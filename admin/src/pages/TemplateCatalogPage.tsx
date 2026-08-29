@@ -23,6 +23,7 @@ type LibraryRow = {
   tags: string[];
   icon: string;
   header: string | null;
+  mediaFormat?: '' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | null;
   body: string;
   bodyHi: string;
   footer: string | null;
@@ -41,6 +42,7 @@ type Draft = {
   tags: string;
   icon: string;
   header: string;
+  mediaFormat: '' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
   body: string;
   bodyHi: string;
   footer: string;
@@ -60,6 +62,7 @@ const EMPTY_DRAFT: Draft = {
   tags: '',
   icon: 'file',
   header: '',
+  mediaFormat: '',
   body: '',
   bodyHi: '',
   footer: '',
@@ -86,6 +89,7 @@ function rowToDraft(row: LibraryRow): Draft {
     tags: (row.tags || []).join(', '),
     icon: row.icon || 'file',
     header: row.header || '',
+    mediaFormat: row.mediaFormat || '',
     body: row.body,
     bodyHi: row.bodyHi,
     footer: row.footer || '',
@@ -119,6 +123,7 @@ function draftPayload(draft: Draft) {
     tags,
     icon: draft.icon.trim() || 'file',
     header: draft.header.trim() || null,
+    mediaFormat: draft.mediaFormat || null,
     body: draft.body,
     bodyHi: draft.bodyHi,
     footer: draft.footer.trim() || null,
@@ -367,6 +372,27 @@ export function TemplateCatalogPage() {
             />
           </label>
           <Input label="Header (optional)" value={draft.header} onChange={(event) => setDraft((prev) => ({ ...prev, header: event.target.value }))} disabled={!canWrite} />
+          <Select
+            label="Header media"
+            value={draft.mediaFormat}
+            onChange={(event) =>
+              setDraft((prev) => ({
+                ...prev,
+                mediaFormat: event.target.value as Draft['mediaFormat'],
+              }))
+            }
+            disabled={!canWrite}
+          >
+            <option value="">Text header / none</option>
+            <option value="IMAGE">Image header</option>
+            <option value="VIDEO">Video header</option>
+            <option value="DOCUMENT">PDF document header</option>
+          </Select>
+          {draft.mediaFormat ? (
+            <Notice tone="warning">
+              Tenants must upload a sample {draft.mediaFormat.toLowerCase()} file before submitting this template to Meta.
+            </Notice>
+          ) : null}
           <Input label="English footer" value={draft.footer} onChange={(event) => setDraft((prev) => ({ ...prev, footer: event.target.value }))} disabled={!canWrite} />
           <Input label="Hindi footer" value={draft.footerHi} onChange={(event) => setDraft((prev) => ({ ...prev, footerHi: event.target.value }))} disabled={!canWrite} />
           <Input label="URL button label" value={draft.buttonText} onChange={(event) => setDraft((prev) => ({ ...prev, buttonText: event.target.value }))} disabled={!canWrite} />

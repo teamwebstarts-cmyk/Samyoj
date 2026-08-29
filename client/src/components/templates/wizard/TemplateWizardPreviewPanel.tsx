@@ -1,6 +1,6 @@
-import { BadgeCheck, ChevronLeft, Pencil, Send, Store } from 'lucide-react';
+import { Pencil, Send } from 'lucide-react';
 import AppAlert from '../../ui/AppAlert';
-import { WhatsAppTemplateCard } from '../../inbox/WhatsAppPreview';
+import { WhatsAppChatSurface, WhatsAppTemplateCard } from '../../inbox/WhatsAppPreview';
 import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
 import type { TemplateFormState } from '../../../utils/templateForm';
 import type { TemplateButton } from '../../../types';
@@ -91,40 +91,23 @@ export default function TemplateWizardPreviewPanel({
         </div>
 
         <div className={`template-wizard-phone-frame ${framePadClass}`}>
-          <div
-            className={`mx-auto w-full ${phoneMaxClass} overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#efeae2] shadow-sm dark:border-slate-700`}
-          >
-            <div className="flex items-center gap-2 bg-[#075e54] px-3 py-2.5 text-white">
-              <ChevronLeft className="h-4 w-4 opacity-80" />
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
-                <Store className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1 truncate text-[13px] font-semibold">
-                  Samyoj Store
-                  <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-300" />
-                </p>
-                <p className="text-[10px] text-white/75">Business account</p>
-              </div>
-            </div>
-            <div className="px-3 py-3">
-              <WhatsAppTemplateCard
-                header={filledPreview.header}
-                headerFormat={
-                  form.headerFormat !== 'TEXT' && form.headerFormat !== 'NONE'
-                    ? form.headerFormat
-                    : undefined
-                }
-                headerMediaUrl={headerPreviewUrl || filledPreview.headerMediaUrl}
-                body={filledPreview.body || 'Your message body will appear here.'}
-                footer={filledPreview.footer}
-                buttons={previewButtons}
-                time="12:30 PM"
-                status="read"
-                className="w-full"
-              />
-            </div>
-          </div>
+          <WhatsAppChatSurface compact={compact} className={`mx-auto w-full ${phoneMaxClass}`}>
+            <WhatsAppTemplateCard
+              header={filledPreview.header}
+              headerFormat={
+                form.headerFormat !== 'TEXT' && form.headerFormat !== 'NONE'
+                  ? form.headerFormat
+                  : undefined
+              }
+              headerMediaUrl={headerPreviewUrl || filledPreview.headerMediaUrl}
+              body={filledPreview.body || 'Your message body will appear here.'}
+              footer={filledPreview.footer}
+              buttons={previewButtons}
+              time="12:30 PM"
+              status="read"
+              className="w-full"
+            />
+          </WhatsAppChatSurface>
           {(form.name || form.category) && (
             <div className={`mx-auto mt-3 flex w-full ${phoneMaxClass} items-center gap-2 px-0.5`}>
               {form.category ? (

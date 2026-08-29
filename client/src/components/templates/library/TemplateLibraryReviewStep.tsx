@@ -1,10 +1,14 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Loader2, Upload } from 'lucide-react';
 import AppInput from '../../ui/AppInput';
 import AppSelect from '../../ui/AppSelect';
 import InfoTip from '../../ui/InfoTip';
 import type { TemplateFormState } from '../../../utils/templateForm';
 import type { CatalogListItem } from '../../../utils/templateLibrary';
 import { libraryNeedsButtonInputs, normalizeWebsiteUrl } from '../../../utils/templateLibrary';
+import { templateApi } from '../../../services/api';
+import { headerMediaAccept, headerMediaMimeAllowed, type HeaderMediaFormat } from '../../../utils/headerMedia';
+import { toastError } from '../../../utils/toast';
 
 const FILL_SOURCE_OPTIONS = [
   { value: '', label: 'Manual (per campaign)' },
@@ -40,6 +44,15 @@ function reviewInfoContent(): ReactNode {
   );
 }
 
+function fileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function TemplateLibraryReviewStep({
   item,
   form,
@@ -55,6 +68,8 @@ export default function TemplateLibraryReviewStep({
   buttonPhone,
   onButtonPhoneChange,
 }: TemplateLibraryReviewStepProps) {
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const needsButtons = libraryNeedsButtonInputs(item);
   const urlButton = (item.buttons || []).find((button) => button.type?.toUpperCase() === 'URL');
   const phoneButton = (item.buttons || []).find((button) => button.type?.toUpperCase() === 'PHONE_NUMBER');
@@ -93,6 +108,51 @@ export default function TemplateLibraryReviewStep({
         </div>
         <p className="mt-1 text-[11px] font-medium text-slate-500">{item.copy}</p>
         <p className="mt-0.5 font-mono text-[10px] text-slate-400">{item.id}</p>
+        {item.mediaFormat ? (
+          <div className="mt-2 rounded-lg bg-sky-50 px-2.5 py-2 text-[11px] font-semibold leading-relaxed text-sky-800 dark:bg-sky-950/30 dark:text-sky-200">
+            <p>This draft has a {item.mediaFormat.toLowerCase()} header. Upload a sample file before submitting it to Meta.</p>
+            <input
+              ref={mediaInputRef}
+              type="file"
+              className="hidden"
+              accept={headerMediaAccept(item.mediaFormat as HeaderMediaFormat)}
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                const format = item.mediaFormat as HeaderMediaFormat;
+                if (!headerMediaMimeAllowed(format, file.type)) {
+                  toastError(`Choose a ${format.toLowerCase()} file.`);
+                  return;
+                }
+                setUploadingMedia(true);
+                try {
+                  const { data } = await templateApi.uploadHeader({
+                    data: await fileAsBase64(file),
+                    mimeType: file.type,
+                  });
+                  const handle = data?.data?.handle;
+                  if (!handle) throw new Error('Meta did not return a media handle.');
+                  onChange({ ...form, headerMediaHandle: handle });
+                } catch (error) {
+                  toastError(error instanceof Error ? error.message : 'Could not upload sample media.');
+                } finally {
+                  setUploadingMedia(false);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-sky-800 disabled:opacity-60"
+              onClick={() => mediaInputRef.current?.click()}
+              disabled={uploadingMedia}
+            >
+              {uploadingMedia ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {uploadingMedia ? 'Uploading…' : form.headerMediaHandle ? 'Replace sample media' : 'Upload sample media'}
+            </button>
+            {form.headerMediaHandle ? <span className="ml-2 text-[10px] font-bold text-emerald-700">Sample ready</span> : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="template-wizard-card p-3 sm:p-3.5">
@@ -124,16 +184,22 @@ export default function TemplateLibraryReviewStep({
         {needsButtons && (
           <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
             <div className="flex items-center gap-1">
-              <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">Button links</p>
+              <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">Button website — needed now</p>
               <InfoTip
                 label="Button link help"
-                content="Replace the sample URL with your public https:// page or a phone number with country code."
+                content="WhatsApp stores this page on the template during review. It is not {{1}}. Body variables below fill later when you send from Inbox or Campaigns."
               />
             </div>
+            <p className="text-[11px] font-medium leading-relaxed text-slate-500">
+              Customer taps the button, this page opens on their phone. Use your shop or tracking site — not GitHub,
+              Telegram, or the example below.
+            </p>
             {urlButton && (
               <AppInput
                 id="library-button-url"
                 label={urlButton.text || 'Website URL'}
+                hint="Not a variable"
+                labelInfo="Paste a real https page. Example only: https://yourstore.com/track"
                 placeholder="https://yourstore.com/track"
                 value={buttonUrl}
                 error={buttonUrlError || undefined}
@@ -159,11 +225,18 @@ export default function TemplateLibraryReviewStep({
       {bodyVars.length > 0 && (
         <div className="template-wizard-card overflow-hidden">
           <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2.5 dark:border-slate-800 sm:px-3.5">
-            <p className="text-[12px] font-bold text-slate-900 dark:text-white">Variables</p>
-            <InfoTip
-              label="Variable mapping help"
-              content="Choose where each placeholder comes from. Inbox and Campaigns pre-select the same mapping after Meta approves this template."
-            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <p className="text-[12px] font-bold text-slate-900 dark:text-white">Variables — fill later</p>
+                <InfoTip
+                  label="Variable mapping help"
+                  content="Samples are only for Meta review. Real {{1}} values fill when you send. Inbox and Campaigns use the Fill from mapping you pick here."
+                />
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-slate-500">
+                Preview uses sample text like Rahul. When you send, Contact name / Same for everyone replaces it.
+              </p>
+            </div>
           </div>
           <div className="divide-y divide-slate-100 dark:divide-slate-800" role="list">
             {bodyVars.map((meta, rowIndex) => {

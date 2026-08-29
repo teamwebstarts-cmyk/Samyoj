@@ -5,7 +5,21 @@ function extractVarNumbers(text: string): number[] {
   return [...new Set(matches.map((m) => parseInt(m.replace(/[{}]/g, ''), 10)))].sort((a, b) => a - b);
 }
 
-function validatePlaceholderText(path: string, text: string, ctx: z.RefinementCtx) {
+/** Meta rejects a body/header when {{n}} is first, or last except for punctuation. */
+export function templateTextHasEdgeParams(text: string): boolean {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return false;
+  if (/^\{\{\d+\}\}/.test(trimmed)) return true;
+  const withoutTrailingPunct = trimmed.replace(/[\s.!?…,;:'"“”‘’]+$/u, '');
+  return /\{\{\d+\}\}$/.test(withoutTrailingPunct);
+}
+
+function validatePlaceholderText(
+  path: string,
+  text: string,
+  ctx: z.RefinementCtx,
+  skipEdgeParams = false,
+) {
   if (!text.includes('{{')) return;
   const nums = extractVarNumbers(text);
   const expected = Array.from({ length: nums.length ? Math.max(...nums) : 0 }, (_, i) => i + 1);
@@ -17,12 +31,13 @@ function validatePlaceholderText(path: string, text: string, ctx: z.RefinementCt
       path: [path],
     });
   }
-  const trimmed = text.trim();
-  if (/^\{\{\d+\}\}/.test(trimmed)) {
-    ctx.addIssue({ code: 'custom', message: 'Text cannot start with a placeholder', path: [path] });
-  }
-  if (/\{\{\d+\}\}$/.test(trimmed)) {
-    ctx.addIssue({ code: 'custom', message: 'Text cannot end with a placeholder', path: [path] });
+  if (!skipEdgeParams && templateTextHasEdgeParams(text)) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'Variables can’t be at the start or end of the template. Add normal words before the first field and after the last one — a full stop after {{3}} is not enough.',
+      path: [path],
+    });
   }
 }
 
@@ -105,7 +120,7 @@ export const createTemplateSchema = z
       });
     }
 
-    validatePlaceholderText('body', data.body, ctx);
+    validatePlaceholderText('body', data.body, ctx, data.category === 'AUTHENTICATION');
     if (data.header) validatePlaceholderText('header', data.header, ctx);
 
     if (data.buttons?.length) {

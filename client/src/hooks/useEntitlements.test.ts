@@ -40,6 +40,26 @@ describe('deriveEntitlements', () => {
     expect(entitlements.getUpgradePlan('contacts')).toBe('pro');
   });
 
+  it('does not re-lock when the server snapshot says isLocked is false', () => {
+    const entitlements = deriveEntitlements({
+      plan: 'starter',
+      subscriptionStatus: 'active',
+      entitlements: {
+        planTier: 'starter',
+        subscriptionStatus: 'active',
+        isLocked: false,
+        planExpiresAt: '2020-01-01T00:00:00.000Z',
+        quotas: {
+          campaigns: true,
+          templates: true,
+        },
+      },
+    });
+
+    expect(entitlements.isLocked).toBe(false);
+    expect(entitlements.canUseFeature('campaigns')).toBe(true);
+  });
+
   it('fails closed for a locked organization while keeping the snapshot readable', () => {
     const entitlements = deriveEntitlements({
       plan: 'pro',
@@ -90,6 +110,7 @@ describe('deriveEntitlements', () => {
     expect(entitlements.quotas.seats).toEqual({ used: 2, limit: 3 });
     expect(entitlements.quotas.contacts).toEqual({ used: 0, limit: 5_000 });
     expect(entitlements.canUseFeature('aiBots')).toBe(false);
+    expect(entitlements.canUseFeature('campaigns')).toBe(true);
     console.log('client-entitlements-ok');
   });
 });

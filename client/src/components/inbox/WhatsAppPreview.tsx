@@ -2,6 +2,8 @@ import { AlertCircle, Check, CheckCheck, ClipboardCopy, Clock, ExternalLink, Lis
 import type { ReactNode } from 'react';
 import type { MessageTemplate, TemplateButton, TemplateLibraryEntry } from '../../types';
 import { getTemplateButtons } from '../../utils/templateForm';
+import WhatsAppPreviewHeader from './WhatsAppPreviewHeader';
+import type { WhatsAppPreviewIdentity } from '../../utils/whatsappPreviewIdentity';
 
 /** Split-pane preview column for inbox composers (Template / Interactive). */
 export function ComposerPreviewPane({
@@ -29,12 +31,15 @@ export function ComposerPreviewPane({
           <p className="ml-auto truncate text-[10px] font-medium text-theme-muted">{subtitle}</p>
         ) : null}
       </div>
-      <div
-        className={`flex min-h-0 flex-1 items-center justify-end p-3 wa-chat-surface wa-chat-surface-compact ${
-          scrollable ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
-        }`}
-      >
-        {children}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <WhatsAppPreviewHeader compact />
+        <div
+          className={`flex min-h-0 flex-1 items-center justify-end p-3 wa-chat-surface wa-chat-surface-compact !rounded-none !border-0 ${
+            scrollable ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
+          }`}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -150,18 +155,30 @@ interface WhatsAppChatSurfaceProps {
   children: ReactNode;
   className?: string;
   compact?: boolean;
+  /** Chat chrome with business name + number. Default on so every preview matches. */
+  showHeader?: boolean;
+  identity?: WhatsAppPreviewIdentity;
 }
 
 export function WhatsAppChatSurface({
   children,
   className = '',
   compact = false,
+  showHeader = true,
+  identity,
 }: WhatsAppChatSurfaceProps) {
   return (
     <div
-      className={`wa-chat-surface ${compact ? 'wa-chat-surface-compact' : ''} ${className}`}
+      className={`overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#efeae2] shadow-sm dark:border-slate-700 ${className}`}
     >
-      {children}
+      {showHeader ? <WhatsAppPreviewHeader compact={compact} identity={identity} /> : null}
+      <div
+        className={`wa-chat-surface ${compact ? 'wa-chat-surface-compact' : ''} ${
+          showHeader ? '!rounded-none !border-0' : ''
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

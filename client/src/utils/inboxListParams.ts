@@ -1,11 +1,10 @@
-import type { InboxWindowMode, ListChip } from '../components/inbox/InboxListHeader';
+import type { ListChip } from '../components/inbox/InboxListHeader';
 
 export type InboxListQueryInput = {
   page: number;
   pageSize: number;
   search?: string;
   chip: ListChip;
-  windowMode?: InboxWindowMode;
   agentFilter?: string;
   userId?: string;
 };
@@ -43,12 +42,15 @@ export function buildInboxListParams(input: InboxListQueryInput): Record<string,
     case 'botActive':
       params.botActive = 'true';
       break;
+    case 'active':
+      params.window = 'open';
+      break;
+    case 'inactive':
+      params.window = 'closed';
+      break;
     default:
       break;
   }
-
-  if (input.windowMode === 'active') params.window = 'open';
-  if (input.windowMode === 'inactive') params.window = 'closed';
 
   if (input.agentFilter === '__mine__' && input.userId) {
     params.assignedTo = input.userId;

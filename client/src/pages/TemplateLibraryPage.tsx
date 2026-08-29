@@ -20,18 +20,20 @@ import TemplateIssueAlert from '../components/templates/TemplateIssueAlert';
 import LoadingState from '../components/ui/LoadingState';
 import { invalidateApprovedTemplatesCache } from '../components/inbox/TemplateComposer';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
-import { templateApi } from '../services/api';
+import { templateApi, settingsApi } from '../services/api';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { persistTemplateVariableMeta, previewParams } from '../utils/templateForm';
 import {
   formFromCatalogEntry,
+  isSampleLibraryButtonUrl,
   libraryButtonUrlError,
   libraryNeedsButtonInputs,
   libraryWizardStages,
   statusFromTemplateCreate,
   uniqueLibraryTemplateName,
+  usableLibraryButtonUrl,
   type CatalogListItem,
   type CatalogTemplate,
 } from '../utils/templateLibrary';
@@ -74,6 +76,7 @@ export default function TemplateLibraryPage() {
   const [createName, setCreateName] = useState('');
   const [buttonUrl, setButtonUrl] = useState('');
   const [buttonPhone, setButtonPhone] = useState('');
+  const [shopWebsite, setShopWebsite] = useState('');
   const [stageError, setStageError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(null);
@@ -138,6 +141,24 @@ export default function TemplateLibraryPage() {
     loadAccountNames();
   }, [loadAccountNames, resolved, activeNumber?.id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    settingsApi
+      .getProfile()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const website = (data?.data?.profile as { website?: string } | undefined)?.website;
+        const usable = usableLibraryButtonUrl(website);
+        if (usable) setShopWebsite(usable);
+      })
+      .catch(() => {
+        /* optional prefill from Settings → Business profile */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
     setCatalog([]);
@@ -196,12 +217,21 @@ export default function TemplateLibraryPage() {
     setCreateName(name);
     const urlBtn = (selectedItem.buttons || []).find((button) => button.type?.toUpperCase() === 'URL');
     const phoneBtn = (selectedItem.buttons || []).find((button) => button.type?.toUpperCase() === 'PHONE_NUMBER');
-    setButtonUrl(urlBtn?.url || '');
+    setButtonUrl(
+      urlBtn?.url && !isSampleLibraryButtonUrl(urlBtn.url)
+        ? urlBtn.url
+        : shopWebsite,
+    );
     setButtonPhone(phoneBtn?.phone_number || '');
     setStageError(null);
     // Re-seed when the picked draft or preview language changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey, language]);
+
+  useEffect(() => {
+    if (!shopWebsite) return;
+    setButtonUrl((previous) => (previous.trim() ? previous : shopWebsite));
+  }, [shopWebsite]);
 
   const previewTemplate: MessageTemplate = useMemo(
     () => ({
@@ -276,6 +306,7 @@ export default function TemplateLibraryPage() {
       language,
       ...(buttonUrl.trim() ? { buttonUrl: buttonUrl.trim() } : {}),
       ...(buttonPhone.trim() ? { buttonPhone: buttonPhone.trim() } : {}),
+      ...(form.headerMediaHandle ? { headerMediaHandle: form.headerMediaHandle } : {}),
     });
     const status = statusFromTemplateCreate(data);
     persistTemplateVariableMeta(name, form.variableMeta);

@@ -27,8 +27,11 @@ if (mode === 'ui') {
   if (/Meta \(\$\{metaCount\}\)|\bMeta \(100\)/.test(browse)) {
     throw new Error('Browse UI still shows Meta source tab');
   }
-  if (!/templateApi\.starters/.test(page)) {
+  if (!/templateApi\s*\.\s*starters/.test(page)) {
     throw new Error('Library page no longer loads Samyoj catalog');
+  }
+  if (!/submitCatalog/.test(page)) {
+    throw new Error('Library page does not submit catalog drafts to this number');
   }
   if (/templateApi\.library\(/.test(page)) {
     throw new Error('Library page still fetches Meta template library');

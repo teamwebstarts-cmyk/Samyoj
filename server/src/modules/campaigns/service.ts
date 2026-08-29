@@ -843,7 +843,7 @@ export async function queueCampaignSend(
   );
   const billingCategory = billingCategoryForTemplate(template.category);
 
-  await assertDailySendQuota(campaign.organizationId, sendRecipients.length);
+  await assertDailySendQuota(campaign.organizationId, sendRecipients.length, whatsappNumber.id);
   await assertDailyBudget(campaign.organizationId, sendRecipients.length, billingCategory);
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
@@ -908,7 +908,8 @@ export async function queueCampaignSend(
       campaign.id,
       run.runVersion,
       sendRecipients.length,
-      billingCategory
+      billingCategory,
+      whatsappNumber.id,
     );
     await prisma.campaign.update({
       where: { id: campaign.id },
@@ -1331,7 +1332,7 @@ export async function retryFailedRecipients(
     accessToken
   );
   const billingCategory = billingCategoryForTemplate(template.category);
-  await assertDailySendQuota(campaign.organizationId, failed.length);
+  await assertDailySendQuota(campaign.organizationId, failed.length, whatsappNumber.id);
   await assertDailyBudget(campaign.organizationId, failed.length, billingCategory);
   const templateLanguage = campaign.templateLanguage || template.language || 'en_US';
   const templateParams = (campaign.templateParams as TemplateParams | null) || undefined;
@@ -1374,7 +1375,8 @@ export async function retryFailedRecipients(
       campaign.id,
       retryVersion.runVersion,
       failed.length,
-      billingCategory
+      billingCategory,
+      whatsappNumber.id,
     );
     const reset = await prisma.campaignRecipient.updateMany({
       where: {

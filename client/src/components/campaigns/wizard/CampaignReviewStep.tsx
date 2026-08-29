@@ -4,11 +4,9 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
   Edit3,
   Gift,
   MessageCircle,
-  MoreVertical,
   Users,
 } from 'lucide-react';
 import AppButton from '../../ui/AppButton';
@@ -27,7 +25,6 @@ interface CampaignReviewStepProps {
   form: CampaignWizardForm;
   setForm: Dispatch<SetStateAction<CampaignWizardForm>>;
   selectedTemplate?: MessageTemplate;
-  channelLabel: string;
   includedCount: number | null;
   audienceMetrics?: AudiencePreviewMetrics | null;
   excludedCount: number;
@@ -40,7 +37,6 @@ export default function CampaignReviewStep({
   form,
   setForm,
   selectedTemplate,
-  channelLabel,
   includedCount,
   audienceMetrics,
   excludedCount,
@@ -183,29 +179,11 @@ export default function CampaignReviewStep({
                 </div>
                 <div className="campaign-review-preview-body">
                   {filledPreview ? (
-                    <div className="campaign-review-phone-frame">
-                      <div className="campaign-review-phone-header">
-                        <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
-                        <span className="campaign-review-phone-avatar">
-                          <MessageCircle className="h-3 w-3" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[9px] font-extrabold">WhatsApp Business</span>
-                          <span className="block truncate text-[7px] font-medium text-emerald-100">
-                            {channelLabel}
-                          </span>
-                        </span>
-                        <MoreVertical className="h-3.5 w-3.5 shrink-0" />
-                      </div>
-                      <div className="campaign-review-phone-body">
-                        <WhatsAppTemplatePreview
-                          {...filledPreview}
-                          variant="compact"
-                          showSurface={false}
-                          className="campaign-review-preview-surface"
-                        />
-                      </div>
-                    </div>
+                    <WhatsAppTemplatePreview
+                      {...filledPreview}
+                      variant="compact"
+                      className="campaign-review-preview-surface mx-auto w-full max-w-[16.5rem]"
+                    />
                   ) : (
                     <div className="flex min-h-[190px] items-center justify-center text-center text-[10px] font-semibold text-slate-400">
                       Choose a template to preview the message.
@@ -292,8 +270,12 @@ export default function CampaignReviewStep({
               </div>
               <div className="space-y-1.5">
                   {[
-                    { value: false, title: 'Send now', description: 'Starts immediately.' },
-                    { value: true, title: 'Schedule', description: 'Pick a date and time.' },
+                    {
+                      value: false,
+                      title: 'Immediately',
+                      description: 'Does not send yet. Use the green Send now button below, then confirm.',
+                    },
+                    { value: true, title: 'Schedule', description: 'Pick a date and time, then confirm below.' },
                   ].map((option) => (
                     <label
                       key={option.title}

@@ -13,6 +13,7 @@ import {
   campaignToWizardForm,
   countTemplateVariables,
   createEmptyCampaignWizardForm,
+  eligibleCampaignSendCount,
   getCampaignScheduleMinimum,
   validateCampaignWizardStage,
   type CampaignWizardDetail,
@@ -85,13 +86,16 @@ export default function CampaignWizardPage() {
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const initializedFromQuery = useRef(false);
+  const createdCampaignIdRef = useRef<string | null>(null);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const canManageCampaigns =
     entitlementsLoading || !entitlements || entitlements.canUseFeature('campaigns');
   const campaignGateMessage =
     !entitlementsLoading && entitlements && !entitlements.canUseFeature('campaigns')
-      ? 'Campaigns are not included on your current plan.'
+      ? entitlements.isLocked
+        ? 'This workspace is locked, so campaign send is turned off.'
+        : 'Campaigns are not included on your current plan.'
       : null;
 
   const selectedTemplate = useMemo(
@@ -112,10 +116,20 @@ export default function CampaignWizardPage() {
       : form.audienceType === 'ALL_OPTED_IN' && audienceMetrics?.notOptedIn != null
         ? audienceMetrics.notOptedIn
         : 0;
+  const sendReadyCount = eligibleCampaignSendCount(form, audiencePreviewCount);
   const finalActionBlocked =
-    audiencePreviewCount === null ||
-    audiencePreviewCount === 0 ||
+    sendReadyCount === null ||
+    sendReadyCount === 0 ||
     invalidAudienceCount > 0;
+  const footerLockReason = !canManageCampaigns
+    ? campaignGateMessage || 'Campaign send is turned off on this account.'
+    : sendReadyCount === 0
+      ? 'Nobody in this audience is subscribed to campaign messages.'
+      : sendReadyCount === null
+        ? 'Select who should receive this campaign.'
+        : invalidAudienceCount > 0
+          ? 'Fix invalid phone numbers before sending.'
+          : null;
   const selectedNumber =
     whatsappNumbers.find((number) => number.id === form.whatsappNumberId) ||
     (whatsappNumbers.length === 1 ? whatsappNumbers[0] : undefined);
@@ -193,6 +207,7 @@ export default function CampaignWizardPage() {
     setAudienceMetrics(null);
     setEstimatedCost(null);
     setConfirmState(null);
+    createdCampaignIdRef.current = null;
     setLoading(Boolean(isEdit));
     loadTemplates();
   });
@@ -212,6 +227,7 @@ export default function CampaignWizardPage() {
           return;
         }
         setEditing(campaign);
+        createdCampaignIdRef.current = campaign.id;
         setForm(campaignToWizardForm(campaign, templates));
       })
       .catch((error) => {
@@ -227,6 +243,13 @@ export default function CampaignWizardPage() {
     if (!editing || !templates.length) return;
     setForm(campaignToWizardForm(editing, templates));
   }, [editing, templates]);
+
+  useEffect(() => {
+    if (!activeNumber?.id) return;
+    setForm((previous) =>
+      previous.whatsappNumberId ? previous : { ...previous, whatsappNumberId: activeNumber.id },
+    );
+  }, [activeNumber?.id]);
 
   useEffect(() => {
     if (id || initializedFromQuery.current) return;
@@ -353,6 +376,12 @@ export default function CampaignWizardPage() {
       setStageError(error);
       return;
     }
+    if (activeStep === 1 && audiencePreviewCount === 0) {
+      setStageError(
+        'Nobody in this audience is subscribed to campaign messages. Open Contacts and turn on campaign messages for them.',
+      );
+      return;
+    }
     setStageError(null);
     setActiveStep(step);
   };
@@ -368,6 +397,7 @@ export default function CampaignWizardPage() {
       return null;
     }
     let payload: Record<string, unknown>;
+    const existingId = editing?.id || createdCampaignIdRef.current;
     try {
       if (action !== 'draft') {
         const stageErrorMessage = validateCampaignWizardStage(0, form, selectedTemplate);
@@ -383,7 +413,7 @@ export default function CampaignWizardPage() {
       payload = buildCampaignPayload(form, {
         draft: action === 'draft',
         clearSchedule: !form.scheduleEnabled,
-        isUpdate: Boolean(editing),
+        isUpdate: Boolean(existingId),
       });
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Campaign details could not be saved.');
@@ -392,82 +422,104 @@ export default function CampaignWizardPage() {
 
     setSaving(true);
     try {
-      let campaignId = editing?.id;
-      if (editing) {
-        await campaignApi.update(editing.id, payload);
+      let campaignId = existingId;
+      if (existingId) {
+        await campaignApi.update(existingId, payload);
       } else {
         const { data } = await campaignApi.create(payload);
-        campaignId = (data.data as CampaignWizardDetail).id;
+        const created = data.data as CampaignWizardDetail;
+        campaignId = created.id;
+        createdCampaignIdRef.current = created.id;
+        setEditing(created);
       }
 
       if (!campaignId) throw new Error('Campaign could not be created.');
 
       if (action === 'send') {
-        const full = (await campaignApi.get(campaignId)).data.data as CampaignWizardDetail;
-        const sendConfirm = buildCampaignSendConfirm({
-          campaignName: full.name,
-          templateName: full.templateName,
-          recipientCount: full.totalContacts ?? 0,
-          excludedCount: excludedSelectedContacts > 0 ? excludedSelectedContacts : undefined,
-        });
-        setConfirmState({
-          ...sendConfirm,
-          onConfirm: async () => {
-            setConfirmLoading(true);
-            try {
-              await campaignApi.send(campaignId as string);
-              toastSuccess('Campaign queued — track delivery on the Campaigns page');
-              setConfirmState(null);
-              navigate('/campaigns');
-            } catch (error) {
-              toastError(getCampaignSendErrorMessage(error, 'Campaign could not be sent. Check the campaign and try again.'));
-            } finally {
-              setConfirmLoading(false);
-            }
-          },
-        });
-        return campaignId;
+        try {
+          await campaignApi.send(campaignId);
+          toastSuccess('Campaign queued — track delivery on the Campaigns page');
+          setConfirmState(null);
+          navigate('/campaigns');
+          return campaignId;
+        } catch (error) {
+          toastError(
+            getCampaignSendErrorMessage(error, 'Campaign could not be sent. Check the campaign and try again.'),
+          );
+          return campaignId;
+        }
       }
 
       toastSuccess(
         action === 'schedule'
           ? 'Campaign scheduled'
-          : editing
+          : existingId
             ? 'Campaign saved'
             : 'Campaign saved as draft',
       );
       navigate('/campaigns');
       return campaignId;
     } catch (error) {
-      toastError(getErrorMessage(error, 'Campaign could not be saved. Check the required fields and try again.'));
+      toastError(
+        getCampaignSendErrorMessage(
+          error,
+          'Campaign could not be saved. Check the required fields and try again.',
+        ),
+      );
       return null;
     } finally {
       setSaving(false);
     }
   };
 
+  const showSendBlock = (message: string) => {
+    setStageError(message);
+    toastError(message);
+    document.getElementById('campaign-wizard-form')?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleFinalAction = () => {
-    if (audiencePreviewCount === null) {
-      setStageError('Preview audience to continue. Final send and schedule require a successful audience preview.');
+    if (sendReadyCount === null) {
+      showSendBlock('Select who should receive this campaign, then try Send again.');
       return;
     }
-    if (audiencePreviewCount === 0) {
-      setStageError(
-        'Nobody in this audience has agreed to campaign messages. Open Contacts and turn on Allow campaign messages.',
+    if (sendReadyCount === 0) {
+      showSendBlock(
+        'Nobody in this audience is subscribed to campaign messages. Open Contacts and turn on campaign messages for them.',
       );
       return;
     }
     if (invalidAudienceCount > 0) {
-      setStageError('Fix invalid phone numbers before continuing.');
+      showSendBlock('Fix invalid phone numbers before continuing.');
       return;
     }
     const error = validateCampaignWizardStage(2, form, selectedTemplate) || validateCampaignWizardStage(0, form, selectedTemplate);
     if (error) {
-      setStageError(error);
+      showSendBlock(error);
       return;
     }
     setStageError(null);
-    void saveCampaign(form.scheduleEnabled ? 'schedule' : 'send');
+    if (form.scheduleEnabled) {
+      void saveCampaign('schedule');
+      return;
+    }
+    const sendConfirm = buildCampaignSendConfirm({
+      campaignName: form.name,
+      templateName: form.templateName,
+      recipientCount: sendReadyCount,
+      excludedCount: excludedSelectedContacts > 0 ? excludedSelectedContacts : undefined,
+    });
+    setConfirmState({
+      ...sendConfirm,
+      onConfirm: async () => {
+        setConfirmLoading(true);
+        try {
+          await saveCampaign('send');
+        } finally {
+          setConfirmLoading(false);
+        }
+      },
+    });
   };
 
   const handleDelete = () => {
@@ -525,7 +577,7 @@ export default function CampaignWizardPage() {
           editingTotalContacts={editing?.totalContacts}
           selectedTemplate={selectedTemplate}
           channelLabel={channelLabel}
-          audiencePreviewCount={audiencePreviewCount}
+          audiencePreviewCount={sendReadyCount}
           onPreviewCountChange={setAudiencePreviewCount}
           onPreviewCostChange={setEstimatedCost}
           onPreviewMetricsChange={setAudienceMetrics}
@@ -539,8 +591,7 @@ export default function CampaignWizardPage() {
         form={form}
         setForm={setForm}
         selectedTemplate={selectedTemplate}
-        channelLabel={channelLabel}
-        includedCount={audiencePreviewCount}
+        includedCount={sendReadyCount}
         audienceMetrics={audienceMetrics}
         excludedCount={excludedSelectedContacts}
         minScheduleDateTime={getCampaignScheduleMinimum()}
@@ -692,7 +743,7 @@ export default function CampaignWizardPage() {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  className="!min-h-10"
+                  className="!min-h-10 !border-slate-300 !text-slate-800 dark:!border-slate-600 dark:!text-slate-100"
                   loading={saving}
                   disabled={saving || !canManageCampaigns}
                   onClick={() => void saveCampaign('draft')}
@@ -718,7 +769,7 @@ export default function CampaignWizardPage() {
                         type="button"
                         size="sm"
                         variant="secondary"
-                        className="!h-8 !min-h-8"
+                        className="!h-9 !min-h-9 !border-slate-300 !text-slate-800 dark:!border-slate-600 dark:!text-slate-100"
                         disabled={saving || !canManageCampaigns || finalActionBlocked}
                         onClick={() => {
                           setStageError(null);
@@ -737,27 +788,41 @@ export default function CampaignWizardPage() {
                       type="button"
                       size="sm"
                       icon={<Send className="h-3.5 w-3.5" />}
-                      className="!h-8 !min-h-8"
+                      className="!h-9 !min-h-9 !bg-gradient-to-br !from-whatsapp-500 !to-whatsapp-600 !shadow-[0_2px_8px_rgba(37,211,102,0.35)]"
                       loading={saving}
                       disabled={saving || !canManageCampaigns || finalActionBlocked}
                       onClick={handleFinalAction}
+                      aria-describedby="campaign-send-hint"
                     >
                       {form.scheduleEnabled ? (
                         <>
                           <span className="hidden xl:inline">
-                            {`Schedule campaign · ${(audiencePreviewCount || 0).toLocaleString()} included`}
+                            {`Schedule campaign · ${(sendReadyCount || 0).toLocaleString()} included`}
                           </span>
                           <span className="xl:hidden">Schedule campaign</span>
                         </>
                       ) : (
                         <>
                           <span className="hidden xl:inline">
-                            {`Send now · ${(audiencePreviewCount || 0).toLocaleString()} included`}
+                            {`Send now · ${(sendReadyCount || 0).toLocaleString()} included`}
                           </span>
                           <span className="xl:hidden">Send now</span>
                         </>
                       )}
                     </AppButton>
+                    <p
+                      id="campaign-send-hint"
+                      className={`basis-full text-right text-[10px] font-semibold ${
+                        footerLockReason
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {footerLockReason ||
+                        (form.scheduleEnabled
+                          ? 'Delivery starts at the time you picked.'
+                          : 'This opens a confirm popup. The campaign starts only after you tap Send there.')}
+                    </p>
                   </>
                 )}
               </>

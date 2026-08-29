@@ -3,7 +3,6 @@ import { ChevronDown, Copy, Download, Key, RefreshCw, Trash2, Webhook } from 'lu
 import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import SettingsPanel from './SettingsPanel';
-import WhatsAppButtonBuilder from './WhatsAppButtonBuilder';
 import { complianceApi, integrationsApi } from '../../services/api';
 import type { ApiKeyItem, WebhookEndpoint } from '../../types';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -171,7 +170,6 @@ export default function IntegrationsPanel({ showDeveloperTools = false }: Integr
 
   return (
     <div className="space-y-4">
-      <WhatsAppButtonBuilder />
       <SettingsPanel
         title="Data & export"
         description="Download your contacts or a full workspace backup."

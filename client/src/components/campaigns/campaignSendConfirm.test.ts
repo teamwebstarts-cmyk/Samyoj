@@ -38,4 +38,13 @@ describe('buildCampaignSendConfirm', () => {
       ),
     ).toMatch(/already queued/i);
   });
+
+  it('maps empty-audience API errors to a subscribe message', () => {
+    expect(
+      getCampaignSendErrorMessage(
+        { response: { data: { error: { message: 'Campaign must have at least one recipient' } } } },
+        'fallback',
+      ),
+    ).toMatch(/subscribed to campaign messages/i);
+  });
 });

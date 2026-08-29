@@ -40,7 +40,7 @@ export interface CampaignWizardForm {
 
 export type CampaignWizardDetail = Campaign & { recipients?: CampaignRecipient[] };
 
-function getSelectedAudienceTypes(form: CampaignWizardForm): CampaignAudienceType[] {
+export function getSelectedAudienceTypes(form: CampaignWizardForm): CampaignAudienceType[] {
   if (!form.selectedAudienceTypes?.length) return [form.audienceType];
   if (
     form.selectedAudienceTypes.length === 1 &&
@@ -50,6 +50,19 @@ function getSelectedAudienceTypes(form: CampaignWizardForm): CampaignAudienceTyp
     return [form.audienceType];
   }
   return form.selectedAudienceTypes;
+}
+
+/** Count used to enable Send. Keep last preview; if it has not landed yet, selected contacts still count. */
+export function eligibleCampaignSendCount(
+  form: CampaignWizardForm,
+  audiencePreviewCount: number | null,
+): number | null {
+  if (audiencePreviewCount !== null) return audiencePreviewCount;
+  const types = getSelectedAudienceTypes(form);
+  if (types.includes('CONTACTS') && form.selectedContactIds.length > 0) {
+    return form.selectedContactIds.length;
+  }
+  return null;
 }
 
 export function createEmptyCampaignWizardForm(): CampaignWizardForm {
@@ -238,6 +251,7 @@ export function buildCampaignPayload(
     if (!phones.length) throw new Error('Add at least one valid phone number');
     payload.recipients = recipientsFromPhones(phones, form.recipientDetails);
   } else if (hasTags || form.audienceType === 'TAGS') {
+    payload.audienceType = 'TAGS';
     payload.audienceConfig = {
       tags: form.audienceTags
         .split(',')
@@ -247,11 +261,13 @@ export function buildCampaignPayload(
     };
   } else if (hasContacts || form.audienceType === 'CONTACTS') {
     if (!form.selectedContactIds.length) throw new Error('Select at least one contact');
+    payload.audienceType = 'CONTACTS';
     payload.audienceConfig = {
       contactIds: form.selectedContactIds,
       requireOptIn: true,
     };
   } else {
+    payload.audienceType = 'ALL_OPTED_IN';
     payload.audienceConfig = { requireOptIn: true };
   }
 

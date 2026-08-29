@@ -89,6 +89,8 @@ describe('plans.ts', () => {
     it('PLAN_TIERS has correct entitlements', () => {
       expect(PLAN_TIERS.launch.waNumbers).toBe(1);
       expect(PLAN_TIERS.starter.seats).toBe(3);
+      expect(PLAN_TIERS.starter.campaigns).toBe(true);
+      expect(PLAN_TIERS.launch.campaigns).toBe(true);
       expect(PLAN_TIERS.growth.contacts).toBe(25000);
       expect(PLAN_TIERS.pro.waNumbers).toBe(5);
     });

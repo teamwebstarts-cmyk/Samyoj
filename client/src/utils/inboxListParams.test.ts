@@ -12,12 +12,9 @@ describe('buildInboxListParams', () => {
     expect(buildInboxListParams({ ...base, chip: 'unread' }).unread).toBe('true');
     expect(buildInboxListParams({ ...base, chip: 'favourites' }).favorite).toBe('true');
     expect(buildInboxListParams({ ...base, chip: 'unreplied' }).unreplied).toBe('true');
-    expect(buildInboxListParams({ ...base, windowMode: 'active' }).window).toBe('open');
-    expect(buildInboxListParams({ ...base, windowMode: 'inactive' }).window).toBe('closed');
-    expect(buildInboxListParams({ ...base, chip: 'unread', windowMode: 'active' })).toMatchObject({
-      unread: 'true',
-      window: 'open',
-    });
+    expect(buildInboxListParams({ ...base, chip: 'active' }).window).toBe('open');
+    expect(buildInboxListParams({ ...base, chip: 'inactive' }).window).toBe('closed');
+    expect(buildInboxListParams({ ...base, chip: 'all' }).window).toBeUndefined();
     expect(buildInboxListParams({ ...base, chip: 'open' }).status).toBe('OPEN');
     expect(buildInboxListParams({ ...base, chip: 'pending' }).status).toBe('PENDING');
     expect(buildInboxListParams({ ...base, chip: 'hasTicket' }).hasOpenTicket).toBe('true');

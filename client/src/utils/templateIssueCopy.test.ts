@@ -12,10 +12,40 @@ describe('explainTemplateIssue', () => {
     expect(issue.example).toContain('yourstore.com');
   });
 
+  it('explains Meta trailing-variable rejection', () => {
+    const issue = explainTemplateIssue(
+      "Leading or trailing params not allowed: Variables can't be at the start or end of the template.",
+    );
+    expect(issue.title).toMatch(/start or end/i);
+    expect(issue.detail.toLowerCase()).toMatch(/full stop|after the last/);
+  });
+
+  it('explains empty button website is not a body variable', () => {
+    const issue = explainTemplateIssue('Add your website link here');
+    expect(issue.title).toMatch(/website for this button/i);
+    expect(issue.detail).toMatch(/not \{\{1\}\}/i);
+    expect(issue.detail.toLowerCase()).toMatch(/later/);
+    expect(issue.example).toContain('yourstore.com');
+  });
+
   it('hides raw API error codes', () => {
     const issue = explainTemplateIssue('(#100) Invalid parameter');
     expect(issue.title).toMatch(/couldn.t save/i);
     expect(issue.detail).not.toMatch(/#100/);
+  });
+
+  it('explains Meta template rejection instead of hiding Invalid parameter', () => {
+    const issue = explainTemplateIssue('Meta rejected this template: Invalid parameter');
+    expect(issue.title).toMatch(/rejected/i);
+    expect(issue.detail.toLowerCase()).toMatch(/github|tracking|unique name/);
+  });
+
+  it('blocks GitHub template button links in plain copy', () => {
+    const issue = explainTemplateIssue(
+      'WhatsApp will not approve GitHub, Telegram, or code-repo links on a template button.',
+    );
+    expect(issue.title).toMatch(/github/i);
+    expect(issue.example).toContain('yourstore.com');
   });
 
   it('still explains template-wizard personal-field and sample-value messages', () => {

@@ -343,6 +343,7 @@ export type CatalogTemplate = {
   tags: string[];
   icon?: string;
   header?: string | null;
+  mediaFormat?: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
   body: string;
   bodyHi: string;
   footer?: string | null;
@@ -452,6 +453,31 @@ function isPrivateOrLocalHost(hostname: string): boolean {
  * Reject localhost / private IPs. Do not reject the same public hostname as
  * this app — a merchant may host the store and Samyoj on one domain.
  */
+/** True when the catalog still has a placeholder, not a customer shop URL. */
+export function isSampleLibraryButtonUrl(raw?: string): boolean {
+  const value = (raw || '').trim();
+  if (!value) return true;
+  let host = '';
+  try {
+    host = new URL(normalizeWebsiteUrl(value)).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return true;
+  }
+  return (
+    host === 'example.com' ||
+    host.endsWith('.example.com') ||
+    host === 'yourbrand.com' ||
+    host.endsWith('.yourbrand.com')
+  );
+}
+
+/** Settings / catalog URL that WhatsApp will actually accept on a template button. */
+export function usableLibraryButtonUrl(raw?: string, appOrigin?: string): string {
+  const value = normalizeWebsiteUrl(raw || '');
+  if (!value || isSampleLibraryButtonUrl(value) || libraryButtonUrlError(value, appOrigin)) return '';
+  return value;
+}
+
 export function libraryButtonUrlError(raw: string, appOrigin?: string): string | null {
   const value = normalizeWebsiteUrl(raw);
   if (!value) {
@@ -473,9 +499,21 @@ export function libraryButtonUrlError(raw: string, appOrigin?: string): string |
     return 'Use your live website, not this Samyoj page or a link that only works on your computer.';
   }
 
-  const host = parsed.hostname.toLowerCase();
-  if (host === 'example.com' || host.endsWith('.example.com')) {
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (host === 'example.com' || host.endsWith('.example.com') || host === 'yourbrand.com') {
     return 'Replace the sample address with your real website.';
+  }
+  if (
+    host === 'github.com' ||
+    host.endsWith('.github.com') ||
+    host === 'gitlab.com' ||
+    host.endsWith('.gitlab.com') ||
+    host === 't.me' ||
+    host === 'telegram.org' ||
+    host === 'telegram.me' ||
+    host.endsWith('.telegram.org')
+  ) {
+    return 'WhatsApp will not approve GitHub, Telegram, or code-repo links on a template button. Paste a shop or tracking page customers can open on their phone.';
   }
 
   if (appOrigin) {

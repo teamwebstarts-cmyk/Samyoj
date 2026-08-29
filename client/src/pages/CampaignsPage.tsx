@@ -1130,17 +1130,18 @@ export default function CampaignsPage() {
             ? 'Delivery summary'
             : 'Message, audience, timing, and review'
         }
-        size="xl"
+        size={viewOnly ? '2xl' : 'xl'}
         icon={Send}
         accent="violet"
         footer={
           viewOnly ? (
             <div className="flex w-full flex-col gap-2.5">
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 {canManageCampaigns && editing && canRescheduleCampaign(editing.status) && (
                   <AppButton
                     size="sm"
                     variant="secondary"
+                    className="w-full sm:w-auto"
                     icon={<CalendarClock size={14} />}
                     onClick={() => setRescheduleTarget(editing)}
                   >
@@ -1149,12 +1150,13 @@ export default function CampaignsPage() {
                 )}
                 {canManageCampaigns && editing && canEditCampaign(editing.status) && (
                   <>
-                    <AppButton size="sm" icon={<Play size={14} />} onClick={() => handleSend(editing.id)}>
+                    <AppButton size="sm" className="w-full sm:w-auto" icon={<Play size={14} />} onClick={() => handleSend(editing.id)}>
                       Send now
                     </AppButton>
                     <AppButton
                       size="sm"
                       variant="secondary"
+                      className="w-full sm:w-auto"
                       onClick={() => {
                         if (!editing) return;
                         const campaign = editing;
@@ -1170,6 +1172,7 @@ export default function CampaignsPage() {
                   <AppButton
                     size="sm"
                     variant="secondary"
+                    className="w-full sm:w-auto"
                     icon={<Pause size={14} />}
                     onClick={() => editing && handleAction(() => campaignApi.pause(editing.id), 'Campaign paused')}
                   >
@@ -1180,6 +1183,7 @@ export default function CampaignsPage() {
                   <AppButton
                     size="sm"
                     variant="secondary"
+                    className="w-full sm:w-auto"
                     icon={<Play size={14} />}
                     onClick={() => editing && handleAction(() => campaignApi.resume(editing.id), 'Campaign resumed')}
                   >
@@ -1187,7 +1191,7 @@ export default function CampaignsPage() {
                   </AppButton>
                 )}
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-theme-border pt-2.5">
+              <div className="flex flex-col gap-2 border-t border-theme-border pt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 {editing && (
                   <CampaignActionsMenu>
                     {canManageCampaigns && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
@@ -1210,7 +1214,7 @@ export default function CampaignsPage() {
                     </button>
                   </CampaignActionsMenu>
                 )}
-                <AppButton size="sm" variant="secondary" onClick={closeSlide}>
+                <AppButton size="sm" variant="secondary" className="w-full sm:w-auto" onClick={closeSlide}>
                   Close
                 </AppButton>
               </div>
@@ -1250,6 +1254,7 @@ export default function CampaignsPage() {
             </div>
 
             <CampaignRetargetPanel
+              campaign={editing}
               campaignId={editing.id}
               campaignName={editing.name}
               analytics={analytics}

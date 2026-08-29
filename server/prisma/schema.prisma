@@ -2018,6 +2018,7 @@ model PlatformLibraryTemplate {
   tags         String[] @default([])
   icon         String   @default("file")
   header       String?
+  mediaFormat  String?  @map("media_format")
   body         String
   bodyHi       String   @map("body_hi")
   footer       String?

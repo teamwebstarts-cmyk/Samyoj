@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { CheckCheck, Sparkles } from 'lucide-react';
+import { WhatsAppChatSurface, WhatsAppBubble } from '../inbox/WhatsAppPreview';
+import { useWhatsAppPreviewIdentity } from '../../hooks/useWhatsAppPreviewIdentity';
 
 export function StatusBadge({ status }: { status: string }) {
   const tone =
@@ -76,37 +77,21 @@ export function StudioEmpty({
 
 export function WhatsAppPreview({
   brandName,
-  color,
   body,
 }: {
   brandName: string;
-  color: string;
+  color?: string;
   body: string;
 }) {
+  const identity = useWhatsAppPreviewIdentity({ companyName: brandName || undefined });
+
   return (
     <div className="studio-grain overflow-hidden rounded-2xl border border-theme-border p-4">
       <div className="mx-auto max-w-[280px]">
-        <div
-          className="overflow-hidden rounded-2xl border border-white/60 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900"
-        >
-          <div
-            className="flex items-center gap-2 px-3 py-2 text-white"
-            style={{ backgroundColor: color || '#128C7E' }}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span className="truncate text-[12px] font-bold">{brandName || 'Your brand'}</span>
-          </div>
-          <div className="bg-[#ece5dd]/70 px-3 py-4 dark:bg-slate-800/60">
-            <div className="ml-auto max-w-[85%] rounded-xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[12px] leading-snug text-slate-800 shadow-sm">
-              <p className="whitespace-pre-wrap">{body}</p>
-              <span className="mt-1 flex items-center justify-end gap-0.5 text-[10px] text-slate-500">
-                10:31
-                <CheckCheck className="h-3 w-3 text-sky-500" />
-              </span>
-            </div>
-          </div>
-        </div>
-        <p className="mt-2 text-center text-[11px] font-medium text-theme-muted">Live preview · Brand Kit tone</p>
+        <WhatsAppChatSurface compact identity={identity}>
+          <WhatsAppBubble direction="outbound" content={body} compact status="read" />
+        </WhatsAppChatSurface>
+        <p className="mt-2 text-center text-[11px] font-medium text-theme-muted">Live preview</p>
       </div>
     </div>
   );

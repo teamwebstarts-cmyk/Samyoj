@@ -651,7 +651,13 @@ export const templateApi = {
   starters: () => api.get('/templates/starters'),
   submitCatalog: (
     slug: string,
-    data: { name: string; language: string; buttonUrl?: string; buttonPhone?: string }
+    data: {
+      name: string;
+      language: string;
+      buttonUrl?: string;
+      buttonPhone?: string;
+      headerMediaHandle?: string;
+    }
   ) => api.post(`/templates/catalog/${encodeURIComponent(slug)}/submit`, data),
   get: (name: string) => api.get(`/templates/${name}`),
   usage: (name: string) => api.get(`/templates/${name}/usage`),

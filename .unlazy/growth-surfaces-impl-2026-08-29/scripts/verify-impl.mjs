@@ -99,11 +99,13 @@ const LEAVES = {
   },
   '1.1.4': () => {
     mustInclude('client/src/components/inbox/InboxListHeader.tsx', [
-      'inbox-window-toggle',
+      "chip: 'active'",
+      "chip: 'inactive'",
       'Active',
       'Inactive',
     ]);
     mustNotInclude('client/src/components/inbox/InboxListHeader.tsx', [
+      'inbox-window-toggle',
       'Can reply',
       'Needs template',
     ]);

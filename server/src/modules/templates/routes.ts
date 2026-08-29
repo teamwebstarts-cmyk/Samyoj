@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
-import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { MetaApiError, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
@@ -22,6 +22,7 @@ import {
   buildCatalogSubmitPayload,
   getPublishedLibraryTemplate,
   listPublishedLibraryTemplates,
+  unusableTemplateButtonUrl,
 } from './catalog-store';
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
@@ -129,6 +130,7 @@ const catalogSubmitSchema = z.object({
   language: z.string().min(2).default('en_US'),
   buttonUrl: z.string().max(2000).optional(),
   buttonPhone: z.string().max(20).optional(),
+  headerMediaHandle: z.string().max(500).optional(),
 });
 
 router.post(
@@ -142,12 +144,28 @@ router.post(
       .parse(req.params.slug);
     const body = catalogSubmitSchema.parse(req.body);
     const row = await getPublishedLibraryTemplate(slug);
+    const rowButtons = Array.isArray(row.buttons) ? row.buttons : [];
+    const needsUrl = rowButtons.some(
+      (button) =>
+        button &&
+        typeof button === 'object' &&
+        !Array.isArray(button) &&
+        (button as { type?: string }).type === 'URL',
+    );
+    if (needsUrl && !body.buttonUrl?.trim()) {
+      throw new AppError(400, 'Add your public https:// website link for this template button.');
+    }
+    if (needsUrl && body.buttonUrl) {
+      const buttonUrlError = unusableTemplateButtonUrl(body.buttonUrl);
+      if (buttonUrlError) throw new AppError(400, buttonUrlError);
+    }
     const data = createTemplateSchema.parse(
       buildCatalogSubmitPayload(row, {
         name: body.name,
         language: body.language,
         buttonUrl: body.buttonUrl,
         buttonPhone: body.buttonPhone,
+        headerMediaHandle: body.headerMediaHandle,
       })
     );
     const { wabaId, accessToken } = await getOrgWhatsappContext(
@@ -155,13 +173,21 @@ router.post(
       req.activeWhatsappNumberId
     );
 
-    const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
-      name: data.name,
-      language: data.language,
-      category: data.category,
-      components: buildCreateComponents(data),
-      allow_category_change: true,
-    });
+    let result;
+    try {
+      result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
+        name: data.name,
+        language: data.language,
+        category: data.category,
+        components: buildCreateComponents(data),
+        allow_category_change: true,
+      });
+    } catch (error) {
+      if (error instanceof MetaApiError) {
+        throw new AppError(400, `Meta rejected this template: ${error.message}`, 'META_TEMPLATE_REJECTED');
+      }
+      throw error;
+    }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
     sendSuccess(res, result, 201);

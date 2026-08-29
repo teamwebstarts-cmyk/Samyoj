@@ -96,7 +96,7 @@ export default function ConfirmDialog({
     if (!open) return;
     previousFocus.current = document.activeElement as HTMLElement | null;
     requestAnimationFrame(() => {
-      dialogRef.current?.querySelector<HTMLElement>('button')?.focus();
+      dialogRef.current?.querySelector<HTMLElement>('[data-confirm-action]')?.focus();
     });
     return () => {
       previousFocus.current?.focus();
@@ -129,7 +129,7 @@ export default function ConfirmDialog({
 
       <div
         ref={dialogRef}
-        className={`relative w-full overflow-hidden rounded-[1.35rem] border border-theme-border bg-theme-surface shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)] ${
+        className={`relative flex max-h-[min(92vh,40rem)] w-full flex-col overflow-hidden rounded-[1.35rem] border border-theme-border bg-theme-surface shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)] ${
           details && details.length > 0 ? 'max-w-[460px]' : 'max-w-[420px]'
         }`}
         role="alertdialog"
@@ -147,7 +147,7 @@ export default function ConfirmDialog({
           aria-hidden
         />
 
-        <div className="relative px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-7">
+        <div className="relative min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-7">
           <div className="flex flex-col items-center text-center">
             <div className="relative">
               <div
@@ -225,6 +225,7 @@ export default function ConfirmDialog({
               loading={loading}
               disabled={loading}
               fullWidth
+              data-confirm-action
               className="sm:min-w-[108px] sm:flex-none"
             >
               {confirmLabel}

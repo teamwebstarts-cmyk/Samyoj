@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
+import { parseMessagingLimitCap } from '../whatsapp/messaging-limit-tier';
 import { randomUUID } from 'node:crypto';
 import { ownsCampaignQuotaReservation, utcDayStart } from './safety';
 import type { Prisma } from '@prisma/client';
@@ -52,44 +53,69 @@ export async function getDailySendUsage(organizationId: string, whatsappNumberId
       : Promise.resolve(null),
   ]);
 
-  const dailySendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
   const reservedSendCount = ledger?.reservedSendCount ?? 0;
-  const remaining = Math.max(0, dailySendLimit - sentToday - reservedSendCount);
+  const uniqueUsed24h = uniquePhones.length;
+  const meta = parseMessagingLimitCap(number?.messagingLimitTier);
+  const remaining =
+    meta.unlimited || !meta.known || meta.cap == null
+      ? null
+      : Math.max(0, meta.cap - uniqueUsed24h - reservedSendCount);
 
   return {
     sentToday,
-    dailySendLimit,
+    dailySendLimit: meta.cap,
     reservedSendCount,
     remaining,
-    uniqueUsed24h: uniquePhones.length,
+    uniqueUsed24h,
     messagingLimitTier: number?.messagingLimitTier || null,
     batchSize: settings.batchSize ?? DEFAULT_CAMPAIGN_SETTINGS.batchSize!,
     batchDelayMs: settings.batchDelayMs ?? DEFAULT_CAMPAIGN_SETTINGS.batchDelayMs!,
   };
 }
 
-export async function assertDailySendQuota(organizationId: string, recipientCount: number) {
-  const settings = await getCampaignSettings(organizationId);
-  const limit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
-  const day = utcDayStart();
-  const [sentToday, reserved] = await Promise.all([
-    prisma.campaignRecipient.count({
-      where: {
-        campaign: { organizationId },
-        status: { in: ['SENT', 'DELIVERED', 'READ'] },
-        sentAt: { gte: day },
+async function uniqueCampaignPhones24h(organizationId: string, whatsappNumberId?: string | null) {
+  const rolling24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await prisma.campaignRecipient.findMany({
+    where: {
+      campaign: {
+        organizationId,
+        ...(whatsappNumberId ? { whatsappNumberId } : {}),
       },
-    }),
-    prisma.campaignQuotaLedger.findUnique({
-      where: { organizationId_periodStart: { organizationId, periodStart: day } },
-      select: { reservedSendCount: true },
-    }),
-  ]);
-  if (sentToday + (reserved?.reservedSendCount ?? 0) + recipientCount > limit) {
+      status: { in: ['SENT', 'DELIVERED', 'READ'] },
+      sentAt: { gte: rolling24h },
+    },
+    distinct: ['phone'],
+    select: { phone: true },
+  });
+  return rows.length;
+}
+
+export async function assertDailySendQuota(
+  organizationId: string,
+  recipientCount: number,
+  whatsappNumberId?: string | null,
+) {
+  if (recipientCount <= 0) return;
+  const number = whatsappNumberId
+    ? await prisma.whatsappNumber.findFirst({
+        where: { id: whatsappNumberId, organizationId, isActive: true },
+        select: { messagingLimitTier: true },
+      })
+    : null;
+  const meta = parseMessagingLimitCap(number?.messagingLimitTier);
+  if (!meta.known || meta.unlimited || meta.cap == null) return;
+
+  const uniqueUsed24h = await uniqueCampaignPhones24h(organizationId, whatsappNumberId);
+  const day = utcDayStart();
+  const reserved = await prisma.campaignQuotaLedger.findUnique({
+    where: { organizationId_periodStart: { organizationId, periodStart: day } },
+    select: { reservedSendCount: true },
+  });
+  if (uniqueUsed24h + (reserved?.reservedSendCount ?? 0) + recipientCount > meta.cap) {
     throw new AppError(
       429,
-      `Daily campaign recipient limit reached (${limit}). Try again tomorrow.`,
-      'CAMPAIGN_DAILY_LIMIT'
+      `This number’s Meta unique-people / 24h ceiling is ${meta.cap.toLocaleString()}. Send fewer contacts, or wait for the window to roll. Exact remaining is only in WhatsApp Manager.`,
+      'CAMPAIGN_META_LIMIT',
     );
   }
 }
@@ -145,7 +171,8 @@ export async function reserveCampaignQuota(
   campaignId: string,
   runVersion: number,
   recipientCount: number,
-  category = 'MARKETING'
+  category = 'MARKETING',
+  whatsappNumberId?: string | null,
 ) {
   const budgetCents = Math.round(estimateCampaignCost(recipientCount, category).estimatedCostInr * 100);
   const day = utcDayStart();
@@ -174,8 +201,24 @@ export async function reserveCampaignQuota(
     }
 
     const settings = await getCampaignSettings(organizationId);
-    const dailySendLimit = settings.dailySendLimit ?? DEFAULT_CAMPAIGN_SETTINGS.dailySendLimit!;
     const dailyBudgetInr = settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!;
+    const number = whatsappNumberId
+      ? await tx.whatsappNumber.findFirst({
+          where: { id: whatsappNumberId, organizationId, isActive: true },
+          select: { messagingLimitTier: true },
+        })
+      : null;
+    const meta = parseMessagingLimitCap(number?.messagingLimitTier);
+    if (meta.known && !meta.unlimited && meta.cap != null) {
+      const uniqueUsed24h = await uniqueCampaignPhones24h(organizationId, whatsappNumberId);
+      if (uniqueUsed24h + lockedLedger.reservedSendCount + recipientCount > meta.cap) {
+        throw new AppError(
+          429,
+          `This number’s Meta unique-people / 24h ceiling is ${meta.cap.toLocaleString()}. Send fewer contacts, or wait for the window to roll. Exact remaining is only in WhatsApp Manager.`,
+          'CAMPAIGN_META_LIMIT',
+        );
+      }
+    }
     const sentToday = await tx.campaignRecipient.count({
       where: {
         campaign: { organizationId },
@@ -183,13 +226,6 @@ export async function reserveCampaignQuota(
         sentAt: { gte: day },
       },
     });
-    if (sentToday + lockedLedger.reservedSendCount + recipientCount > dailySendLimit) {
-      throw new AppError(
-        429,
-        `Daily campaign recipient limit reached (${dailySendLimit}). Try again tomorrow.`,
-        'CAMPAIGN_DAILY_LIMIT'
-      );
-    }
     const spentEstimateInr = estimateCampaignCost(sentToday, category).estimatedCostInr;
     const reservedBudgetInr = lockedLedger.reservedBudgetCents / 100;
     if (spentEstimateInr + reservedBudgetInr + budgetCents / 100 > dailyBudgetInr) {

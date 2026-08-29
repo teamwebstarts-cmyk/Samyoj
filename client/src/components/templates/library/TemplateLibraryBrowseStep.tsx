@@ -18,9 +18,11 @@ import {
 } from 'lucide-react';
 import AppAlert from '../../ui/AppAlert';
 import AppButton from '../../ui/AppButton';
+import AppSelect from '../../ui/AppSelect';
 import SearchInput from '../../ui/SearchInput';
 import StatusBadge from '../../ui/StatusBadge';
 import Skeleton from '../../ui/Skeleton';
+import InfoTip from '../../ui/InfoTip';
 import type { CatalogListItem } from '../../../utils/templateLibrary';
 
 export type CatalogFilterChip = { id: string; label: string };
@@ -59,11 +61,27 @@ const ICON_MAP: Record<string, LucideIcon> = {
   message: MessageSquare,
 };
 
+const ICON_TONES = [
+  'bg-gradient-to-br from-cyan-500 to-blue-600',
+  'bg-gradient-to-br from-fuchsia-500 to-purple-600',
+  'bg-gradient-to-br from-amber-400 to-orange-600',
+  'bg-gradient-to-br from-emerald-400 to-teal-600',
+  'bg-gradient-to-br from-rose-500 to-pink-600',
+  'bg-gradient-to-br from-indigo-500 to-violet-700',
+  'bg-gradient-to-br from-lime-500 to-green-600',
+] as const;
+
 function iconFor(item: CatalogListItem): LucideIcon {
   if (item.icon && ICON_MAP[item.icon]) return ICON_MAP[item.icon];
   if (item.category === 'AUTHENTICATION') return KeyRound;
   if (item.category === 'MARKETING') return Sparkles;
   return FileText;
+}
+
+function iconToneFor(item: CatalogListItem): string {
+  let hash = 0;
+  for (const character of item.id) hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  return ICON_TONES[Math.abs(hash) % ICON_TONES.length];
 }
 
 function previewBody(item: CatalogListItem, language: string): string {
@@ -90,10 +108,15 @@ export default function TemplateLibraryBrowseStep({
   return (
     <div className="space-y-3">
       <div className="template-wizard-card p-3 sm:p-3.5">
-        <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
-          Samyoj template library
-        </p>
-        <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">{honesty}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
+            Samyoj template library
+          </p>
+          <InfoTip
+            label="How library templates work"
+            content={honesty}
+          />
+        </div>
         <div className="mt-3 space-y-2.5">
           <SearchInput
             id="library-search"
@@ -104,43 +127,26 @@ export default function TemplateLibraryBrowseStep({
             inputClassName="!h-9 !rounded-lg !pl-9 !pr-3 !text-[13px]"
             className="min-w-0"
           />
-          <div className="flex flex-wrap gap-1.5">
-            {filters.map((chip) => {
-              const active = chip.id === filterId;
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => onFilterChange(chip.id)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
-                    active
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex gap-1.5">
-            {[
-              { id: 'en_US', label: 'English' },
-              { id: 'hi_IN', label: 'Hindi' },
-            ].map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => onLanguageChange(option.id)}
-                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ${
-                  language === option.id
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            <AppSelect
+              size="compact"
+              label="Filter"
+              value={filterId}
+              isSearchable={false}
+              options={filters.map((filter) => ({ value: filter.id, label: filter.label }))}
+              onChange={(event) => onFilterChange(event.target.value)}
+            />
+            <AppSelect
+              size="compact"
+              label="Language"
+              value={language}
+              isSearchable={false}
+              options={[
+                { value: 'en_US', label: 'English' },
+                { value: 'hi_IN', label: 'Hindi' },
+              ]}
+              onChange={(event) => onLanguageChange(event.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -208,6 +214,7 @@ export default function TemplateLibraryBrowseStep({
               const key = entry.id;
               const selected = selectedKey === key;
               const Icon = iconFor(entry);
+              const iconTone = iconToneFor(entry);
               return (
                 <button
                   key={key}
@@ -223,7 +230,7 @@ export default function TemplateLibraryBrowseStep({
                 >
                   <span className="flex items-start justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${iconTone}`}>
                         <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
                       </span>
                       <span className="min-w-0">
@@ -233,7 +240,14 @@ export default function TemplateLibraryBrowseStep({
                         <span className="mt-0.5 block text-[10px] font-medium text-slate-400">{entry.copy}</span>
                       </span>
                     </span>
-                    <StatusBadge status={entry.category} />
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <StatusBadge status={entry.category} />
+                      {entry.mediaFormat ? (
+                        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                          {entry.mediaFormat} header
+                        </span>
+                      ) : null}
+                    </span>
                   </span>
                   <span className="mt-2 line-clamp-2 text-[11px] leading-snug text-slate-500">
                     {previewBody(entry, language)}

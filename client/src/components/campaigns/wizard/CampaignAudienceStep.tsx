@@ -70,7 +70,11 @@ export default function CampaignAudienceStep({
               audienceType={form.audienceType}
               selectedAudienceTypes={form.selectedAudienceTypes}
               onAudienceTypesChange={(selectedAudienceTypes) =>
-                setForm((previous) => ({ ...previous, selectedAudienceTypes }))
+                setForm((previous) => ({
+                  ...previous,
+                  selectedAudienceTypes,
+                  audienceType: selectedAudienceTypes[0] || previous.audienceType,
+                }))
               }
               audienceOperator={form.audienceOperator}
               onAudienceOperatorChange={(audienceOperator) =>

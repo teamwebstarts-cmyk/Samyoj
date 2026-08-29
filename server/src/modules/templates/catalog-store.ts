@@ -9,6 +9,7 @@ import {
   type CatalogButton,
   type SamyojCatalogEntry,
 } from './catalog';
+import { templateTextHasEdgeParams } from './types';
 
 export const CATALOG_HONESTY =
   'These drafts live in Samyoj. Submitting still sends this copy to Meta for YOUR WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on your number.';
@@ -42,6 +43,9 @@ export function rowToCatalogEntry(row: PlatformLibraryTemplate): SamyojCatalogEn
     tags: row.tags,
     icon: row.icon,
     header: row.header || undefined,
+    mediaFormat: row.mediaFormat === 'IMAGE' || row.mediaFormat === 'VIDEO' || row.mediaFormat === 'DOCUMENT'
+      ? row.mediaFormat
+      : undefined,
     body: row.body,
     bodyHi: row.bodyHi,
     footer: row.footer || undefined,
@@ -70,6 +74,7 @@ function seedRow(entry: SamyojCatalogEntry, index: number): Prisma.PlatformLibra
     tags: entry.tags,
     icon: entry.icon,
     header: entry.header ?? null,
+    mediaFormat: entry.mediaFormat ?? null,
     body: entry.body,
     bodyHi: entry.bodyHi,
     footer: entry.footer ?? null,
@@ -82,18 +87,53 @@ function seedRow(entry: SamyojCatalogEntry, index: number): Prisma.PlatformLibra
   };
 }
 
+const SEED_SETTING_KEY = 'library_catalog_seeded';
+
 export async function seedPlatformLibraryIfEmpty(): Promise<{ seeded: number }> {
+  const flag = await prisma.platformSetting.findUnique({ where: { key: SEED_SETTING_KEY } });
+  if (flag) return { seeded: 0 };
   const count = await prisma.platformLibraryTemplate.count();
-  if (count > 0) return { seeded: 0 };
-  await prisma.platformLibraryTemplate.createMany({
-    data: SAMYOJ_CATALOG.map((entry, index) => seedRow(entry, index)),
-    skipDuplicates: true,
+  let seeded = 0;
+  if (count === 0) {
+    await prisma.platformLibraryTemplate.createMany({
+      data: SAMYOJ_CATALOG.map((entry, index) => seedRow(entry, index)),
+      skipDuplicates: true,
+    });
+    seeded = SAMYOJ_CATALOG.length;
+  }
+  await prisma.platformSetting.upsert({
+    where: { key: SEED_SETTING_KEY },
+    create: {
+      key: SEED_SETTING_KEY,
+      value: { at: new Date().toISOString(), count: seeded || count },
+    },
+    update: { value: { at: new Date().toISOString() } },
   });
-  return { seeded: SAMYOJ_CATALOG.length };
+  return { seeded };
+}
+
+async function patchSeededLibraryEdgeParams() {
+  const bySlug = new Map(SAMYOJ_CATALOG.map((entry) => [entry.id, entry]));
+  const rows = await prisma.platformLibraryTemplate.findMany({
+    where: { slug: { in: [...bySlug.keys()] } },
+    select: { id: true, slug: true, body: true, bodyHi: true },
+  });
+  for (const row of rows) {
+    const entry = bySlug.get(row.slug);
+    if (!entry) continue;
+    const nextBody = templateTextHasEdgeParams(row.body) ? entry.body : row.body;
+    const nextBodyHi = templateTextHasEdgeParams(row.bodyHi) ? entry.bodyHi : row.bodyHi;
+    if (nextBody === row.body && nextBodyHi === row.bodyHi) continue;
+    await prisma.platformLibraryTemplate.update({
+      where: { id: row.id },
+      data: { body: nextBody, bodyHi: nextBodyHi },
+    });
+  }
 }
 
 export async function listPublishedLibraryTemplates() {
   await seedPlatformLibraryIfEmpty();
+  await patchSeededLibraryEdgeParams();
   const rows = await prisma.platformLibraryTemplate.findMany({
     where: { published: true },
     orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
@@ -105,8 +145,38 @@ export async function listPublishedLibraryTemplates() {
   };
 }
 
+export function unusableTemplateButtonUrl(raw: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    return 'That button link is not a valid website.';
+  }
+  if (parsed.protocol !== 'https:') {
+    return 'Use a public https:// website for the button.';
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (
+    host === 'github.com' ||
+    host.endsWith('.github.com') ||
+    host === 'gitlab.com' ||
+    host.endsWith('.gitlab.com') ||
+    host === 't.me' ||
+    host === 'telegram.org' ||
+    host === 'telegram.me' ||
+    host.endsWith('.telegram.org') ||
+    host === 'yourbrand.com' ||
+    host === 'example.com' ||
+    host.endsWith('.example.com')
+  ) {
+    return 'WhatsApp will not approve GitHub, Telegram, or sample links on a template button. Paste a shop or tracking page customers can open on their phone.';
+  }
+  return null;
+}
+
 export async function getPublishedLibraryTemplate(slug: string) {
   await seedPlatformLibraryIfEmpty();
+  await patchSeededLibraryEdgeParams();
   const row = await prisma.platformLibraryTemplate.findFirst({
     where: { slug, published: true },
   });
@@ -116,16 +186,31 @@ export async function getPublishedLibraryTemplate(slug: string) {
 
 export function buildCatalogSubmitPayload(
   row: PlatformLibraryTemplate,
-  input: { name: string; language: string; buttonUrl?: string; buttonPhone?: string }
+  input: {
+    name: string;
+    language: string;
+    buttonUrl?: string;
+    buttonPhone?: string;
+    headerMediaHandle?: string;
+  }
 ) {
-  return starterCreatePayload(rowToCatalogEntry(row), input.language, input.name, {
+  const payload = starterCreatePayload(rowToCatalogEntry(row), input.language, input.name, {
     url: input.buttonUrl,
     phone: input.buttonPhone,
   });
+  if (row.mediaFormat) {
+    return {
+      ...payload,
+      headerFormat: row.mediaFormat as 'IMAGE' | 'VIDEO' | 'DOCUMENT',
+      headerMediaHandle: input.headerMediaHandle,
+    };
+  }
+  return payload;
 }
 
 export async function listAdminLibraryTemplates() {
   await seedPlatformLibraryIfEmpty();
+  await patchSeededLibraryEdgeParams();
   return prisma.platformLibraryTemplate.findMany({
     orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
   });
@@ -138,6 +223,7 @@ export type LibraryTemplateWriteInput = {
   tags: string[];
   icon: string;
   header?: string | null;
+  mediaFormat?: 'IMAGE' | 'VIDEO' | 'DOCUMENT' | null;
   body: string;
   bodyHi: string;
   footer?: string | null;
@@ -157,6 +243,7 @@ function writeData(input: LibraryTemplateWriteInput): Prisma.PlatformLibraryTemp
     tags: input.tags,
     icon: input.icon,
     header: input.header || null,
+    mediaFormat: input.mediaFormat || null,
     body: input.body,
     bodyHi: input.bodyHi,
     footer: input.footer || null,
@@ -209,6 +296,7 @@ export async function patchAdminLibraryTemplate(input: {
       ...(input.data.tags !== undefined ? { tags: input.data.tags } : {}),
       ...(input.data.icon !== undefined ? { icon: input.data.icon } : {}),
       ...(input.data.header !== undefined ? { header: input.data.header || null } : {}),
+      ...(input.data.mediaFormat !== undefined ? { mediaFormat: input.data.mediaFormat || null } : {}),
       ...(input.data.body !== undefined ? { body: input.data.body } : {}),
       ...(input.data.bodyHi !== undefined ? { bodyHi: input.data.bodyHi } : {}),
       ...(input.data.footer !== undefined ? { footer: input.data.footer || null } : {}),

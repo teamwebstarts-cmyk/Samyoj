@@ -7,6 +7,8 @@ import {
   libraryVariableMetaForPersist,
   LIBRARY_QUICK_PICKS,
   libraryButtonUrlError,
+  isSampleLibraryButtonUrl,
+  usableLibraryButtonUrl,
   normalizeWebsiteUrl,
   pickStarterLibraryMatch,
   statusFromTemplateCreate,
@@ -115,6 +117,19 @@ describe('libraryButtonUrlError', () => {
         'https://app.samyoj.test',
       ),
     ).toMatch(/Samyoj screen/i);
+  });
+
+  it('rejects GitHub and Telegram button URLs', () => {
+    expect(libraryButtonUrlError('https://github.com/teamwebstarts-cmyk/Samyoj')).toMatch(/GitHub|shop or tracking/i);
+    expect(libraryButtonUrlError('https://web.telegram.org/')).toMatch(/Telegram|shop or tracking/i);
+  });
+
+  it('treats catalog placeholders as sample URLs and accepts a real shop site', () => {
+    expect(isSampleLibraryButtonUrl('https://www.yourbrand.com/')).toBe(true);
+    expect(isSampleLibraryButtonUrl('https://yourstore.com/track')).toBe(false);
+    expect(usableLibraryButtonUrl('https://www.yourbrand.com/')).toBe('');
+    expect(usableLibraryButtonUrl('https://yourstore.com/reschedule')).toBe('https://yourstore.com/reschedule');
+    expect(usableLibraryButtonUrl('')).toBe('');
   });
 });
 

@@ -65,11 +65,8 @@ export default function CampaignAudiencePreview({
       setLoading(true);
       setStale(false);
       setError(null);
-      setCostInr(null);
-      onCountChange?.(null);
-      onCostChange?.(null);
-      onMetricsChange?.(null);
-      setMetrics(null);
+      // Keep the last good parent count while a refresh is in flight. Clearing it
+      // disabled Review → Send for people who selected contacts and moved on.
 
       try {
         let payload: Record<string, unknown>;
@@ -124,7 +121,7 @@ export default function CampaignAudiencePreview({
             audienceType: 'MANUAL',
             recipients: result.phones.map((phone) => ({ phone })),
           };
-        } else if (audienceType === 'TAGS') {
+        } else if (hasTags || audienceType === 'TAGS') {
           const tags = audienceTags
             .split(',')
             .map((t) => t.trim())
@@ -142,7 +139,7 @@ export default function CampaignAudiencePreview({
             audienceType: 'TAGS',
             audienceConfig: { tags, requireOptIn: true },
           };
-        } else if (audienceType === 'CONTACTS') {
+        } else if (hasContacts || audienceType === 'CONTACTS') {
           if (!selectedContactIds.length) {
             setCount(null);
             onCountChange?.(null);

@@ -43,7 +43,9 @@ const keyMap: Record<string, Tone> = {
   DISABLED: 'neutral',
   ANALYST: 'info',
   SUPPORT: 'warning',
-  SUPER_ADMIN: 'success',
+  UTILITY: 'info',
+  MARKETING: 'purple',
+  AUTHENTICATION: 'warning',
 };
 
 export function StatusBadge({

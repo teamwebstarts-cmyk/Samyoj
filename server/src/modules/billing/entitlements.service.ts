@@ -168,7 +168,8 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
     : ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
         org.subscriptionStatus
       ) || Boolean(org.planExpiresAt && org.planExpiresAt <= new Date());
-  const isLocked = unlockLocalTesting() ? false : computedLocked;
+  const testing = unlockLocalTesting();
+  const isLocked = testing ? false : computedLocked;
   const planExpiresAt = ledgerPeriod?.endsAt ?? org.planExpiresAt;
 
   return {
@@ -198,15 +199,17 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
         used: automationCount + flowCount,
         limit: tierDef.publishedWorkflows,
       },
-      aiIncluded: tierDef.aiIncluded,
-      callingIncluded: tierDef.callingIncluded,
-      analyticsAdvanced: tierDef.analyticsAdvanced,
-      campaigns: tierDef.campaigns,
-      integrations: tierDef.integrations,
-      publicApi: tierDef.publicApi,
-      templates: tierDef.templates,
-      forms: tierDef.forms,
-      advancedInbox: tierDef.advancedInbox,
+      // Local testing already unlocks mutations via checkFeature. Mirror that in
+      // the snapshot so the UI does not grey-out Send while the API would allow it.
+      aiIncluded: testing && tierDef.aiIncluded === 'off' ? 'included' : tierDef.aiIncluded,
+      callingIncluded: testing ? true : tierDef.callingIncluded,
+      analyticsAdvanced: testing ? true : tierDef.analyticsAdvanced,
+      campaigns: testing ? true : tierDef.campaigns,
+      integrations: testing ? true : tierDef.integrations,
+      publicApi: testing ? true : tierDef.publicApi,
+      templates: testing ? true : tierDef.templates,
+      forms: testing ? true : tierDef.forms,
+      advancedInbox: testing ? true : tierDef.advancedInbox,
       supportLevel: tierDef.supportLevel,
     },
   };
@@ -232,7 +235,7 @@ export async function checkFeature(
         : feature === 'support'
           ? 'starter'
         : feature === 'campaigns'
-          ? 'growth'
+          ? 'launch'
           : 'starter';
 
   if (entitlements.isLocked) {

@@ -76,6 +76,12 @@ export function getCampaignSendErrorMessage(error: unknown, fallback: string) {
   if (/Campaign changed while/i.test(message)) {
     return 'The campaign changed while sending started. Refresh and try once more.';
   }
+  if (/unique-people \/ 24h ceiling|CAMPAIGN_META_LIMIT/i.test(message)) {
+    return message;
+  }
+  if (/Daily campaign recipient limit reached/i.test(message)) {
+    return 'This number hit Meta’s unique-people / 24h messaging limit. Send fewer contacts, or wait for the window to roll. Exact remaining is only in WhatsApp Manager.';
+  }
   const explained = explainTemplateIssue(message);
   if (explained.title && explained.title !== message) {
     return explained.detail ? `${explained.title}. ${explained.detail}` : explained.title;

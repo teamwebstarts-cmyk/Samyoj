@@ -16,6 +16,8 @@ const AGENT_VISIBLE_COUNT = 3;
 
 export type ListChip =
   | 'all'
+  | 'active'
+  | 'inactive'
   | 'unread'
   | 'unreplied'
   | 'open'
@@ -24,11 +26,10 @@ export type ListChip =
   | 'hasTicket'
   | 'botActive';
 
-/** Active = 24h chat still open. Inactive = window closed (need a template). */
-export type InboxWindowMode = 'all' | 'active' | 'inactive';
-
-const FILTER_CHIPS: Array<{ chip: ListChip; label: string }> = [
+const FILTER_CHIPS: Array<{ chip: ListChip; label: string; title?: string }> = [
   { chip: 'all', label: 'All' },
+  { chip: 'active', label: 'Active', title: '24h window open — you can reply' },
+  { chip: 'inactive', label: 'Inactive', title: '24h window closed — send a template' },
   { chip: 'unread', label: 'Unread' },
   { chip: 'unreplied', label: 'Unreplied' },
   { chip: 'open', label: 'Open' },
@@ -44,8 +45,6 @@ interface InboxListHeaderProps {
   searchInputRef?: Ref<HTMLInputElement>;
   chip: ListChip;
   onChipChange: (chip: ListChip) => void;
-  windowMode: InboxWindowMode;
-  onWindowModeChange: (mode: InboxWindowMode) => void;
   conversationTotal: number;
   unreadTotal: number;
   agentFilter: string;
@@ -114,49 +113,12 @@ function AgentAvatarButton({
   );
 }
 
-function WindowModeToggle({
-  windowMode,
-  onToggle,
-  className,
-  tipFor,
-}: {
-  windowMode: InboxWindowMode;
-  onToggle: () => void;
-  className: string;
-  tipFor: (label: string) => Record<string, unknown>;
-}) {
-  const inactive = windowMode === 'inactive';
-  return (
-    <button
-      type="button"
-      aria-pressed={windowMode !== 'all'}
-      aria-label={inactive ? 'Inactive chats. Click for Active.' : 'Active chats. Click for Inactive.'}
-      data-testid="inbox-window-toggle"
-      onClick={onToggle}
-      {...tipFor(
-        inactive
-          ? 'Inactive: 24h window closed. Click to show Active chats.'
-          : 'Active: 24h chat is open. Click to show Inactive chats.'
-      )}
-      className={`inline-flex h-9 shrink-0 items-center rounded-lg px-3 text-[12.5px] font-bold transition hover:brightness-105 active:scale-[0.98] ${FOCUS_RING_CLASS} ${
-        inactive
-          ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
-          : 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)]'
-      } ${className}`}
-    >
-      {inactive ? 'Inactive' : 'Active'}
-    </button>
-  );
-}
-
 export default function InboxListHeader({
   search,
   onSearchChange,
   searchInputRef,
   chip,
   onChipChange,
-  windowMode,
-  onWindowModeChange,
   conversationTotal,
   unreadTotal,
   agentFilter,
@@ -226,11 +188,6 @@ export default function InboxListHeader({
   const toggleAgentFilter = (value: string) => {
     onAgentFilterChange(agentFilter === value ? '' : value);
     setAgentsMenuOpen(false);
-  };
-
-  const toggleWindowMode = () => {
-    if (windowMode === 'inactive') onWindowModeChange('active');
-    else onWindowModeChange('inactive');
   };
 
   return (
@@ -311,13 +268,6 @@ export default function InboxListHeader({
             </button>
           )}
 
-          <WindowModeToggle
-            windowMode={windowMode}
-            onToggle={toggleWindowMode}
-            className="hidden md:inline-flex"
-            tipFor={tipFor}
-          />
-
           <button
             type="button"
             onClick={onNewChat}
@@ -338,12 +288,6 @@ export default function InboxListHeader({
             onChange={onSearchChange}
             placeholder="Search inbox"
             className="min-w-0 flex-1 [&_input]:!h-8 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!text-[14px] [&_input]:!shadow-none [&_svg]:left-2.5 [&_svg]:!h-3.5 [&_svg]:!w-3.5 [&_input]:!pl-8"
-          />
-          <WindowModeToggle
-            windowMode={windowMode}
-            onToggle={toggleWindowMode}
-            className="md:hidden"
-            tipFor={tipFor}
           />
 
           {selectableAgents.length > 0 && (
@@ -459,6 +403,7 @@ export default function InboxListHeader({
                 role="tab"
                 aria-selected={active}
                 data-testid={`inbox-filter-chip-${item.chip}`}
+                title={item.title}
                 onClick={() => onChipChange(item.chip)}
                 className={`inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2 text-[12px] font-semibold leading-none transition ${FOCUS_RING_CLASS} ${
                   active

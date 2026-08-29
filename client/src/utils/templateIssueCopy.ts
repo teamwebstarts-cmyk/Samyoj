@@ -36,8 +36,8 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     issue: {
       title: 'Add the website for this button',
       detail:
-        'When someone taps the button in the chat, they should land on your site. Paste that page’s address here.',
-      example: 'https://yourstore.com/verify',
+        'This is not {{1}}. Name and order number fill later when you send. Meta needs your live shop or tracking page on this button now.',
+      example: 'https://yourstore.com/track',
     },
   },
   {
@@ -46,6 +46,15 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
       title: 'Use your real website',
       detail: 'Swap the sample address for the page customers should actually visit.',
       example: 'https://yourstore.com/verify',
+    },
+  },
+  {
+    match: /github|telegram|code-repo/i,
+    issue: {
+      title: 'Use a shop or tracking page, not GitHub',
+      detail:
+        'WhatsApp opens this button on the customer’s phone. GitHub, Telegram, and sample links are rejected. Paste a page on your live site.',
+      example: 'https://yourstore.com/track',
     },
   },
   {
@@ -85,6 +94,16 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
       title: 'A personal field needs a small fix',
       detail:
         'Personal fields look like {{1}} and {{2}}. Keep them in order, and add a few words of normal text around them.',
+    },
+  },
+  {
+    match:
+      /leading or trailing params|variables can.?t be at the start or end|cannot (start|end) with a placeholder|full stop after \{\{3\}\}/i,
+    issue: {
+      title: 'Don’t start or end the message with {{1}}',
+      detail:
+        'WhatsApp needs normal words before the first field and after the last one. A full stop after Tracking ID {{3}} is not enough. Add a short sentence after the last field.',
+      example: 'Tracking ID: {{3}}. Keep this message handy.',
     },
   },
   {
@@ -162,6 +181,19 @@ export function explainTemplateIssue(message: string): FriendlyIssue {
   const trimmed = message.trim();
   for (const row of KNOWN_ISSUES) {
     if (row.match.test(trimmed)) return row.issue;
+  }
+  const metaRejected = trimmed.match(/^Meta rejected this template:\s*(.*)$/i);
+  if (metaRejected) {
+    const detail = metaRejected[1].trim();
+    if (!detail || /^invalid parameter$/i.test(detail) || TECHNICAL_NOISE.test(detail)) {
+      return {
+        title: 'WhatsApp rejected this template',
+        detail:
+          'Usually the button is not a customer website (GitHub, Telegram, sample URLs), or this name already exists on the number. Use a shop or tracking page and a unique name.',
+        example: 'https://yourstore.com/track',
+      };
+    }
+    return { title: 'WhatsApp rejected this template', detail };
   }
   if (!trimmed || TECHNICAL_NOISE.test(trimmed)) {
     return {

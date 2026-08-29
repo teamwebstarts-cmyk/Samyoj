@@ -174,7 +174,32 @@ export interface CreateTemplatePayload {
 }
 
 interface GraphError {
-  error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string };
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+    error_subcode?: number;
+    error_user_title?: string;
+    error_user_msg?: string;
+    fbtrace_id?: string;
+    error_data?: unknown;
+  };
+}
+
+/** Prefer Meta's shop-owner copy over the useless Graph "Invalid parameter". */
+export function formatGraphErrorMessage(
+  error?: GraphError['error'],
+  fallback = 'Failed to create message template'
+): string {
+  if (!error) return fallback;
+  const user = [error.error_user_title, error.error_user_msg]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(': ');
+  if (user) return user;
+  const generic = (error.message || '').trim();
+  if (generic && !/^invalid parameter$/i.test(generic)) return generic;
+  return 'WhatsApp rejected this template. Use a public shop or tracking page for the button (not GitHub or Telegram), and a unique template name.';
 }
 
 /** Structured Meta Graph failures — preserve code + fbtrace for Inbox/server logs. */
@@ -798,7 +823,19 @@ export class MetaWhatsAppService {
 
     const data = (await res.json()) as { id?: string; status?: string; category?: string } & GraphError;
     if (!res.ok) {
-      throw new Error(data.error?.message || 'Failed to create message template');
+      log.warn('Meta createMessageTemplate rejected', {
+        status: res.status,
+        graph: data.error,
+        templateName: payload.name,
+        language: payload.language,
+        category: payload.category,
+      });
+      throw new MetaApiError(formatGraphErrorMessage(data.error), {
+        metaCode: data.error?.code,
+        metaSubcode: data.error?.error_subcode,
+        fbtraceId: data.error?.fbtrace_id,
+        statusCode: res.status,
+      });
     }
     return { id: data.id!, status: data.status!, category: data.category! };
   }
@@ -877,7 +914,15 @@ export class MetaWhatsAppService {
       throw new Error('Meta API returned an unreadable response');
     }
     if (!res.ok) {
-      throw new Error(data.error?.message || 'Failed to create template from library');
+      throw new MetaApiError(
+        formatGraphErrorMessage(data.error, 'Failed to create template from library'),
+        {
+          metaCode: data.error?.code,
+          metaSubcode: data.error?.error_subcode,
+          fbtraceId: data.error?.fbtrace_id,
+          statusCode: res.status,
+        }
+      );
     }
     return { id: data.id!, status: data.status!, category: data.category! };
   }

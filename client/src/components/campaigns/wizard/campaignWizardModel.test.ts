@@ -3,6 +3,7 @@ import {
   buildCampaignPayload,
   countTemplateVariables,
   createEmptyCampaignWizardForm,
+  eligibleCampaignSendCount,
   validateCampaignWizardStage,
 } from './campaignWizardModel';
 import type { MessageTemplate } from '../../../types';
@@ -75,6 +76,37 @@ describe('campaignWizardModel', () => {
 
     const contactsForm = { ...createEmptyCampaignWizardForm(), audienceType: 'CONTACTS' as const };
     expect(validateCampaignWizardStage(1, contactsForm, template)).toBe('Select at least one contact.');
+  });
+
+  it('builds a contacts payload with audienceType CONTACTS', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      name: 'Follow-up',
+      templateName: template.name,
+      audienceType: 'ALL_OPTED_IN' as const,
+      selectedAudienceTypes: ['CONTACTS'] as Array<'CONTACTS'>,
+      selectedContactIds: ['contact-1', 'contact-2'],
+    };
+
+    expect(buildCampaignPayload(form)).toMatchObject({
+      audienceType: 'CONTACTS',
+      audienceConfig: {
+        contactIds: ['contact-1', 'contact-2'],
+        requireOptIn: true,
+      },
+    });
+  });
+
+  it('lets selected contacts unlock send while preview is still loading', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      audienceType: 'CONTACTS' as const,
+      selectedAudienceTypes: ['CONTACTS'] as Array<'CONTACTS'>,
+      selectedContactIds: ['a', 'b', 'c', 'd'],
+    };
+    expect(eligibleCampaignSendCount(form, null)).toBe(4);
+    expect(eligibleCampaignSendCount(form, 0)).toBe(0);
+    expect(eligibleCampaignSendCount(form, 3)).toBe(3);
   });
 
   it('builds a backward-compatible combined audience payload', () => {

@@ -5,7 +5,7 @@ import ChatContextMenu from '../components/inbox/ChatContextMenu';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import NewChatSlideOver from '../components/inbox/NewChatSlideOver';
 import ConversationList from '../components/inbox/ConversationList';
-import InboxListHeader, { type InboxWindowMode, type ListChip } from '../components/inbox/InboxListHeader';
+import InboxListHeader, { type ListChip } from '../components/inbox/InboxListHeader';
 import ChatThread from '../components/inbox/ChatThread';
 import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxDetailsPanel';
 import CreateTicketModal from '../components/inbox/CreateTicketModal';
@@ -79,7 +79,6 @@ export default function InboxPage() {
 
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ListChip>('all');
-  const [windowMode, setWindowMode] = useState<InboxWindowMode>('all');
   const [agentFilter, setAgentFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(() => readStoredPageSize());
@@ -104,7 +103,6 @@ export default function InboxPage() {
   } = useConversationList({
     search: debouncedSearch,
     chip,
-    windowMode,
     agentFilter,
     userId: user?.id,
     page,
@@ -590,7 +588,6 @@ export default function InboxPage() {
     total,
     search,
     chip,
-    windowMode,
     agentFilter,
     page,
     pageSize,
@@ -599,7 +596,6 @@ export default function InboxPage() {
     setTotal,
     setSearch,
     setChip,
-    setWindowMode,
     setAgentFilter,
     setPage,
     setPageSize,
@@ -734,11 +730,6 @@ export default function InboxPage() {
     setChip(next);
   }, []);
 
-  const handleWindowModeChange = useCallback((next: InboxWindowMode) => {
-    setPage(1);
-    setWindowMode(next);
-  }, []);
-
   const handleSearchChange = useCallback((value: string) => {
     setPage(1);
     setSearch(value);
@@ -808,8 +799,6 @@ export default function InboxPage() {
               searchInputRef={searchInputRef}
               chip={chip}
               onChipChange={handleChipChange}
-              windowMode={windowMode}
-              onWindowModeChange={handleWindowModeChange}
               conversationTotal={total}
               unreadTotal={unreadTotal}
               agentFilter={agentFilter}

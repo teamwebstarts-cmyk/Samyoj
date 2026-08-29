@@ -27,7 +27,7 @@ const widths = {
   md: 'w-full max-w-md sm:max-w-[min(100vw,28rem)]',
   lg: 'w-full max-w-lg sm:max-w-[min(100vw,32rem)]',
   xl: 'w-full max-w-xl sm:max-w-[min(100vw,36rem)]',
-  '2xl': 'w-full sm:max-w-[min(100vw,42rem)]',
+  '2xl': 'w-full sm:max-w-[min(100vw,46rem)]',
 };
 
 const EXIT_MS = 220;
@@ -58,7 +58,11 @@ export default function SlideOver({
       const firstField = panelRef.current?.querySelector<HTMLElement>(
         'input:not([type="hidden"]):not([tabindex="-1"]), textarea, select',
       );
-      (firstField ?? panelRef.current?.querySelector<HTMLElement>('button'))?.focus();
+      if (firstField) {
+        firstField.focus();
+        return;
+      }
+      panelRef.current?.focus();
     });
   }, [open, mounted]);
 
@@ -100,6 +104,7 @@ export default function SlideOver({
         role="dialog"
         aria-modal="true"
         aria-labelledby="slideover-title"
+        tabIndex={-1}
       >
         <div className="modal-panel__header relative overflow-hidden">
           <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${theme.bar}`} />
@@ -147,7 +152,7 @@ export default function SlideOver({
           </div>
         </div>
 
-        <div className="modal-panel__body flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+        <div className="modal-panel__body flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-6 sm:py-6">
           {children}
         </div>
 

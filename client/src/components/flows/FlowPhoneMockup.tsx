@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { ChevronLeft, MoreVertical, Paperclip, Phone, Smile, Video } from 'lucide-react';
+import { Paperclip, Smile } from 'lucide-react';
 import InteractiveMessageCard from '../inbox/InteractiveMessageCard';
 import { WhatsAppBubble } from '../inbox/WhatsAppPreview';
+import WhatsAppPreviewHeader from '../inbox/WhatsAppPreviewHeader';
+import { useWhatsAppPreviewIdentity } from '../../hooks/useWhatsAppPreviewIdentity';
 import type { FlowNode } from '../../types';
 import { buildFullFlowPreviewMessages } from './flowUtils';
 
@@ -15,11 +17,14 @@ interface FlowPhoneMockupProps {
 export default function FlowPhoneMockup({
   nodes,
   startNodeId,
-  businessName = 'Your Business',
+  businessName,
   className = '',
 }: FlowPhoneMockupProps) {
   const chatRef = useRef<HTMLDivElement>(null);
   const messages = buildFullFlowPreviewMessages(nodes, startNodeId);
+  const identity = useWhatsAppPreviewIdentity(
+    businessName?.trim() ? { companyName: businessName } : undefined,
+  );
 
   useEffect(() => {
     const el = chatRef.current;
@@ -30,7 +35,6 @@ export default function FlowPhoneMockup({
   return (
     <div className={`mx-auto w-full max-w-[300px] ${className}`}>
       <div className="flow-phone-device">
-        {/* Status bar */}
         <div className="flow-phone-device__status">
           <span className="text-[11px] font-semibold tabular-nums text-white">9:41</span>
           <div className="flex items-center gap-1">
@@ -39,26 +43,7 @@ export default function FlowPhoneMockup({
           </div>
         </div>
 
-        {/* WhatsApp header */}
-        <div className="flow-phone-device__header">
-          <button type="button" className="text-white/90" aria-hidden>
-            <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
-          </button>
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] text-[11px] font-bold text-[#075E54]">
-              {businessName.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-[14px] font-semibold leading-tight text-white">{businessName}</p>
-              <p className="text-[11px] leading-tight text-[#b8e0d8]">online</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 text-white/90">
-            <Video className="h-[18px] w-[18px]" strokeWidth={2} />
-            <Phone className="h-[17px] w-[17px]" strokeWidth={2} />
-            <MoreVertical className="h-[18px] w-[18px]" strokeWidth={2} />
-          </div>
-        </div>
+        <WhatsAppPreviewHeader identity={identity} />
 
         {/* Scrollable chat */}
         <div ref={chatRef} className="flow-phone-device__chat">

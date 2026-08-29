@@ -74,7 +74,7 @@ const TIER_FEATURE_THRESHOLDS: Record<EntitlementFeature, PlanTier> = {
   flowPublish: 'launch',
   aiBots: 'growth',
   calling: 'pro',
-  campaigns: 'growth',
+  campaigns: 'launch',
   templates: 'launch',
   analytics: 'growth',
   integrations: 'growth',
@@ -245,10 +245,13 @@ export function deriveEntitlements(
     ? payload.trialEndsAt || payload.currentPeriodEnd || payload.planExpiresAt
     : payload.planExpiresAt);
   const periodExpired = Boolean(expiry && new Date(expiry).getTime() <= Date.now());
+  const statusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(status);
+  // Trust the server snapshot when it is present. Local testing sets isLocked=false
+  // even if planExpiresAt is in the past; re-deriving the lock here greys every Send button.
   const isLocked =
-    Boolean(snapshot?.isLocked) ||
-    ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(status) ||
-    periodExpired;
+    snapshot?.isLocked !== undefined
+      ? Boolean(snapshot.isLocked)
+      : statusLocked || periodExpired;
   const daysUntilExpiry = daysBetween(expiry);
   const planName =
     snapshot?.planName ||

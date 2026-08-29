@@ -10,6 +10,7 @@ import {
   PhoneOff,
   Settings2,
   Download,
+  MessageCircle,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { TabTransition } from '../components/ui/TabTransition';
@@ -35,12 +36,14 @@ import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel'
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
+import WhatsAppButtonBuilder from '../components/settings/WhatsAppButtonBuilder';
 import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 import { useEntitlements } from '../hooks/useEntitlements';
 
 type SettingsTab =
   | 'profile'
   | 'whatsapp'
+  | 'website-button'
   | 'inbox'
   | 'integrations'
   | 'security';
@@ -64,6 +67,12 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'WhatsApp',
     hint: 'Connect business numbers',
     icon: Smartphone,
+  },
+  {
+    id: 'website-button',
+    label: 'Website WhatsApp button',
+    hint: 'Embed on your site',
+    icon: MessageCircle,
   },
   {
     id: 'inbox',
@@ -153,7 +162,9 @@ export default function SettingsPage() {
     const legacy = resolveLegacyTab(raw);
     const candidate = (
       legacy ||
-      (['profile', 'whatsapp', 'inbox', 'integrations', 'security'].includes(raw || '')
+      (['profile', 'whatsapp', 'website-button', 'inbox', 'integrations', 'security'].includes(
+          raw || ''
+        )
         ? (raw as SettingsTab)
         : null)
     ) as SettingsTab | null;
@@ -349,6 +360,8 @@ export default function SettingsPage() {
                       />
                     </>
                   )}
+
+                  {activeTab === 'website-button' && <WhatsAppButtonBuilder />}
 
                   {activeTab === 'inbox' && (
                     <HoursAndInboxPanel
