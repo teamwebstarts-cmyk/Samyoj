@@ -75,7 +75,6 @@ export default function DashboardPage() {
   const [campaignsError, setCampaignsError] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [onboardingError, setOnboardingError] = useState(false);
-  const [quota, setQuota] = useState<{ sentToday: number; dailySendLimit: number } | null>(null);
   const [waStatus, setWaStatus] = useState<WhatsAppGuideStatus>({
     connected: false,
     incomingEnabled: null,
@@ -185,20 +184,6 @@ export default function DashboardPage() {
         setOnboarding(null);
         setOnboardingError(true);
       });
-
-    campaignApi
-      .quota()
-      .then(({ data }) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        const payload = data?.data as { sentToday?: number; dailySendLimit?: number } | undefined;
-        if (typeof payload?.sentToday === 'number' && typeof payload?.dailySendLimit === 'number') {
-          setQuota({ sentToday: payload.sentToday, dailySendLimit: payload.dailySendLimit });
-        }
-      })
-      .catch(() => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
-        setQuota(null);
-      });
   }, [activeNumber, resolved]);
 
   // Load / refresh Live Metrics when connected (and whenever period changes via loadStats).
@@ -268,11 +253,7 @@ export default function DashboardPage() {
             <LiveMetricsHero
               messagesSent={stats.messagesSent}
               qualityRating={stats.qualityRating}
-              promoConversations={stats.promoConversations}
-              serviceConversations={stats.serviceConversations}
               messagingLimitTier={stats.messagingLimitTier}
-              sentToday={quota?.sentToday}
-              dailySendLimit={quota?.dailySendLimit}
               period={metricsPeriod}
               onPeriodChange={setMetricsPeriod}
             />

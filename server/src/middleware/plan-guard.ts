@@ -9,12 +9,19 @@ import {
   checkFeature,
 } from '../modules/billing/entitlements.service';
 import { AppError } from '../utils/response';
+import { config } from '../config';
+
+/** Local test-deploy: do not block product flows on expired demo plans. */
+function bypassPlanGuardsForLocalTesting(): boolean {
+  return config.nodeEnv === 'development';
+}
 
 /**
  * Middleware that blocks requests if the organization is in an expired, locked, or past_due state.
  */
 export function requireActiveCommercial() {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (bypassPlanGuardsForLocalTesting()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       return next(new AppError(401, 'Organization required'));
@@ -50,6 +57,7 @@ export function requireActiveCommercialOnMutation() {
  */
 export function requirePlan(minTier: PlanTier) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (bypassPlanGuardsForLocalTesting()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       return next(new AppError(401, 'Organization required'));
@@ -88,6 +96,7 @@ export function requirePlan(minTier: PlanTier) {
  */
 export function requireQuota(quotaType: QuotaType, requestedCount = 1) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (bypassPlanGuardsForLocalTesting()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       return next(new AppError(401, 'Organization required'));
@@ -117,6 +126,7 @@ export function requireQuota(quotaType: QuotaType, requestedCount = 1) {
 /** Guard a named entitlement before a mutating route runs. */
 export function requireFeature(feature: FeatureType) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (bypassPlanGuardsForLocalTesting()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) return next(new AppError(401, 'Organization required'));
 

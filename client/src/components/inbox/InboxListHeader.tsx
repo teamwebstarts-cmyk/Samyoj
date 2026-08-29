@@ -14,14 +14,23 @@ const AGENT_MENU_WIDTH = 240;
 const AGENT_MENU_GAP = 8;
 const AGENT_VISIBLE_COUNT = 3;
 
-export type ListChip = 'all' | 'unread' | 'unreplied' | 'canReply' | 'needsTemplate' | 'open' | 'favourites' | 'pending' | 'hasTicket' | 'botActive';
+export type ListChip =
+  | 'all'
+  | 'unread'
+  | 'unreplied'
+  | 'open'
+  | 'favourites'
+  | 'pending'
+  | 'hasTicket'
+  | 'botActive';
+
+/** Active = 24h chat still open. Inactive = window closed (need a template). */
+export type InboxWindowMode = 'all' | 'active' | 'inactive';
 
 const FILTER_CHIPS: Array<{ chip: ListChip; label: string }> = [
   { chip: 'all', label: 'All' },
   { chip: 'unread', label: 'Unread' },
   { chip: 'unreplied', label: 'Unreplied' },
-  { chip: 'canReply', label: 'Can reply' },
-  { chip: 'needsTemplate', label: 'Needs template' },
   { chip: 'open', label: 'Open' },
   { chip: 'favourites', label: 'Favorites' },
   { chip: 'pending', label: 'Pending' },
@@ -35,6 +44,8 @@ interface InboxListHeaderProps {
   searchInputRef?: Ref<HTMLInputElement>;
   chip: ListChip;
   onChipChange: (chip: ListChip) => void;
+  windowMode: InboxWindowMode;
+  onWindowModeChange: (mode: InboxWindowMode) => void;
   conversationTotal: number;
   unreadTotal: number;
   agentFilter: string;
@@ -103,12 +114,63 @@ function AgentAvatarButton({
   );
 }
 
+function WindowModeToggle({
+  windowMode,
+  onToggle,
+  className,
+  tipFor,
+}: {
+  windowMode: InboxWindowMode;
+  onToggle: (mode: Exclude<InboxWindowMode, 'all'>) => void;
+  className: string;
+  tipFor: (label: string) => Record<string, unknown>;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Chat window"
+      className={`inline-flex h-9 shrink-0 items-center rounded-lg border border-theme-border bg-white p-0.5 dark:bg-theme-surface ${className}`}
+    >
+      <button
+        type="button"
+        aria-pressed={windowMode === 'active'}
+        data-testid="inbox-window-active"
+        onClick={() => onToggle('active')}
+        {...tipFor('Active: 24h chat is open — reply without a template')}
+        className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12.5px] font-bold transition ${FOCUS_RING_CLASS} ${
+          windowMode === 'active'
+            ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)]'
+            : 'text-neutral-800 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800'
+        }`}
+      >
+        Active
+      </button>
+      <button
+        type="button"
+        aria-pressed={windowMode === 'inactive'}
+        data-testid="inbox-window-inactive"
+        onClick={() => onToggle('inactive')}
+        {...tipFor('Inactive: 24h window closed — history, send a template to write again')}
+        className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12.5px] font-bold transition ${FOCUS_RING_CLASS} ${
+          windowMode === 'inactive'
+            ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+            : 'text-neutral-800 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800'
+        }`}
+      >
+        Inactive
+      </button>
+    </div>
+  );
+}
+
 export default function InboxListHeader({
   search,
   onSearchChange,
   searchInputRef,
   chip,
   onChipChange,
+  windowMode,
+  onWindowModeChange,
   conversationTotal,
   unreadTotal,
   agentFilter,
@@ -178,6 +240,10 @@ export default function InboxListHeader({
   const toggleAgentFilter = (value: string) => {
     onAgentFilterChange(agentFilter === value ? '' : value);
     setAgentsMenuOpen(false);
+  };
+
+  const toggleWindowMode = (mode: Exclude<InboxWindowMode, 'all'>) => {
+    onWindowModeChange(windowMode === mode ? 'all' : mode);
   };
 
   return (
@@ -258,6 +324,13 @@ export default function InboxListHeader({
             </button>
           )}
 
+          <WindowModeToggle
+            windowMode={windowMode}
+            onToggle={toggleWindowMode}
+            className="hidden md:inline-flex"
+            tipFor={tipFor}
+          />
+
           <button
             type="button"
             onClick={onNewChat}
@@ -278,6 +351,12 @@ export default function InboxListHeader({
             onChange={onSearchChange}
             placeholder="Search inbox"
             className="min-w-0 flex-1 [&_input]:!h-8 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!text-[14px] [&_input]:!shadow-none [&_svg]:left-2.5 [&_svg]:!h-3.5 [&_svg]:!w-3.5 [&_input]:!pl-8"
+          />
+          <WindowModeToggle
+            windowMode={windowMode}
+            onToggle={toggleWindowMode}
+            className="md:hidden"
+            tipFor={tipFor}
           />
 
           {selectableAgents.length > 0 && (

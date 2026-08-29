@@ -3,7 +3,7 @@ import { inboxApi } from '../../services/api';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { buildInboxListParams } from '../../utils/inboxListParams';
 import type { Conversation } from '../../types';
-import type { ListChip } from './InboxListHeader';
+import type { InboxWindowMode, ListChip } from './InboxListHeader';
 
 export const PAGE_SIZE_OPTIONS = [10, 15, 30, 50] as const;
 export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -32,6 +32,7 @@ export function writeStoredPageSize(size: PageSize) {
 interface ListFilters {
   search: string;
   chip: ListChip;
+  windowMode: InboxWindowMode;
   agentFilter: string;
   userId?: string;
   page: number;
@@ -45,6 +46,7 @@ interface ListFilters {
 export function useConversationList({
   search,
   chip,
+  windowMode,
   agentFilter,
   userId,
   page,
@@ -86,6 +88,7 @@ export function useConversationList({
         pageSize,
         search,
         chip,
+        windowMode,
         agentFilter,
         userId,
       });
@@ -111,6 +114,7 @@ export function useConversationList({
   }, [
     search,
     chip,
+    windowMode,
     agentFilter,
     userId,
     page,

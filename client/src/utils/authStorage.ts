@@ -62,6 +62,12 @@ export function hasAuthSessionHint(): boolean {
   return Boolean(getCsrfToken());
 }
 
+/** Drop the readable CSRF hint when HttpOnly cookies are gone or invalid. */
+export function clearClientSessionCookies(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = 'samyoj_csrf=; Path=/; Max-Age=0; SameSite=Strict';
+}
+
 /** @deprecated HttpOnly cookies replaced tab-scoped JWT storage. */
 export function getAccessToken(): null {
   return null;

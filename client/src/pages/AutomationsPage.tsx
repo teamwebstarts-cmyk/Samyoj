@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import AutomationCard from '../components/automations/AutomationCard';
 import AutomationConflictsBanner from '../components/automations/AutomationConflictsBanner';
-import AutomationAnalyticsPanel from '../components/automations/AutomationAnalyticsPanel';
 import AutomationTipCard, { AiBotLink } from '../components/automations/AutomationTipCard';
 import FlowsTab, { type FlowSummary } from '../components/flows/FlowsTab';
 import { getErrorMessage } from '../utils/errors';
@@ -50,7 +49,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { automationApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
-import type { Automation, AutomationAnalytics, AutomationConflict } from '../types';
+import type { Automation, AutomationConflict } from '../types';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 
@@ -216,8 +215,6 @@ export default function AutomationsPage() {
   const [flowSummary, setFlowSummary] = useState<FlowSummary>({ total: 0, active: 0, paused: 0 });
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [conflicts, setConflicts] = useState<AutomationConflict[]>([]);
-  const [analytics, setAnalytics] = useState<AutomationAnalytics | null>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const canUseAutomations =
@@ -291,23 +288,6 @@ export default function AutomationsPage() {
       })
       .catch(() => {});
   }, [activeNumber, activeTab, flowSummary.active, flowSummary.paused, resolved, summary.active, summary.paused]);
-
-  useEffect(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
-    setAnalyticsLoading(true);
-    automationApi
-      .analytics(30)
-      .then(({ data }) => {
-        if (requestNumberId === activeNumberIdRef.current) setAnalytics(data.data);
-      })
-      .catch(() => {
-        if (requestNumberId === activeNumberIdRef.current) setAnalytics(null);
-      })
-      .finally(() => {
-        if (requestNumberId === activeNumberIdRef.current) setAnalyticsLoading(false);
-      });
-  }, [activeNumber, flowSummary.active, resolved, summary.active, summary.total]);
 
   const openCreate = (triggerType = 'KEYWORD') => {
     if (!canUseAutomations) return;
@@ -538,10 +518,6 @@ export default function AutomationsPage() {
         )}
 
         <AutomationConflictsBanner conflicts={conflicts} />
-
-        <SectionCard title="Automation activity" subtitle="Last 30 days for this WhatsApp number">
-          <AutomationAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
-        </SectionCard>
 
         {activeTab === 'flows' && (
           <AutomationTipCard icon={GitBranch} title="Conversation flows">

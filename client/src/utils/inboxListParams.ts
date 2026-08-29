@@ -1,17 +1,18 @@
-import type { ListChip } from '../components/inbox/InboxListHeader';
+import type { InboxWindowMode, ListChip } from '../components/inbox/InboxListHeader';
 
 export type InboxListQueryInput = {
   page: number;
   pageSize: number;
   search?: string;
   chip: ListChip;
+  windowMode?: InboxWindowMode;
   agentFilter?: string;
   userId?: string;
 };
 
 /**
  * Builds GET /inbox query params. Kept pure so Vitest can lock the filter contract
- * (unread / favourites / unreplied / ticket / bot) without mounting React.
+ * (unread / favourites / unreplied / ticket / bot / 24h window) without mounting React.
  */
 export function buildInboxListParams(input: InboxListQueryInput): Record<string, string> {
   const params: Record<string, string> = {
@@ -26,12 +27,6 @@ export function buildInboxListParams(input: InboxListQueryInput): Record<string,
       break;
     case 'unreplied':
       params.unreplied = 'true';
-      break;
-    case 'canReply':
-      params.window = 'open';
-      break;
-    case 'needsTemplate':
-      params.window = 'closed';
       break;
     case 'open':
       params.status = 'OPEN';
@@ -51,6 +46,9 @@ export function buildInboxListParams(input: InboxListQueryInput): Record<string,
     default:
       break;
   }
+
+  if (input.windowMode === 'active') params.window = 'open';
+  if (input.windowMode === 'inactive') params.window = 'closed';
 
   if (input.agentFilter === '__mine__' && input.userId) {
     params.assignedTo = input.userId;

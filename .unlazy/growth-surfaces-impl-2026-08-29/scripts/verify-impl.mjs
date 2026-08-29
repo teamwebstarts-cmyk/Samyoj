@@ -54,13 +54,21 @@ const LEAVES = {
   '1.1.1': () => LEAVES['root-honesty'](),
   '1.1.2': () => {
     mustInclude('client/src/components/dashboard/LiveMetricsHero.tsx', [
-      'Quality',
-      'Service messages',
-      'promoConversations',
-      'Open WhatsApp Manager',
+      'Quality rating',
+      'Meta daily limit',
+      'unique users / 24h',
+      'formatMessagingLimitTier',
+      'InfoTip',
     ]);
     mustNotInclude('client/src/components/dashboard/LiveMetricsHero.tsx', [
       'label="Delivery"',
+      'Promo vs service',
+      'Samyoj daily send cap',
+    ]);
+    mustInclude('client/src/utils/messagingLimitTier.ts', [
+      'TIER_250',
+      'TIER_10K',
+      'whatsapp_business_manager_messaging_limit',
     ]);
     mustInclude('server/src/modules/analytics/conversation-mix.ts', [
       'MARKETING',
@@ -89,8 +97,12 @@ const LEAVES = {
   },
   '1.1.4': () => {
     mustInclude('client/src/components/inbox/InboxListHeader.tsx', [
-      "'canReply'",
-      "'needsTemplate'",
+      "'active'",
+      "'inactive'",
+      'Active',
+      'Inactive',
+    ]);
+    mustNotInclude('client/src/components/inbox/InboxListHeader.tsx', [
       'Can reply',
       'Needs template',
     ]);
@@ -198,7 +210,8 @@ const LEAVES = {
     mustInclude('server/src/modules/campaigns/cohorts.ts', ['isSamePhoneIdentity']);
     mustInclude('client/src/utils/templateLibrary.ts', ['return null']);
     mustInclude('client/src/components/dashboard/LiveMetricsHero.tsx', [
-      'billed conversation',
+      'Meta daily limit',
+      'Quality rating',
     ]);
     mustInclude('client/src/pages/TemplateLibraryPage.tsx', ['submitStarterCreate']);
     mustNotInclude('client/src/pages/TemplateLibraryPage.tsx', ["|| 'APPROVED'"]);

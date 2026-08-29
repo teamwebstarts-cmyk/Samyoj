@@ -1,10 +1,15 @@
 import prisma from '../../config/database';
+import { config } from '../../config';
 import {
   PlanTier,
   PLAN_TIERS,
   legacyPlanToTier,
 } from './plans';
 import { AppError } from '../../utils/response';
+
+function unlockLocalTesting(): boolean {
+  return config.nodeEnv === 'development' && !process.env.VITEST;
+}
 
 export type QuotaType =
   | 'waNumbers'
@@ -158,11 +163,12 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
   const statusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
     org.subscriptionStatus
   );
-  const isLocked = isLedgerBacked
+  const computedLocked = isLedgerBacked
     ? !currentPeriod || statusLocked
     : ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
         org.subscriptionStatus
       ) || Boolean(org.planExpiresAt && org.planExpiresAt <= new Date());
+  const isLocked = unlockLocalTesting() ? false : computedLocked;
   const planExpiresAt = ledgerPeriod?.endsAt ?? org.planExpiresAt;
 
   return {
@@ -210,6 +216,9 @@ export async function checkFeature(
   organizationId: string,
   feature: FeatureType
 ): Promise<{ allowed: boolean; requiredPlan: PlanTier; reason?: string; code?: string }> {
+  if (unlockLocalTesting()) {
+    return { allowed: true, requiredPlan: 'growth' };
+  }
   const entitlements = await getOrgEntitlements(organizationId);
   const requiredPlan: PlanTier =
     feature === 'calling'
@@ -262,6 +271,15 @@ export async function checkQuota(
   requestedCount = 1
 ): Promise<QuotaCheckResult> {
   const entitlements = await getOrgEntitlements(organizationId);
+
+  if (unlockLocalTesting()) {
+    return {
+      allowed: true,
+      used: 0,
+      limit: 'unlimited',
+      upgradeCta: 'growth',
+    };
+  }
 
   // Check commercial lock
   if (entitlements.isLocked) {

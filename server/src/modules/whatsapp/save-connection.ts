@@ -4,6 +4,7 @@ import { AppError } from '../../utils/response';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { analyticsConversationFilter } from './active-number';
 import { checkQuota } from '../billing/entitlements.service';
+import { MetaWhatsAppService } from './meta.service';
 
 export type WhatsappWorkspaceConnection = {
   phoneNumber: string;
@@ -147,12 +148,39 @@ export async function saveWhatsappNumberWorkspace(
         },
       });
     });
+    await refreshConnectedNumberHealth(whatsappNumber.id, connection);
     return { whatsappNumber, created: !existing };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       throw new AppError(409, CROSS_ORG_CONNECTED);
     }
     throw err;
+  }
+}
+
+/** Same Graph fields for a brand-new Cloud API number and a long-running verified WABA. */
+async function refreshConnectedNumberHealth(
+  whatsappNumberId: string,
+  connection: WhatsappWorkspaceConnection
+): Promise<void> {
+  try {
+    const token = MetaWhatsAppService.decryptToken(connection.encryptedToken);
+    const health = await MetaWhatsAppService.getPhoneNumberHealth(connection.phoneNumberId, token);
+    const data: {
+      qualityRating?: string;
+      officialBusinessAccount?: boolean;
+      messagingLimitTier?: string;
+    } = {};
+    if (health.qualityRating) data.qualityRating = health.qualityRating;
+    if (health.officialBusinessAccount !== null) {
+      data.officialBusinessAccount = health.officialBusinessAccount;
+    }
+    if (health.messagingLimitTier) data.messagingLimitTier = health.messagingLimitTier;
+    if (Object.keys(data).length) {
+      await prisma.whatsappNumber.update({ where: { id: whatsappNumberId }, data });
+    }
+  } catch {
+    // Connect still succeeds; daily poll / quality webhook backfills the tier.
   }
 }
 

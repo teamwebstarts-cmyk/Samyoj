@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await discardClonedSession();
       clearAuthTokens();
 
-      if (!hasAuthSessionHint()) {
+      if (!hasAuthSessionHint() || window.location.pathname.startsWith('/login')) {
         setLoading(false);
         return;
       }

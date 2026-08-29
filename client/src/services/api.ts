@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
-import { clearAuthTokens, getCsrfToken, hasAuthSessionHint } from '../utils/authStorage';
+import { clearAuthTokens, clearClientSessionCookies, getCsrfToken, hasAuthSessionHint } from '../utils/authStorage';
 import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
 import { apiBaseUrl } from './utils';
 
@@ -45,6 +45,10 @@ function isExpectedApiNoise(error: unknown): boolean {
   const status = error.response?.status;
   const url = String(error.config?.url || '');
   if (status === 404 && /\/calling\/[^/?]+\/signaling(?:\?|$)/.test(url)) return true;
+  if (status === 401 && /\/auth\/(?:me|refresh|login)(?:\?|$)/.test(url)) return true;
+  if (status === 429 && /\/auth\/(?:refresh|login)(?:\?|$)/.test(url)) return true;
+  if (status === 402) return true;
+  if (status === 503 && /\/whatsapp\/connect-url(?:\?|$)/.test(url)) return true;
   return false;
 }
 
@@ -107,18 +111,33 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
     const isRefreshCall = /\/auth\/refresh(?:\?|$)/.test(original?.url || '');
-    if (error.response?.status === 401 && original && !original._retry && !isRefreshCall) {
+    const skipSessionRefresh =
+      /\/auth\/(login|register|refresh|logout|forgot-password|reset-password|verify-email|resend-verification)(?:\?|$)/.test(
+        original?.url || ''
+      ) || window.location.pathname.startsWith('/login');
+    if (error.response?.status === 429 && isRefreshCall) {
+      return Promise.reject(error);
+    }
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      !isRefreshCall &&
+      !skipSessionRefresh
+    ) {
       original._retry = true;
       try {
         await refreshSessionSingleFlight();
         return api(original);
       } catch (refreshError) {
-        logError(refreshError, {
-          source: 'auth',
-          action: 'Session refresh failed',
-          method: original.method?.toUpperCase(),
-          url: original.url,
-        });
+        if (!isExpectedApiNoise(refreshError)) {
+          logError(refreshError, {
+            source: 'auth',
+            action: 'Session refresh failed',
+            method: original.method?.toUpperCase(),
+            url: original.url,
+          });
+        }
         clearAuthTokens();
         const returnTo = `${window.location.pathname}${window.location.search}`;
         if (!window.location.pathname.startsWith('/login')) {
@@ -145,12 +164,22 @@ api.interceptors.response.use(
 );
 
 let refreshPromise: Promise<void> | null = null;
+let refreshCooldownUntil = 0;
 
 async function refreshSessionSingleFlight() {
+  if (Date.now() < refreshCooldownUntil) {
+    throw new Error('Session refresh is temporarily rate-limited. Please wait and try again.');
+  }
   if (!refreshPromise) {
     refreshPromise = axios
       .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
       .then(() => undefined)
+      .catch((err) => {
+        if (axios.isAxiosError(err) && err.response?.status === 429) {
+          refreshCooldownUntil = Date.now() + 60_000;
+        }
+        throw err;
+      })
       .finally(() => {
         refreshPromise = null;
       });
@@ -164,7 +193,12 @@ export async function ensureFreshAccessToken(): Promise<boolean> {
   try {
     await refreshSessionSingleFlight();
     return true;
-  } catch {
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+    if (status === 401) {
+      clearAuthTokens();
+      clearClientSessionCookies();
+    }
     return false;
   }
 }

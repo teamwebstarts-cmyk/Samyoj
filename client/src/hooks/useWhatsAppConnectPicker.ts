@@ -34,6 +34,8 @@ export function useWhatsAppConnectPicker(options?: {
   }, [coexistence]);
 
   const connecting = standard.connecting || coexistence.connecting;
+  const connectUnavailableReason =
+    standard.connectUnavailableReason || coexistence.connectUnavailableReason;
 
   return {
     pickerOpen,
@@ -42,5 +44,6 @@ export function useWhatsAppConnectPicker(options?: {
     connectStandard,
     connectCoexistence,
     connecting,
+    connectUnavailableReason,
   };
 }

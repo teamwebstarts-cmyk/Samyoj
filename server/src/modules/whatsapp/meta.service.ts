@@ -1,4 +1,5 @@
 import { config } from '../../config';
+import { AppError } from '../../errors';
 import { classifyMetaError, metaBackoffDelayMs } from '../../errors/meta';
 import { decrypt, encrypt } from '../../utils/crypto';
 import { createModuleLogger } from '../../utils/logger';
@@ -296,11 +297,11 @@ export class MetaWhatsAppService {
         ? config.meta.esCoexConfigId || config.meta.esConfigId
         : config.meta.esConfigId;
     if (!configId) {
-      throw new Error(
+      const message =
         connectMode === 'coexistence'
-          ? 'META_ES_COEX_CONFIG_ID or META_ES_CONFIG_ID is not configured on the server.'
-          : 'META_ES_CONFIG_ID is not configured on the server.'
-      );
+          ? 'WhatsApp coexistence connect is not configured. Set META_ES_COEX_CONFIG_ID (or META_ES_CONFIG_ID) in server/.env from Meta → Facebook Login for Business → Embedded Signup v4.'
+          : 'WhatsApp connect is not configured. Set META_ES_CONFIG_ID in server/.env from Meta → Facebook Login for Business → Embedded Signup v4, then restart the API.';
+      throw new AppError(503, message, 'META_ES_CONFIG_MISSING');
     }
     return {
       mode: 'ES_V4_SDK',

@@ -23,6 +23,7 @@ import {
 } from './cookies';
 import {
   authLoginLimiter,
+  authRefreshLimiter,
   authRegisterLimiter,
   authForgotLimiter,
   consumeAccountThrottle,
@@ -270,20 +271,27 @@ router.post(
 
 router.post(
   '/refresh',
-  authLoginLimiter,
+  authRefreshLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const body = z.object({ refreshToken: z.string().min(1).optional() }).parse(req.body ?? {});
     const refreshToken = body.refreshToken ?? readTenantRefreshToken(req);
-    if (!refreshToken) throw new AppError(401, 'Invalid refresh token');
+    if (!refreshToken) {
+      clearTenantAuthCookies(res);
+      throw new AppError(401, 'Invalid refresh token');
+    }
 
     try {
       verifyRefreshToken(refreshToken);
     } catch {
+      clearTenantAuthCookies(res);
       throw new AppError(401, 'Invalid refresh token');
     }
 
     const rotated = await rotateTenantSession(refreshToken, req, res);
-    if (!rotated) throw new AppError(401, 'Invalid refresh token');
+    if (!rotated) {
+      clearTenantAuthCookies(res);
+      throw new AppError(401, 'Invalid refresh token');
+    }
 
     sendSuccess(res, { message: 'Session refreshed' });
   })

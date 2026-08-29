@@ -304,7 +304,21 @@ async function handlePhoneNumberQualityUpdate(value: Record<string, unknown>) {
   if (qualityRating) {
     await prisma.whatsappNumber.update({
       where: { id: number.id },
-      data: { qualityRating: String(qualityRating).toUpperCase() },
+      data: {
+        qualityRating: String(qualityRating).toUpperCase(),
+        ...(typeof metadata.current_limit === 'string' &&
+        /^(TIER_|UNTIERED)/i.test(metadata.current_limit)
+          ? { messagingLimitTier: metadata.current_limit.toUpperCase() }
+          : {}),
+      },
+    });
+  } else if (
+    typeof metadata.current_limit === 'string' &&
+    /^(TIER_|UNTIERED)/i.test(metadata.current_limit)
+  ) {
+    await prisma.whatsappNumber.update({
+      where: { id: number.id },
+      data: { messagingLimitTier: metadata.current_limit.toUpperCase() },
     });
   }
 

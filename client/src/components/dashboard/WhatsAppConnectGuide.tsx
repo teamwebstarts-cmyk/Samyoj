@@ -96,6 +96,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     connectStandard,
     connectCoexistence,
     connecting,
+    connectUnavailableReason,
   } = useWhatsAppConnectPicker({
     onConnected: () => {
       void refreshNumbers({ silent: true });
@@ -467,6 +468,11 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
               <p className="mt-0.5 text-[12.5px] text-neutral-600 sm:text-[13px]">
                 Sign in with Facebook and choose your business number — takes about a minute.
               </p>
+              {connectUnavailableReason ? (
+                <p className="mt-2 text-[12px] text-amber-800 dark:text-amber-200" role="status">
+                  {connectUnavailableReason}
+                </p>
+              ) : null}
             </div>
           </div>
           <AppButton

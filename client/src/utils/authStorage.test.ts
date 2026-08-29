@@ -4,6 +4,7 @@ import {
   backupAuthBeforeOAuth,
   clearAuthBackup,
   clearAuthTokens,
+  clearClientSessionCookies,
   consumeOAuthReturnPath,
   discardClonedSession,
   getAccessToken,
@@ -51,6 +52,16 @@ beforeEach(() => {
       return cookieValue;
     },
     set cookie(value: string) {
+      if (/Max-Age=0/i.test(value) || /expires=Thu, 01 Jan 1970/i.test(value)) {
+        const name = value.split('=')[0]?.trim();
+        if (!name) return;
+        cookieValue = cookieValue
+          .split(';')
+          .map((part) => part.trim())
+          .filter((part) => part && !part.startsWith(`${name}=`))
+          .join('; ');
+        return;
+      }
       cookieValue = value;
     },
   });
@@ -85,6 +96,13 @@ describe('HttpOnly cookie auth (SAMYOJ-3)', () => {
   });
 
   it('has no session hint when the CSRF cookie is absent', () => {
+    expect(getCsrfToken()).toBeNull();
+    expect(hasAuthSessionHint()).toBe(false);
+  });
+
+  it('clears the readable CSRF cookie hint', () => {
+    setDocumentCookie('samyoj_csrf=csrf-token-123; Path=/');
+    clearClientSessionCookies();
     expect(getCsrfToken()).toBeNull();
     expect(hasAuthSessionHint()).toBe(false);
   });

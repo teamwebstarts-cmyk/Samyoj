@@ -21,6 +21,9 @@ export const apiBaseUrl = (() => {
   return new URL('/api', `${base}/`).href.replace(/\/$/, '');
 })();
 
+/** Must match server `SOCKET_IO_PATH` so Path=/api auth cookies are sent. */
+export const SOCKET_IO_PATH = '/api/socket.io';
+
 /** Socket.IO server URL — same origin in prod; explicit env overrides for split deployments. */
 export const socketBaseUrl = (() => {
   const envSocket = import.meta.env.VITE_SOCKET_URL;
@@ -30,3 +33,23 @@ export const socketBaseUrl = (() => {
   const base = absoluteBaseForApi();
   return base || 'http://localhost:8000';
 })();
+
+/**
+ * Cursor / Codespace port-forwards often drop Socket.IO WebSocket upgrades
+ * (`400` + "Session ID unknown"). Dev stays on HTTP polling; production still
+ * prefers WebSocket.
+ */
+export function getSocketIoClientOptions(options?: {
+  reconnection?: boolean;
+  extraAuth?: Record<string, unknown>;
+}) {
+  const pollingOnly = Boolean(import.meta.env.DEV);
+  return {
+    path: SOCKET_IO_PATH,
+    withCredentials: true as const,
+    transports: pollingOnly ? (['polling'] as const) : (['websocket', 'polling'] as const),
+    upgrade: !pollingOnly,
+    reconnection: options?.reconnection,
+    auth: options?.extraAuth,
+  };
+}

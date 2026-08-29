@@ -182,6 +182,16 @@ export const authLoginLimiter = rateLimit({
   message: { success: false, error: 'Too many login attempts. Try again in 15 minutes.' },
 });
 
+/** Session refresh — separate bucket so 401 retry storms do not block login. */
+export const authRefreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 300 : 120,
+  ...sharedLimiterOptions,
+  skipFailedRequests: true,
+  store: redisAuthStore('refresh'),
+  message: { success: false, error: 'Too many session refresh attempts. Wait a minute and try again.' },
+});
+
 /** Platform operator login is isolated from customer login counters. */
 export const platformAuthLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

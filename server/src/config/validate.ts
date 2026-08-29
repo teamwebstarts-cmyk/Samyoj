@@ -113,6 +113,11 @@ export function validateConfig(): void {
     if (!config.email.smtpHost) {
       warnings.push('SMTP not configured — forgot-password / verify-email links will be logged to server logs only');
     }
+    if (!config.meta.esConfigId) {
+      warnings.push(
+        'META_ES_CONFIG_ID is not set — Connect WhatsApp will return 503 until you copy the Embedded Signup v4 Configuration ID into server/.env'
+      );
+    }
   }
 
   for (const w of warnings) {

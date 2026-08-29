@@ -74,11 +74,16 @@ const platformCors = cors({
 app.set('trust proxy', 1);
 app.set('etag', false);
 
+/** Under `/api` so Path=/api HttpOnly cookies are sent on the handshake. */
+export const SOCKET_IO_PATH = '/api/socket.io';
+
 const io = new Server(httpServer, {
+  path: SOCKET_IO_PATH,
   cors: {
     origin: corsOriginDelegate,
     credentials: true,
   },
+  transports: ['polling', 'websocket'],
 });
 
 // Socket.IO auth & rooms — JWT + OrganizationUser membership (same as HTTP requireOrg)
@@ -158,6 +163,7 @@ app.use(
       const p = req.path || '';
       // Never throttle health checks, webhook deliveries, or Socket.IO upgrades.
       if (p === '/health' || p.startsWith('/api/whatsapp/webhook')) return true;
+      if (p.startsWith('/socket.io') || p.startsWith('/api/socket.io')) return true;
       if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') return true;
       return false;
     },

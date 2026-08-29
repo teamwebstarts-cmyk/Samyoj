@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { Mic, MicOff, PhoneOff, Loader2 } from 'lucide-react';
-import { socketBaseUrl } from '../../services/utils';
+import { getSocketIoClientOptions, socketBaseUrl } from '../../services/utils';
 import { ensureFreshAccessToken } from '../../services/api';
 import { hasAuthSessionHint } from '../../utils/authStorage';
 import { getActiveWhatsappNumberId } from '../../services/api';
@@ -121,12 +121,12 @@ export default function CallingVoicePreview({
     try {
       await ensureFreshAccessToken();
       const socket = io(socketBaseUrl, {
-        withCredentials: true,
-        auth: {
-          whatsappNumberId: getActiveWhatsappNumberId() || undefined,
-        },
-        transports: import.meta.env.DEV ? ['polling', 'websocket'] : ['websocket', 'polling'],
-        reconnection: false,
+        ...getSocketIoClientOptions({
+          reconnection: false,
+          extraAuth: {
+            whatsappNumberId: getActiveWhatsappNumberId() || undefined,
+          },
+        }),
       });
       socketRef.current = socket;
 

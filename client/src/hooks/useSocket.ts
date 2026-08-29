@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { logError } from '../utils/errors';
-import { socketBaseUrl } from '../services/utils';
+import { getSocketIoClientOptions, socketBaseUrl } from '../services/utils';
 import { ensureFreshAccessToken } from '../services/api';
 import { clearAuthTokens, hasAuthSessionHint } from '../utils/authStorage';
 
@@ -114,10 +114,12 @@ function attachSharedSocket(socket: Socket) {
 
   socket.on('connect_error', (err) => {
     publishState({ status: 'error' });
-    logError(err, {
-      source: 'socket',
-      action: 'Connection failed',
-    });
+    if (isAuthConnectError(err)) {
+      logError(err, {
+        source: 'socket',
+        action: 'Connection failed',
+      });
+    }
 
     if (!isAuthConnectError(err) || authRefreshInFlight) return;
 
@@ -160,9 +162,7 @@ function acquireSharedSocket(): Socket {
 
   publishState({ status: 'connecting' });
   const socket = io(socketBaseUrl, {
-    withCredentials: true,
-    transports: import.meta.env.DEV ? ['polling', 'websocket'] : ['websocket', 'polling'],
-    reconnection: true,
+    ...getSocketIoClientOptions({ reconnection: true }),
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 30000,

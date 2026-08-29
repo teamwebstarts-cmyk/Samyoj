@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { whatsappApi } from '../services/api';
 import { getWhatsAppOAuthRedirectUri } from '../utils/whatsappOAuth';
 import {
@@ -6,6 +6,7 @@ import {
   type EmbeddedSignupClientConfig,
   type EmbeddedSignupMode,
 } from '../utils/embeddedSignup';
+import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
@@ -39,6 +40,7 @@ export function useWhatsAppConnectOAuth(options?: {
   const { refreshNumbers } = useWhatsAppNumber();
   const [connecting, setConnecting] = useState(false);
   const [signupConfig, setSignupConfig] = useState<EmbeddedSignupClientConfig | null>(null);
+  const [connectUnavailableReason, setConnectUnavailableReason] = useState<string | null>(null);
   const connectMode = options?.connectMode || 'standard';
   const onConnectedRef = useRef(options?.onConnected);
   onConnectedRef.current = options?.onConnected;
@@ -62,23 +64,6 @@ export function useWhatsAppConnectOAuth(options?: {
     },
     [refreshNumbers]
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const redirectUri = getWhatsAppOAuthRedirectUri();
-        const { data } = await whatsappApi.connectUrl(redirectUri, connectMode);
-        const cfg = pickSignupConfig(data);
-        if (!cancelled) setSignupConfig(cfg);
-      } catch {
-        if (!cancelled) setSignupConfig(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [connectMode]);
 
   useWaOAuthPopupListener(handleOAuthResult);
 
@@ -143,16 +128,19 @@ export function useWhatsAppConnectOAuth(options?: {
         const { data } = await whatsappApi.connectUrl(redirectUri, connectMode);
         const cfg = pickSignupConfig(data);
         if (!cfg) {
-          toastError('Could not start WhatsApp connection. Please try again.');
+          toastError(connectUnavailableReason || 'Could not start WhatsApp connection. Please try again.');
           return;
         }
         setSignupConfig(cfg);
+        setConnectUnavailableReason(null);
         await runEmbeddedSignup(cfg);
-      } catch {
-        toastError('Could not start WhatsApp connection. Please try again.');
+      } catch (err) {
+        const message = getErrorMessage(err, 'Could not start WhatsApp connection. Please try again.');
+        setConnectUnavailableReason(message);
+        toastError(message);
       }
     })();
-  }, [signupConfig, connectMode, runEmbeddedSignup]);
+  }, [signupConfig, connectMode, runEmbeddedSignup, connectUnavailableReason]);
 
-  return { connect, connecting, connectMode };
+  return { connect, connecting, connectMode, connectUnavailableReason };
 }
