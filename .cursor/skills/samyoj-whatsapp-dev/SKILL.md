@@ -11,6 +11,8 @@ description: >-
 
 # Samyoj WhatsApp + Local Dev
 
+For **Meta WhatsApp Cloud API** endpoints, message payloads, webhooks, templates, CSW, and error codes, also load `.agents/skills/whatsapp-cloud-api/SKILL.md` (official reference skill). This skill covers **Samyoj-specific** runbooks only.
+
 ## Non-negotiables
 
 1. **Normal users never see** Meta App ID, App Secret, `.env`, or Advanced credential override in UI.
