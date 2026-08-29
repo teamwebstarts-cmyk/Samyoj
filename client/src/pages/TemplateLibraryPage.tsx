@@ -160,7 +160,10 @@ export default function TemplateLibraryPage() {
         const list = Array.isArray(data?.data) ? data.data : [];
         setStarters(list as SamyojStarter[]);
       })
-      .catch(() => setStarters([]));
+      .catch(() => {
+        setStarters([]);
+        toastError('Could not load Samyoj starters.');
+      });
   }, []);
 
   useEffect(() => {
@@ -437,11 +440,20 @@ export default function TemplateLibraryPage() {
     setSearch(starter.libraryHint);
     setStageError(null);
     try {
-      const params: Record<string, string> = { language: nextLanguage, limit: '50' };
-      if (starter.usecase) params.usecase = starter.usecase;
-      else if (starter.libraryHint) params.search = starter.libraryHint;
-      const { data } = await templateApi.library(params);
-      const entries = (Array.isArray(data.data) ? data.data : []) as LibraryListItem[];
+      let entries: LibraryListItem[] = [];
+      try {
+        const params: Record<string, string> = { language: nextLanguage, limit: '50' };
+        if (starter.usecase) params.usecase = starter.usecase;
+        else if (starter.libraryHint) params.search = starter.libraryHint;
+        const { data } = await templateApi.library(params);
+        entries = (Array.isArray(data.data) ? data.data : []) as LibraryListItem[];
+      } catch {
+        toastWarning(
+          'Meta catalog unavailable. Submitting the Samyoj starter instead — Meta still reviews it.',
+        );
+        await submitStarterCreate(starter, nextLanguage);
+        return;
+      }
       const match = pickStarterLibraryMatch(starter, entries);
       if (match && canCloneFromMetaLibrary(match)) {
         const item: LibraryListItem = { ...match, source: 'meta' };

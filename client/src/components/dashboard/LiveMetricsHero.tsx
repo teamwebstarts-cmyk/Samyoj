@@ -1,5 +1,5 @@
 import MetricsPeriodPicker from './MetricsPeriodPicker';
-import { metricsPeriodCompareLabel, type MetricsPeriod } from '../../utils/metricsPeriod';
+import type { MetricsPeriod } from '../../utils/metricsPeriod';
 
 export {
   METRICS_PRESET_OPTIONS as LIVE_METRICS_PERIOD_OPTIONS,
@@ -73,7 +73,6 @@ export default function LiveMetricsHero({
   period,
   onPeriodChange,
 }: LiveMetricsHeroProps) {
-  const compareLabel = metricsPeriodCompareLabel(period);
   const quality = qualityCopy(qualityRating);
   const hasMix =
     typeof promoConversations === 'number' || typeof serviceConversations === 'number';
@@ -111,7 +110,8 @@ export default function LiveMetricsHero({
               {messagesSent.toLocaleString()}
             </p>
             <p className="mt-2.5 hidden max-w-md text-[12.5px] font-medium leading-relaxed text-neutral-500 sm:block sm:text-[13px]">
-              Phone quality and Meta conversation categories for {compareLabel.replace(/^vs\s+/i, '') || 'this period'}.
+              Phone quality is live. Promo vs service uses billed conversation days in this range
+              (Meta Graph fills the previous calendar day). Sent is all messages.
             </p>
             {messagingLimitTier ? (
               <p className="mt-2 text-[11px] font-medium text-neutral-500">

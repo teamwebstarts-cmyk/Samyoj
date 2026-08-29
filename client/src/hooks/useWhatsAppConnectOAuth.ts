@@ -10,6 +10,8 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
 
+const COEXISTENCE_FINISH_EVENT = 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
+
 function pickSignupConfig(payload: unknown): EmbeddedSignupClientConfig | null {
   if (!payload || typeof payload !== 'object') return null;
   const row = payload as Record<string, unknown>;
@@ -85,11 +87,29 @@ export function useWhatsAppConnectOAuth(options?: {
       setConnecting(true);
       try {
         const result = await launchEmbeddedSignup(cfg);
+        if (connectMode === 'coexistence' && result.event) {
+          if (/cancel/i.test(result.event)) {
+            handleOAuthResult({
+              status: 'cancel',
+              message: 'WhatsApp Business app onboarding was cancelled.',
+            });
+            return;
+          }
+          if (
+            result.event !== COEXISTENCE_FINISH_EVENT &&
+            result.event !== 'FINISH' &&
+            result.event !== 'FINISH_ONLY_WABA'
+          ) {
+            console.warn('[wa-connect] Unexpected coexistence ES event:', result.event);
+          }
+        }
         const { data } = await whatsappApi.completeConnect(result.code, cfg.state, result.wabaId);
         const payload = data.data;
         if (payload.requiresSelection && payload.phones?.length && payload.pendingToken) {
           sessionStorage.setItem('wa_oauth_code', result.code);
           sessionStorage.setItem('wa_oauth_state', cfg.state);
+          sessionStorage.setItem('wa_oauth_phones', JSON.stringify(payload.phones));
+          sessionStorage.setItem('wa_oauth_pending', payload.pendingToken);
           window.location.assign('/settings/whatsapp/callback');
           return;
         }
@@ -108,7 +128,7 @@ export function useWhatsAppConnectOAuth(options?: {
         }
       }
     },
-    [handleOAuthResult]
+    [handleOAuthResult, connectMode]
   );
 
   const connect = useCallback(() => {

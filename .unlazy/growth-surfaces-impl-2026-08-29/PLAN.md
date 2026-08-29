@@ -36,6 +36,7 @@ Mode: orchestrated (sequential dispatch — CampaignsPage and Settings overlap a
   - 1.3 Wave 3 extras ......... gates/node-1.3.md
     - 1.3.1 wa.me website button
     - 1.3.2 OBA / official check checklist
+  - 1.4 Polish + local verify ... gates/leaf-1.4.md
 
 Leaves run sequentially in this session (shared CampaignsPage / Settings / WhatsappNumber).
 

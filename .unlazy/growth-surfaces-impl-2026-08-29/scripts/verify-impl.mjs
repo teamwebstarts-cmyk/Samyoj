@@ -188,11 +188,26 @@ const LEAVES = {
     LEAVES['1.3.1']();
     LEAVES['1.3.2']();
   },
+  polish: () => {
+    mustInclude('client/src/pages/CampaignWizardPage.tsx', [
+      "selectedAudienceTypes: ['CONTACTS']",
+      'cohortAudience',
+    ]);
+    mustInclude('client/src/components/inbox/useInboxDeepLink.ts', ['ready']);
+    mustInclude('server/src/modules/inbox/service-window.ts', ['inboxListOrderBy']);
+    mustInclude('server/src/modules/campaigns/cohorts.ts', ['isSamePhoneIdentity']);
+    mustInclude('client/src/utils/templateLibrary.ts', ['return null']);
+    mustInclude('client/src/components/dashboard/LiveMetricsHero.tsx', [
+      'billed conversation',
+    ]);
+    mustInclude('client/src/pages/TemplateLibraryPage.tsx', ['submitStarterCreate']);
+    mustNotInclude('client/src/pages/TemplateLibraryPage.tsx', ["|| 'APPROVED'"]);
+  },
 };
 
 const ids =
   leaf === 'all'
-    ? ['root-honesty', 'wave1', 'wave2', 'wave3']
+    ? ['root-honesty', 'wave1', 'wave2', 'wave3', 'polish']
     : [leaf];
 
 for (const id of ids) {

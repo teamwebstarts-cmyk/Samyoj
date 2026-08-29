@@ -243,6 +243,7 @@ export default function CampaignWizardPage() {
     const phones = (searchParams.get('phones') || '').replace(/\\n/g, '\n');
     const fromName = searchParams.get('name') || '';
     if (fromCampaign && cohort) {
+      if (!resolved || !activeNumber?.id) return;
       initializedFromQuery.current = true;
       campaignApi
         .cohortAudience(fromCampaign, cohort)
@@ -256,6 +257,7 @@ export default function CampaignWizardPage() {
           setForm((previous) => ({
             ...previous,
             audienceType: 'CONTACTS',
+            selectedAudienceTypes: ['CONTACTS'],
             selectedContactIds: ids,
             name: fromName || previous.name,
           }));
@@ -299,12 +301,13 @@ export default function CampaignWizardPage() {
       templateName,
       templateLanguage,
       audienceType,
+      selectedAudienceTypes: [audienceType],
       audienceTags: tags.join(', '),
       selectedContactIds: contactIds,
       phones,
       name,
     }));
-  }, [id, searchParams]);
+  }, [activeNumber?.id, id, resolved, searchParams]);
 
   useEffect(() => {
     const prefilledTemplateName = searchParams.get('template') || '';

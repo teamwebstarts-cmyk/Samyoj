@@ -23,3 +23,9 @@ Scope: Ship spec waves 1–3 on existing Samyoj surfaces without faking Meta quo
   CHECK: node .unlazy/growth-surfaces-impl-2026-08-29/scripts/verify-impl.mjs --leaf wave3
   EXPECT: growth-surfaces impl verification passed
   EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=6edb1355a1f7/42 entries; output=OK include client/src/components/settings/WhatsAppChannelsPanel.tsx | growth-surfaces impl verification passed
+
+- [x] G5: polish + local stack verification
+  CHECK: node .unlazy/growth-surfaces-impl-2026-08-29/scripts/verify-impl.mjs --leaf polish
+  EXPECT: growth-surfaces impl verification passed
+  CWD: /workspaces/Samyoj
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=6edb1355a1f7/42 entries; output=OK absent client/src/pages/TemplateLibraryPage.tsx | growth-surfaces impl verification passed

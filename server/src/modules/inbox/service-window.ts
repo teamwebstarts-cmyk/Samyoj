@@ -7,7 +7,18 @@ export function serviceWindowOpenSince(now = new Date()): Date {
   return new Date(now.getTime() - CUSTOMER_SERVICE_WINDOW_MS);
 }
 
-/** List-filter for 24h CSW. Missing opensAt is inactive (fail closed for free-form). */
+export function inboxListOrderBy(
+  windowFilter?: string
+): Array<Record<string, unknown>> {
+  if (windowFilter === 'open' || windowFilter === 'closed') {
+    return [{ lastMessageAt: 'desc' }, { id: 'desc' }];
+  }
+  return [
+    { cs24hWindowOpensAt: { sort: 'desc', nulls: 'last' } },
+    { lastMessageAt: 'desc' },
+    { id: 'desc' },
+  ];
+}
 export function conversationServiceWindowWhere(
   kind: 'open' | 'closed',
   now = new Date()

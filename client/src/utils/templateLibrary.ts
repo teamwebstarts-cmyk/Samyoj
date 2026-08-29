@@ -248,10 +248,10 @@ export function statusFromTemplateCreate(data: unknown): string {
   return raw ? String(raw).toUpperCase() : 'PENDING';
 }
 
-export function pickStarterLibraryMatch(
+export function pickStarterLibraryMatch<T extends { name: string; category?: string; usecase?: string; body?: string; source?: string }>(
   starter: { category: string; usecase?: string; libraryHint: string },
-  entries: Array<{ name: string; category?: string; usecase?: string; body?: string; source?: string }>,
-) {
+  entries: T[],
+): T | null {
   const cloneable = entries.filter((entry) => canCloneFromMetaLibrary(entry));
   if (!cloneable.length) return null;
   const usecase = (starter.usecase || '').toUpperCase();
@@ -270,7 +270,7 @@ export function pickStarterLibraryMatch(
     const auth = cloneable.find((entry) => (entry.category || '').toUpperCase() === 'AUTHENTICATION');
     if (auth) return auth;
   }
-  return cloneable[0];
+  return null;
 }
 
 export function uniqueLibraryTemplateName(base: string, existing: Set<string>): string {

@@ -4,7 +4,8 @@ OWNS: client/src/components/inbox/InboxListHeader.tsx, client/src/utils/inboxLis
 
 Scope: Add Can reply / Needs template chips filtered on the server by cs24hWindowOpensAt. Keep CRM Open/Pending.
 
-- [ ] G1: chips map to window=open|closed and server filters cs24hWindowOpensAt
+- [x] G1: chips map to window=open|closed and server filters cs24hWindowOpensAt
   CHECK: node .unlazy/growth-surfaces-impl-2026-08-29/scripts/verify-impl.mjs --leaf 1.1.4
   EXPECT: growth-surfaces impl verification passed
-  EVIDENCE: pending
+  CWD: /workspaces/Samyoj
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=6edb1355a1f7/42 entries; output=OK include server/src/modules/inbox/service-window.ts | growth-surfaces impl verification passed

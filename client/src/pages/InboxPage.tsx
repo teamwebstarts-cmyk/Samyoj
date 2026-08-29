@@ -603,7 +603,11 @@ export default function InboxPage() {
     reloadList: () => void loadConversations(),
   });
 
-  useInboxDeepLink({ upsertConversation, openConversation: handleOpenConversation });
+  useInboxDeepLink({
+    upsertConversation,
+    openConversation: handleOpenConversation,
+    ready: resolved && Boolean(activeNumber?.id),
+  });
 
   const handleStartChat = async (payload: {
     phone: string;

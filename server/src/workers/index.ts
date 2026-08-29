@@ -914,7 +914,13 @@ log.info('Workers started', {
   ],
 });
 
-// Daily billing analytics poll (every 24 hours)
+// Daily billing analytics poll (every 24 hours), plus one fill on boot for dashboard mix.
+void pollConversationAnalytics().catch((err) =>
+  logError(err, { source: 'worker', action: 'pollConversationAnalytics' })
+);
+void pollQualityRatings().catch((err) =>
+  logError(err, { source: 'worker', action: 'pollQualityRatings' })
+);
 setInterval(() => {
   pollConversationAnalytics().catch((err) =>
     logError(err, { source: 'worker', action: 'pollConversationAnalytics' })

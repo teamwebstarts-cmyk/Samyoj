@@ -4,7 +4,7 @@ import {
   extractMetaErrorFields,
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
-import { conversationServiceWindowWhere, latestWindowOpenAt } from './service-window';
+import { conversationServiceWindowWhere, inboxListOrderBy, latestWindowOpenAt } from './service-window';
 import { nextUnreadCount } from './unread';
 
 describe('latestWindowOpenAt', () => {
@@ -73,6 +73,21 @@ describe('extractMetaErrorFields', () => {
   it('parses (#code) from plain Error messages', () => {
     const err = new Error('(#131047) Message failed to send because more than 24 hours have passed');
     expect(extractMetaErrorFields(err).metaCode).toBe(131047);
+  });
+});
+
+describe('inboxListOrderBy', () => {
+  it('puts recent customer-service windows first on All', () => {
+    expect(inboxListOrderBy()).toEqual([
+      { cs24hWindowOpensAt: { sort: 'desc', nulls: 'last' } },
+      { lastMessageAt: 'desc' },
+      { id: 'desc' },
+    ]);
+  });
+
+  it('keeps recency among Can reply / Needs template', () => {
+    expect(inboxListOrderBy('open')).toEqual([{ lastMessageAt: 'desc' }, { id: 'desc' }]);
+    expect(inboxListOrderBy('closed')).toEqual([{ lastMessageAt: 'desc' }, { id: 'desc' }]);
   });
 });
 

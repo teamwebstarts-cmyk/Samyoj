@@ -32,7 +32,7 @@ import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import { jumpConversationToFlowNode } from '../flows/jump';
 import type { FlowNode } from '../flows/types';
-import { resolveCs24hWindowOpensAt, conversationServiceWindowWhere } from './service-window';
+import { resolveCs24hWindowOpensAt, conversationServiceWindowWhere, inboxListOrderBy } from './service-window';
 import { nextUnreadCount } from './unread';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
@@ -251,7 +251,7 @@ router.get(
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
         labels: { include: { label: true } },
       },
-      orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+      orderBy: inboxListOrderBy(typeof windowFilter === 'string' ? windowFilter : undefined) as Prisma.ConversationFindManyArgs['orderBy'],
       take: isLegacyPage ? take : take + 1,
     };
     if (isLegacyPage) {

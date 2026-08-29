@@ -82,11 +82,19 @@ async function conversationIndex(
 ) {
   const normalized = [...new Set(phones.map((phone) => normalizePhoneIdentity(phone)).filter(Boolean))];
   if (!normalized.length) return new Map<string, { id: string; windowOpen: boolean }>();
+  const lastTens = [
+    ...new Set(normalized.filter((phone) => phone.length >= 10).map((phone) => phone.slice(-10))),
+  ].slice(0, 80);
   const rows = await prisma.conversation.findMany({
     where: {
       organizationId: orgId,
       whatsappNumberId,
-      contact: { normalizedPhone: { in: normalized } },
+      contact: {
+        OR: [
+          { normalizedPhone: { in: normalized } },
+          ...lastTens.map((tail) => ({ normalizedPhone: { endsWith: tail } })),
+        ],
+      },
     },
     select: {
       id: true,
@@ -96,12 +104,16 @@ async function conversationIndex(
   });
   const map = new Map<string, { id: string; windowOpen: boolean }>();
   for (const row of rows) {
-    const phone = row.contact?.normalizedPhone;
-    if (!phone) continue;
-    map.set(phone, {
+    const contactPhone = row.contact?.normalizedPhone;
+    if (!contactPhone) continue;
+    const value = {
       id: row.id,
       windowOpen: isWithin24HourWindow(row.cs24hWindowOpensAt),
-    });
+    };
+    map.set(contactPhone, value);
+    for (const phone of normalized) {
+      if (isSamePhoneIdentity(contactPhone, phone)) map.set(phone, value);
+    }
   }
   return map;
 }

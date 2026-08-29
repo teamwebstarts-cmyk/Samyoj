@@ -13,6 +13,8 @@ type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
 
 const CODE_KEY = 'wa_oauth_code';
 const STATE_KEY = 'wa_oauth_state';
+const PHONES_KEY = 'wa_oauth_phones';
+const PENDING_KEY = 'wa_oauth_pending';
 
 /** Share one in-flight exchange across React Strict Mode double-mount. */
 const inflightExchanges = new Map<string, Promise<WhatsappConnectResult>>();
@@ -29,9 +31,24 @@ function readStashedOAuthParams() {
   };
 }
 
+function readStashedPhoneSelection(): { phones: WhatsappPhoneOption[]; pendingToken: string } | null {
+  const pendingToken = sessionStorage.getItem(PENDING_KEY);
+  const rawPhones = sessionStorage.getItem(PHONES_KEY);
+  if (!pendingToken || !rawPhones) return null;
+  try {
+    const phones = JSON.parse(rawPhones) as WhatsappPhoneOption[];
+    if (!Array.isArray(phones) || phones.length === 0) return null;
+    return { phones, pendingToken };
+  } catch {
+    return null;
+  }
+}
+
 function clearStashedOAuthParams() {
   sessionStorage.removeItem(CODE_KEY);
   sessionStorage.removeItem(STATE_KEY);
+  sessionStorage.removeItem(PHONES_KEY);
+  sessionStorage.removeItem(PENDING_KEY);
 }
 
 function finishOAuthFlow(payload: {
@@ -123,6 +140,18 @@ export default function WhatsappCallbackPage() {
     const stashed = readStashedOAuthParams();
     const code = codeFromUrl || stashed.code;
     const state = stateFromUrl || stashed.state;
+    const stashedSelection = readStashedPhoneSelection();
+
+    if (stashedSelection) {
+      setPhones(stashedSelection.phones);
+      setPendingToken(stashedSelection.pendingToken);
+      setSelectedKey(
+        `${stashedSelection.phones[0].wabaId}:${stashedSelection.phones[0].phoneNumberId}`
+      );
+      setStatus('select');
+      setMessage('Choose which WhatsApp number to connect.');
+      return;
+    }
 
     if (!code || !state) {
       const msg = 'WhatsApp connection was cancelled. Your dashboard session is still active.';

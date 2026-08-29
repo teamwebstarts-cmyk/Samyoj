@@ -237,6 +237,14 @@ describe('starter library match and create status', () => {
     expect(match?.name).toBe('order_confirmation_1');
   });
 
+  it('does not clone an unrelated utility row for appointment', () => {
+    const match = pickStarterLibraryMatch(
+      { category: 'UTILITY', usecase: '', libraryHint: 'appointment reminder' },
+      [{ name: 'delivery_update_1', category: 'UTILITY', usecase: 'DELIVERY_UPDATE' }],
+    );
+    expect(match).toBeNull();
+  });
+
   it('defaults missing Meta status to PENDING instead of APPROVED', () => {
     expect(statusFromTemplateCreate({})).toBe('PENDING');
     expect(statusFromTemplateCreate({ data: { status: 'rejected' } })).toBe('REJECTED');

@@ -35,66 +35,67 @@ export async function pollConversationAnalytics(): Promise<void> {
     },
   });
 
-  const now = new Date();
-  const periodStart = new Date(now);
-  periodStart.setDate(periodStart.getDate() - 1);
-  periodStart.setHours(0, 0, 0, 0);
-  const periodEnd = new Date(periodStart);
-  periodEnd.setDate(periodEnd.getDate() + 1);
+  for (let daysAgo = 1; daysAgo <= 7; daysAgo += 1) {
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - daysAgo);
+    periodStart.setHours(0, 0, 0, 0);
+    const periodEnd = new Date(periodStart);
+    periodEnd.setDate(periodEnd.getDate() + 1);
+    const startTs = Math.floor(periodStart.getTime() / 1000);
+    const endTs = Math.floor(periodEnd.getTime() / 1000);
 
-  const startTs = Math.floor(periodStart.getTime() / 1000);
-  const endTs = Math.floor(periodEnd.getTime() / 1000);
+    for (const number of numbers) {
+      try {
+        const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+        const analytics = await MetaWhatsAppService.getConversationAnalytics(
+          number.wabaId,
+          accessToken,
+          startTs,
+          endTs
+        );
 
-  for (const number of numbers) {
-    try {
-      const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
-      const analytics = await MetaWhatsAppService.getConversationAnalytics(
-        number.wabaId,
-        accessToken,
-        startTs,
-        endTs
-      );
+        for (const entry of analytics) {
+          const category = (entry.conversation_category || 'SERVICE').toUpperCase();
+          const count = entry.conversation || 0;
+          const costUsd = entry.cost || 0;
+          const costInr = costUsd > 0 ? costUsd * USD_TO_INR : count * (CATEGORY_RATES_INR[category] ?? 0.35);
 
-      for (const entry of analytics) {
-        const category = (entry.conversation_category || 'SERVICE').toUpperCase();
-        const count = entry.conversation || 0;
-        const costUsd = entry.cost || 0;
-        const costInr = costUsd > 0 ? costUsd * USD_TO_INR : count * (CATEGORY_RATES_INR[category] ?? 0.35);
-
-        await prisma.conversationCharge.upsert({
-          where: {
-            organizationId_wabaId_phoneNumberId_category_periodStart: {
+          await prisma.conversationCharge.upsert({
+            where: {
+              organizationId_wabaId_phoneNumberId_category_periodStart: {
+                organizationId: number.organizationId,
+                wabaId: number.wabaId,
+                phoneNumberId: number.phoneNumberId,
+                category,
+                periodStart,
+              },
+            },
+            create: {
               organizationId: number.organizationId,
               wabaId: number.wabaId,
               phoneNumberId: number.phoneNumberId,
               category,
+              country: 'IN',
+              conversationCount: count,
+              costUsd,
+              costInr,
               periodStart,
+              periodEnd,
             },
-          },
-          create: {
-            organizationId: number.organizationId,
-            wabaId: number.wabaId,
-            phoneNumberId: number.phoneNumberId,
-            category,
-            country: 'IN',
-            conversationCount: count,
-            costUsd,
-            costInr,
-            periodStart,
-            periodEnd,
-          },
-          update: {
-            conversationCount: count,
-            costUsd,
-            costInr,
-          },
+            update: {
+              conversationCount: count,
+              costUsd,
+              costInr,
+            },
+          });
+        }
+      } catch (err) {
+        log.warn('Failed to poll conversation analytics', {
+          wabaId: number.wabaId,
+          daysAgo,
+          error: String(err),
         });
       }
-    } catch (err) {
-      log.warn('Failed to poll conversation analytics', {
-        wabaId: number.wabaId,
-        error: String(err),
-      });
     }
   }
 }

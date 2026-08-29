@@ -49,6 +49,16 @@ function safeTokenEquals(a: string, b: string): boolean {
   return timingSafeEqual(digA, digB);
 }
 
+/** Prefer phones from the WABA the ES postMessage hinted (coexistence onboarding). */
+function narrowPhonesForWabaHint<T extends { wabaId: string }>(
+  phones: T[],
+  wabaIdHint?: string
+): T[] {
+  if (!wabaIdHint) return phones;
+  const matched = phones.filter((p) => p.wabaId === wabaIdHint);
+  return matched.length > 0 ? matched : phones;
+}
+
 const log = createModuleLogger('whatsapp');
 
 const router = Router();
@@ -331,11 +341,13 @@ router.post(
       throw new AppError(400, 'No phone numbers found on your WhatsApp Business Account.');
     }
 
-    if (phones.length === 1) {
+    const selectablePhones = narrowPhonesForWabaHint(phones, oauthState.wabaIdHint);
+
+    if (selectablePhones.length === 1) {
       const connection = await MetaWhatsAppService.buildConnectionDetails(
         accessToken,
-        phones[0].phoneNumberId,
-        phones[0].wabaId
+        selectablePhones[0].phoneNumberId,
+        selectablePhones[0].wabaId
       );
       const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection, {
         connectMode,
@@ -372,13 +384,14 @@ router.post(
     log.info('WhatsApp OAuth requires phone selection', {
       organizationId: orgId,
       userId,
-      phoneCount: phones.length,
+      phoneCount: selectablePhones.length,
+      wabaIdHint: oauthState.wabaIdHint,
     });
 
     sendSuccess(res, {
       requiresSelection: true,
       pendingToken,
-      phones: phones.map((p) => ({
+      phones: selectablePhones.map((p) => ({
         wabaId: p.wabaId,
         phoneNumberId: p.phoneNumberId,
         phoneNumber: p.phoneNumber,

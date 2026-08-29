@@ -98,7 +98,11 @@ router.patch(
           await MetaWhatsAppService.sendMessage(
             whatsappNumber.phoneNumberId,
             accessToken,
-            payload
+            payload,
+            {
+              whatsappNumberId: whatsappNumber.id,
+              isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
+            }
           );
           notified = true;
         }
@@ -161,7 +165,11 @@ router.patch(
         await MetaWhatsAppService.sendMessage(
           whatsappNumber.phoneNumberId,
           accessToken,
-          payload
+          payload,
+          {
+            whatsappNumberId: whatsappNumber.id,
+            isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
+          }
         );
       }
     }

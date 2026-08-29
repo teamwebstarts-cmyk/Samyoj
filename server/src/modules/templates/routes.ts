@@ -325,15 +325,23 @@ router.post(
     }
     const components = buildTemplateComponents(resolvedParams, template);
 
-    const result = await MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, {
-      to: phone,
-      type: 'template',
-      template: {
-        name,
-        language: { code: templateLanguage },
-        ...(components.length ? { components } : {}),
+    const result = await MetaWhatsAppService.sendMessage(
+      phoneNumberId,
+      accessToken,
+      {
+        to: phone,
+        type: 'template',
+        template: {
+          name,
+          language: { code: templateLanguage },
+          ...(components.length ? { components } : {}),
+        },
       },
-    });
+      {
+        whatsappNumberId: whatsappNumber.id,
+        isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
+      }
+    );
 
     sendSuccess(res, { metaMessageId: result.messages?.[0]?.id });
   })
