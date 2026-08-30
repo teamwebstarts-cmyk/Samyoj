@@ -16,6 +16,7 @@ import { errorHandler, logError, setupGlobalErrorHandlers } from './errors';
 import logger, { requestLogger } from './utils/logger';
 import { socketAuthMiddleware, startMembershipGuard } from './middleware/socket-auth';
 import { requireTenantCsrf } from './middleware/tenant-csrf';
+import { skipGlobalHttpRateLimit } from './middleware/http-rate-limit';
 import prisma from './config/database';
 import Redis from 'ioredis';
 
@@ -156,17 +157,11 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 5000,
+    max: 20_000,
+    skipFailedRequests: true,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => {
-      const p = req.path || '';
-      // Never throttle health checks, webhook deliveries, or Socket.IO upgrades.
-      if (p === '/health' || p.startsWith('/api/whatsapp/webhook')) return true;
-      if (p.startsWith('/socket.io') || p.startsWith('/api/socket.io')) return true;
-      if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') return true;
-      return false;
-    },
+    skip: (req) => skipGlobalHttpRateLimit(req.originalUrl || req.path, req.headers.upgrade),
   })
 );
 
