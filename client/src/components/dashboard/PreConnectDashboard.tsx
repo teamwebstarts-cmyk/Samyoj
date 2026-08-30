@@ -2,22 +2,14 @@ import { useState, useCallback } from 'react';
 import PreConnectHero from './PreConnectHero';
 import PreConnectSteps from './PreConnectSteps';
 import PreConnectVideoModal from './PreConnectVideoModal';
-import WhatsAppConnectModeModal from '../whatsapp/WhatsAppConnectModeModal';
-import { useWhatsAppConnectPicker } from '../../hooks/useWhatsAppConnectPicker';
+import { useWhatsAppConnectOAuth } from '../../hooks/useWhatsAppConnectOAuth';
 import { getPreconnectVideoUrl } from '../../utils/preconnectVideos';
 
 const INTRO_VIDEO_URL = getPreconnectVideoUrl('intro');
 
 /** Full Dashboard body when WhatsApp is not connected. */
 export default function PreConnectDashboard() {
-  const {
-    pickerOpen,
-    openPicker,
-    closePicker,
-    connectStandard,
-    connectCoexistence,
-    connecting,
-  } = useWhatsAppConnectPicker({ returnPath: '/' });
+  const { connect, connecting } = useWhatsAppConnectOAuth({ returnPath: '/' });
   const [videoOpen, setVideoOpen] = useState(false);
 
   const openVideo = useCallback(() => setVideoOpen(true), []);
@@ -25,22 +17,14 @@ export default function PreConnectDashboard() {
 
   return (
     <div className="dashboard-stack pb-4 sm:pb-2">
-      <PreConnectHero connecting={connecting} onConnect={openPicker} onWatchVideo={INTRO_VIDEO_URL ? openVideo : undefined} />
-      <PreConnectSteps connecting={connecting} onConnect={openPicker} />
+      <PreConnectHero connecting={connecting} onConnect={connect} onWatchVideo={INTRO_VIDEO_URL ? openVideo : undefined} />
+      <PreConnectSteps connecting={connecting} onConnect={connect} />
 
       <PreConnectVideoModal
         open={videoOpen}
         title="Watch Setup Video"
         videoUrl={INTRO_VIDEO_URL}
         onClose={closeVideo}
-      />
-
-      <WhatsAppConnectModeModal
-        open={pickerOpen}
-        onClose={closePicker}
-        onConnectStandard={connectStandard}
-        onConnectCoexistence={connectCoexistence}
-        connecting={connecting}
       />
     </div>
   );

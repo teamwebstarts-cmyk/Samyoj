@@ -24,8 +24,7 @@ import type {
 } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
-import { useWhatsAppConnectPicker } from '../hooks/useWhatsAppConnectPicker';
-import WhatsAppConnectModeModal from '../components/whatsapp/WhatsAppConnectModeModal';
+import { useWhatsAppConnectOAuth } from '../hooks/useWhatsAppConnectOAuth';
 
 // Subcomponents
 import SettingsHero from '../components/settings/SettingsHero';
@@ -179,21 +178,6 @@ export default function SettingsPage() {
   // WhatsApp State
   const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
-
-  const {
-    pickerOpen,
-    openPicker,
-    closePicker,
-    connectStandard,
-    connectCoexistence,
-    connecting,
-  } = useWhatsAppConnectPicker({
-    returnPath: '/settings?tab=whatsapp',
-    onConnected: () => {
-      void refreshNumbers();
-      loadData({ silent: true });
-    },
-  });
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
 
   // Business Hours
@@ -234,9 +218,17 @@ export default function SettingsPage() {
     loadData();
   }, [organization?.id]);
 
+  const { connect, connecting } = useWhatsAppConnectOAuth({
+    returnPath: '/settings?tab=whatsapp',
+    onConnected: () => {
+      void refreshNumbers();
+      loadData({ silent: true });
+    },
+  });
+
   const handleConnect = () => {
     if (!isOwnerOrAdmin || !canConnectWhatsApp) return;
-    openPicker();
+    connect();
   };
 
   // Handle WhatsApp Disconnect
@@ -388,14 +380,6 @@ export default function SettingsPage() {
           </>
         )}
       </div>
-
-      <WhatsAppConnectModeModal
-        open={pickerOpen}
-        onClose={closePicker}
-        onConnectStandard={connectStandard}
-        onConnectCoexistence={connectCoexistence}
-        connecting={connecting}
-      />
 
       {/* Disconnect confirmation */}
       <ConfirmDialog

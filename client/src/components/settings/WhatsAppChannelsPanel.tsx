@@ -189,7 +189,7 @@ export default function WhatsAppChannelsPanel({
           </div>
           <p className="mt-3 text-[14px] font-semibold text-theme-fg">No number connected</p>
           <p className="mt-1 text-[12px] text-theme-secondary">
-            Choose standard Cloud API or connect your existing Business app number.
+            Sign in with Facebook and pick your business line.
           </p>
           {numberLimit !== null && (
             <p className="mt-1.5 text-[11px] text-theme-muted">

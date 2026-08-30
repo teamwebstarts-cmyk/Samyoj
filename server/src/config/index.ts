@@ -64,12 +64,12 @@ export const config = {
      */
     allowTunnelWebhook: /^(1|true|yes)$/i.test(process.env.META_ALLOW_TUNNEL_WEBHOOK || ''),
     /**
-     * es_v4 = Embedded Signup (customers / Tech Provider).
-     * oauth = previous Facebook Login scopes flow (developer testing an existing WABA).
+     * oauth = Facebook Login scopes (V5 / this V7 branch — existing WABA, no Tech Provider wizard).
+     * es_v4 = Embedded Signup (v6 branch / later V8 after Meta 2/2).
      */
-    connectFlow: /^(oauth|legacy_oauth)$/i.test(process.env.META_CONNECT_FLOW || '')
-      ? 'oauth'
-      : 'es_v4',
+    connectFlow: /^(es_v4|embedded)$/i.test(process.env.META_CONNECT_FLOW || '')
+      ? 'es_v4'
+      : 'oauth',
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   /** AI brain configuration — Sarvam is the default brain provider. */
