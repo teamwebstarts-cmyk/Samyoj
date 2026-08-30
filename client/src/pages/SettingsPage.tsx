@@ -82,8 +82,8 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
   },
   {
     id: 'green-tick',
-    label: 'Green tick',
-    hint: 'Prep with Meta',
+    label: 'Official check',
+    hint: 'Green tick prep with Meta',
     icon: BadgeCheck,
   },
   {

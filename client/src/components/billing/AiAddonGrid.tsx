@@ -102,7 +102,7 @@ function FlexTopupCard({
   );
   const fillPct = ((quote.spendInr - minInr) / (maxInr - minInr)) * 100;
   const unitLabel = isCalling ? (quote.units === 1 ? 'minute' : 'minutes') : 'credits';
-  const Icon = isCalling ? Phone : Bot;
+  const Icon = isCalling ? CallingMinuteMark : ChatCreditMark;
 
   return (
     <article
@@ -127,13 +127,7 @@ function FlexTopupCard({
             {isCalling ? 'Calling minutes' : 'Chat credits'}
           </p>
         </div>
-        <span
-          className={
-            isCalling
-              ? 'flex h-10 w-10 items-center justify-center rounded-2xl bg-[#12352f] text-[#f3e6c8] dark:bg-[#d4784a] dark:text-[#12352f]'
-              : 'flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1b1633] text-[#e4c15a] dark:bg-[#e4c15a] dark:text-[#1b1633]'
-          }
-        >
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm shadow-emerald-600/30 dark:bg-emerald-500">
           <Icon className="h-5 w-5" />
         </span>
       </div>

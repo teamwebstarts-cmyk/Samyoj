@@ -93,10 +93,13 @@ export default function OfficialCheckCard() {
   return (
     <SettingsPanel
       title="Green tick"
-      description="We help you prepare. Meta reviews and decides. This is Meta’s Official Business Account — Samyoj cannot grant or sell it."
+      description="We help you prepare. Meta reviews and decides. Samyoj cannot grant or sell the badge."
       icon={BadgeCheck}
     >
       <div className="space-y-4">
+        <p className="text-[12px] font-medium text-theme-muted">
+          This is Meta’s Official Business Account.
+        </p>
         {isOnBizApp ? (
           <AppAlert variant="warning">
             The green tick is not available on WhatsApp Business app numbers
