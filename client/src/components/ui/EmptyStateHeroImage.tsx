@@ -25,7 +25,7 @@ export default function EmptyStateHeroImage({ id, width, height }: EmptyStateHer
         width={width}
         height={height}
         decoding="async"
-        fetchpriority="high"
+        fetchPriority="high"
         className="max-h-full max-w-full select-none object-contain"
         draggable={false}
       />

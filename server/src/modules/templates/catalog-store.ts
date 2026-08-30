@@ -121,8 +121,14 @@ async function patchSeededLibraryEdgeParams() {
   for (const row of rows) {
     const entry = bySlug.get(row.slug);
     if (!entry) continue;
-    const nextBody = templateTextHasEdgeParams(row.body) ? entry.body : row.body;
-    const nextBodyHi = templateTextHasEdgeParams(row.bodyHi) ? entry.bodyHi : row.bodyHi;
+    const nextBody =
+      templateTextHasEdgeParams(row.body) && !templateTextHasEdgeParams(entry.body)
+        ? entry.body
+        : row.body;
+    const nextBodyHi =
+      templateTextHasEdgeParams(row.bodyHi) && !templateTextHasEdgeParams(entry.bodyHi)
+        ? entry.bodyHi
+        : row.bodyHi;
     if (nextBody === row.body && nextBodyHi === row.bodyHi) continue;
     await prisma.platformLibraryTemplate.update({
       where: { id: row.id },
@@ -169,7 +175,7 @@ export function unusableTemplateButtonUrl(raw: string): string | null {
     host === 'example.com' ||
     host.endsWith('.example.com')
   ) {
-    return 'WhatsApp will not approve GitHub, Telegram, or sample links on a template button. Paste a shop or tracking page customers can open on their phone.';
+    return 'That page is not a shop customers can open. Leave this blank to use a chat button, or paste your own https shop or tracking page.';
   }
   return null;
 }
@@ -235,6 +241,30 @@ export type LibraryTemplateWriteInput = {
   sortOrder: number;
 };
 
+export function assertLibraryCopySafe(input: {
+  body?: string | null;
+  bodyHi?: string | null;
+  header?: string | null;
+  category?: string | null;
+}) {
+  const skipAuth = input.category === 'AUTHENTICATION';
+  if (!skipAuth && input.body && templateTextHasEdgeParams(input.body)) {
+    throw new AppError(
+      400,
+      'Variables can’t be at the start or end of the English body. Add words after the last field — a full stop is not enough.',
+    );
+  }
+  if (!skipAuth && input.bodyHi && templateTextHasEdgeParams(input.bodyHi)) {
+    throw new AppError(
+      400,
+      'Variables can’t be at the start or end of the Hindi body. Add words after the last field — a full stop is not enough.',
+    );
+  }
+  if (input.header && templateTextHasEdgeParams(input.header)) {
+    throw new AppError(400, 'The header cannot start or end with a variable.');
+  }
+}
+
 function writeData(input: LibraryTemplateWriteInput): Prisma.PlatformLibraryTemplateUncheckedCreateInput {
   return {
     slug: input.slug,
@@ -261,6 +291,7 @@ export async function createAdminLibraryTemplate(input: {
   reason: string;
   data: LibraryTemplateWriteInput;
 }) {
+  assertLibraryCopySafe(input.data);
   const existing = await prisma.platformLibraryTemplate.findUnique({ where: { slug: input.data.slug } });
   if (existing) throw new AppError(409, 'A library template with this slug already exists');
   const row = await prisma.platformLibraryTemplate.create({ data: writeData(input.data) });
@@ -283,6 +314,18 @@ export async function patchAdminLibraryTemplate(input: {
 }) {
   const before = await prisma.platformLibraryTemplate.findUnique({ where: { id: input.id } });
   if (!before) throw new AppError(404, 'Library template not found');
+  if (
+    input.data.body !== undefined ||
+    input.data.bodyHi !== undefined ||
+    input.data.header !== undefined
+  ) {
+    assertLibraryCopySafe({
+      body: input.data.body ?? before.body,
+      bodyHi: input.data.bodyHi ?? before.bodyHi,
+      header: input.data.header !== undefined ? input.data.header : before.header,
+      category: input.data.category ?? before.category,
+    });
+  }
   if (input.data.slug && input.data.slug !== before.slug) {
     const clash = await prisma.platformLibraryTemplate.findUnique({ where: { slug: input.data.slug } });
     if (clash) throw new AppError(409, 'A library template with this slug already exists');

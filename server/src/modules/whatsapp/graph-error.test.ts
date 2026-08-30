@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { formatGraphErrorMessage } from './meta.service';
 
 describe('formatGraphErrorMessage', () => {
@@ -17,5 +17,30 @@ describe('formatGraphErrorMessage', () => {
     expect(formatGraphErrorMessage({ message: 'Invalid parameter', code: 100 })).toMatch(
       /shop or tracking|unique template name/i
     );
+  });
+});
+
+describe('createMessageTemplate', () => {
+  it('does not crash when Meta returns a non-JSON body', async () => {
+    const { MetaWhatsAppService, MetaApiError } = await import('./meta.service');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new SyntaxError('Unexpected token <');
+        },
+      }),
+    );
+    await expect(
+      MetaWhatsAppService.createMessageTemplate('waba', 'token', {
+        name: 'order_shipped',
+        language: 'en_US',
+        category: 'UTILITY',
+        components: [],
+      }),
+    ).rejects.toBeInstanceOf(MetaApiError);
+    vi.unstubAllGlobals();
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ComponentType } from 'react';
+import type { LucideProps } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -62,7 +63,7 @@ const TABS: Array<{
   id: RetargetTab;
   label: string;
   countKey?: keyof CohortCounts;
-  icon: ComponentType<{ className?: string }>;
+  icon: ComponentType<LucideProps>;
 }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'read', label: 'Read', countKey: 'read', icon: Eye },

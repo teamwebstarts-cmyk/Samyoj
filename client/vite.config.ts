@@ -2,6 +2,11 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const codespaceName = process.env.CODESPACE_NAME;
+const codespaceForwardingDomain =
+  process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || 'app.github.dev';
+const codespaceHttpsOrigin = codespaceName
+  ? `https://${codespaceName}-3000.${codespaceForwardingDomain}`
+  : '';
 
 /** Vite still injects /@vite/client when hmr is false; that client throws in Codespaces. */
 function stripViteClientInCodespaces(): Plugin {
@@ -22,6 +27,9 @@ function stripViteClientInCodespaces(): Plugin {
 
 export default defineConfig({
   plugins: [react(), stripViteClientInCodespaces()],
+  define: {
+    'import.meta.env.VITE_CODESPACE_HTTPS_ORIGIN': JSON.stringify(codespaceHttpsOrigin),
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,
@@ -48,6 +56,12 @@ export default defineConfig({
       '/healthz': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
+      },
+      // Brave/ad-block often block connect.facebook.net; load the JS SDK same-origin.
+      '/__fb-sdk': {
+        target: 'https://connect.facebook.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__fb-sdk/, ''),
       },
     },
   },

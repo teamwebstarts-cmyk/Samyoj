@@ -47,7 +47,8 @@ export async function processMessageEchoes(
           phone: contactPhone,
           normalizedPhone: contactPhone,
           name: contactPhone,
-          source: 'INBOUND',
+          // Biz-app outbound created this contact — do not label it inbound.
+          source: 'OUTBOUND',
         },
       });
     }

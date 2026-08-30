@@ -661,7 +661,14 @@ export function starterCreatePayload(
   const buttons = (starter.buttons || [])
     .filter((btn) => allowed.has(btn.type))
     .map((btn) => {
-      if (btn.type === 'URL') return { ...btn, url: url || btn.url || SAMPLE_URL };
+      if (btn.type === 'URL') {
+        if (!url) return { type: 'QUICK_REPLY' as const, text: btn.text };
+        return {
+          ...btn,
+          url,
+          ...( /\{\{\d+\}\}/.test(url) ? { example: btn.example || 'order-123' } : {}),
+        };
+      }
       if (btn.type === 'PHONE_NUMBER') return { ...btn, phone_number: phone || btn.phone_number };
       return btn;
     });

@@ -71,7 +71,8 @@ export default function TemplateLibraryReviewStep({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const needsButtons = libraryNeedsButtonInputs(item);
-  const urlButton = (item.buttons || []).find((button) => button.type?.toUpperCase() === 'URL');
+  const urlButtons = (item.buttons || []).filter((button) => button.type?.toUpperCase() === 'URL');
+  const urlButton = urlButtons[0];
   const phoneButton = (item.buttons || []).find((button) => button.type?.toUpperCase() === 'PHONE_NUMBER');
   const bodyVars = form.variableMeta.filter((meta) => meta.scope === 'body');
 
@@ -184,30 +185,38 @@ export default function TemplateLibraryReviewStep({
         {needsButtons && (
           <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
             <div className="flex items-center gap-1">
-              <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">Button website — needed now</p>
+              <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">Button website — optional</p>
               <InfoTip
                 label="Button link help"
-                content="WhatsApp stores this page on the template during review. It is not {{1}}. Body variables below fill later when you send from Inbox or Campaigns."
+                content="Meta locks the website domain on this template at review. Only a path ending like /order-123 can change later when you send. Body fields {{1}} are separate. Leave this empty to use a chat button instead — no website needed to submit."
               />
             </div>
             <p className="text-[11px] font-medium leading-relaxed text-slate-500">
-              Customer taps the button, this page opens on their phone. Use your shop or tracking site — not GitHub,
-              Telegram, or the example below.
+              Leave empty if you do not have a shop page yet. We will submit a chat button with the same label. If you
+              paste a site, use your real https shop or tracking page — Meta reviews that domain now.
             </p>
             {urlButton && (
               <AppInput
                 id="library-button-url"
-                label={urlButton.text || 'Website URL'}
-                hint="Not a variable"
-                labelInfo="Paste a real https page. Example only: https://yourstore.com/track"
-                placeholder="https://yourstore.com/track"
+                label={
+                  urlButtons.length > 1
+                    ? urlButtons.map((button) => button.text).join(' + ')
+                    : urlButton.text || 'Website URL'
+                }
+                hint="Optional"
+                labelInfo="Domain is saved on the template. Add /{{1}} at the end if each customer should get a unique path."
+                placeholder="Leave empty, or https://yourstore.com/track"
                 value={buttonUrl}
                 error={buttonUrlError || undefined}
                 onChange={(event) => onButtonUrlChange(event.target.value)}
                 onBlur={(event) => onButtonUrlChange(normalizeWebsiteUrl(event.target.value))}
-                required
               />
             )}
+            {urlButtons.length > 1 ? (
+              <p className="text-[11px] font-medium leading-relaxed text-slate-500">
+                Both buttons open this same website. WhatsApp stores one page on this draft.
+              </p>
+            ) : null}
             {phoneButton && (
               <AppInput
                 id="library-button-phone"

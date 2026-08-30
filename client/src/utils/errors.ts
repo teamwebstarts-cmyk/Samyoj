@@ -91,7 +91,22 @@ export function normalizeError(err: unknown): NormalizedClientError {
 }
 
 export function getErrorMessage(err: unknown, fallback = 'Something went wrong'): string {
-  return normalizeError(err).message || fallback;
+  const normalized = normalizeError(err);
+  return sanitizeUserErrorMessage(normalized.message, normalized.code) || fallback;
+}
+
+const CONNECT_NOT_READY =
+  'WhatsApp connect isn’t ready yet. Try again in a few minutes. If it still doesn’t open, contact support.';
+
+/** Never show .env keys, Meta config IDs, or operator runbooks in the UI. */
+export function sanitizeUserErrorMessage(message: string, code?: string): string {
+  if (
+    code === 'META_ES_CONFIG_MISSING' ||
+    /META_ES_CONFIG|META_ES_COEX|server\/\.env|Embedded Signup v4/i.test(message)
+  ) {
+    return CONNECT_NOT_READY;
+  }
+  return message;
 }
 
 function formatContextLines(context?: ClientErrorContext): string[] {

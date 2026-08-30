@@ -38,6 +38,7 @@ vi.mock('./rate-limit', () => ({
   authLoginLimiter: (_req: unknown, _res: unknown, next: unknown) => (next as () => void)(),
   authRegisterLimiter: (_req: unknown, _res: unknown, next: unknown) => (next as () => void)(),
   authForgotLimiter: (_req: unknown, _res: unknown, next: unknown) => (next as () => void)(),
+  authRefreshLimiter: (_req: unknown, _res: unknown, next: unknown) => (next as () => void)(),
   consumeAccountThrottle: vi.fn().mockResolvedValue(true),
 }));
 

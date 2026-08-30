@@ -77,7 +77,10 @@ export function buildTemplateComponents(data: TemplateInput) {
       type: 'BUTTONS',
       buttons: data.buttons.map((btn) => {
         const base: Record<string, unknown> = { type: btn.type, text: btn.text };
-        if (btn.type === 'URL' && btn.url) base.url = btn.url;
+        if (btn.type === 'URL' && btn.url) {
+          base.url = btn.url;
+          if (/\{\{\d+\}\}$/.test(btn.url) && btn.example) base.example = [btn.example];
+        }
         if (btn.type === 'PHONE_NUMBER' && btn.phone_number) base.phone_number = btn.phone_number;
         if (btn.type === 'COPY_CODE' && btn.example) base.example = [btn.example];
         return base;

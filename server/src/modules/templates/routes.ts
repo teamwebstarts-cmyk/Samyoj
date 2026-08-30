@@ -152,9 +152,6 @@ router.post(
         !Array.isArray(button) &&
         (button as { type?: string }).type === 'URL',
     );
-    if (needsUrl && !body.buttonUrl?.trim()) {
-      throw new AppError(400, 'Add your public https:// website link for this template button.');
-    }
     if (needsUrl && body.buttonUrl) {
       const buttonUrlError = unusableTemplateButtonUrl(body.buttonUrl);
       if (buttonUrlError) throw new AppError(400, buttonUrlError);

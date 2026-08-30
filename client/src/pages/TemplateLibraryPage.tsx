@@ -258,14 +258,19 @@ export default function TemplateLibraryPage() {
   });
   const previewButtons = form.buttons
     .filter((button) => button.text.trim())
-    .map((button) => ({
-      type: button.type,
-      text: button.text,
-      ...(button.type === 'URL' && (buttonUrl || button.url) ? { url: buttonUrl || button.url } : {}),
-      ...(button.type === 'PHONE_NUMBER' && (buttonPhone || button.phone_number)
-        ? { phone_number: buttonPhone || button.phone_number }
-        : {}),
-    }));
+    .map((button) => {
+      if (button.type === 'URL' && !buttonUrl.trim()) {
+        return { type: 'QUICK_REPLY' as const, text: button.text };
+      }
+      return {
+        type: button.type,
+        text: button.text,
+        ...(button.type === 'URL' && (buttonUrl || button.url) ? { url: buttonUrl || button.url } : {}),
+        ...(button.type === 'PHONE_NUMBER' && (buttonPhone || button.phone_number)
+          ? { phone_number: buttonPhone || button.phone_number }
+          : {}),
+      };
+    });
 
   const goToStep = (step: number) => {
     if (step > maxReachableStep) return;
@@ -280,10 +285,13 @@ export default function TemplateLibraryPage() {
     if (existingNames.has(createName.trim())) {
       return 'A template with this name already exists. Choose a different name.';
     }
+    if (selected.mediaFormat && !form.headerMediaHandle) {
+      return 'Upload a sample image, video, or PDF for this header before submitting.';
+    }
     if (libraryNeedsButtonInputs(selected)) {
       const needsUrl = (selected.buttons || []).some((button) => button.type?.toUpperCase() === 'URL');
       const needsPhone = (selected.buttons || []).some((button) => button.type?.toUpperCase() === 'PHONE_NUMBER');
-      if (needsUrl) {
+      if (needsUrl && buttonUrl.trim()) {
         const urlError = libraryButtonUrlError(buttonUrl, window.location.origin);
         if (urlError) return urlError;
       }
@@ -356,7 +364,14 @@ export default function TemplateLibraryPage() {
       try {
         await submitCatalog(selected, createName.trim());
       } catch (err: unknown) {
-        setStageError(mapTemplateApiError(getErrorMessage(err, 'Failed to submit this template to Meta.')));
+        const raw = getErrorMessage(err, 'Failed to submit this template to Meta.');
+        const mapped = mapTemplateApiError(raw);
+        setStageError(mapped);
+        if (/already exists|same name/i.test(`${raw} ${mapped}`) && selected) {
+          const taken = new Set([...accountNames, createName.trim()].filter(Boolean));
+          setAccountNames(Array.from(taken));
+          setCreateName(uniqueLibraryTemplateName(selected.id, taken));
+        }
       } finally {
         setSaving(false);
       }

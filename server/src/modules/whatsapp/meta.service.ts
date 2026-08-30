@@ -322,11 +322,15 @@ export class MetaWhatsAppService {
         ? config.meta.esCoexConfigId || config.meta.esConfigId
         : config.meta.esConfigId;
     if (!configId) {
-      const message =
-        connectMode === 'coexistence'
-          ? 'WhatsApp coexistence connect is not configured. Set META_ES_COEX_CONFIG_ID (or META_ES_CONFIG_ID) in server/.env from Meta → Facebook Login for Business → Embedded Signup v4.'
-          : 'WhatsApp connect is not configured. Set META_ES_CONFIG_ID in server/.env from Meta → Facebook Login for Business → Embedded Signup v4, then restart the API.';
-      throw new AppError(503, message, 'META_ES_CONFIG_MISSING');
+      log.warn('Embedded Signup config_id missing — Connect WhatsApp cannot start', {
+        connectMode,
+        env: connectMode === 'coexistence' ? 'META_ES_COEX_CONFIG_ID or META_ES_CONFIG_ID' : 'META_ES_CONFIG_ID',
+      });
+      throw new AppError(
+        503,
+        'WhatsApp connect isn’t ready yet. Try again in a few minutes. If it still doesn’t open, contact support.',
+        'META_ES_CONFIG_MISSING',
+      );
     }
     return {
       mode: 'ES_V4_SDK',
@@ -821,7 +825,17 @@ export class MetaWhatsAppService {
       body: JSON.stringify(payload),
     });
 
-    const data = (await res.json()) as { id?: string; status?: string; category?: string } & GraphError;
+    let data: { id?: string; status?: string; category?: string } & GraphError;
+    try {
+      data = (await res.json()) as typeof data;
+    } catch {
+      throw new MetaApiError(
+        res.ok
+          ? 'WhatsApp returned an unreadable response.'
+          : `WhatsApp returned ${res.status} without a readable error.`,
+        { statusCode: res.status }
+      );
+    }
     if (!res.ok) {
       log.warn('Meta createMessageTemplate rejected', {
         status: res.status,

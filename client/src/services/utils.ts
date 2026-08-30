@@ -47,7 +47,7 @@ export function getSocketIoClientOptions(options?: {
   return {
     path: SOCKET_IO_PATH,
     withCredentials: true as const,
-    transports: pollingOnly ? (['polling'] as const) : (['websocket', 'polling'] as const),
+    transports: pollingOnly ? ['polling'] : ['websocket', 'polling'],
     upgrade: !pollingOnly,
     reconnection: options?.reconnection,
     auth: options?.extraAuth,

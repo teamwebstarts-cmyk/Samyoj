@@ -12,6 +12,7 @@ import {
   verifyConnectOAuthState,
 } from './connect-oauth-state';
 import { mapWhatsAppOAuthError } from './oauth-errors';
+import { buildLegacyOAuthConnectUrl } from './legacy-oauth-url';
 import {
   getOrgMetaSettings,
   rejectOrgMetaConfigWrite,
@@ -109,24 +110,26 @@ async function saveWhatsappConnection(
     }
   }
 
-  let isOnBizApp = false;
-  let coexistenceStatus: string | null = null;
-  if (opts?.connectMode === 'coexistence' || opts?.skipRegister) {
-    try {
-      const flags = await MetaWhatsAppService.fetchCoexistenceFlags(
-        connection.phoneNumberId,
-        connection.accessToken
-      );
-      isOnBizApp = flags.isOnBizApp;
-      coexistenceStatus = flags.isOnBizApp ? 'active' : 'pending';
-    } catch (err) {
-      log.warn('Coexistence flag check failed after connect', {
-        organizationId: orgId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      if (opts?.connectMode === 'coexistence') {
-        coexistenceStatus = 'pending';
-      }
+  let isOnBizApp: boolean | undefined;
+  let coexistenceStatus: string | null | undefined;
+  try {
+    const flags = await MetaWhatsAppService.fetchCoexistenceFlags(
+      connection.phoneNumberId,
+      connection.accessToken
+    );
+    isOnBizApp = flags.isOnBizApp;
+    coexistenceStatus = flags.isOnBizApp
+      ? 'active'
+      : opts?.connectMode === 'coexistence'
+        ? 'pending'
+        : null;
+  } catch (err) {
+    log.warn('Coexistence flag check failed after connect', {
+      organizationId: orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    if (opts?.connectMode === 'coexistence') {
+      coexistenceStatus = 'pending';
     }
   }
 
@@ -150,8 +153,8 @@ async function saveWhatsappConnection(
     wabaId: connection.wabaId,
     businessId: connection.businessId,
     encryptedToken,
-    isOnBizApp: opts?.connectMode === 'coexistence' ? isOnBizApp : undefined,
-    coexistenceStatus: opts?.connectMode === 'coexistence' ? coexistenceStatus : undefined,
+    isOnBizApp,
+    coexistenceStatus,
     tokenExpiresAt,
   });
   emitProductEvent({
@@ -228,6 +231,28 @@ router.get(
       redirectUri,
       connectMode,
     });
+    if (config.meta.connectFlow === 'oauth' && connectMode === 'standard') {
+      const signupConfig = buildLegacyOAuthConnectUrl({
+        appId: metaCredentials.appId,
+        state,
+        redirectUri,
+        connectMode,
+      });
+      log.info('WhatsApp legacy OAuth URL issued', {
+        organizationId: orgId,
+        userId,
+        redirectUri,
+        connectMode,
+        appId: metaCredentials.appId,
+      });
+      emitProductEvent({
+        organizationId: orgId,
+        name: 'WHATSAPP_OAUTH_START',
+      });
+      sendSuccess(res, signupConfig);
+      return;
+    }
+
     const signupConfig = MetaWhatsAppService.getEmbeddedSignupConfig(
       state,
       metaCredentials,
@@ -519,7 +544,6 @@ router.get(
         coexistenceStatus: true,
         historySyncProgress: true,
         coexistenceOffboardedAt: true,
-        tokenExpiresAt: true,
         qualityRating: true,
         officialBusinessAccount: true,
         messagingLimitTier: true,

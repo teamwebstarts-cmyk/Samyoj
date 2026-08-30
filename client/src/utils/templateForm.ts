@@ -442,17 +442,29 @@ function syncExamples(text: string, current: string[]): string[] {
   return Array.from({ length: count }, (_, i) => current[i] || '');
 }
 
+function clauseBeforeVariable(text: string, varIndex: number): string {
+  const needle = `{{${varIndex}}}`;
+  const at = text.indexOf(needle);
+  const before = at === -1 ? text : text.slice(0, at);
+  const sincePrev = before.split(/\{\{\d+\}\}/).pop() || before;
+  return sincePrev.replace(/[\s,.:;!?—–-]+$/g, '').toLowerCase();
+}
+
 export function inferVariableDescription(text: string, varIndex: number): string {
-  const parts = text.split(`{{${varIndex}}}`);
-  const before = (parts[0] || '').toLowerCase();
-  if (/\b(hi|hello|dear|hey)\s*$/.test(before.trim())) return 'Customer name';
-  if (before.includes('order')) return 'Order number';
-  if (before.includes('appointment') || before.includes('date')) return 'Date or time';
-  if (before.includes('amount') || before.includes('₹') || before.includes('rs')) return 'Amount';
-  if (before.includes('code') || before.includes('otp') || before.includes('verification'))
-    return 'Verification code';
-  if (before.includes('track') || before.includes('reference') || before.includes('id'))
-    return 'Reference ID';
+  const nearby = clauseBeforeVariable(text, varIndex);
+  const trimmed = nearby.trim();
+  if (varIndex === 1 && (/\b(hi|hello|dear|hey|namaste|priya)\s*$/.test(trimmed) || trimmed === '')) {
+    return 'Customer name';
+  }
+  if (/track(ing)?(\s+id)?/.test(nearby)) return 'Tracking ID';
+  if (/pay by|due on|until|ends\b|retry on/.test(nearby)) return 'Date or time';
+  if (/\bbill date\b/.test(nearby)) return 'Bill date';
+  if (/amount due|amount|₹|\brs\b/.test(nearby)) return 'Amount';
+  if (/\b(invoice|bill)\b/.test(nearby)) return 'Invoice or bill';
+  if (/appointment|\bdate\b|\btime\b|pickup window/.test(nearby)) return 'Date or time';
+  if (/\border\b/.test(nearby)) return 'Order number';
+  if (/code|otp|verification/.test(nearby)) return 'Verification code';
+  if (/\bid\b|reference/.test(nearby)) return 'Reference ID';
   const defaults = [
     'Customer name',
     'Order number',

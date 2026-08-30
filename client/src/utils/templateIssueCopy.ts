@@ -2,6 +2,7 @@ export interface FriendlyIssue {
   title: string;
   detail: string;
   example?: string;
+  nextStep?: string;
 }
 
 const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
@@ -32,12 +33,22 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
+    match: /upload a sample (image|video|pdf|file)|sample media|media headers/i,
+    issue: {
+      title: 'Upload a sample for the header',
+      detail:
+        'WhatsApp reviews a sample image, video, or PDF with this template. Upload one before submitting.',
+      nextStep: 'Use Upload sample media on this Review screen, then submit.',
+    },
+  },
+  {
     match: /add your website link|add the website for this button|customers open when they tap/i,
     issue: {
       title: 'Add the website for this button',
       detail:
         'This is not {{1}}. Name and order number fill later when you send. Meta needs your live shop or tracking page on this button now.',
       example: 'https://yourstore.com/track',
+      nextStep: 'Paste your shop or tracking page, then submit again.',
     },
   },
   {
@@ -49,12 +60,13 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     },
   },
   {
-    match: /github|telegram|code-repo/i,
+    match: /github|telegram|code-repo|not a shop customers can open|leave this blank to use a chat button/i,
     issue: {
-      title: 'Use a shop or tracking page, not GitHub',
+      title: 'Leave this blank, or use your shop page',
       detail:
-        'WhatsApp opens this button on the customer’s phone. GitHub, Telegram, and sample links are rejected. Paste a page on your live site.',
+        'The button website is optional. Empty = a chat button in WhatsApp. If you paste a link, it must be your real https shop or tracking page — Meta locks that domain at review. Only a path ending can change later when you send.',
       example: 'https://yourstore.com/track',
+      nextStep: 'Clear the website field and submit, or paste your own shop https page.',
     },
   },
   {
@@ -69,7 +81,9 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
     match: /template with this name already exists|already exists\. Choose a different name|duplicate.*template|same name/i,
     issue: {
       title: 'That name is already in use',
-      detail: 'Pick a slightly different name, or delete the old template first.',
+      detail:
+        'Pending and rejected templates still occupy the name on this WhatsApp number. Pick order_shipped_3, or delete the old one in WhatsApp Manager.',
+      nextStep: 'Change the template name, then submit once.',
     },
   },
   {
@@ -104,6 +118,7 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
       detail:
         'WhatsApp needs normal words before the first field and after the last one. A full stop after Tracking ID {{3}} is not enough. Add a short sentence after the last field.',
       example: 'Tracking ID: {{3}}. Keep this message handy.',
+      nextStep: 'Refresh this library draft so the extra sentence is in the message, then submit.',
     },
   },
   {
@@ -178,27 +193,34 @@ const TECHNICAL_NOISE = /#\d{3,}|error code|oauth|graph\.facebook|invalid parame
 
 /** Turn a raw wizard / API message into something a shop owner can act on. */
 export function explainTemplateIssue(message: string): FriendlyIssue {
-  const trimmed = message.trim();
+  const trimmed = message.trim().replace(/^(body|header|footer|buttons)(\.\d+)?[:\s]+/i, '');
+  const inner = trimmed.replace(/^Meta rejected this template:\s*/i, '').trim();
   for (const row of KNOWN_ISSUES) {
-    if (row.match.test(trimmed)) return row.issue;
+    if (row.match.test(trimmed) || (inner && row.match.test(inner))) return row.issue;
   }
-  const metaRejected = trimmed.match(/^Meta rejected this template:\s*(.*)$/i);
-  if (metaRejected) {
-    const detail = metaRejected[1].trim();
-    if (!detail || /^invalid parameter$/i.test(detail) || TECHNICAL_NOISE.test(detail)) {
+  if (/^invalid parameter$/i.test(inner) || TECHNICAL_NOISE.test(inner || trimmed)) {
+    if (/^Meta rejected this template:/i.test(message.trim()) || /^invalid parameter$/i.test(inner)) {
       return {
         title: 'WhatsApp rejected this template',
         detail:
           'Usually the button is not a customer website (GitHub, Telegram, sample URLs), or this name already exists on the number. Use a shop or tracking page and a unique name.',
         example: 'https://yourstore.com/track',
+        nextStep: 'Fix the button website or template name, then submit once.',
       };
     }
-    return { title: 'WhatsApp rejected this template', detail };
   }
   if (!trimmed || TECHNICAL_NOISE.test(trimmed)) {
     return {
       title: 'WhatsApp couldn’t save this yet',
       detail: 'Check the website link and message text, then try again. If it still fails, wait a minute and retry.',
+      nextStep: 'Change one thing (link, name, or message), then submit again.',
+    };
+  }
+  if (/^Meta rejected this template:/i.test(message.trim()) && inner) {
+    return {
+      title: 'WhatsApp rejected this template',
+      detail: inner,
+      nextStep: 'Fix that item on this Review screen, then submit once. Do not keep resubmitting the same copy.',
     };
   }
   return {

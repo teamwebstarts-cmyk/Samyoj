@@ -33,4 +33,25 @@ describe('coexistence-lifecycle', () => {
       })
     );
   });
+
+  it('ACCOUNT_RECONNECTED restores isOnBizApp and coexistenceStatus', async () => {
+    prismaMock.whatsappNumber.update.mockResolvedValue({});
+
+    await processAccountUpdate(
+      { id: 'wn1', organizationId: 'org1', phoneNumber: '+919999999999' },
+      { event: 'ACCOUNT_RECONNECTED' },
+      'waba1'
+    );
+
+    expect(prismaMock.whatsappNumber.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'wn1' },
+        data: expect.objectContaining({
+          isOnBizApp: true,
+          coexistenceStatus: 'active',
+          coexistenceOffboardedAt: null,
+        }),
+      })
+    );
+  });
 });

@@ -5,11 +5,14 @@ import {
   Inbox,
   Link2,
   LogOut,
+  PhoneOff,
   Settings2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import { toastError, toastSuccess } from '../../utils/toast';
+import { sanitizeUserErrorMessage } from '../../utils/errors';
 import { billingApi, whatsappApi } from '../../services/api';
 import { useWhatsAppConnectPicker } from '../../hooks/useWhatsAppConnectPicker';
 import WhatsAppConnectModeModal from '../whatsapp/WhatsAppConnectModeModal';
@@ -85,6 +88,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [enablingIncoming, setEnablingIncoming] = useState(false);
 
   const loadRef = useRef<() => void>(() => {});
@@ -223,14 +227,10 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
   const handleDisconnect = async () => {
     if (!number) return;
-    const confirmed = window.confirm(
-      'Disconnect WhatsApp? New messages will stop until you connect again.'
-    );
-    if (!confirmed) return;
-
     setDisconnecting(true);
     try {
       await whatsappApi.disconnect(number.id);
+      setDisconnectOpen(false);
       setNumber(null);
       setQualityRating(null);
       setWebhookSubscribed(null);
@@ -313,6 +313,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     }
 
     return (
+      <>
       <section
         aria-label="WhatsApp connection"
         className="relative z-10"
@@ -439,7 +440,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
             <button
               type="button"
-              onClick={() => void handleDisconnect()}
+              onClick={() => setDisconnectOpen(true)}
               disabled={disconnecting}
               aria-label={disconnecting ? 'Disconnecting' : 'Disconnect'}
               className="inline-flex h-8 min-h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 sm:h-10 sm:min-h-10 sm:flex-none sm:rounded-xl sm:px-4 sm:text-[13px]"
@@ -450,6 +451,27 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
           </div>
         </div>
       </section>
+      <ConfirmDialog
+        open={disconnectOpen}
+        onClose={() => {
+          if (!disconnecting) setDisconnectOpen(false);
+        }}
+        onConfirm={() => void handleDisconnect()}
+        title="Disconnect WhatsApp?"
+        description="New messages will stop until you connect this number again."
+        highlight={phone}
+        highlightLabel="Connected number"
+        details={[
+          'Incoming replies on this number will pause until you reconnect',
+          'Existing chats, contacts, and history stay saved',
+        ]}
+        confirmLabel="Disconnect"
+        cancelLabel="Keep connected"
+        variant="danger"
+        icon={PhoneOff}
+        loading={disconnecting}
+      />
+      </>
     );
   }
 
@@ -470,7 +492,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
               </p>
               {connectUnavailableReason ? (
                 <p className="mt-2 text-[12px] text-amber-800 dark:text-amber-200" role="status">
-                  {connectUnavailableReason}
+                  {sanitizeUserErrorMessage(connectUnavailableReason)}
                 </p>
               ) : null}
             </div>

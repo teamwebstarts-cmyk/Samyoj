@@ -63,6 +63,13 @@ export const config = {
      * Never set on the VPS. Ignored when NODE_ENV=production.
      */
     allowTunnelWebhook: /^(1|true|yes)$/i.test(process.env.META_ALLOW_TUNNEL_WEBHOOK || ''),
+    /**
+     * es_v4 = Embedded Signup (customers / Tech Provider).
+     * oauth = previous Facebook Login scopes flow (developer testing an existing WABA).
+     */
+    connectFlow: /^(oauth|legacy_oauth)$/i.test(process.env.META_CONNECT_FLOW || '')
+      ? 'oauth'
+      : 'es_v4',
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   /** AI brain configuration — Sarvam is the default brain provider. */

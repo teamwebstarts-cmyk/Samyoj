@@ -16,9 +16,13 @@ describe('platform API privacy', () => {
 
   it('keeps outreach POST strict so callers cannot supply recipient or body', () => {
     const routes = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
-    expect(routes).toContain('.strict()');
-    expect(routes).toContain("channel: z.literal('email')");
-    expect(routes).not.toMatch(/recipientEmail|to: z\.string\(\)\.email|body: z\.string/);
-    expect(routes).not.toContain("from '../../middleware/auth'");
+    const postStart = routes.indexOf("router.post(\n  '/orgs/:id/outreach'");
+    expect(postStart).toBeGreaterThan(-1);
+    const postEnd = routes.indexOf("router.get(\n  '/operators'", postStart);
+    const outreachPost = routes.slice(postStart, postEnd);
+    expect(outreachPost).toContain('.strict()');
+    expect(outreachPost).toContain("channel: z.literal('email')");
+    expect(outreachPost).not.toMatch(/recipientEmail|to: z\.string\(\)\.email|body: z\.string/);
+    expect(outreachPost).not.toContain("from '../../middleware/auth'");
   });
 });

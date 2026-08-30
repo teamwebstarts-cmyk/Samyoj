@@ -1,8 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { whatsappApi } from '../services/api';
-import { getWhatsAppOAuthRedirectUri } from '../utils/whatsappOAuth';
+import { getWhatsAppOAuthRedirectUri, startWhatsAppOAuth } from '../utils/whatsappOAuth';
 import {
+  FACEBOOK_SDK_BLOCKED_MESSAGE,
+  isFacebookSdkReady,
   launchEmbeddedSignup,
+  preloadFacebookSdk,
   type EmbeddedSignupClientConfig,
   type EmbeddedSignupMode,
 } from '../utils/embeddedSignup';
@@ -13,10 +16,35 @@ import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
 
 const COEXISTENCE_FINISH_EVENT = 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
 
-function pickSignupConfig(payload: unknown): EmbeddedSignupClientConfig | null {
+type LegacyOAuthConnectConfig = {
+  mode: 'OAUTH_DIALOG';
+  url: string;
+  state: string;
+  redirectUri: string;
+  connectMode: EmbeddedSignupMode;
+};
+
+type ConnectLaunchConfig = EmbeddedSignupClientConfig | LegacyOAuthConnectConfig;
+
+function pickConnectLaunch(payload: unknown): ConnectLaunchConfig | null {
   if (!payload || typeof payload !== 'object') return null;
   const row = payload as Record<string, unknown>;
   const inner = row.data && typeof row.data === 'object' ? (row.data as Record<string, unknown>) : row;
+  const connectMode: EmbeddedSignupMode =
+    inner.connectMode === 'coexistence' ? 'coexistence' : 'standard';
+
+  if (inner.mode === 'OAUTH_DIALOG') {
+    if (typeof inner.url !== 'string' || typeof inner.state !== 'string') return null;
+    if (typeof inner.redirectUri !== 'string') return null;
+    return {
+      mode: 'OAUTH_DIALOG',
+      url: inner.url,
+      state: inner.state,
+      redirectUri: inner.redirectUri,
+      connectMode,
+    };
+  }
+
   if (inner.mode !== 'ES_V4_SDK') return null;
   if (typeof inner.appId !== 'string' || typeof inner.configId !== 'string') return null;
   if (typeof inner.state !== 'string' || typeof inner.redirectUri !== 'string') return null;
@@ -27,11 +55,11 @@ function pickSignupConfig(payload: unknown): EmbeddedSignupClientConfig | null {
     apiVersion: typeof inner.apiVersion === 'string' ? inner.apiVersion : 'v21.0',
     state: inner.state,
     redirectUri: inner.redirectUri,
-    connectMode: inner.connectMode === 'coexistence' ? 'coexistence' : 'standard',
+    connectMode,
   };
 }
 
-/** Shared Connect WhatsApp ES v4 (FB SDK + postMessage) for Dashboard / Settings CTAs. */
+/** Shared Connect WhatsApp (ES v4 or legacy OAuth) for Dashboard / Settings CTAs. */
 export function useWhatsAppConnectOAuth(options?: {
   returnPath?: string;
   onConnected?: () => void;
@@ -39,7 +67,7 @@ export function useWhatsAppConnectOAuth(options?: {
 }) {
   const { refreshNumbers } = useWhatsAppNumber();
   const [connecting, setConnecting] = useState(false);
-  const [signupConfig, setSignupConfig] = useState<EmbeddedSignupClientConfig | null>(null);
+  const [signupConfig, setSignupConfig] = useState<ConnectLaunchConfig | null>(null);
   const [connectUnavailableReason, setConnectUnavailableReason] = useState<string | null>(null);
   const connectMode = options?.connectMode || 'standard';
   const onConnectedRef = useRef(options?.onConnected);
@@ -57,7 +85,7 @@ export function useWhatsAppConnectOAuth(options?: {
         return;
       }
       if (data.status === 'cancel') {
-        toastSuccess(data.message || 'Connection cancelled — you are still signed in.');
+        toastError(data.message || 'WhatsApp was not connected. You can try Connect again.');
         return;
       }
       toastError(data.message || 'WhatsApp connection failed');
@@ -66,6 +94,37 @@ export function useWhatsAppConnectOAuth(options?: {
   );
 
   useWaOAuthPopupListener(handleOAuthResult);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const redirectUri = getWhatsAppOAuthRedirectUri();
+        const { data } = await whatsappApi.connectUrl(redirectUri, connectMode);
+        if (cancelled) return;
+        const cfg = pickConnectLaunch(data);
+        if (!cfg) {
+          setConnectUnavailableReason(
+            'Could not start WhatsApp connection. Please try again.',
+          );
+          return;
+        }
+        setSignupConfig(cfg);
+        setConnectUnavailableReason(null);
+        if (cfg.mode === 'ES_V4_SDK') {
+          await preloadFacebookSdk(cfg.appId, cfg.apiVersion);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setConnectUnavailableReason(
+          getErrorMessage(err, 'Could not start WhatsApp connection. Please try again.'),
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectMode]);
 
   const runEmbeddedSignup = useCallback(
     async (cfg: EmbeddedSignupClientConfig) => {
@@ -117,29 +176,24 @@ export function useWhatsAppConnectOAuth(options?: {
   );
 
   const connect = useCallback(() => {
-    if (signupConfig) {
-      void runEmbeddedSignup(signupConfig);
+    if (!signupConfig || signupConfig.connectMode !== connectMode) {
+      toastError(
+        connectUnavailableReason ||
+          'WhatsApp connect is still preparing. Wait a second and click Connect again.',
+      );
       return;
     }
-
-    void (async () => {
-      try {
-        const redirectUri = getWhatsAppOAuthRedirectUri();
-        const { data } = await whatsappApi.connectUrl(redirectUri, connectMode);
-        const cfg = pickSignupConfig(data);
-        if (!cfg) {
-          toastError(connectUnavailableReason || 'Could not start WhatsApp connection. Please try again.');
-          return;
-        }
-        setSignupConfig(cfg);
-        setConnectUnavailableReason(null);
-        await runEmbeddedSignup(cfg);
-      } catch (err) {
-        const message = getErrorMessage(err, 'Could not start WhatsApp connection. Please try again.');
-        setConnectUnavailableReason(message);
-        toastError(message);
-      }
-    })();
+    if (signupConfig.mode === 'OAUTH_DIALOG') {
+      setConnecting(true);
+      startWhatsAppOAuth(signupConfig.url);
+      return;
+    }
+    if (!isFacebookSdkReady()) {
+      toastError(FACEBOOK_SDK_BLOCKED_MESSAGE);
+      void preloadFacebookSdk(signupConfig.appId, signupConfig.apiVersion);
+      return;
+    }
+    void runEmbeddedSignup(signupConfig);
   }, [signupConfig, connectMode, runEmbeddedSignup, connectUnavailableReason]);
 
   return { connect, connecting, connectMode, connectUnavailableReason };

@@ -40,10 +40,10 @@ export default function WhatsAppConnectModeModal({
               Connect WhatsApp
             </p>
             <h2 id="wa-connect-mode-title" className="mt-0.5 text-[17px] font-extrabold text-neutral-900">
-              Aap WhatsApp aaj kaise use karte ho?
+              How do you use WhatsApp today?
             </h2>
             <p className="mt-1 text-[13px] text-neutral-600">
-              Pehle apna setup choose karein — phir Facebook sign-in khulega.
+              Choose your setup first — then Facebook sign-in will open.
             </p>
           </div>
           <button
@@ -68,10 +68,10 @@ export default function WhatsAppConnectModeModal({
             </span>
             <span>
               <span className="block text-[14px] font-bold text-neutral-900">
-                Naya Cloud API number (Business app nahi)
+                New Cloud API number (no Business app)
               </span>
               <span className="mt-0.5 block text-[12.5px] leading-relaxed text-neutral-600">
-                Standard setup — naya business line ya number jo abhi phone app par nahi hai.
+                Standard setup — a new business line, or a number that is not on the phone app.
               </span>
             </span>
           </button>
@@ -87,10 +87,10 @@ export default function WhatsAppConnectModeModal({
             </span>
             <span>
               <span className="block text-[14px] font-bold text-neutral-900">
-                Phone par WhatsApp Business app already hai
+                WhatsApp Business app is already on the phone
               </span>
               <span className="mt-0.5 block text-[12.5px] leading-relaxed text-neutral-600">
-                Coexistence — phone app + Samyoj Cloud API saath chalenge. Purani chats sync ho sakti hain.
+                Coexistence — the phone app and Samyoj Cloud API run together. Older chats can sync.
               </span>
             </span>
           </button>
@@ -98,8 +98,7 @@ export default function WhatsAppConnectModeModal({
           <div className="flex items-start gap-2 rounded-lg bg-neutral-50 px-3 py-2.5 text-[12px] text-neutral-600">
             <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-400" />
             <p>
-              Connect ke baad Meta Business Suite mein payment method add karna zaroori hai templates aur paid
-              messages ke liye.
+              After you connect, add a payment method in Meta Business Suite for templates and paid messages.
             </p>
           </div>
         </div>

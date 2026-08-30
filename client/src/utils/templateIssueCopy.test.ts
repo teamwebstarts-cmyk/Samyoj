@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { explainTemplateIssue } from './templateIssueCopy';
+import { mapTemplateApiError } from '../components/templates/wizard/templateWizardModel';
 
 describe('explainTemplateIssue', () => {
   it('explains a localhost / Samyoj page URL without jargon', () => {
@@ -12,12 +13,20 @@ describe('explainTemplateIssue', () => {
     expect(issue.example).toContain('yourstore.com');
   });
 
+  it('explains missing sample media for a header', () => {
+    const issue = explainTemplateIssue(
+      'Upload a sample image, video, or PDF for this header before submitting.',
+    );
+    expect(issue.title).toMatch(/sample for the header/i);
+  });
+
   it('explains Meta trailing-variable rejection', () => {
     const issue = explainTemplateIssue(
       "Leading or trailing params not allowed: Variables can't be at the start or end of the template.",
     );
     expect(issue.title).toMatch(/start or end/i);
     expect(issue.detail.toLowerCase()).toMatch(/full stop|after the last/);
+    expect(issue.nextStep).toMatch(/refresh|submit/i);
   });
 
   it('explains empty button website is not a body variable', () => {
@@ -44,7 +53,7 @@ describe('explainTemplateIssue', () => {
     const issue = explainTemplateIssue(
       'WhatsApp will not approve GitHub, Telegram, or code-repo links on a template button.',
     );
-    expect(issue.title).toMatch(/github/i);
+    expect(issue.title).toMatch(/blank|shop page|github/i);
     expect(issue.example).toContain('yourstore.com');
   });
 
@@ -102,6 +111,7 @@ describe('explainTemplateIssue', () => {
       'A template with this name already exists. Choose a different name.',
     );
     expect(exists.title).toMatch(/already in use/i);
+    expect(exists.nextStep).toMatch(/change the template name/i);
 
     const http = explainTemplateIssue(
       'This website link isn’t secure enough. Use an address that starts with https://, not http://',
@@ -119,5 +129,19 @@ describe('explainTemplateIssue', () => {
     const coupon = explainTemplateIssue('Add the coupon code.');
     expect(coupon.title).toMatch(/coupon code/i);
     expect(coupon.example).toBe('SAVE20');
+  });
+});
+
+describe('mapTemplateApiError', () => {
+  it('does not rewrite trailing-variable rejects into a header-media error', () => {
+    const mapped = mapTemplateApiError(
+      "Leading or trailing params not allowed: Variables can't be at the start or end of the template.",
+    );
+    expect(mapped.toLowerCase()).not.toMatch(/header media/);
+    expect(mapped.toLowerCase()).toMatch(/leading or trailing|start or end/);
+  });
+
+  it('keeps a name-collision message actionable', () => {
+    expect(mapTemplateApiError('Template Name Already Exists')).toMatch(/order_shipped_3|already exists/i);
   });
 });

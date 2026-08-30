@@ -9,6 +9,7 @@ import {
   upsertVariableMetaFromParam,
   valueForCampaignParamSource,
   valueForInboxParamSource,
+  inferVariableDescription,
 } from './templateForm';
 
 describe('applyPurposePreset', () => {
@@ -106,5 +107,16 @@ describe('inbox param mapping', () => {
     expect(valueForInboxParamSource('custom', '{{name}}')).toBe('');
     expect(valueForInboxParamSource('custom', '29 Aug')).toBe('29 Aug');
     expect(inboxParamSelectValue('29 Aug')).toBe('custom');
+  });
+});
+
+describe('inferVariableDescription', () => {
+  const shipped =
+    'Hi {{1}}, order {{2}} is on the way. Tracking ID: {{3}}. Keep this message for tracking.';
+
+  it('labels order_shipped fields from the nearest clause, not the whole prefix', () => {
+    expect(inferVariableDescription(shipped, 1)).toBe('Customer name');
+    expect(inferVariableDescription(shipped, 2)).toBe('Order number');
+    expect(inferVariableDescription(shipped, 3)).toBe('Tracking ID');
   });
 });

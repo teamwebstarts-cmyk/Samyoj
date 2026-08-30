@@ -481,7 +481,7 @@ export function usableLibraryButtonUrl(raw?: string, appOrigin?: string): string
 export function libraryButtonUrlError(raw: string, appOrigin?: string): string | null {
   const value = normalizeWebsiteUrl(raw);
   if (!value) {
-    return 'Add your website link here';
+    return null;
   }
 
   let parsed: URL;
@@ -513,7 +513,7 @@ export function libraryButtonUrlError(raw: string, appOrigin?: string): string |
     host === 'telegram.me' ||
     host.endsWith('.telegram.org')
   ) {
-    return 'WhatsApp will not approve GitHub, Telegram, or code-repo links on a template button. Paste a shop or tracking page customers can open on their phone.';
+    return 'That page is not a shop customers can open. Leave this blank to use a chat button, or paste your own https shop or tracking page.';
   }
 
   if (appOrigin) {

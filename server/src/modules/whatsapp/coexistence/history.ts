@@ -6,10 +6,20 @@ import { parseMetaTimestamp } from '../../campaigns/safety';
 import { normalizePhoneIdentity } from '../../../utils/phone';
 import type { WhatsappNumber } from '@prisma/client';
 import { mapCoexistenceMessageType } from './message-type';
+import { downloadAndStoreMessageMedia } from '../../media/download.service';
+import { MetaWhatsAppService } from '../meta.service';
 
 const log = createModuleLogger('coexistence-history');
 
 const HISTORY_DECLINED_CODE = 2593109;
+
+/** Meta coexistence: media from history is retrievable for the last 14 days only. */
+export const HISTORY_MEDIA_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+function historyMediaDownloadable(timestamp: Date | null): boolean {
+  if (!timestamp) return false;
+  return Date.now() - timestamp.getTime() <= HISTORY_MEDIA_MAX_AGE_MS;
+}
 
 function mapHistoryStatus(status: string | undefined): 'SENT' | 'DELIVERED' | 'READ' {
   const normalized = (status || '').toLowerCase();
@@ -27,12 +37,51 @@ function resolveDirection(
     : 'INBOUND';
 }
 
+async function attachRecentHistoryMedia(options: {
+  organizationId: string;
+  messageId: string;
+  metadata: Record<string, unknown>;
+  accessToken: string;
+}): Promise<void> {
+  const mediaId = options.metadata.mediaId;
+  if (typeof mediaId !== 'string' || !mediaId) return;
+  try {
+    const stored = await downloadAndStoreMessageMedia({
+      organizationId: options.organizationId,
+      messageId: options.messageId,
+      mediaId,
+      mimeType: typeof options.metadata.mimeType === 'string' ? options.metadata.mimeType : undefined,
+      filename: typeof options.metadata.filename === 'string' ? options.metadata.filename : undefined,
+      accessToken: options.accessToken,
+      isSticker: Boolean(options.metadata.isSticker),
+      isGif: Boolean(options.metadata.isGif),
+    });
+    await prisma.message.update({
+      where: { id: options.messageId },
+      data: {
+        metadata: {
+          ...options.metadata,
+          ...stored,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  } catch (err) {
+    log.warn('History media download failed; keeping placeholder', {
+      messageId: options.messageId,
+      organizationId: options.organizationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /**
  * Ingest one history-sync message. Skips automations — metadata.source = history_sync.
  * Does not emit realtime (bulk backfill would flood clients).
  */
 async function ingestHistoryMessage(
-  whatsappNumber: Pick<WhatsappNumber, 'id' | 'organizationId' | 'phoneNumber'>,
+  whatsappNumber: Pick<WhatsappNumber, 'id' | 'organizationId' | 'phoneNumber'> & {
+    accessToken?: string | null;
+  },
   msg: Record<string, unknown>,
   threadContactPhone: string
 ): Promise<boolean> {
@@ -49,6 +98,7 @@ async function ingestHistoryMessage(
   const inboundTimestamp = parseMetaTimestamp(msg.timestamp);
   const historyContext = msg.history_context as { status?: string } | undefined;
   const orgId = whatsappNumber.organizationId;
+  const parsedMeta = (parsed.metadata as Record<string, unknown> | undefined) || {};
 
   let contact = await prisma.contact.findFirst({
     where: {
@@ -65,7 +115,7 @@ async function ingestHistoryMessage(
         phone: contactPhone,
         normalizedPhone: contactPhone,
         name: contactPhone,
-        source: 'INBOUND',
+        source: direction === 'OUTBOUND' ? 'OUTBOUND' : 'INBOUND',
       },
     });
   }
@@ -89,11 +139,18 @@ async function ingestHistoryMessage(
 
   const metadata: Record<string, unknown> = {
     source: 'history_sync',
-    ...(parsed.metadata as Record<string, unknown> | undefined),
+    ...parsedMeta,
   };
 
+  const hasMediaId = typeof parsedMeta.mediaId === 'string' && parsedMeta.mediaId.length > 0;
+  const canDownload = hasMediaId && historyMediaDownloadable(inboundTimestamp);
+  if (hasMediaId && !canDownload) {
+    metadata.mediaUnavailable = true;
+    metadata.mediaUnavailableReason = inboundTimestamp ? 'older_than_14_days' : 'age_unknown';
+  }
+
   try {
-    await prisma.message.create({
+    const message = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         metaMessageId,
@@ -113,6 +170,26 @@ async function ingestHistoryMessage(
       });
     }
 
+    if (canDownload && whatsappNumber.accessToken) {
+      let accessToken = '';
+      try {
+        accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
+      } catch (err) {
+        log.warn('History media skipped; access token decrypt failed', {
+          organizationId: orgId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      if (accessToken) {
+        await attachRecentHistoryMedia({
+          organizationId: orgId,
+          messageId: message.id,
+          metadata,
+          accessToken,
+        });
+      }
+    }
+
     return true;
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -125,7 +202,9 @@ async function ingestHistoryMessage(
 
 /** Track history sync chunk progress and ingest past messages into Inbox. */
 export async function processHistorySync(
-  whatsappNumber: Pick<WhatsappNumber, 'id' | 'organizationId' | 'phoneNumber'>,
+  whatsappNumber: Pick<WhatsappNumber, 'id' | 'organizationId' | 'phoneNumber'> & {
+    accessToken?: string | null;
+  },
   value: Record<string, unknown>
 ): Promise<number> {
   const chunks = (value.history as Array<Record<string, unknown>>) || [];

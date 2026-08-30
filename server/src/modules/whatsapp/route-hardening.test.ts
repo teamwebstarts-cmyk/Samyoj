@@ -22,4 +22,32 @@ describe('WhatsApp route hardening', () => {
     expect(healthBlock).not.toContain('webhookUrl:');
     expect(healthBlock).toContain('webhookConfigured');
   });
+
+  it('GET /numbers does not expose tokenExpiresAt', () => {
+    const numbersBlock = routesSrc.slice(
+      routesSrc.indexOf("router.get(\n  '/numbers'"),
+      routesSrc.indexOf("router.get(\n  '/webhook-status'")
+    );
+    expect(numbersBlock).not.toContain('tokenExpiresAt');
+    expect(routesSrc).toContain("router.get(\n  '/webhook-status'");
+    const statusBlock = routesSrc.slice(
+      routesSrc.indexOf("router.get(\n  '/webhook-status'"),
+      routesSrc.indexOf("router.get(\n  '/payment-hint'")
+    );
+    expect(statusBlock).toContain('tokenExpiresAt');
+  });
+
+  it('Graph-checks is_on_biz_app after any connect, not only the coexistence modal', () => {
+    const connectFn = routesSrc.slice(
+      routesSrc.indexOf('async function saveWhatsappConnection'),
+      routesSrc.indexOf('const metaAdminGuard')
+    );
+    expect(connectFn).toContain('fetchCoexistenceFlags');
+    expect(connectFn).not.toMatch(
+      /if \(opts\?\.connectMode === 'coexistence' \|\| opts\?\.skipRegister\)/
+    );
+    expect(connectFn).not.toMatch(
+      /isOnBizApp:\s*opts\?\.connectMode === 'coexistence'\s*\?\s*isOnBizApp/
+    );
+  });
 });

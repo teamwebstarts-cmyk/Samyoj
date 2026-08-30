@@ -21,6 +21,9 @@ export default function TemplateIssueAlert({ message, className = '' }: Template
           Example: {issue.example}
         </p>
       ) : null}
+      {issue.nextStep ? (
+        <p className="mt-2 text-[12px] font-semibold leading-relaxed">What to do: {issue.nextStep}</p>
+      ) : null}
     </AppAlert>
   );
 }

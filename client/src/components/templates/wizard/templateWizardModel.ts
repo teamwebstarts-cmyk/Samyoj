@@ -155,29 +155,32 @@ export function getPreviewSampleParams(form: TemplateFormState) {
 
 /** Maps Meta/API errors to user-friendly wizard messages. */
 export function mapTemplateApiError(message: string): string {
-  const lower = message.toLowerCase();
+  const stripped = message.replace(/^(body|header|footer|buttons)(\.\d+)?[:\s]+/i, '').trim();
+  const lower = stripped.toLowerCase();
   if (lower.includes('duplicate') || lower.includes('already exists') || lower.includes('same name')) {
-    return 'A template with this name already exists. Choose a different name or delete the old template first.';
+    return 'A template with this name already exists. Rejected or pending templates still use that name — try a name like order_shipped_3.';
   }
-  if (lower.includes('limit') || lower.includes('250')) {
+  if (/\b(250 templates|template limit|too many templates)\b/.test(lower)) {
     return 'Template limit reached for your WhatsApp account. Delete unused templates and try again.';
   }
-  if (lower.includes('rate') || lower.includes('too many')) {
+  if (/\b(rate limit|too many requests|too many submissions)\b/.test(lower)) {
     return 'Too many submissions in a short time. Wait a few minutes and try again.';
   }
-  if (lower.includes('media') || lower.includes('header')) {
+  if (/\b(header media|header_handle|sample file for media headers)\b/.test(lower)) {
     return 'Header media was rejected or invalid. Upload a different sample file and try again.';
   }
-  if (lower.includes('resubmit') || lower.includes('rejected') || lower.includes('paused')) {
-    return message;
-  }
-  if (lower.includes('meta rejected this template:')) {
-    return message;
+  if (
+    lower.includes('meta rejected this template:') ||
+    lower.includes('leading or trailing') ||
+    lower.includes('resubmit') ||
+    lower.includes('paused')
+  ) {
+    return stripped.startsWith('Meta rejected') ? stripped : `Meta rejected this template: ${stripped}`;
   }
   if (/#\d{3,}|error code|oauth|graph\.facebook|invalid parameter|permission denied/i.test(lower)) {
     return 'WhatsApp couldn’t save this template. Check the website link and message text, then try again.';
   }
-  return message || 'Couldn’t save the template. Check your message and try again.';
+  return stripped || 'Couldn’t save the template. Check your message and try again.';
 }
 
 export function canResubmitTemplateStatus(status?: string) {

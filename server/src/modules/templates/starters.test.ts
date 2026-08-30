@@ -44,6 +44,22 @@ describe('Samyoj catalog templates', () => {
       expect(() => createTemplateSchema.parse(hi), starter.id).not.toThrow();
     }
   });
+
+  it('turns URL buttons into chat buttons when no website is given', () => {
+    const shipped = listSamyojStarters().find((row) => row.id === 'order_shipped');
+    expect(shipped).toBeTruthy();
+    const withoutUrl = starterCreatePayload(shipped!, 'en_US', 'order_shipped_3');
+    expect(withoutUrl.buttons?.every((button) => button.type !== 'URL')).toBe(true);
+    expect(withoutUrl.buttons?.some((button) => button.type === 'QUICK_REPLY' && button.text === 'Track shipment')).toBe(
+      true,
+    );
+    const withUrl = starterCreatePayload(shipped!, 'en_US', 'order_shipped_3', {
+      url: 'https://yourstore.com/track',
+    });
+    expect(withUrl.buttons?.some((button) => button.type === 'URL' && button.url === 'https://yourstore.com/track')).toBe(
+      true,
+    );
+  });
 });
 
 describe('unusableTemplateButtonUrl', () => {
@@ -54,5 +70,16 @@ describe('unusableTemplateButtonUrl', () => {
     );
     expect(unusableTemplateButtonUrl('https://www.yourbrand.com/')).toMatch(/GitHub|shop or tracking|sample/i);
     expect(unusableTemplateButtonUrl('https://yourstore.com/track')).toBeNull();
+  });
+
+  it('rejects trailing variables on admin catalog copy', async () => {
+    const { assertLibraryCopySafe } = await import('./catalog-store');
+    expect(() =>
+      assertLibraryCopySafe({
+        category: 'UTILITY',
+        body: 'Hi {{1}}, tracking {{2}}.',
+        bodyHi: 'Namaste {{1}} tracking theek hai.',
+      }),
+    ).toThrow(/start or end of the English body/i);
   });
 });

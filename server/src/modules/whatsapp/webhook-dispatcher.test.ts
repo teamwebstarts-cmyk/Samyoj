@@ -89,6 +89,17 @@ describe('non-message webhook dispatch wiring', () => {
     });
   });
 
+  it('does not fall back to another WABA number when phone_number_id is unknown', async () => {
+    whatsappNumberMock.findFirst.mockReset();
+    whatsappNumberMock.findMany.mockReset();
+    whatsappNumberMock.findFirst.mockResolvedValue(null);
+    await expect(resolveOrgFromWaba('waba-1', {
+      metadata: { phone_number_id: 'unknown-phone' },
+    })).resolves.toBeNull();
+    expect(whatsappNumberMock.findFirst).toHaveBeenCalled();
+    expect(whatsappNumberMock.findMany).not.toHaveBeenCalled();
+  });
+
   it('registers the app webhook before linking the WABA so override can verify', async () => {
     const order: string[] = [];
     const previousUrl = config.meta.webhookUrl;

@@ -121,7 +121,12 @@ describe('libraryButtonUrlError', () => {
 
   it('rejects GitHub and Telegram button URLs', () => {
     expect(libraryButtonUrlError('https://github.com/teamwebstarts-cmyk/Samyoj')).toMatch(/GitHub|shop or tracking/i);
-    expect(libraryButtonUrlError('https://web.telegram.org/')).toMatch(/Telegram|shop or tracking/i);
+    expect(libraryButtonUrlError('https://web.telegram.org/')).toMatch(/shop|chat button|tracking/i);
+  });
+
+  it('allows an empty website so a chat button can be submitted instead', () => {
+    expect(libraryButtonUrlError('')).toBeNull();
+    expect(libraryButtonUrlError('   ')).toBeNull();
   });
 
   it('treats catalog placeholders as sample URLs and accepts a real shop site', () => {

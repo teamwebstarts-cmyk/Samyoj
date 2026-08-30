@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInjectedScriptNoise } from './errors';
+import { isInjectedScriptNoise, sanitizeUserErrorMessage } from './errors';
 
 describe('isInjectedScriptNoise', () => {
   it('filters Kaspersky M_ID TypeErrors', () => {
@@ -27,5 +27,20 @@ describe('isInjectedScriptNoise', () => {
     expect(isInjectedScriptNoise(err)).toBe(false);
     expect(isInjectedScriptNoise(err, { filename: 'index-BUIMjAXK.js' })).toBe(false);
     expect(isInjectedScriptNoise('API request failed')).toBe(false);
+  });
+});
+
+describe('sanitizeUserErrorMessage', () => {
+  it('hides Embedded Signup env runbooks from users', () => {
+    expect(
+      sanitizeUserErrorMessage(
+        'WhatsApp connect is not configured. Set META_ES_CONFIG_ID in server/.env from Meta → Facebook Login for Business → Embedded Signup v4, then restart the API.',
+      ),
+    ).toBe(
+      'WhatsApp connect isn’t ready yet. Try again in a few minutes. If it still doesn’t open, contact support.',
+    );
+    expect(sanitizeUserErrorMessage('Network request failed', 'META_ES_CONFIG_MISSING')).toMatch(
+      /isn’t ready yet/,
+    );
   });
 });
