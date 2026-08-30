@@ -143,7 +143,7 @@ async function ingestHistoryMessage(
   };
 
   const hasMediaId = typeof parsedMeta.mediaId === 'string' && parsedMeta.mediaId.length > 0;
-  const canDownload = hasMediaId && historyMediaDownloadable(inboundTimestamp);
+  const canDownload = hasMediaId && historyMediaDownloadable(inboundTimestamp ?? null);
   if (hasMediaId && !canDownload) {
     metadata.mediaUnavailable = true;
     metadata.mediaUnavailableReason = inboundTimestamp ? 'older_than_14_days' : 'age_unknown';

@@ -590,17 +590,18 @@ router.get(
       MetaWhatsAppService.getWebhookStatus(number.wabaId, accessToken, metaCredentials),
     ]);
 
-    if (tokenResult.status === 'fulfilled' && tokenResult.value.expiresAt) {
-      const tokenHealth = tokenResult.value;
-      tokenExpiresAt = tokenHealth.expiresAt.toISOString();
-      const daysLeft =
-        (tokenHealth.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-      tokenExpiringSoon = daysLeft <= 7;
-      if (tokenHealth.expiresAt.getTime() !== number.tokenExpiresAt?.getTime()) {
-        await prisma.whatsappNumber.update({
-          where: { id: number.id },
-          data: { tokenExpiresAt: tokenHealth.expiresAt },
-        });
+    if (tokenResult.status === 'fulfilled') {
+      const expiresAt = tokenResult.value.expiresAt;
+      if (expiresAt) {
+        tokenExpiresAt = expiresAt.toISOString();
+        const daysLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        tokenExpiringSoon = daysLeft <= 7;
+        if (expiresAt.getTime() !== number.tokenExpiresAt?.getTime()) {
+          await prisma.whatsappNumber.update({
+            where: { id: number.id },
+            data: { tokenExpiresAt: expiresAt },
+          });
+        }
       }
     }
 
