@@ -585,37 +585,34 @@ router.get(
     let tokenExpiresAt: string | null = number.tokenExpiresAt?.toISOString() ?? null;
     let tokenExpiringSoon = false;
 
-    try {
-      const tokenHealth = await MetaWhatsAppService.inspectAccessTokenExpiry(
-        accessToken,
-        metaCredentials
-      );
-      if (tokenHealth.expiresAt) {
-        tokenExpiresAt = tokenHealth.expiresAt.toISOString();
-        const daysLeft =
-          (tokenHealth.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-        tokenExpiringSoon = daysLeft <= 7;
-        if (tokenHealth.expiresAt.getTime() !== number.tokenExpiresAt?.getTime()) {
-          await prisma.whatsappNumber.update({
-            where: { id: number.id },
-            data: { tokenExpiresAt: tokenHealth.expiresAt },
-          });
-        }
+    const [tokenResult, hookResult] = await Promise.allSettled([
+      MetaWhatsAppService.inspectAccessTokenExpiry(accessToken, metaCredentials),
+      MetaWhatsAppService.getWebhookStatus(number.wabaId, accessToken, metaCredentials),
+    ]);
+
+    if (tokenResult.status === 'fulfilled' && tokenResult.value.expiresAt) {
+      const tokenHealth = tokenResult.value;
+      tokenExpiresAt = tokenHealth.expiresAt.toISOString();
+      const daysLeft =
+        (tokenHealth.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      tokenExpiringSoon = daysLeft <= 7;
+      if (tokenHealth.expiresAt.getTime() !== number.tokenExpiresAt?.getTime()) {
+        await prisma.whatsappNumber.update({
+          where: { id: number.id },
+          data: { tokenExpiresAt: tokenHealth.expiresAt },
+        });
       }
-    } catch {
-      /* best-effort */
     }
 
-    try {
-      const status = await MetaWhatsAppService.getWebhookStatus(
-        number.wabaId,
-        accessToken,
-        metaCredentials
-      );
-      subscribed = status.subscribed;
-    } catch (err) {
+    if (hookResult.status === 'fulfilled') {
+      subscribed = hookResult.value.subscribed;
+    } else {
       statusCheckFailed = true;
-      logError(err, { source: 'webhook', action: 'Webhook status check failed', organizationId: orgId });
+      logError(hookResult.reason, {
+        source: 'webhook',
+        action: 'Webhook status check failed',
+        organizationId: orgId,
+      });
     }
 
     sendSuccess(res, {

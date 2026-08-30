@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_PRODUCTION_WEBHOOK_URL,
   isDurablePublicWebhookUrl,
   isEphemeralWebhookUrl,
+  resolveDurableWebhookPinUrl,
   shouldReplaceAppWebhookCallback,
   webhookUrlHost,
 } from './webhook-url';
@@ -31,14 +33,25 @@ describe('webhook URL guards', () => {
     expect(decision.reason).toMatch(/production webhook/i);
   });
 
-  it('allows replacing production with ngrok when explicitly opted in', () => {
+  it('still refuses replacing production with ngrok even when opted in', () => {
     const decision = shouldReplaceAppWebhookCallback(
       'https://app.samyoj.com/api/whatsapp/webhook',
       'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook',
       { allowTunnelOverride: true }
     );
-    expect(decision.replace).toBe(true);
-    expect(decision.reason).toMatch(/override/i);
+    expect(decision.replace).toBe(false);
+    expect(decision.reason).toMatch(/production webhook/i);
+  });
+
+  it('pins WABA delivery to production when local URL is ngrok', () => {
+    expect(
+      resolveDurableWebhookPinUrl(
+        'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook'
+      )
+    ).toBe(DEFAULT_PRODUCTION_WEBHOOK_URL);
+    expect(resolveDurableWebhookPinUrl('https://app.samyoj.com/api/whatsapp/webhook')).toBe(
+      'https://app.samyoj.com/api/whatsapp/webhook'
+    );
   });
 
   it('allows replacing ngrok with production and refreshing the same URL', () => {

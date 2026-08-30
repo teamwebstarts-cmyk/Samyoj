@@ -88,9 +88,14 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
     }
 
     const generation = ++requestGeneration.current;
-    setActiveWhatsappNumberResolved(false);
-    setResolved(false);
-    if (!options?.silent) setLoading(true);
+    // Silent refresh (after Connect, Settings, etc.) must not flip resolved=false.
+    // That unmounts the dashboard to a skeleton and rejects inbox/analytics as
+    // WHATSAPP_NUMBER_SCOPE_UNRESOLVED until GET /whatsapp/numbers returns.
+    if (!options?.silent) {
+      setActiveWhatsappNumberResolved(false);
+      setResolved(false);
+      setLoading(true);
+    }
     try {
       const { data } = await whatsappApi.numbers();
       if (generation !== requestGeneration.current) return;

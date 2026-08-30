@@ -11,6 +11,7 @@ import {
   Settings2,
   Download,
   MessageCircle,
+  BadgeCheck,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { TabTransition } from '../components/ui/TabTransition';
@@ -36,16 +37,28 @@ import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
 import WhatsAppButtonBuilder from '../components/settings/WhatsAppButtonBuilder';
+import OfficialCheckCard from '../components/settings/OfficialCheckCard';
 import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 import { useEntitlements } from '../hooks/useEntitlements';
 
 type SettingsTab =
   | 'profile'
   | 'whatsapp'
+  | 'green-tick'
   | 'website-button'
   | 'inbox'
   | 'integrations'
   | 'security';
+
+const SETTINGS_TAB_IDS: SettingsTab[] = [
+  'profile',
+  'whatsapp',
+  'green-tick',
+  'website-button',
+  'inbox',
+  'integrations',
+  'security',
+];
 
 const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
   startHour: 9,
@@ -66,6 +79,12 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'WhatsApp',
     hint: 'Connect business numbers',
     icon: Smartphone,
+  },
+  {
+    id: 'green-tick',
+    label: 'Green tick',
+    hint: 'Prep with Meta',
+    icon: BadgeCheck,
   },
   {
     id: 'website-button',
@@ -100,6 +119,8 @@ function resolveLegacyTab(raw: string | null): SettingsTab | null {
       return 'profile';
     case 'campaigns':
       return 'whatsapp';
+    case 'official-check':
+      return 'green-tick';
     case 'automation':
     case 'ai':
       return 'inbox';
@@ -161,11 +182,7 @@ export default function SettingsPage() {
     const legacy = resolveLegacyTab(raw);
     const candidate = (
       legacy ||
-      (['profile', 'whatsapp', 'website-button', 'inbox', 'integrations', 'security'].includes(
-          raw || ''
-        )
-        ? (raw as SettingsTab)
-        : null)
+      (SETTINGS_TAB_IDS.includes((raw || '') as SettingsTab) ? (raw as SettingsTab) : null)
     ) as SettingsTab | null;
     if (candidate && tabs.some((t) => t.id === candidate)) return candidate;
     return (tabs[0]?.id ?? 'profile') as SettingsTab;
@@ -352,6 +369,8 @@ export default function SettingsPage() {
                       />
                     </>
                   )}
+
+                  {activeTab === 'green-tick' && <OfficialCheckCard />}
 
                   {activeTab === 'website-button' && <WhatsAppButtonBuilder />}
 

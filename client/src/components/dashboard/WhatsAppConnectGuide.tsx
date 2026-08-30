@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,12 +11,7 @@ import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { billingApi, whatsappApi } from '../../services/api';
-import {
-  getWhatsAppOAuthRedirectUri,
-  handleWaOAuthPopupClosed,
-  startWhatsAppOAuth,
-} from '../../utils/whatsappOAuth';
-import { useWaOAuthPopupListener } from '../../hooks/useWaOAuthPopupListener';
+import { useWhatsAppConnectOAuth } from '../../hooks/useWhatsAppConnectOAuth';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
 import type { BillingUsage } from '../../types';
@@ -37,13 +32,6 @@ function parseNumbers(data: unknown): WhatsappNumberRow[] {
     return (data as { numbers: WhatsappNumberRow[] }).numbers;
   }
   return [];
-}
-
-function pickConnectUrl(payload: unknown): string {
-  if (payload && typeof payload === 'object' && typeof (payload as { url?: unknown }).url === 'string') {
-    return (payload as { url: string }).url;
-  }
-  return '';
 }
 
 function normalizeQuality(rating: string | null): QualityTone {
@@ -89,24 +77,14 @@ interface WhatsAppConnectGuideProps {
 
 export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnectGuideProps = {}) {
   const { activeNumber, refreshNumbers } = useWhatsAppNumber();
-  const [connectUrl, setConnectUrl] = useState('');
   const [number, setNumber] = useState<WhatsappNumberRow | null>(null);
   const [qualityRating, setQualityRating] = useState<string | null>(null);
   const [webhookSubscribed, setWebhookSubscribed] = useState<boolean | null>(null);
   const [webhookCheckFailed, setWebhookCheckFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [enablingIncoming, setEnablingIncoming] = useState(false);
-  const popupPollRef = useRef<number | null>(null);
-
-  const clearPopupPoll = useCallback(() => {
-    if (popupPollRef.current !== null) {
-      window.clearInterval(popupPollRef.current);
-      popupPollRef.current = null;
-    }
-  }, []);
 
   const emitStatus = useCallback(
     (
@@ -123,16 +101,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     [onStatusChange]
   );
 
-  const loadConnectUrl = async () => {
-    try {
-      const redirectUri = getWhatsAppOAuthRedirectUri();
-      const urlRes = await whatsappApi.connectUrl(redirectUri);
-      setConnectUrl(pickConnectUrl(urlRes.data?.data));
-    } catch {
-      setConnectUrl('');
-    }
-  };
-
   const load = useCallback(() => {
     setLoading(true);
     setLoadError(false);
@@ -140,11 +108,9 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
     Promise.all([
       whatsappApi.numbers(),
-      loadConnectUrl(),
       billingApi.usage().then((r) => ({ ok: true as const, r })).catch(() => ({ ok: false as const })),
-      whatsappApi.webhookStatus().then((r) => ({ ok: true as const, r })).catch(() => ({ ok: false as const })),
     ])
-      .then(([numbersRes, , usageResult, webhookResult]) => {
+      .then(([numbersRes, usageResult]) => {
         const numbers = parseNumbers(numbersRes.data?.data);
         const preferred =
           (preferredId && numbers.find((n) => n.id === preferredId)) ||
@@ -166,125 +132,65 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
           setQualityRating(null);
         }
 
-        if (webhookResult.ok && webhookResult.r.data?.data && typeof webhookResult.r.data.data === 'object') {
-          const status = webhookResult.r.data.data as {
-            subscribed?: boolean | null;
-            statusCheckFailed?: boolean;
-          };
-          setWebhookCheckFailed(Boolean(status.statusCheckFailed));
-          if (status.statusCheckFailed) {
-            setWebhookSubscribed(null);
-          } else if (typeof status.subscribed === 'boolean') {
-            setWebhookSubscribed(status.subscribed);
-          } else {
-            setWebhookSubscribed(null);
-          }
-          emitStatus(
-            preferred,
-            status.statusCheckFailed
+        emitStatus(preferred, null, true);
+        setLoading(false);
+
+        if (!preferred) {
+          setWebhookSubscribed(null);
+          setWebhookCheckFailed(false);
+          return;
+        }
+
+        void whatsappApi
+          .webhookStatus()
+          .then((r) => {
+            const status = r.data?.data as
+              | { subscribed?: boolean | null; statusCheckFailed?: boolean }
+              | undefined;
+            if (!status || typeof status !== 'object') {
+              setWebhookCheckFailed(true);
+              setWebhookSubscribed(null);
+              emitStatus(preferred, null, true);
+              return;
+            }
+            setWebhookCheckFailed(Boolean(status.statusCheckFailed));
+            const subscribed = status.statusCheckFailed
               ? null
               : typeof status.subscribed === 'boolean'
                 ? status.subscribed
-                : null,
-            true
-          );
-        } else {
-          setWebhookCheckFailed(Boolean(preferred));
-          setWebhookSubscribed(null);
-          emitStatus(preferred, null, true);
-        }
+                : null;
+            setWebhookSubscribed(subscribed);
+            emitStatus(preferred, subscribed, true);
+          })
+          .catch(() => {
+            setWebhookCheckFailed(true);
+            setWebhookSubscribed(null);
+            emitStatus(preferred, null, true);
+          });
       })
       .catch(() => {
         setNumber(null);
-        setConnectUrl('');
         setQualityRating(null);
         setWebhookSubscribed(null);
         setWebhookCheckFailed(false);
         setLoadError(true);
         emitStatus(null, null, true);
         toastError('Could not load WhatsApp connection status.');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   }, [activeNumber?.id, emitStatus]);
+
+  const { connect, connecting } = useWhatsAppConnectOAuth({
+    returnPath: '/',
+    prefetch: false,
+    onConnected: () => {
+      load();
+    },
+  });
 
   useEffect(() => {
     load();
   }, [load]);
-
-  useWaOAuthPopupListener((event) => {
-    clearPopupPoll();
-    setConnecting(false);
-    if (event.status === 'success') {
-      toastSuccess(event.message || 'WhatsApp connected');
-      void refreshNumbers({ silent: true });
-      load();
-      return;
-    }
-    if (event.status === 'cancel') {
-      toastSuccess(event.message || 'Connection cancelled — you are still signed in.');
-      return;
-    }
-    toastError(event.message || 'WhatsApp connection failed');
-  });
-
-  useEffect(() => clearPopupPoll, [clearPopupPoll]);
-
-  const handleConnect = () => {
-    const start = (url: string) => {
-      setConnecting(true);
-      const { mode, popup } = startWhatsAppOAuth(url);
-      if (mode === 'redirect') return;
-      clearPopupPoll();
-      popupPollRef.current = window.setInterval(() => {
-        if (popup && popup.closed) {
-          clearPopupPoll();
-          handleWaOAuthPopupClosed(
-            (event) => {
-              setConnecting(false);
-              if (event.status === 'success') {
-                toastSuccess(event.message || 'WhatsApp connected');
-                void refreshNumbers({ silent: true });
-                load();
-                return;
-              }
-              if (event.status === 'cancel') {
-                toastSuccess(event.message || 'Connection cancelled — you are still signed in.');
-                return;
-              }
-              toastError(event.message || 'WhatsApp connection failed');
-            },
-            {
-              onClosedWithoutResult: () => {
-                setConnecting(false);
-                void refreshNumbers({ silent: true });
-              },
-            }
-          );
-        }
-      }, 500);
-    };
-
-    if (connectUrl) {
-      start(connectUrl);
-      return;
-    }
-
-    void (async () => {
-      try {
-        const redirectUri = getWhatsAppOAuthRedirectUri();
-        const { data } = await whatsappApi.connectUrl(redirectUri);
-        const url = pickConnectUrl(data?.data);
-        if (!url) {
-          toastError('Could not start WhatsApp connection. Please try again.');
-          return;
-        }
-        setConnectUrl(url);
-        start(url);
-      } catch {
-        toastError('Could not start WhatsApp connection. Please try again.');
-      }
-    })();
-  };
 
   const handleEnableIncoming = async () => {
     setEnablingIncoming(true);
@@ -326,7 +232,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
       setWebhookCheckFailed(false);
       emitStatus(null, null, true);
       await refreshNumbers({ silent: true });
-      await loadConnectUrl();
+      load();
       toastSuccess('WhatsApp disconnected');
     } catch (err: unknown) {
       const msg =
@@ -562,7 +468,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
           <AppButton
             className="shrink-0"
             icon={<Link2 className="h-4 w-4" />}
-            onClick={handleConnect}
+            onClick={connect}
             disabled={connecting}
             loading={connecting}
           >

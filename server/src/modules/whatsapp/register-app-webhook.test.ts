@@ -58,39 +58,34 @@ describe('registerAppWebhook', () => {
     expect(postCalls).toHaveLength(0);
   });
 
-  it('overwrites a live production callback with ngrok when opted in', async () => {
+  it('still refuses to overwrite production with ngrok when opted in', async () => {
     config.meta.allowTunnelWebhook = true;
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [
-            {
-              object: 'whatsapp_business_account',
-              active: true,
-              callback_url: 'https://app.samyoj.com/api/whatsapp/webhook',
-              fields: [{ name: 'messages' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true }),
-      });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            object: 'whatsapp_business_account',
+            active: true,
+            callback_url: 'https://app.samyoj.com/api/whatsapp/webhook',
+            fields: [{ name: 'messages' }],
+          },
+        ],
+      }),
+    });
     vi.stubGlobal('fetch', fetchMock);
 
-    await MetaWhatsAppService.registerAppWebhook(
-      'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook'
-    );
+    await expect(
+      MetaWhatsAppService.registerAppWebhook(
+        'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook'
+      )
+    ).rejects.toThrow(/live production webhook/i);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [, init] = fetchMock.mock.calls[1] as [string, { method?: string; body?: string }];
-    expect(init.method).toBe('POST');
-    expect(String(init.body)).toContain(
-      encodeURIComponent('https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook')
-    );
+    const postCalls = fetchMock.mock.calls.filter((call) => {
+      const init = call[1] as { method?: string } | undefined;
+      return init?.method === 'POST';
+    });
+    expect(postCalls).toHaveLength(0);
   });
 
   it('registers the production callback when replacing ngrok', async () => {

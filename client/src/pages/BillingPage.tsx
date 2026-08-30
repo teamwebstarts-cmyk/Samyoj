@@ -23,7 +23,6 @@ import { analyticsApi, billingApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type {
   AiCreditsResponse,
-  AiTopupSkuClient,
   BillingInfo,
   BillingPaymentAttempt,
   BillingPlan,
@@ -362,8 +361,9 @@ export default function BillingPage() {
     }
   };
 
-  const handlePurchaseAddon = async (sku: AiTopupSkuClient) => {
-    const capabilityEnabled = sku.pool === 'calling' ? callingIncluded : chatIncluded;
+  const handlePurchaseAddon = async (pool: 'chat' | 'calling', spendInr: number) => {
+    const capabilityEnabled = pool === 'calling' ? callingIncluded : chatIncluded;
+    const skuId = pool === 'calling' ? 'ai_calling_flex' : 'ai_chat_flex';
     if (
       !info?.canManageBilling ||
       !info.razorpayKeyId ||
@@ -380,24 +380,25 @@ export default function BillingPage() {
       );
       return;
     }
-    setPurchasingSku(sku.id);
+    setPurchasingSku(skuId);
     try {
-      const res = await billingApi.purchaseAiAddon(sku.id);
+      const res = await billingApi.purchaseAiAddon(skuId, spendInr);
       const payload = res.data.data;
+      const unitWord = pool === 'calling' ? 'minutes' : 'credits';
       await openRazorpayCheckout({
         keyId: payload.keyId,
         amount: payload.amount,
         currency: payload.currency,
         orderId: payload.orderId,
         name: 'Samyoj AI Add-on',
-        description: `${payload.label} — ${sku.units} ${sku.pool === 'calling' ? 'minutes' : 'credits'}`,
+        description: `${payload.label} — ${payload.units?.toLocaleString('en-IN') ?? ''} ${unitWord}`,
         prefillEmail: user?.email,
         onSuccess: async (response) => {
           try {
             const verifyRes = await billingApi.verifyAiAddon(response);
             toastSuccess(
               verifyRes.data.data.message ||
-                `Added ${verifyRes.data.data.creditsGranted?.toLocaleString() ?? ''} ${sku.pool === 'calling' ? 'minutes' : 'credits'}`
+                `Added ${verifyRes.data.data.creditsGranted?.toLocaleString() ?? ''} ${unitWord}`
             );
             await reloadAiCredits();
           } catch {

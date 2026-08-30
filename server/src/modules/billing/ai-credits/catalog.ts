@@ -37,7 +37,63 @@ export const INCLUDED_ALLOWANCES: Record<
   enterprise: { chatCreditsIncluded: 'custom', callingMinutesIncluded: 'custom' },
 };
 
+/** Inclusive-GST rupee slider. Rates match the Boost / Starter packs. */
+export const FLEX_TOPUP_MIN_INR = 10;
+export const FLEX_TOPUP_MAX_INR = 1000;
+export const FLEX_CHAT_PACK_UNITS = 1_000;
+export const FLEX_CHAT_PACK_INR = 235;
+export const FLEX_CALLING_PACK_UNITS = 30;
+export const FLEX_CALLING_PACK_INR = 353;
+
+export const AI_CHAT_FLEX_SKU_ID = 'ai_chat_flex';
+export const AI_CALLING_FLEX_SKU_ID = 'ai_calling_flex';
+
+export function clampFlexSpendInr(spendInr: number): number {
+  const rounded = Math.round(Number(spendInr));
+  if (!Number.isFinite(rounded)) return FLEX_TOPUP_MIN_INR;
+  return Math.min(FLEX_TOPUP_MAX_INR, Math.max(FLEX_TOPUP_MIN_INR, rounded));
+}
+
+export function quoteFlexTopup(pool: AiCreditPool, spendInr: number) {
+  const inr = clampFlexSpendInr(spendInr);
+  const packUnits = pool === 'calling' ? FLEX_CALLING_PACK_UNITS : FLEX_CHAT_PACK_UNITS;
+  const packInr = pool === 'calling' ? FLEX_CALLING_PACK_INR : FLEX_CHAT_PACK_INR;
+  const units = Math.max(1, Math.round((inr * packUnits) / packInr));
+  const inclGst = inr * 100;
+  return {
+    pool,
+    spendInr: inr,
+    units,
+    inclGstPaise: inclGst,
+    exclPaise: Math.round(inclGst / 1.18),
+    skuId: pool === 'calling' ? AI_CALLING_FLEX_SKU_ID : AI_CHAT_FLEX_SKU_ID,
+    cadence: `topup:1:u:${units}:r:${inr}`,
+  };
+}
+
+export function isFlexTopupSkuId(skuId: string): boolean {
+  return skuId === AI_CHAT_FLEX_SKU_ID || skuId === AI_CALLING_FLEX_SKU_ID;
+}
+
+export function flexSkuForPool(pool: AiCreditPool): AiTopupSku {
+  const quote = quoteFlexTopup(pool, FLEX_TOPUP_MIN_INR);
+  return {
+    id: quote.skuId,
+    pool,
+    purchaseType: 'topup',
+    label: pool === 'calling' ? 'AI Calling' : 'AI Chat Agent',
+    units: quote.units,
+    pricePaise: quote.exclPaise,
+    description:
+      pool === 'calling'
+        ? 'Pay ₹10–₹1,000 for extra AI calling minutes'
+        : 'Pay ₹10–₹1,000 for extra AI chat credits',
+  };
+}
+
 export const AI_TOPUP_SKUS: AiTopupSku[] = [
+  flexSkuForPool('chat'),
+  flexSkuForPool('calling'),
   {
     id: 'ai_chat_topup_1k',
     pool: 'chat',

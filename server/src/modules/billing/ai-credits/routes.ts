@@ -7,9 +7,18 @@ import { AppError, sendSuccess, asyncHandler } from '../../../utils/response';
 import { config } from '../../../config';
 import {
   AI_ADDON_PLAN_ID,
-  AI_TOPUP_SKUS,
+  AI_CALLING_FLEX_SKU_ID,
+  AI_CHAT_FLEX_SKU_ID,
+  FLEX_CALLING_PACK_INR,
+  FLEX_CALLING_PACK_UNITS,
+  FLEX_CHAT_PACK_INR,
+  FLEX_CHAT_PACK_UNITS,
+  FLEX_TOPUP_MAX_INR,
+  FLEX_TOPUP_MIN_INR,
   getAiTopupSku,
   inclGstPaise,
+  isFlexTopupSkuId,
+  quoteFlexTopup,
 } from './catalog';
 import { getAiCreditBalances } from './service';
 import {
@@ -25,7 +34,7 @@ import {
   expireStaleCreatedOrders,
   findReusablePendingOrder,
   fulfillCapturedPayment,
-  parseTopupQuantity,
+  parseFlexTopupUnits,
 } from '../fulfillment';
 import { checkQuota } from '../entitlements.service';
 
@@ -41,9 +50,13 @@ router.get(
     const balances = await getAiCreditBalances(orgId);
     const activeRecurringAddons = await listActiveRecurringAddons(orgId);
 
+    const flexSkus = [AI_CHAT_FLEX_SKU_ID, AI_CALLING_FLEX_SKU_ID]
+      .map((id) => getAiTopupSku(id))
+      .filter((sku): sku is NonNullable<typeof sku> => Boolean(sku));
+
     sendSuccess(res, {
       ...balances,
-      topupSkus: AI_TOPUP_SKUS.map((sku) => ({
+      topupSkus: flexSkus.map((sku) => ({
         id: sku.id,
         pool: sku.pool,
         label: sku.label,
@@ -53,6 +66,20 @@ router.get(
         description: sku.description,
         purchaseType: sku.purchaseType,
       })),
+      flexTopup: {
+        minInr: FLEX_TOPUP_MIN_INR,
+        maxInr: FLEX_TOPUP_MAX_INR,
+        chat: {
+          skuId: AI_CHAT_FLEX_SKU_ID,
+          packUnits: FLEX_CHAT_PACK_UNITS,
+          packInclGstInr: FLEX_CHAT_PACK_INR,
+        },
+        calling: {
+          skuId: AI_CALLING_FLEX_SKU_ID,
+          packUnits: FLEX_CALLING_PACK_UNITS,
+          packInclGstInr: FLEX_CALLING_PACK_INR,
+        },
+      },
       recurringAddonSkus: [],
       activeRecurringAddons,
     });
@@ -70,10 +97,10 @@ router.post(
       throw new AppError(503, 'Payment gateway is not configured');
     }
 
-    const { skuId, quantity, checkoutIntentKey } = z
+    const { skuId, spendInr, checkoutIntentKey } = z
       .object({
         skuId: z.string(),
-        quantity: z.literal(1).default(1),
+        spendInr: z.number().int().min(FLEX_TOPUP_MIN_INR).max(FLEX_TOPUP_MAX_INR).optional(),
         checkoutIntentKey: z.string().trim().min(8).max(120).optional(),
       })
       .parse(req.body);
@@ -81,6 +108,15 @@ router.post(
     const sku = getAiTopupSku(skuId);
     if (!sku || sku.purchaseType !== 'topup') {
       throw new AppError(400, 'Invalid or unavailable AI add-on SKU');
+    }
+
+    const flex = isFlexTopupSkuId(sku.id);
+    if (flex && spendInr == null) {
+      throw new AppError(400, `Choose an amount between ₹${FLEX_TOPUP_MIN_INR} and ₹${FLEX_TOPUP_MAX_INR}`);
+    }
+    const quote = flex ? quoteFlexTopup(sku.pool, spendInr!) : null;
+    if (quote && quote.skuId !== sku.id) {
+      throw new AppError(400, 'Invalid AI add-on SKU for this pool');
     }
 
     const orgId = req.user!.organizationId!;
@@ -97,7 +133,9 @@ router.post(
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new AppError(404, 'Organization not found');
 
-    const chargePaise = inclGstPaise(sku.pricePaise * quantity);
+    const chargePaise = quote ? quote.inclGstPaise : inclGstPaise(sku.pricePaise);
+    const cadence = quote ? quote.cadence : 'topup:1';
+    const unitsGranted = quote ? quote.units : sku.units;
     const intentKey =
       checkoutIntentKey ||
       (typeof req.header('Idempotency-Key') === 'string'
@@ -108,7 +146,8 @@ router.post(
       AI_ADDON_PLAN_ID,
       skuId,
       30 * 60 * 1000,
-      intentKey
+      intentKey,
+      cadence
     );
     if (reusable) {
       return sendSuccess(res, {
@@ -117,8 +156,9 @@ router.post(
         currency: reusable.currency,
         keyId: config.razorpay.keyId,
         skuId: sku.id,
-        quantity: parseTopupQuantity(reusable.cadence),
         label: sku.label,
+        units: parseFlexTopupUnits(reusable.cadence) ?? sku.units,
+        pool: sku.pool,
         reusedPendingOrder: true,
         checkoutIntentKey: reusable.checkoutIntentKey,
       });
@@ -134,7 +174,8 @@ router.post(
         organizationId: orgId,
         planId: AI_ADDON_PLAN_ID,
         skuId: sku.id,
-        quantity: String(quantity),
+        spendInr: String(quote?.spendInr ?? Math.round(chargePaise / 100)),
+        units: String(unitsGranted),
         companyName: org.companyName,
       },
     });
@@ -146,7 +187,7 @@ router.post(
           razorpayOrderId: order.id,
           planId: AI_ADDON_PLAN_ID,
           skuId: sku.id,
-          cadence: `topup:${quantity}`,
+          cadence,
           amountPaise: chargePaise,
           currency: order.currency,
           status: 'CREATED',
@@ -162,7 +203,8 @@ router.post(
           AI_ADDON_PLAN_ID,
           sku.id,
           30 * 60 * 1000,
-          intentKey
+          intentKey,
+          cadence
         );
         if (raceWinner) {
           return sendSuccess(res, {
@@ -171,8 +213,9 @@ router.post(
             currency: raceWinner.currency,
             keyId: config.razorpay.keyId,
             skuId: sku.id,
-            quantity: parseTopupQuantity(raceWinner.cadence),
             label: sku.label,
+            units: parseFlexTopupUnits(raceWinner.cadence) ?? sku.units,
+            pool: sku.pool,
             reusedPendingOrder: true,
             checkoutIntentKey: raceWinner.checkoutIntentKey,
           });
@@ -187,9 +230,8 @@ router.post(
       currency: order.currency,
       keyId: config.razorpay.keyId,
       skuId: sku.id,
-      quantity,
       label: sku.label,
-      units: sku.units * quantity,
+      units: unitsGranted,
       pool: sku.pool,
       checkoutIntentKey: intentKey,
     });

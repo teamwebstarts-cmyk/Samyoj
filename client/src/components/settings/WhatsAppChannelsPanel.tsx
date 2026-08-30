@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Smartphone, LogOut, Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import SettingsPanel from './SettingsPanel';
-import OfficialCheckCard from './OfficialCheckCard';
 import AppButton from '../ui/AppButton';
 import { SettingsTabSkeleton } from './SettingsSkeleton';
 import MetaPolicyDeadlinesCard from '../whatsapp/MetaPolicyDeadlinesCard';
@@ -77,9 +76,14 @@ export default function WhatsAppChannelsPanel({
     <div className="space-y-4">
     <MetaPolicyDeadlinesCard />
     {numbers.length > 0 ? <MetaPaymentCallout showWhenConnected /> : null}
-    <OfficialCheckCard
-      activeNumber={numbers.find((number) => number.id === activeNumberId) || numbers[0] || null}
-    />
+    <p className="text-[13px] font-medium text-theme-secondary">
+      <Link
+        to="/settings?tab=green-tick"
+        className="font-semibold text-whatsapp-700 hover:underline dark:text-whatsapp-400"
+      >
+        Green tick →
+      </Link>
+    </p>
     <SettingsPanel
       title="WhatsApp numbers"
       description="Business lines linked to this workspace."

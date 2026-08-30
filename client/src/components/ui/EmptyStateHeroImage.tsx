@@ -25,7 +25,8 @@ export default function EmptyStateHeroImage({ id, width, height }: EmptyStateHer
         width={width}
         height={height}
         decoding="async"
-        fetchPriority="high"
+        // React 18: camelCase fetchPriority warns; lowercase passes through to the DOM.
+        {...{ fetchpriority: 'high' }}
         className="max-h-full max-w-full select-none object-contain"
         draggable={false}
       />

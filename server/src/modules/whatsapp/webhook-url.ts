@@ -47,30 +47,45 @@ export function isDurablePublicWebhookUrl(url: string | null | undefined): boole
   }
 }
 
+/** Fallback when local META_WEBHOOK_URL is ngrok but the live WABA must stay on VPS. */
+export const DEFAULT_PRODUCTION_WEBHOOK_URL = 'https://app.samyoj.com/api/whatsapp/webhook';
+
 /**
- * Local `setup-webhook` must not steal a live production callback (ngrok)
- * unless the operator explicitly opted in (`META_ALLOW_TUNNEL_WEBHOOK`).
- * Re-registering the same durable URL is allowed so fields can be refreshed.
+ * WABA override target: prefer a durable configured URL, else the production
+ * callback. Never pin Meta delivery to ngrok/localhost.
+ */
+export function resolveDurableWebhookPinUrl(
+  configuredUrl: string | null | undefined,
+  productionUrl?: string | null
+): string | null {
+  if (isDurablePublicWebhookUrl(configuredUrl)) return configuredUrl || null;
+  if (isDurablePublicWebhookUrl(productionUrl)) return productionUrl || null;
+  if (isDurablePublicWebhookUrl(DEFAULT_PRODUCTION_WEBHOOK_URL)) {
+    return DEFAULT_PRODUCTION_WEBHOOK_URL;
+  }
+  return null;
+}
+
+/**
+ * Local `setup-webhook` must not steal a live production callback with ngrok.
+ * `META_ALLOW_TUNNEL_WEBHOOK` does not override this — that flag previously
+ * took inbound off the VPS. Re-registering the same durable URL is allowed.
  */
 export function shouldReplaceAppWebhookCallback(
   currentUrl: string | null | undefined,
   nextUrl: string,
-  options?: { allowTunnelOverride?: boolean }
+  _options?: { allowTunnelOverride?: boolean }
 ): { replace: boolean; reason: string } {
   if (!nextUrl) {
     return { replace: false, reason: 'next webhook URL is empty' };
   }
   if (isEphemeralWebhookUrl(nextUrl) && isDurablePublicWebhookUrl(currentUrl)) {
-    if (options?.allowTunnelOverride) {
-      return { replace: true, reason: 'explicit tunnel override' };
-    }
     return {
       replace: false,
       reason:
         'Refusing to replace a live production webhook URL with an ngrok/localhost tunnel. ' +
-        'That stops inbound messages and calls on the connected WhatsApp number. ' +
-        'Set META_ALLOW_TUNNEL_WEBHOOK=true for local testing (and stop the VPS), ' +
-        'or use a dedicated test WABA.',
+        'That stops inbound messages and calls on the VPS. ' +
+        'Use a dedicated test WABA / Meta app for local inbound, or send test replies to the live app.samyoj.com webhook.',
     };
   }
   return { replace: true, reason: 'ok' };

@@ -13,6 +13,16 @@ export function parseTopupQuantity(cadence: string | null | undefined): number {
   return Math.min(n, 99);
 }
 
+/** Units snapshot on flex checkouts: `topup:1:u:425`. Legacy packs have no `:u:` segment. */
+export function parseFlexTopupUnits(cadence: string | null | undefined): number | null {
+  if (!cadence) return null;
+  const match = cadence.match(/^topup:1:u:(\d+)(?::r:\d+)?$/);
+  if (!match) return null;
+  const n = parseInt(match[1], 10);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return n;
+}
+
 async function fulfillAiAddonOrder(params: {
   paymentOrderId: string;
   paymentId: string;
@@ -66,6 +76,16 @@ async function fulfillAiAddonOrder(params: {
       throw new AppError(400, 'AI add-on orders must contain one fixed pack', 'FIXED_TOPUP_SKU');
     }
 
+    const flexUnits = parseFlexTopupUnits(order.cadence);
+    const grantSku =
+      flexUnits != null
+        ? {
+            ...sku,
+            units: flexUnits,
+            pricePaise: Math.round(order.amountPaise / 1.18),
+          }
+        : sku;
+
     const existingPayment = await tx.paymentOrder.findFirst({
       where: { paymentId: params.paymentId },
       select: { id: true },
@@ -77,7 +97,7 @@ async function fulfillAiAddonOrder(params: {
     const grant = await grantTopUpInTransaction(
       {
         organizationId: order.organizationId,
-        sku,
+        sku: grantSku,
         quantity,
         paymentOrderId: order.id,
         razorpayPaymentId: params.paymentId,
@@ -414,7 +434,8 @@ export async function findReusablePendingOrder(
   planId: string,
   skuId: string,
   maxAgeMs = 30 * 60 * 1000,
-  checkoutIntentKey?: string
+  checkoutIntentKey?: string,
+  cadence?: string
 ) {
   const since = new Date(Date.now() - maxAgeMs);
   return prisma.paymentOrder.findFirst({
@@ -425,6 +446,7 @@ export async function findReusablePendingOrder(
       status: 'CREATED',
       createdAt: { gte: since },
       ...(checkoutIntentKey ? { checkoutIntentKey } : {}),
+      ...(cadence ? { cadence } : {}),
     },
     orderBy: { createdAt: 'desc' },
   });

@@ -35,7 +35,17 @@ async function main() {
   await waitForWebhookReachable(config.meta.webhookUrl);
 
   // Register the app callback first so Meta can verify it before WABA override.
-  await MetaWhatsAppService.registerAppWebhook(config.meta.webhookUrl);
+  // If Meta already points at production, do not steal it with local ngrok —
+  // still pin the WABA override so VPS inbound keeps working.
+  try {
+    await MetaWhatsAppService.registerAppWebhook(config.meta.webhookUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/live production webhook/i.test(message)) throw err;
+    logger.warn('Keeping production Meta webhook; pinning WABA override instead', {
+      error: message,
+    });
+  }
 
   const numbers = await prisma.whatsappNumber.findMany({
     where: { isActive: true },

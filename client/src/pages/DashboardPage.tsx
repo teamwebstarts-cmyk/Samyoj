@@ -90,7 +90,7 @@ export default function DashboardPage() {
     setWaStatus(status);
   }, []);
 
-  const connectionReady = (waStatus.statusReady || !numbersLoading) && resolved;
+  const connectionReady = resolved && (!numbersLoading || hasConnectedNumber || waStatus.statusReady);
   const isConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
 
   const loadStats = useCallback(() => {

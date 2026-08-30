@@ -5,6 +5,7 @@ import { decrypt, encrypt } from '../../utils/crypto';
 import { createModuleLogger } from '../../utils/logger';
 import {
   isDurablePublicWebhookUrl,
+  resolveDurableWebhookPinUrl,
   isEphemeralWebhookUrl,
   shouldReplaceAppWebhookCallback,
   webhookUrlHost,
@@ -1308,8 +1309,11 @@ export class MetaWhatsAppService {
     token: string,
     credentials?: MetaCredentials
   ): Promise<void> {
-    const callbackUrl = config.meta.webhookUrl;
-    if (!isDurablePublicWebhookUrl(callbackUrl)) return;
+    const callbackUrl = resolveDurableWebhookPinUrl(
+      config.meta.webhookUrl,
+      config.meta.productionWebhookUrl
+    );
+    if (!callbackUrl) return;
 
     try {
       await this.postWabaCallbackOverride(wabaId, token, callbackUrl);

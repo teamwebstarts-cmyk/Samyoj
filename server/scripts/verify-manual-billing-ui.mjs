@@ -33,6 +33,8 @@ requireNeedles('client/src/components/billing/AiAddonGrid.tsx', [
   'Buy add-on',
   'one-time manual purchases',
   'id="ai-addons"',
+  'type="range"',
+  'md:grid-cols-2',
 ]);
 forbidNeedles('client/src/components/billing/AiAddonGrid.tsx', [
   'Subscribe monthly',

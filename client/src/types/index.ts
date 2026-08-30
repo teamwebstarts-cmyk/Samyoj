@@ -541,11 +541,25 @@ export interface ActiveRecurringAddonView {
   cancelAtPeriodEnd: boolean;
 }
 
+export interface FlexTopupRate {
+  skuId: string;
+  packUnits: number;
+  packInclGstInr: number;
+}
+
+export interface FlexTopupCatalog {
+  minInr: number;
+  maxInr: number;
+  chat: FlexTopupRate;
+  calling: FlexTopupRate;
+}
+
 export interface AiCreditsResponse {
   chat: AiCreditBalanceView;
   calling: AiCreditBalanceView;
   periodEnd: string | null;
   topupSkus: AiTopupSkuClient[];
+  flexTopup?: FlexTopupCatalog;
   recurringAddonSkus: AiTopupSkuClient[];
   activeRecurringAddons?: ActiveRecurringAddonView[];
 }

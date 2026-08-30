@@ -135,7 +135,7 @@ function CampaignTabRail({
           ref={scrollerRef}
           role="tablist"
           aria-label="Campaign retarget sections"
-          className={`flex min-w-0 gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth py-0.5 touch-pan-x [scrollbar-width:thin] ${
+          className={`flex min-w-0 gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth py-0.5 touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
             canScrollLeft ? 'pl-9' : ''
           } ${canScrollRight ? 'pr-9' : ''}`}
         >

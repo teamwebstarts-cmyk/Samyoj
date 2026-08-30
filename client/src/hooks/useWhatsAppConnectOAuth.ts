@@ -17,12 +17,18 @@ function pickConnectUrl(payload: unknown): string {
 }
 
 /** Shared Connect WhatsApp OAuth (popup + refresh) for Dashboard / Settings-style CTAs. */
-export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConnected?: () => void }) {
+export function useWhatsAppConnectOAuth(options?: {
+  returnPath?: string;
+  onConnected?: () => void;
+  prefetch?: boolean;
+}) {
   const { refreshNumbers } = useWhatsAppNumber();
   const [connecting, setConnecting] = useState(false);
   const [connectUrl, setConnectUrl] = useState('');
   const returnPath = options?.returnPath || '/';
+  const prefetch = options?.prefetch !== false;
   const popupPollRef = useRef<number | null>(null);
+  const connectingRef = useRef(false);
   const onConnectedRef = useRef(options?.onConnected);
   onConnectedRef.current = options?.onConnected;
 
@@ -36,6 +42,7 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
   const handleOAuthResult = useCallback(
     (data: { status: string; message?: string }) => {
       clearPopupPoll();
+      connectingRef.current = false;
       setConnecting(false);
       if (data.status === 'success') {
         toastSuccess(data.message || 'WhatsApp connected');
@@ -52,6 +59,7 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
   );
 
   useEffect(() => {
+    if (!prefetch) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -65,14 +73,17 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [prefetch]);
 
   useEffect(() => clearPopupPoll, [clearPopupPoll]);
 
   useWaOAuthPopupListener(handleOAuthResult);
 
   const connect = useCallback(() => {
+    if (connectingRef.current) return;
+
     const start = (url: string) => {
+      connectingRef.current = true;
       setConnecting(true);
       const { mode, popup } = startWhatsAppOAuth(url, { returnPath });
       if (mode === 'redirect') return;
@@ -82,6 +93,7 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
           clearPopupPoll();
           handleWaOAuthPopupClosed(handleOAuthResult, {
             onClosedWithoutResult: () => {
+              connectingRef.current = false;
               setConnecting(false);
               void refreshNumbers({ silent: true });
             },
@@ -95,18 +107,21 @@ export function useWhatsAppConnectOAuth(options?: { returnPath?: string; onConne
       return;
     }
 
+    connectingRef.current = true;
     void (async () => {
       try {
         const redirectUri = getWhatsAppOAuthRedirectUri();
         const { data } = await whatsappApi.connectUrl(redirectUri);
         const url = pickConnectUrl(data?.data);
         if (!url) {
+          connectingRef.current = false;
           toastError('Could not start WhatsApp connection. Please try again.');
           return;
         }
         setConnectUrl(url);
         start(url);
       } catch {
+        connectingRef.current = false;
         toastError('Could not start WhatsApp connection. Please try again.');
       }
     })();
