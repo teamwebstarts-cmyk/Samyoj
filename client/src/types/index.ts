@@ -255,6 +255,11 @@ export interface MessageMetadata {
   unsupportedType?: string;
   metaErrorCode?: number;
   metaErrorTitle?: string;
+  metaErrorHint?: string;
+  metaCode?: number;
+  error?: string;
+  errors?: Array<{ code?: number; title?: string; message?: string }>;
+  retryHelps?: boolean;
   /** Centered WhatsApp-style call notice in the thread. */
   isCallEvent?: boolean;
   /** Agent-only call summary (Inbox/Calls). Never send to WhatsApp. */

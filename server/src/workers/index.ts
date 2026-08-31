@@ -36,6 +36,7 @@ import { billingCategoryForTemplate } from '../modules/campaigns/types';
 import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/webhook-health';
 import { safeRecordMetaSendFailure } from '../modules/platform/meta-errors';
 import { startPlatformTelemetryWorker } from '../modules/platform/worker';
+import { whatsappSendFailurePatches } from '../modules/whatsapp/send-failure-explain';
 
 const log = createModuleLogger('worker');
 
@@ -687,7 +688,11 @@ const broadcastWorker = new Worker(
         });
       } catch (err) {
         const classified = classifyProviderError(err);
-        const errorMessage = classified.message;
+        const failure = whatsappSendFailurePatches({
+          code: typeof classified.metadata.metaCode === 'number' ? classified.metadata.metaCode : undefined,
+          rawMessage: classified.message,
+        });
+        const errorMessage = failure.explained.body;
         void safeRecordMetaSendFailure({
           organizationId,
           whatsappNumberId: whatsappNumberDbId,
@@ -720,8 +725,8 @@ const broadcastWorker = new Worker(
           data: {
             status: durableFailure ? 'FAILED' : 'AMBIGUOUS',
             errorMessage: durableFailure
-              ? `Meta rejected before acceptance: ${errorMessage}`
-              : `Provider outcome unknown; reconcile with Meta before retrying: ${errorMessage}`,
+              ? failure.explained.body
+              : `Provider outcome unknown; reconcile with Meta before retrying: ${failure.explained.body}`,
             consentSnapshot: providerSnapshot as Prisma.InputJsonValue,
             claimToken: null,
             claimedAt: null,

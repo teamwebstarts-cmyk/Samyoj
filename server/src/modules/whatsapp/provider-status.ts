@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
+import { whatsappSendFailurePatches } from './send-failure-explain';
 
 const log = createModuleLogger('provider-status');
 
@@ -113,7 +114,12 @@ export async function applyProviderMessageStatus(input: {
 
   const statusMeta: Record<string, unknown> = { ...existingMeta };
   if (!isOlderOrDuplicate && input.status.pricing) statusMeta.pricing = input.status.pricing;
+  const failure =
+    !isOlderOrDuplicate && input.statusValue === 'FAILED'
+      ? whatsappSendFailurePatches({ errors: input.status.errors })
+      : null;
   if (!isOlderOrDuplicate && input.status.errors) statusMeta.errors = input.status.errors;
+  if (failure) Object.assign(statusMeta, failure.metadataPatch);
   if (!isOlderOrDuplicate && input.status.conversation) {
     statusMeta.conversationId = (input.status.conversation as { id?: string })?.id;
   }
@@ -147,6 +153,7 @@ export async function applyProviderMessageStatus(input: {
       messageId: existingMsg.id,
       status: input.statusValue,
       conversationId: existingMsg.conversationId,
+      ...(failure?.socketPatch || {}),
     });
   }
   return true;

@@ -16,6 +16,7 @@ import {
 import { useAuth } from './AuthContext';
 import {
   afterWhatsappNumbersFetch,
+  parseWhatsappNumbersPayload,
   resolveActiveNumber,
   retainActiveNumberId,
 } from '../utils/whatsappWorkspace';
@@ -26,6 +27,7 @@ export interface WhatsappNumberOption {
   phoneNumberId: string;
   wabaId: string;
   isActive: boolean;
+  disconnectedAt?: string | null;
   isOnBizApp?: boolean;
   coexistenceStatus?: string | null;
   historySyncProgress?: number | null;
@@ -42,6 +44,8 @@ interface WhatsAppNumberContextType {
   activeNumberKey: string | null;
   /** At least one WhatsApp number is linked to the org */
   hasConnectedNumber: boolean;
+  /** Soft-disconnected numbers for this org (history still belongs here). */
+  disconnectedNumbers: WhatsappNumberOption[];
   /** True after GET /whatsapp/numbers has settled, including an empty (not connected) list. */
   resolved: boolean;
   loading: boolean;
@@ -56,18 +60,11 @@ function storageKey(orgId: string) {
   return `active-wa-number-${orgId}`;
 }
 
-function parseNumbers(data: unknown): WhatsappNumberOption[] {
-  if (Array.isArray(data)) return data as WhatsappNumberOption[];
-  if (data && typeof data === 'object' && Array.isArray((data as { numbers?: unknown }).numbers)) {
-    return (data as { numbers: WhatsappNumberOption[] }).numbers;
-  }
-  return [];
-}
-
 export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
   const { organization } = useAuth();
   const orgId = organization?.id;
   const [numbers, setNumbers] = useState<WhatsappNumberOption[]>([]);
+  const [disconnectedNumbers, setDisconnectedNumbers] = useState<WhatsappNumberOption[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [resolved, setResolved] = useState(false);
@@ -79,6 +76,7 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
   const refreshNumbers = useCallback(async (options?: { silent?: boolean }) => {
     if (!orgId) {
       setNumbers([]);
+      setDisconnectedNumbers([]);
       setActiveId(null);
       setActiveWhatsappNumberId(null);
       setActiveWhatsappNumberResolved(false);
@@ -99,8 +97,9 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await whatsappApi.numbers();
       if (generation !== requestGeneration.current) return;
-      const list = parseNumbers(data.data);
-      setNumbers(list);
+      const parsed = parseWhatsappNumbersPayload(data.data);
+      setNumbers(parsed.numbers);
+      setDisconnectedNumbers(parsed.disconnected);
 
       consecutiveFailures.current = 0;
 
@@ -108,7 +107,7 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
         const stored = localStorage.getItem(storageKey(orgId));
         const previousPhoneNumberId =
           numbersRef.current.find((number) => number.id === prev)?.phoneNumberId ?? null;
-        const nextNumber = resolveActiveNumber(list, stored, previousPhoneNumberId);
+        const nextNumber = resolveActiveNumber(parsed.numbers, stored, previousPhoneNumberId);
         const next = nextNumber?.id ?? null;
 
         setActiveWhatsappNumberId(next);
@@ -179,13 +178,14 @@ export function WhatsAppNumberProvider({ children }: { children: ReactNode }) {
       activeNumber,
       activeNumberKey,
       hasConnectedNumber: numbers.length > 0,
+      disconnectedNumbers,
       resolved,
       loading,
       hasMultiple: numbers.length > 1,
       switchNumber,
       refreshNumbers,
     }),
-    [numbers, activeNumber, activeNumberKey, loading, resolved, switchNumber, refreshNumbers]
+    [numbers, disconnectedNumbers, activeNumber, activeNumberKey, loading, resolved, switchNumber, refreshNumbers]
   );
 
   return (

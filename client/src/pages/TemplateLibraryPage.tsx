@@ -41,6 +41,7 @@ import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { mapTemplateApiError } from '../components/templates/wizard/templateWizardModel';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
 import { useTopbarExtras } from '../contexts/TopbarContext';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useEntitlements } from '../hooks/useEntitlements';
@@ -57,7 +58,7 @@ function asCatalogItems(raw: unknown): CatalogListItem[] {
 }
 
 export default function TemplateLibraryPage() {
-  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
@@ -436,15 +437,16 @@ export default function TemplateLibraryPage() {
   }
 
   if (!hasConnectedNumber) {
+    const copy = whatsappNotConnectedCopy(disconnectedNumbers, {
+      task: 'submit a library template to Meta',
+    });
     return (
       <div className="template-wizard-page">
         <div className="template-wizard-card mx-auto max-w-lg p-6 text-center">
-          <p className="text-[15px] font-bold text-slate-900 dark:text-white">Connect WhatsApp first</p>
-          <p className="mt-2 text-[13px] text-slate-600">
-            You need to link your WhatsApp Business number before submitting a library template to Meta.
-          </p>
-          <Link to="/settings" className="mt-4 inline-block text-[13px] font-semibold text-violet-600">
-            Go to Settings
+          <p className="text-[15px] font-bold text-slate-900 dark:text-white">{copy.title}</p>
+          <p className="mt-2 text-[13px] text-slate-600">{copy.description}</p>
+          <Link to="/settings?tab=whatsapp" className="mt-4 inline-block text-[13px] font-semibold text-violet-600">
+            {copy.cta}
           </Link>
         </div>
       </div>

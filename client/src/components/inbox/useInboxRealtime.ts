@@ -6,6 +6,7 @@ import { logError } from '../../utils/errors';
 import type { Conversation, Message, ServiceWindowInfo } from '../../types';
 import { emitChatNotice } from './chatNoticeBus';
 import { explainAiSkipReason } from '../../utils/aiSkipReasons';
+import { explainWhatsAppSendFailure } from '../../utils/whatsappSendFailure';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 
 function softCatch(action: string, conversationId?: string) {
@@ -69,6 +70,10 @@ export function useInboxRealtime({
         whatsappNumberId?: string;
         numberId?: string;
         messageIds?: string[];
+        error?: string;
+        errorTitle?: string;
+        metaCode?: number;
+        retryHelps?: boolean;
       };
       if (!resolved || !activeNumber) return;
       const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
@@ -125,14 +130,45 @@ export function useInboxRealtime({
         return;
       }
 
-      if (event === 'message:status' && openId === payload.conversationId) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? { ...m, status: (payload.status || m.status).toUpperCase() }
-              : m
-          )
-        );
+      if (event === 'message:status' && payload.conversationId) {
+        const nextStatus = (payload.status || '').toUpperCase();
+        let becameFailed = false;
+        if (openId === payload.conversationId) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== payload.messageId) return m;
+              const wasFailed = m.status.toUpperCase() === 'FAILED';
+              if (nextStatus === 'FAILED' && !wasFailed) becameFailed = true;
+              return {
+                ...m,
+                status: nextStatus || m.status,
+                metadata: {
+                  ...m.metadata,
+                  ...(payload.error ? { error: payload.error, metaErrorHint: payload.error } : {}),
+                  ...(payload.errorTitle ? { metaErrorTitle: payload.errorTitle } : {}),
+                  ...(payload.metaCode != null
+                    ? { metaCode: payload.metaCode, metaErrorCode: payload.metaCode }
+                    : {}),
+                  ...(typeof payload.retryHelps === 'boolean' ? { retryHelps: payload.retryHelps } : {}),
+                },
+              };
+            })
+          );
+        } else if (nextStatus === 'FAILED') {
+          becameFailed = true;
+        }
+        if (becameFailed) {
+          const explained = explainWhatsAppSendFailure({
+            code: payload.metaCode,
+            rawMessage: payload.error || payload.errorTitle,
+          });
+          emitChatNotice(payload.conversationId, {
+            kind: 'send-error',
+            message: explained.notice,
+            tone: 'orange',
+            icon: 'alert',
+          });
+        }
         return;
       }
 

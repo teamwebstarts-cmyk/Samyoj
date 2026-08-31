@@ -56,6 +56,7 @@ import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { parseWhatsappNumbersPayload } from '../utils/whatsappWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useEntitlements } from '../hooks/useEntitlements';
@@ -340,7 +341,7 @@ export default function CampaignsPage() {
     Promise.all([whatsappApi.numbers(), contactApi.tags()])
       .then(([numbersRes, tagsRes]) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        setWhatsappNumbers(Array.isArray(numbersRes.data.data) ? numbersRes.data.data : []);
+        setWhatsappNumbers(parseWhatsappNumbersPayload(numbersRes.data.data).numbers);
         const tags = tagsRes.data.data.tags || [];
         setAvailableTags(tags.map((t: string | { name: string }) => (typeof t === 'string' ? t : t.name)));
       })

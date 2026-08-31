@@ -532,8 +532,8 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    const numbers = await prisma.whatsappNumber.findMany({
-      where: { organizationId: req.user!.organizationId!, isActive: true },
+    const rows = await prisma.whatsappNumber.findMany({
+      where: { organizationId: req.user!.organizationId! },
       select: {
         id: true,
         phoneNumber: true,
@@ -548,9 +548,20 @@ router.get(
         officialBusinessAccount: true,
         messagingLimitTier: true,
         createdAt: true,
+        updatedAt: true,
       },
+      orderBy: [{ isActive: 'desc' }, { updatedAt: 'desc' }],
     });
-    sendSuccess(res, numbers);
+    const numbers = rows
+      .filter((row) => row.isActive)
+      .map(({ updatedAt: _updatedAt, ...row }) => row);
+    const disconnected = rows
+      .filter((row) => !row.isActive)
+      .map(({ updatedAt, ...row }) => ({
+        ...row,
+        disconnectedAt: updatedAt.toISOString(),
+      }));
+    sendSuccess(res, { numbers, disconnected });
   })
 );
 

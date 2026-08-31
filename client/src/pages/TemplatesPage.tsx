@@ -36,6 +36,7 @@ import type { MessageTemplate } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
@@ -51,7 +52,7 @@ interface TemplateRejectionAlert {
 }
 
 export default function TemplatesPage() {
-  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -329,17 +330,24 @@ export default function TemplatesPage() {
   }
 
   if (!hasConnectedNumber) {
+    const copy = whatsappNotConnectedCopy(disconnectedNumbers, {
+      task: 'create and send message templates',
+    });
     return (
       <PageShell>
         <div className="p-4 sm:p-6">
           <EmptyState
             icon={Settings}
-            title="Connect WhatsApp first"
-            description="You need to link your WhatsApp Business number before creating message templates."
-            steps={['Open Settings', 'Connect your WhatsApp number', 'Come back here to create templates']}
+            title={copy.title}
+            description={copy.description}
+            steps={
+              copy.disconnected
+                ? ['Open Settings', 'Reconnect this WhatsApp number', 'Come back here to send templates']
+                : ['Open Settings', 'Connect your WhatsApp number', 'Come back here to create templates']
+            }
             action={
-              <AppButton icon={<Settings size={16} />} onClick={() => navigate('/settings')}>
-                Go to Settings
+              <AppButton icon={<Settings size={16} />} onClick={() => navigate('/settings?tab=whatsapp')}>
+                {copy.cta}
               </AppButton>
             }
           />

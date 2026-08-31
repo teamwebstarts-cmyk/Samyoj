@@ -11,14 +11,24 @@ import { utcDay } from './privacy';
 const log = createModuleLogger('platform-meta-errors');
 
 const OFFICIAL_TITLES: Record<number, string> = {
+  190: 'Access token invalid',
+  368: 'Temporarily blocked',
   130429: 'Throughput limit reached',
+  131000: 'Something went wrong',
   131026: 'Message undeliverable',
+  131031: 'Business Account locked',
   131047: 'Re-engagement required',
   131048: 'Spam rate / quality limit',
   131049: 'Marketing message cap',
   131051: 'Unsupported message type',
   131053: 'Media download error',
   131056: 'Pair rate limit',
+  132001: 'Template paused',
+  132012: 'Template parameter mismatch',
+  132015: 'Template paused',
+  141006: 'Payment issue',
+  141010: 'Business verification required',
+  141014: 'WhatsApp account banned',
 };
 
 const IDENTIFIER_PATTERN = /\b(wa_id|wamid|fbtrace_id)\b[=: ]*[A-Za-z0-9._-]+/gi;

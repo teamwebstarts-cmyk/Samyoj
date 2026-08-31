@@ -24,6 +24,7 @@ import { useSocket } from '../hooks/useSocket';
 import { toastError, toastSuccess } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
 
 const TICKETS_CACHE_KEY = 'tickets';
 
@@ -35,7 +36,7 @@ type TicketsNumberCache = {
 };
 
 export default function TicketsPage() {
-  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [status, setStatus] = useState('');
@@ -181,17 +182,24 @@ export default function TicketsPage() {
   }
 
   if (!hasConnectedNumber) {
+    const copy = whatsappNotConnectedCopy(disconnectedNumbers, {
+      task: 'track Inbox chats that still need a reply',
+    });
     return (
       <PageShell>
         <div className="p-4 sm:p-6">
           <EmptyState
             icon={Settings2}
-            title="Connect WhatsApp first"
-            description="Tickets track Inbox chats that still need a reply. Connect WhatsApp before creating them."
-            steps={['Open Settings', 'Connect your WhatsApp number', 'Create a ticket from Inbox']}
+            title={copy.title}
+            description={copy.description}
+            steps={
+              copy.disconnected
+                ? ['Open Settings', 'Reconnect this WhatsApp number', 'Create a ticket from Inbox']
+                : ['Open Settings', 'Connect your WhatsApp number', 'Create a ticket from Inbox']
+            }
             action={
-              <Link to="/settings">
-                <AppButton icon={<Settings2 size={16} />}>Go to Settings</AppButton>
+              <Link to="/settings?tab=whatsapp">
+                <AppButton icon={<Settings2 size={16} />}>{copy.cta}</AppButton>
               </Link>
             }
           />

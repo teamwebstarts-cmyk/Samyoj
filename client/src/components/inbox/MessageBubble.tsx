@@ -38,6 +38,7 @@ import {
 } from './unsupportedMessage';
 import type { Message } from '../../types';
 import CallSummaryNote from '../calls/CallSummaryNote';
+import { explainWhatsAppSendFailureFromMessage } from '../../utils/whatsappSendFailure';
 
 const ACTION_MENU_WIDTH = 160;
 const REACT_MENU_WIDTH = 232;
@@ -421,6 +422,8 @@ export default function MessageBubble({
   const tickStatus = mapStatus(message.status);
   const isFailed = isOutbound && tickStatus === 'failed';
   const isAmbiguous = isOutbound && tickStatus === 'ambiguous';
+  const sendFailure = isFailed ? explainWhatsAppSendFailureFromMessage(message) : null;
+  const canRetryFailed = Boolean(isFailed && onRetry && sendFailure?.retryHelps !== false);
   const time = grouping.last ? formatMessageTime(message.createdAt) : undefined;
   const replyPreview = message.metadata?.replyPreview;
   const reactions = message.metadata?.reactions || [];
@@ -589,13 +592,13 @@ export default function MessageBubble({
                 <SmilePlus className="h-3.5 w-3.5" /> React
               </button>
             )}
-            {isFailed && onRetry && (
+            {canRetryFailed && (
               <button
                 type="button"
                 role="menuitem"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-red-600 hover:bg-theme-subtle"
                 onClick={() => {
-                  onRetry(message);
+                  onRetry?.(message);
                   closeMenus();
                 }}
               >
@@ -1000,7 +1003,8 @@ export default function MessageBubble({
             <FailedRetryRow
               show={isFailed}
               retrying={retrying}
-              onRetry={() => onRetry?.(message)}
+              explanation={sendFailure}
+              onRetry={canRetryFailed ? () => onRetry?.(message) : undefined}
             />
             <AmbiguousStatusRow show={isAmbiguous} />
             </div>
@@ -1043,7 +1047,12 @@ export default function MessageBubble({
             </CollapsibleMessageText>
           </div>
           {reactionChips}
-          <FailedRetryRow show={isFailed} retrying={retrying} onRetry={() => onRetry?.(message)} />
+          <FailedRetryRow
+            show={isFailed}
+            retrying={retrying}
+            explanation={sendFailure}
+            onRetry={canRetryFailed ? () => onRetry?.(message) : undefined}
+          />
           <AmbiguousStatusRow show={isAmbiguous} />
         </div>
       </div>
@@ -1066,24 +1075,35 @@ function FailedRetryRow({
   show,
   retrying,
   onRetry,
+  explanation,
 }: {
   show: boolean;
   retrying?: boolean;
-  onRetry: () => void;
+  onRetry?: () => void;
+  explanation: ReturnType<typeof explainWhatsAppSendFailureFromMessage> | null;
 }) {
   if (!show) return null;
   return (
-    <div className="mt-1 flex items-center justify-end gap-1.5">
-      <span className="text-[11px] font-semibold text-red-600 dark:text-red-400">Failed</span>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={retrying}
-        className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 ring-1 ring-red-200/70 transition hover:bg-red-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-1 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-500/30"
-      >
-        <RotateCcw className={`h-3 w-3 ${retrying ? 'animate-spin' : ''}`} strokeWidth={2.5} />
-        Retry
-      </button>
+    <div className="mt-1 flex max-w-[min(100%,280px)] flex-col items-end gap-1">
+      <p className="text-right text-[11px] font-semibold text-red-600 dark:text-red-400">
+        {explanation?.title || 'Failed'}
+      </p>
+      {explanation?.body ? (
+        <p className="text-right text-[11px] leading-snug text-red-700/90 dark:text-red-300/90">
+          {explanation.body}
+        </p>
+      ) : null}
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 ring-1 ring-red-200/70 transition hover:bg-red-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-1 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-500/30"
+        >
+          <RotateCcw className={`h-3 w-3 ${retrying ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+          Retry
+        </button>
+      ) : null}
     </div>
   );
 }

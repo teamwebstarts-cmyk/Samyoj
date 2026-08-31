@@ -54,6 +54,7 @@ import {
 } from './worker-safety';
 import { emitProductEvent } from '../platform/events';
 import { assertApprovedCampaignTemplate, assertCampaignRecipientTemplates } from './template-validation';
+import { whatsappSendFailurePatches } from '../whatsapp/send-failure-explain';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
@@ -685,9 +686,10 @@ export async function syncCampaignRecipientFromWebhook(
       }
       if (normalized === 'READ') data.readAt = current.readAt ?? eventAt;
       if (normalized === 'FAILED') {
+        const failure = whatsappSendFailurePatches({ errors: context?.errors });
         data.errorMessage = reconciliation.status === 'AMBIGUOUS'
           ? 'Delivery outcome raced an active provider call; reconcile with Meta before retrying'
-          : `Delivery failed (Meta webhook)${context?.errors ? `: ${JSON.stringify(context.errors)}` : ''}`;
+          : failure.explained.body;
       }
       if (context?.errors) {
         data.consentSnapshot = {

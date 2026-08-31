@@ -23,6 +23,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useTopbarExtras } from '../../contexts/TopbarContext';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
@@ -103,7 +104,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const { pathname, search } = useLocation();
   const { orgRole, availability, setAvailability } = useAuth();
   const { extras: topbarExtras } = useTopbarExtras();
-  const { hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { title, description } = getPageMeta(pathname);
   const isCampaignWizard = isCampaignWizardRoute(pathname);
   const isTemplateWizard = isTemplateWizardRoute(pathname);
@@ -128,6 +129,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   // heartbeat — topbar has no inbox socket; match NumberSwitcher / Inbox header.
   const showLive = !numbersLoading && hasConnectedNumber;
   const showNotConnected = !numbersLoading && !hasConnectedNumber;
+  const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers);
 
   useGlobalSearchShortcut(() => setSearchOpen(true));
 
@@ -361,9 +363,9 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   ) : showNotConnected ? (
                     <span
                       className="hidden h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 sm:inline-flex dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
-                      title="WhatsApp is not connected"
+                      title={disconnectedCopy.description}
                     >
-                      Not connected
+                      {disconnectedCopy.disconnected ? 'Disconnected' : 'Not connected'}
                     </span>
                   ) : null}
                 </div>
@@ -400,9 +402,9 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   ) : showNotConnected ? (
                     <span
                       className="hidden h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 sm:inline-flex dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
-                      title="WhatsApp is not connected"
+                      title={disconnectedCopy.description}
                     >
-                      Not connected
+                      {disconnectedCopy.disconnected ? 'Disconnected' : 'Not connected'}
                     </span>
                   ) : null}
                 </div>

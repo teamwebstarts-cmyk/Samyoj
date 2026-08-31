@@ -1,3 +1,5 @@
+import { explainWhatsAppSendFailure, parseWhatsAppMetaCode } from './whatsappSendFailure';
+
 /** Plain-language labels for messaging consent (avoids opt-in/opt-out jargon). */
 export const messagingConsent = {
   badgeYes: 'Subscribed',
@@ -38,13 +40,17 @@ export const messagingConsent = {
   templateStopPlaceholder: 'Reply STOP to stop messages',
 } as const;
 
-const technicalRecipientError = /(#?\d{3,}|api|provider|whatsapp|meta|graph|token|oauth|http|status|request|response|invalid parameter|error code|business account|rate limit|permission|template)/i;
-
 export function formatRecipientError(message?: string | null): string {
-  const fallback = 'This recipient could not be sent. Review the recipient details or try again later.';
-  const cleaned = message?.trim();
-  if (!cleaned || technicalRecipientError.test(cleaned)) return fallback;
-  return cleaned;
+  const jsonCode = message?.match(/"code"\s*:\s*(\d{2,6})/);
+  const explained = explainWhatsAppSendFailure({
+    code: jsonCode?.[1] ?? parseWhatsAppMetaCode(message),
+    rawMessage: message,
+  });
+  if (!message?.trim()) {
+    return 'This recipient could not be sent. Review the recipient details or try again later.';
+  }
+  if (explained.title === 'Message not delivered') return explained.body;
+  return `${explained.title}. ${explained.body}`;
 }
 
 export const conversationStatusLabel: Record<string, string> = {

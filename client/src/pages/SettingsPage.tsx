@@ -134,7 +134,7 @@ function resolveLegacyTab(raw: string | null): SettingsTab | null {
 export default function SettingsPage() {
   const { orgRole, organization } = useAuth();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
-  const { numbers, activeNumber, refreshNumbers, loading: numbersLoading, resolved: numbersResolved } = useWhatsAppNumber();
+  const { numbers, disconnectedNumbers, activeNumber, refreshNumbers, loading: numbersLoading, resolved: numbersResolved } = useWhatsAppNumber();
   const [searchParams, setSearchParams] = useSearchParams();
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -356,6 +356,7 @@ export default function SettingsPage() {
                       )}
                       <WhatsAppChannelsPanel
                         numbers={numbers}
+                        disconnectedNumbers={disconnectedNumbers}
                         activeNumberId={activeNumber?.id ?? null}
                         numberLimit={entitlementNumberLimit}
                         planName={entitlementPlanName}

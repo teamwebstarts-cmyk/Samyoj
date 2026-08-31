@@ -205,6 +205,9 @@ describe('campaign safety boundaries', () => {
       .toBe('PACING_OR_RATE_LIMIT');
     expect(classifyProviderError(Object.assign(new Error('bad request'), { statusCode: 400 })).classification)
       .toBe('UNKNOWN');
+    expect(classifyProviderError(Object.assign(new Error('Business Account locked'), {
+      metaCode: 131031,
+    })).classification).toBe('PERMANENT_REJECTION');
   });
 
   it('separates durable setup failures from retryable provider outages', () => {

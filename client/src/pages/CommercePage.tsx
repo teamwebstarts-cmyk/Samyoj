@@ -20,6 +20,7 @@ import { useSocket } from '../hooks/useSocket';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
 import { readNumberCache, writeNumberCache } from '../utils/whatsappNumberCache';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 
 const COMMERCE_CACHE_KEY = 'commerce';
@@ -34,7 +35,7 @@ type CommerceNumberCache = {
 };
 
 export default function CommercePage() {
-  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const [orders, setOrders] = useState<CommerceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -216,17 +217,24 @@ export default function CommercePage() {
   }
 
   if (!hasConnectedNumber) {
+    const copy = whatsappNotConnectedCopy(disconnectedNumbers, {
+      task: 'track catalog purchases from WhatsApp',
+    });
     return (
       <PageShell>
         <div className="p-4 sm:p-6">
           <EmptyState
             icon={Settings2}
-            title="Connect WhatsApp first"
-            description="Orders appear here after customers buy from your WhatsApp catalog."
-            steps={['Open Settings', 'Connect your WhatsApp number', 'Come back here to track orders']}
+            title={copy.title}
+            description={copy.description}
+            steps={
+              copy.disconnected
+                ? ['Open Settings', 'Reconnect this WhatsApp number', 'Come back here to track orders']
+                : ['Open Settings', 'Connect your WhatsApp number', 'Come back here to track orders']
+            }
             action={
-              <Link to="/settings">
-                <AppButton icon={<Settings2 size={16} />}>Go to Settings</AppButton>
+              <Link to="/settings?tab=whatsapp">
+                <AppButton icon={<Settings2 size={16} />}>{copy.cta}</AppButton>
               </Link>
             }
           />

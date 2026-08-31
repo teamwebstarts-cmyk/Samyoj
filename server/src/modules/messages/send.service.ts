@@ -297,8 +297,9 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
           messageRow.conversation?.cs24hWindowOpensAt
         );
         if (!isWithin24HourWindow(windowOpensAt)) {
-          const errorMessage =
-            'Customer service window closed. Free-form messages cannot be sent. Use a template.';
+          const { whatsappSendFailurePatches } = await import('../whatsapp/send-failure-explain');
+          const cswFailure = whatsappSendFailurePatches({ code: META_CSW_ERROR_CODE });
+          const errorMessage = cswFailure.explained.body;
           log.warn('Skipped free-form send — customer service window closed', {
             organizationId: input.organizationId,
             conversationId: messageRow.conversationId,
@@ -312,8 +313,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
               status: 'FAILED',
               metadata: {
                 ...((messageRow.metadata as Record<string, unknown>) || {}),
-                error: errorMessage,
-                metaCode: META_CSW_ERROR_CODE,
+                ...cswFailure.metadataPatch,
                 skippedCsw: true,
               },
             },
@@ -321,8 +321,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
           emitToOrg(input.organizationId, 'message:status', {
             messageId: input.messageId,
             status: 'FAILED',
-            error: errorMessage,
-            metaCode: META_CSW_ERROR_CODE,
+            ...cswFailure.socketPatch,
             conversationId: messageRow.conversationId,
           });
           throw new AppError(400, errorMessage, CSW_CLOSED_CODE);
@@ -567,6 +566,8 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     }
 
     const { message: errorMessage, metaCode, metaSubcode, fbtraceId } = extractMetaErrorFields(error);
+    const { whatsappSendFailurePatches } = await import('../whatsapp/send-failure-explain');
+    const failure = whatsappSendFailurePatches({ code: metaCode, rawMessage: errorMessage });
     // Merge the error into existing metadata so send params (mediaPath,
     // templateName, interactive, …) survive for POST /inbox/messages/:id/retry.
     const existing = await prisma.message.findUnique({
@@ -607,11 +608,10 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
         ...(nextStatus === 'FAILED' ? { providerCallStartedAt: null } : {}),
         metadata: {
           ...((existing?.metadata as Record<string, unknown>) || {}),
-          error: errorMessage,
+          ...failure.metadataPatch,
           ...(nextStatus === 'AMBIGUOUS'
             ? { providerOutcomeUnknown: true }
             : {}),
-          ...(metaCode !== undefined ? { metaCode } : {}),
           ...(metaSubcode !== undefined ? { metaSubcode } : {}),
           ...(fbtraceId ? { fbtraceId } : {}),
         },
@@ -621,8 +621,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     emitToOrg(input.organizationId, 'message:status', {
       messageId: input.messageId,
       status: nextStatus,
-      error: errorMessage,
-      metaCode,
+      ...failure.socketPatch,
       fbtraceId,
       conversationId: message.conversationId,
     });
@@ -632,7 +631,19 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     }
 
     throw metaCode === META_CSW_ERROR_CODE
-      ? new AppError(400, errorMessage, CSW_CLOSED_CODE)
-      : new AppError(502, errorMessage);
+      ? new AppError(400, failure.explained.body, CSW_CLOSED_CODE, {
+          metaCode,
+          title: failure.explained.title,
+        })
+      : new AppError(
+          502,
+          failure.explained.body,
+          metaCode != null ? `META_${metaCode}` : 'WHATSAPP_SEND_FAILED',
+          {
+            metaCode,
+            title: failure.explained.title,
+            retryHelps: failure.explained.retryHelps,
+          }
+        );
   }
 }

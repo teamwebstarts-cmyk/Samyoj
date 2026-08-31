@@ -41,6 +41,7 @@ export function emitChatNotice(conversationId: string, payload: ChatNoticePayloa
       icon: fallbackIcon,
       actionLabel: payload.actionLabel,
       onAction: payload.onAction,
+      duration: payload.kind === 'send-error' ? 8000 : undefined,
     });
     return;
   }

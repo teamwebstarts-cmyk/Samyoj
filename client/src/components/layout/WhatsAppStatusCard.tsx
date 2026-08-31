@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
+import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 import { tipProps } from './SidebarFlyoutTip';
 
 interface WhatsAppStatusCardProps {
@@ -28,8 +29,9 @@ export default function WhatsAppStatusCard({
   onShowTip,
   onHideTip,
 }: WhatsAppStatusCardProps) {
-  const { activeNumber, hasConnectedNumber, loading } = useWhatsAppNumber();
+  const { activeNumber, hasConnectedNumber, disconnectedNumbers, loading } = useWhatsAppNumber();
   const href = '/settings?tab=whatsapp';
+  const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers);
 
   if (loading) {
     return (
@@ -54,7 +56,9 @@ export default function WhatsAppStatusCard({
       ? activeNumber
         ? `${formatPhoneDisplay(activeNumber.phoneNumber)} · Connected`
         : 'WhatsApp connected'
-      : 'Connect WhatsApp';
+      : disconnectedCopy.disconnected
+        ? `${disconnectedCopy.phone} · Disconnected`
+        : 'Connect WhatsApp';
     const flyout =
       onShowTip && onHideTip ? tipProps(true, tipText, onShowTip, onHideTip) : {};
 
@@ -123,17 +127,19 @@ export default function WhatsAppStatusCard({
         <WhatsAppGlyph className="h-5 w-5" />
       </div>
       <p className="mt-2.5 text-[13px] font-bold tracking-tight text-theme-fg">
-        Need help getting started?
+        {disconnectedCopy.disconnected ? disconnectedCopy.title : 'Need help getting started?'}
       </p>
       <p className="mt-1 text-[11.5px] font-medium leading-snug text-theme-secondary">
-        Connect WhatsApp and automate in minutes.
+        {disconnectedCopy.disconnected
+          ? disconnectedCopy.description
+          : 'Connect WhatsApp and automate in minutes.'}
       </p>
       <Link
         to={href}
         onClick={onNavigate}
         className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#1fa855] to-[#128C7E] text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(18,140,126,0.28)] transition duration-200 hover:brightness-105"
       >
-        Get Started
+        {disconnectedCopy.cta}
         <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
       </Link>
     </div>

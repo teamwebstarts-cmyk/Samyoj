@@ -6,6 +6,10 @@
       "env": {
         "SARVAM_API_KEY": "sk_9abwlg04_hGtdFvIgJlrV0NEwhyv3lxJ2"
       }
+    },
+    "Meta Developer Tools": {
+      "url": "https://mcp.facebook.com/devtools",
+      "type": "http"
     }
   }
 }

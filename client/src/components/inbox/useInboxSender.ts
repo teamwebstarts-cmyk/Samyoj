@@ -6,6 +6,10 @@ import { MEDIA_LIMITS, MEDIA_LIMIT_LABELS } from './mediaLimits';
 import { emitChatNotice } from './chatNoticeBus';
 import type { PendingAttachment } from './ChatComposer';
 import type { Conversation, Message, SendMessagePayload, ServiceWindowInfo, TemplateParams } from '../../types';
+import {
+  explainWhatsAppSendFailure,
+  parseWhatsAppMetaCode,
+} from '../../utils/whatsappSendFailure';
 
 export { MEDIA_LIMITS, MEDIA_LIMIT_LABELS, VOICE_MAX_SECONDS } from './mediaLimits';
 
@@ -151,11 +155,6 @@ export function useInboxSender({
         // No global success toast — the outbound bubble / status is enough.
         return true;
       } catch (err: unknown) {
-        if (optimisticId) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m))
-          );
-        }
         const ax = err as {
           response?: {
             status?: number;
@@ -163,8 +162,8 @@ export function useInboxSender({
             data?: {
               error?: {
                 message?: string;
-                code?: number;
-                details?: string;
+                code?: number | string;
+                details?: string | { metaCode?: number };
               };
               meta?: { code?: number };
             };
@@ -172,11 +171,39 @@ export function useInboxSender({
           message?: string;
         };
         const apiErr = ax?.response?.data?.error;
-        const metaCode = apiErr?.code ?? ax?.response?.data?.meta?.code ?? undefined;
+        const detailsMetaCode =
+          apiErr?.details && typeof apiErr.details === 'object' ? apiErr.details.metaCode : undefined;
+        const metaCode = parseWhatsAppMetaCode(
+          apiErr?.code ?? detailsMetaCode ?? ax?.response?.data?.meta?.code
+        );
         const msgText =
           apiErr?.message || ax?.response?.statusText || ax?.message || 'Failed to send';
-        const haystack = `${msgText} ${apiErr?.details || ''} ${ax?.response?.statusText || ''}`.toLowerCase();
+        const explained = explainWhatsAppSendFailure({ code: metaCode, rawMessage: msgText });
+        if (optimisticId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === optimisticId
+                ? {
+                    ...m,
+                    status: 'FAILED',
+                    metadata: {
+                      ...m.metadata,
+                      error: explained.body,
+                      metaCode: explained.code,
+                      metaErrorCode: explained.code,
+                      metaErrorTitle: explained.title,
+                      metaErrorHint: explained.body,
+                      retryHelps: explained.retryHelps,
+                    },
+                  }
+                : m
+            )
+          );
+        }
+        const detailsText = typeof apiErr?.details === 'string' ? apiErr.details : '';
+        const haystack = `${msgText} ${detailsText} ${ax?.response?.statusText || ''}`.toLowerCase();
         const isWindowClosed =
+          explained.action === 'window' ||
           metaCode === 131047 ||
           /131047/.test(haystack) ||
           (ax?.response?.status === 400 &&
@@ -187,9 +214,9 @@ export function useInboxSender({
               /re-engagement/.test(haystack)));
         if (isWindowClosed) {
           onWindowClosed?.();
-          noticeSendError(selected.id, '24h window closed — switch to a template');
+          noticeSendError(selected.id, explained.notice);
         } else {
-          noticeSendError(selected.id, msgText);
+          noticeSendError(selected.id, explained.notice);
         }
         return false;
       } finally {

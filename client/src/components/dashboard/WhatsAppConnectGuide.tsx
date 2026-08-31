@@ -17,6 +17,8 @@ import { formatPhoneDisplay } from '../../utils/formatPhone';
 import type { BillingUsage } from '../../types';
 import WhatsAppGlyph from './icons/WhatsAppGlyph';
 import IconWell from './icons/IconWell';
+import { parseWhatsappNumbersPayload } from '../../utils/whatsappWorkspace';
+import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 
 interface WhatsappNumberRow {
   id: string;
@@ -25,14 +27,6 @@ interface WhatsappNumberRow {
 }
 
 type QualityTone = 'GREEN' | 'YELLOW' | 'RED' | null;
-
-function parseNumbers(data: unknown): WhatsappNumberRow[] {
-  if (Array.isArray(data)) return data as WhatsappNumberRow[];
-  if (data && typeof data === 'object' && Array.isArray((data as { numbers?: unknown }).numbers)) {
-    return (data as { numbers: WhatsappNumberRow[] }).numbers;
-  }
-  return [];
-}
 
 function normalizeQuality(rating: string | null): QualityTone {
   const r = (rating || '').toUpperCase();
@@ -76,7 +70,7 @@ interface WhatsAppConnectGuideProps {
 }
 
 export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnectGuideProps = {}) {
-  const { activeNumber, refreshNumbers } = useWhatsAppNumber();
+  const { activeNumber, refreshNumbers, disconnectedNumbers } = useWhatsAppNumber();
   const [number, setNumber] = useState<WhatsappNumberRow | null>(null);
   const [qualityRating, setQualityRating] = useState<string | null>(null);
   const [webhookSubscribed, setWebhookSubscribed] = useState<boolean | null>(null);
@@ -111,7 +105,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
       billingApi.usage().then((r) => ({ ok: true as const, r })).catch(() => ({ ok: false as const })),
     ])
       .then(([numbersRes, usageResult]) => {
-        const numbers = parseNumbers(numbersRes.data?.data);
+        const numbers = parseWhatsappNumbersPayload(numbersRes.data?.data).numbers;
         const preferred =
           (preferredId && numbers.find((n) => n.id === preferredId)) ||
           numbers.find((n) => n.isActive) ||
@@ -448,6 +442,8 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     );
   }
 
+  const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers);
+
   return (
     <section aria-label="WhatsApp connection">
       <div className="dashboard-card rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)]">
@@ -458,10 +454,14 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
             </IconWell>
             <div>
               <h2 className="text-[14px] font-bold text-neutral-900 sm:text-[15px]">
-                Connect WhatsApp to go live
+                {disconnectedCopy.disconnected
+                  ? disconnectedCopy.title
+                  : 'Connect WhatsApp to go live'}
               </h2>
               <p className="mt-0.5 text-[12.5px] text-neutral-600 sm:text-[13px]">
-                Sign in with Facebook and choose your business number — takes about a minute.
+                {disconnectedCopy.disconnected
+                  ? disconnectedCopy.description
+                  : 'Sign in with Facebook and choose your business number — takes about a minute.'}
               </p>
             </div>
           </div>
@@ -472,7 +472,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
             disabled={connecting}
             loading={connecting}
           >
-            Connect WhatsApp
+            {disconnectedCopy.cta}
           </AppButton>
         </div>
       </div>

@@ -10,6 +10,7 @@ import { formatPhoneDisplay } from '../../utils/phone';
 
 interface WhatsAppChannelsPanelProps {
   numbers: WhatsappNumberOption[];
+  disconnectedNumbers?: WhatsappNumberOption[];
   activeNumberId: string | null;
   numberLimit: number | 'unlimited' | null;
   planName: string | null;
@@ -46,6 +47,7 @@ function showKeepAliveReminder(number: WhatsappNumberOption): boolean {
 
 export default function WhatsAppChannelsPanel({
   numbers,
+  disconnectedNumbers = [],
   activeNumberId,
   numberLimit,
   planName,
@@ -186,7 +188,43 @@ export default function WhatsAppChannelsPanel({
             );
           })}
         </div>
-      ) : (
+      ) : null}
+      {disconnectedNumbers.length > 0 ? (
+        <div className={`${numbers.length > 0 ? 'mt-2.5' : ''} space-y-2.5`}>
+          {disconnectedNumbers.map((number) => (
+            <div
+              key={number.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3.5 py-3 ring-1 ring-amber-100/80 dark:border-amber-900/40 dark:bg-amber-950/25 dark:ring-amber-900/30"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300">
+                  <Smartphone className="h-[18px] w-[18px]" strokeWidth={2.25} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-[14px] text-theme-fg">
+                    {formatPhoneDisplay(number.phoneNumber)}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    Disconnected — reconnect to send and receive
+                  </p>
+                </div>
+              </div>
+              <AppButton
+                size="sm"
+                icon={<Plus className="h-3.5 w-3.5" />}
+                onClick={onConnect}
+                loading={connecting}
+                disabled={connecting || !canEdit || !canConnect}
+                className="shrink-0"
+              >
+                Reconnect
+              </AppButton>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {numbers.length === 0 && disconnectedNumbers.length === 0 ? (
         <div className="rounded-xl border border-dashed border-whatsapp-500/30 bg-gradient-to-b from-whatsapp-500/[0.05] to-transparent px-4 py-8 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white">
             <Smartphone className="h-5 w-5" strokeWidth={2.25} />
@@ -211,7 +249,7 @@ export default function WhatsAppChannelsPanel({
             </AppButton>
           </div>
         </div>
-      )}
+      ) : null}
     </SettingsPanel>
     </div>
   );

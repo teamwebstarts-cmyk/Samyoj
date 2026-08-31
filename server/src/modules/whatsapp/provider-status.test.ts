@@ -8,6 +8,7 @@ import {
   unmatchedStatusEventAt,
 } from './provider-status';
 import { recordWebhookStatusMetaError } from '../platform/meta-errors';
+import { emitToOrg } from '../../realtime';
 
 vi.mock('../../config/database', () => ({
   default: {
@@ -174,5 +175,51 @@ describe('handleOutboundStatusWebhook', () => {
       statusValue: 'FAILED',
       status,
     });
+  });
+
+  it('emits a user-facing lock explanation when Graph fails a template with 131031', async () => {
+    messageMock.findFirst.mockResolvedValue({
+      id: 'msg-lock',
+      status: 'SENT',
+      metadata: { templateName: 'order_update' },
+      conversationId: 'conv-1',
+    } as never);
+    messageMock.updateMany.mockResolvedValue({ count: 1 } as never);
+
+    await handleOutboundStatusWebhook({
+      organizationId: 'org-1',
+      whatsappNumberId: 'wa-1',
+      phoneNumberId: 'phone-1',
+      metaMessageId: 'wamid.lock',
+      statusValue: 'FAILED',
+      statusTimestamp: new Date('2026-08-31T07:12:00.000Z'),
+      status: {
+        errors: [{ code: 131031, title: 'Business Account locked' }],
+      },
+    });
+
+    expect(messageMock.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          metadata: expect.objectContaining({
+            metaErrorCode: 131031,
+            retryHelps: false,
+            metaErrorTitle: expect.stringMatching(/locked/i),
+          }),
+        }),
+      })
+    );
+    expect(emitToOrg).toHaveBeenCalledWith(
+      'org-1',
+      'message:status',
+      expect.objectContaining({
+        messageId: 'msg-lock',
+        status: 'FAILED',
+        metaCode: 131031,
+        retryHelps: false,
+        errorTitle: expect.stringMatching(/locked/i),
+      })
+    );
   });
 });

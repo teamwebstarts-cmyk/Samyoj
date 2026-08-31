@@ -4,6 +4,7 @@ import AppButton from '../ui/AppButton';
 import EmptyStateHeroImage from '../ui/EmptyStateHeroImage';
 import InboxEmptyIcon from '../inbox/InboxEmptyIcon';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 
 const CALL_FEATURES = [
   {
@@ -34,8 +35,11 @@ interface CallsListEmptyProps {
 
 /** Left-pane empty — same structure as InboxListEmpty. */
 export function CallsListEmpty({ filtered }: CallsListEmptyProps) {
-  const { hasConnectedNumber, loading } = useWhatsAppNumber();
+  const { hasConnectedNumber, loading, disconnectedNumbers } = useWhatsAppNumber();
   const whatsappConnected = hasConnectedNumber;
+  const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers, {
+    task: 'receive and place customer calls',
+  });
 
   if (filtered) {
     return (
@@ -52,11 +56,13 @@ export function CallsListEmpty({ filtered }: CallsListEmptyProps) {
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
       <InboxEmptyIcon icon={Phone} size="md" />
-      <h3 className="mt-5 text-[15px] font-bold tracking-tight text-theme-fg">No calls yet</h3>
+      <h3 className="mt-5 text-[15px] font-bold tracking-tight text-theme-fg">
+        {whatsappConnected ? 'No calls yet' : disconnectedCopy.title}
+      </h3>
       <p className="mt-2 max-w-[260px] text-[13px] leading-relaxed text-theme-secondary">
         {whatsappConnected
           ? 'Answer incoming rings, or call a customer from Inbox when they allow it.'
-          : 'Connect WhatsApp to start receiving and placing customer calls.'}
+          : disconnectedCopy.description}
       </p>
 
       {!loading && (
@@ -64,7 +70,7 @@ export function CallsListEmpty({ filtered }: CallsListEmptyProps) {
           {!whatsappConnected ? (
             <Link to="/settings?tab=whatsapp">
               <AppButton fullWidth size="sm">
-                Connect WhatsApp
+                {disconnectedCopy.cta}
               </AppButton>
             </Link>
           ) : (

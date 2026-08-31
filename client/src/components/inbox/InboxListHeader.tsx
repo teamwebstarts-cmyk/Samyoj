@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { AlertTriangle, MoreHorizontal, Plus, RefreshCw, User, X } from 'lucide-react';
 import SearchInput from '../ui/SearchInput';
 import { useGlassTipProps } from './ComposerGlassTip';
@@ -9,6 +10,7 @@ import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import type { InboundHealth } from '../../hooks/useWebhookHealth';
 import type { InboxSelectOption } from './InboxSelect';
 import { getAvatarGradient, getInitials } from './inboxUtils';
+import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 
 const AGENT_MENU_WIDTH = 240;
 const AGENT_MENU_GAP = 8;
@@ -137,9 +139,12 @@ export default function InboxListHeader({
   const agentsMenuBtnRef = useRef<HTMLButtonElement>(null);
   const agentsMenuRef = useRef<HTMLDivElement>(null);
   const chipRowRef = useHorizontalWheelScroll();
-  const { hasConnectedNumber, loading: numberLoading } = useWhatsAppNumber();
+  const { hasConnectedNumber, loading: numberLoading, disconnectedNumbers } = useWhatsAppNumber();
 
   const isConnected = hasConnectedNumber && !numberLoading;
+  const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers, {
+    task: 'open chats and receive replies',
+  });
   const selectableAgents = agentOptions.filter((option) => option.value !== '');
   const visibleAgents = selectableAgents.slice(0, AGENT_VISIBLE_COUNT);
   const hiddenActiveFilter =
@@ -192,7 +197,28 @@ export default function InboxListHeader({
 
   return (
     <div className="shrink-0 border-b border-neutral-100 px-3 pb-2 pt-2 dark:border-neutral-800/80 md:pt-3">
-      {inboundHealth?.state === 'unhealthy' && (
+      {!numberLoading && !hasConnectedNumber && (
+        <div
+          role="status"
+          data-testid="whatsapp-disconnected-banner"
+          className="mb-2 flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/95 px-2.5 py-1.5 text-amber-950 md:mb-3 md:items-start md:gap-2.5 md:rounded-xl md:px-3 md:py-2.5 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 md:mt-0.5 md:h-4 md:w-4 dark:text-amber-400" />
+          <div className="min-w-0 flex-1 text-[11.5px] leading-snug md:text-[12px]">
+            <p className="font-bold">{disconnectedCopy.title}</p>
+            <p className="mt-0.5 hidden text-amber-900/85 md:block dark:text-amber-200/85">
+              {disconnectedCopy.description}
+            </p>
+          </div>
+          <Link
+            to="/settings?tab=whatsapp"
+            className={`shrink-0 rounded-md border border-amber-300/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 md:text-[10.5px] dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-900/40 ${FOCUS_RING_CLASS}`}
+          >
+            {disconnectedCopy.cta}
+          </Link>
+        </div>
+      )}
+      {inboundHealth?.state === 'unhealthy' && isConnected && (
         <div
           role="alert"
           data-testid="inbound-health-banner"
@@ -200,20 +226,14 @@ export default function InboxListHeader({
         >
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 md:mt-0.5 md:h-4 md:w-4 dark:text-red-400" />
           <div className="min-w-0 flex-1 text-[11.5px] leading-snug md:text-[12px]">
-            <p className="font-bold">
-              {isConnected ? 'Inbound not arriving' : 'WhatsApp is not connected'}
-            </p>
+            <p className="font-bold">Inbound not arriving</p>
             <p className="mt-0.5 hidden text-red-800/85 md:block dark:text-red-200/85">
-              {isConnected
-                ? inboundHealth?.reason
-                : 'Connect a WhatsApp number to start receiving messages.'}
+              {inboundHealth?.reason}
             </p>
-            {isConnected && (
-              <p className="mt-1 hidden text-[11px] font-medium text-red-700/85 md:block dark:text-red-300/80">
-                Outbound still works on localhost; the public tunnel or Meta webhook subscription is
-                the usual cause.
-              </p>
-            )}
+            <p className="mt-1 hidden text-[11px] font-medium text-red-700/85 md:block dark:text-red-300/80">
+              Outbound still works on localhost; the public tunnel or Meta webhook subscription is
+              the usual cause.
+            </p>
           </div>
           <button
             type="button"

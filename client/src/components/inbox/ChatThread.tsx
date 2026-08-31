@@ -42,6 +42,7 @@ import type {
 } from '../../types';
 
 const EPHEMERAL_MS = 2200;
+const SEND_ERROR_NOTICE_MS = 8000;
 const NOTICE_EXIT_MS = 150;
 
 interface ChatThreadProps {
@@ -263,7 +264,7 @@ export default function ChatThread({
         setEphemeral((prev) => prev.filter((n) => n.id !== id));
         ephemeralTimers.current.delete(id);
       }, NOTICE_EXIT_MS);
-    }, EPHEMERAL_MS);
+    }, payload.kind === 'send-error' ? SEND_ERROR_NOTICE_MS : EPHEMERAL_MS);
     ephemeralTimers.current.set(id, leaveTimer);
   }, []);
 
@@ -509,7 +510,7 @@ export default function ChatThread({
         const isFailed = outbound.status === 'FAILED';
         setAnnounceText(
           isFailed
-            ? 'Your message failed to send.'
+            ? 'Your message was not delivered. Open the chat to see why.'
             : 'Your message was sent.'
         );
       }

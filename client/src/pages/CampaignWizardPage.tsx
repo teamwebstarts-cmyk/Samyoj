@@ -31,6 +31,7 @@ import {
 import { WizardPageSkeleton } from '../components/ui/ListLayoutSkeleton';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
@@ -67,7 +68,7 @@ export default function CampaignWizardPage() {
   const [searchParams] = useSearchParams();
   const { canManageTeam } = useAuth();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
-  const { activeNumber, resolved, hasConnectedNumber, loading: numbersLoading } = useWhatsAppNumber();
+  const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const isEdit = Boolean(id);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -606,16 +607,17 @@ export default function CampaignWizardPage() {
   }
 
   if (!hasConnectedNumber) {
+    const copy = whatsappNotConnectedCopy(disconnectedNumbers, {
+      task: 'send a campaign',
+    });
     return (
       <div className="campaign-wizard-page">
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <div className="campaign-wizard-card mx-auto max-w-lg p-6 text-center">
-            <p className="text-[15px] font-bold text-slate-900 dark:text-white">Connect WhatsApp first</p>
-            <p className="mt-2 text-[13px] text-slate-600">
-              You need to link your WhatsApp Business number before sending a campaign.
-            </p>
-            <AppButton className="mt-4" onClick={() => navigate('/settings')}>
-              Go to Settings
+            <p className="text-[15px] font-bold text-slate-900 dark:text-white">{copy.title}</p>
+            <p className="mt-2 text-[13px] text-slate-600">{copy.description}</p>
+            <AppButton className="mt-4" onClick={() => navigate('/settings?tab=whatsapp')}>
+              {copy.cta}
             </AppButton>
           </div>
         </div>

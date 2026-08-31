@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   afterWhatsappNumbersFetch,
   isCurrentNumberRequest,
+  parseWhatsappNumbersPayload,
   resolveActiveNumber,
   retainActiveNumberId,
   shouldRevalidateNumberCache,
@@ -48,5 +49,19 @@ describe('WhatsApp workspace restoration', () => {
       workspaceResolved: true,
       numberScopeResolved: true,
     });
+  });
+
+  it('parses active vs disconnected numbers from the object envelope', () => {
+    expect(
+      parseWhatsappNumbersPayload({
+        numbers: [number('db-1', 'meta-phone-1')],
+        disconnected: [{ ...number('db-old', 'meta-phone-old'), isActive: false }],
+      }).disconnected[0]?.id
+    ).toBe('db-old');
+  });
+
+  it('ignores inactive rows when restoring the workspace', () => {
+    const inactive = { ...number('db-off', 'meta-phone-1'), isActive: false };
+    expect(resolveActiveNumber([inactive], 'meta-phone-1')).toBeNull();
   });
 });
