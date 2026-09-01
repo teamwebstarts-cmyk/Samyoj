@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle, Loader2, Smartphone } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
@@ -7,6 +7,11 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappApi, type WhatsappPhoneOption, type WhatsappConnectResult } from '../services/api';
 import { clearAuthBackup, restoreAuthBackupIfNeeded } from '../utils/authStorage';
 import { logError, normalizeError } from '../utils/errors';
+import {
+  defaultPhoneSelectionKey,
+  isWhatsAppOAuthCodeConsumed,
+  phoneOptionKey,
+} from '../utils/whatsappConnectSelect';
 import { completeOAuthPopupFlow, isOAuthPopupContext } from '../utils/whatsappOAuth';
 
 type PageStatus = 'loading' | 'select' | 'connecting' | 'success' | 'error';
@@ -15,6 +20,7 @@ const CODE_KEY = 'wa_oauth_code';
 const STATE_KEY = 'wa_oauth_state';
 const PHONES_KEY = 'wa_oauth_phones';
 const PENDING_KEY = 'wa_oauth_pending';
+const SELECTED_KEY = 'wa_oauth_selected';
 
 /** Share one in-flight exchange across React Strict Mode double-mount. */
 const inflightExchanges = new Map<string, Promise<WhatsappConnectResult>>();
@@ -31,14 +37,32 @@ function readStashedOAuthParams() {
   };
 }
 
-function readStashedPhoneSelection(): { phones: WhatsappPhoneOption[]; pendingToken: string } | null {
+function persistPhoneSelection(
+  phones: WhatsappPhoneOption[],
+  pendingToken: string,
+  selectedKey: string
+) {
+  sessionStorage.setItem(PHONES_KEY, JSON.stringify(phones));
+  sessionStorage.setItem(PENDING_KEY, pendingToken);
+  if (selectedKey) sessionStorage.setItem(SELECTED_KEY, selectedKey);
+}
+
+function readStashedPhoneSelection(): {
+  phones: WhatsappPhoneOption[];
+  pendingToken: string;
+  selectedKey: string;
+} | null {
   const pendingToken = sessionStorage.getItem(PENDING_KEY);
   const rawPhones = sessionStorage.getItem(PHONES_KEY);
   if (!pendingToken || !rawPhones) return null;
   try {
     const phones = JSON.parse(rawPhones) as WhatsappPhoneOption[];
     if (!Array.isArray(phones) || phones.length === 0) return null;
-    return { phones, pendingToken };
+    return {
+      phones,
+      pendingToken,
+      selectedKey: sessionStorage.getItem(SELECTED_KEY) || '',
+    };
   } catch {
     return null;
   }
@@ -49,6 +73,7 @@ function clearStashedOAuthParams() {
   sessionStorage.removeItem(STATE_KEY);
   sessionStorage.removeItem(PHONES_KEY);
   sessionStorage.removeItem(PENDING_KEY);
+  sessionStorage.removeItem(SELECTED_KEY);
 }
 
 function finishOAuthFlow(payload: {
@@ -75,7 +100,6 @@ function exchangeCodeOnce(code: string, state: string): Promise<WhatsappConnectR
     .completeConnect(code, state)
     .then(({ data }) => data.data)
     .finally(() => {
-      // Keep briefly so a remount within the same tick can still attach.
       window.setTimeout(() => inflightExchanges.delete(code), 5_000);
     });
 
@@ -83,36 +107,63 @@ function exchangeCodeOnce(code: string, state: string): Promise<WhatsappConnectR
   return promise;
 }
 
-function isCodeAlreadyUsed(message: string) {
-  return /authorization code has been used|already completed/i.test(message);
-}
-
 export default function WhatsappCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { refreshNumbers } = useWhatsAppNumber();
+  const { numbers, refreshNumbers } = useWhatsAppNumber();
   const [status, setStatus] = useState<PageStatus>('loading');
   const [message, setMessage] = useState('Connecting your WhatsApp number...');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phones, setPhones] = useState<WhatsappPhoneOption[]>([]);
   const [pendingToken, setPendingToken] = useState('');
   const [selectedKey, setSelectedKey] = useState('');
+  const userPickedRef = useRef(false);
+  const statusRef = useRef<PageStatus>(status);
+  statusRef.current = status;
+
+  const codeFromUrl = searchParams.get('code');
+  const stateFromUrl = searchParams.get('state');
+  const oauthError = searchParams.get('error');
+  const errorDescription = searchParams.get('error_description');
+  const connectedPhoneNumberIds = numbers.map((number) => number.phoneNumberId);
+
+  const applySelection = (
+    nextPhones: WhatsappPhoneOption[],
+    nextPending: string,
+    preferredKey: string
+  ) => {
+    const valid =
+      preferredKey && nextPhones.some((phone) => phoneOptionKey(phone) === preferredKey)
+        ? preferredKey
+        : defaultPhoneSelectionKey(nextPhones, connectedPhoneNumberIds);
+    setPhones(nextPhones);
+    setPendingToken(nextPending);
+    setSelectedKey(valid);
+    persistPhoneSelection(nextPhones, nextPending, valid);
+    setStatus('select');
+    setMessage('Choose which WhatsApp number to connect.');
+  };
+
+  useEffect(() => {
+    if (status !== 'select' || userPickedRef.current || phones.length === 0) return;
+    const next = defaultPhoneSelectionKey(phones, connectedPhoneNumberIds);
+    if (next && next !== selectedKey) {
+      setSelectedKey(next);
+      persistPhoneSelection(phones, pendingToken, next);
+    }
+    // Only shift the default when workspace numbers first arrive — not on every radio click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- connected ids are the trigger
+  }, [connectedPhoneNumberIds.join('|')]);
 
   useEffect(() => {
     restoreAuthBackupIfNeeded();
-
-    const codeFromUrl = searchParams.get('code');
-    const stateFromUrl = searchParams.get('state');
-    const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
-
     stashOAuthParams(codeFromUrl, stateFromUrl);
 
-    if (error) {
+    if (oauthError) {
       clearStashedOAuthParams();
       clearAuthBackup();
-      const msg = errorDescription || error || 'Sign-in was cancelled.';
+      const msg = errorDescription || oauthError || 'Sign-in was cancelled.';
       logError(msg, {
         source: 'auth',
         action: 'WhatsApp OAuth cancelled/rejected by Meta',
@@ -137,21 +188,26 @@ export default function WhatsappCallbackPage() {
       return;
     }
 
+    const phase = statusRef.current;
+    if (phase === 'connecting' || phase === 'success') {
+      return;
+    }
+
+    const stashedSelection = readStashedPhoneSelection();
+    if (stashedSelection) {
+      if (phase !== 'select') {
+        applySelection(
+          stashedSelection.phones,
+          stashedSelection.pendingToken,
+          stashedSelection.selectedKey
+        );
+      }
+      return;
+    }
+
     const stashed = readStashedOAuthParams();
     const code = codeFromUrl || stashed.code;
     const state = stateFromUrl || stashed.state;
-    const stashedSelection = readStashedPhoneSelection();
-
-    if (stashedSelection) {
-      setPhones(stashedSelection.phones);
-      setPendingToken(stashedSelection.pendingToken);
-      setSelectedKey(
-        `${stashedSelection.phones[0].wabaId}:${stashedSelection.phones[0].phoneNumberId}`
-      );
-      setStatus('select');
-      setMessage('Choose which WhatsApp number to connect.');
-      return;
-    }
 
     if (!code || !state) {
       const msg = 'WhatsApp connection was cancelled. Your dashboard session is still active.';
@@ -175,8 +231,6 @@ export default function WhatsappCallbackPage() {
     exchangeCodeOnce(code, state)
       .then((result) => {
         if (!alive) return;
-        clearStashedOAuthParams();
-        clearAuthBackup();
 
         console.info('[wa-oauth] Exchange succeeded', {
           requiresSelection: Boolean(result.requiresSelection),
@@ -184,14 +238,18 @@ export default function WhatsappCallbackPage() {
         });
 
         if (result.requiresSelection && result.phones?.length && result.pendingToken) {
-          setPhones(result.phones);
-          setPendingToken(result.pendingToken);
-          setSelectedKey(`${result.phones[0].wabaId}:${result.phones[0].phoneNumberId}`);
-          setStatus('select');
-          setMessage('Choose which WhatsApp number to connect.');
+          sessionStorage.removeItem(CODE_KEY);
+          sessionStorage.removeItem(STATE_KEY);
+          applySelection(
+            result.phones,
+            result.pendingToken,
+            defaultPhoneSelectionKey(result.phones, connectedPhoneNumberIds)
+          );
           return;
         }
 
+        clearStashedOAuthParams();
+        clearAuthBackup();
         setPhoneNumber(result.phoneNumber || '');
         setStatus('success');
         setMessage('WhatsApp connected successfully!');
@@ -217,21 +275,19 @@ export default function WhatsappCallbackPage() {
           component: 'WhatsappCallbackPage',
         });
         const msg = normalized.message || 'Failed to complete WhatsApp connection.';
+        const pending = readStashedPhoneSelection();
 
-        // First mount may have already connected; treat duplicate code as success.
-        if (isCodeAlreadyUsed(msg)) {
-          console.info('[wa-oauth] Code already used — treating as success if connected');
-          clearStashedOAuthParams();
-          clearAuthBackup();
-          void refreshNumbers();
-          setStatus('success');
-          setMessage('WhatsApp connected successfully!');
-          if (finishOAuthFlow({ status: 'success', message: 'WhatsApp connected successfully!' })) {
-            setStatus('success');
-            setMessage('WhatsApp connected! You can close this window.');
-            return;
-          }
-          window.setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 1500);
+        if (isWhatsAppOAuthCodeConsumed(msg) && pending) {
+          applySelection(pending.phones, pending.pendingToken, pending.selectedKey);
+          return;
+        }
+
+        if (isWhatsAppOAuthCodeConsumed(msg)) {
+          const reuseMsg =
+            'This Facebook login was already used. Close this window and click Connect WhatsApp again, then pick the number you want.';
+          setStatus('error');
+          setMessage(reuseMsg);
+          if (finishOAuthFlow({ status: 'error', message: reuseMsg })) return;
           return;
         }
 
@@ -247,10 +303,19 @@ export default function WhatsappCallbackPage() {
     return () => {
       alive = false;
     };
-  }, [searchParams, navigate, user, authLoading, refreshNumbers]);
+  }, [
+    authLoading,
+    user?.id,
+    navigate,
+    refreshNumbers,
+    codeFromUrl,
+    stateFromUrl,
+    oauthError,
+    errorDescription,
+  ]);
 
   const handleSelectConnect = async () => {
-    const selected = phones.find((p) => `${p.wabaId}:${p.phoneNumberId}` === selectedKey);
+    const selected = phones.find((p) => phoneOptionKey(p) === selectedKey);
     if (!selected || !pendingToken) return;
 
     setStatus('connecting');
@@ -287,15 +352,12 @@ export default function WhatsappCallbackPage() {
         component: 'WhatsappCallbackPage',
       });
       const msg = normalizeError(err).message || 'Failed to connect selected number.';
-      if (finishOAuthFlow({ status: 'error', message: normalized.message || msg })) {
-        setStatus('error');
-        setMessage(normalized.message || msg);
-        return;
-      }
-      setStatus('error');
+      setStatus('select');
       setMessage(normalized.message || msg);
     }
   };
+
+  const connectedIdSet = new Set(connectedPhoneNumberIds);
 
   return (
     <div className="platform-gradient flex min-h-screen items-center justify-center p-4">
@@ -317,8 +379,9 @@ export default function WhatsappCallbackPage() {
             <p className="mt-2 text-[13px] font-medium text-neutral-600">{message}</p>
             <div className="mt-5 space-y-2 text-left">
               {phones.map((phone) => {
-                const key = `${phone.wabaId}:${phone.phoneNumberId}`;
+                const key = phoneOptionKey(phone);
                 const isSelected = selectedKey === key;
+                const alreadyHere = connectedIdSet.has(phone.phoneNumberId);
                 return (
                   <label
                     key={key}
@@ -333,7 +396,11 @@ export default function WhatsappCallbackPage() {
                       name="whatsapp-phone"
                       value={key}
                       checked={isSelected}
-                      onChange={() => setSelectedKey(key)}
+                      onChange={() => {
+                        userPickedRef.current = true;
+                        setSelectedKey(key);
+                        persistPhoneSelection(phones, pendingToken, key);
+                      }}
                       className="h-4 w-4 accent-whatsapp-600"
                     />
                     <div className="min-w-0 flex-1">
@@ -341,6 +408,11 @@ export default function WhatsappCallbackPage() {
                       {phone.verifiedName && (
                         <p className="truncate text-[12px] font-semibold text-neutral-600">
                           {phone.verifiedName}
+                        </p>
+                      )}
+                      {alreadyHere && (
+                        <p className="mt-0.5 text-[11px] font-semibold text-neutral-500">
+                          Already on this workspace
                         </p>
                       )}
                     </div>
