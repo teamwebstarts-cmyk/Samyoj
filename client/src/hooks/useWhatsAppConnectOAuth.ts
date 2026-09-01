@@ -59,6 +59,20 @@ export function useWhatsAppConnectOAuth(options?: {
   );
 
   useEffect(() => {
+    if (!connecting) return;
+    const tick = () => {
+      void refreshNumbers({ silent: true });
+    };
+    const interval = window.setInterval(tick, 2000);
+    const onFocus = () => tick();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [connecting, refreshNumbers]);
+
+  useEffect(() => {
     if (!prefetch) return;
     let cancelled = false;
     void (async () => {

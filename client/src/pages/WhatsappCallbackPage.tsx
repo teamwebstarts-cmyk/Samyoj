@@ -262,10 +262,11 @@ export default function WhatsappCallbackPage() {
           })
         ) {
           setStatus('success');
-          setMessage('WhatsApp connected! You can close this window.');
+          setMessage('WhatsApp connected. This window should close — if not, close it to return to Samyoj.');
           return;
         }
-        window.setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 1500);
+        setStatus('success');
+        setMessage('WhatsApp connected. Close this window to return to Samyoj.');
       })
       .catch((err: unknown) => {
         if (!alive) return;
@@ -341,10 +342,11 @@ export default function WhatsappCallbackPage() {
         })
       ) {
         setStatus('success');
-        setMessage('WhatsApp connected! You can close this window.');
+        setMessage('WhatsApp connected. This window should close — if not, close it to return to Samyoj.');
         return;
       }
-      setTimeout(() => navigate('/settings?tab=whatsapp', { replace: true }), 2500);
+      setStatus('success');
+      setMessage('WhatsApp connected. Close this window to return to Samyoj.');
     } catch (err: unknown) {
       const normalized = logError(err, {
         source: 'auth',

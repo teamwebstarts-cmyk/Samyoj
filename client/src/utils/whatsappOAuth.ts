@@ -7,7 +7,6 @@ export const WA_OAUTH_CALLBACK_PATH = '/settings/whatsapp/callback';
 export const WA_OAUTH_POPUP_CALLBACK_PATH = '/settings/whatsapp/callback/popup';
 const WA_OAUTH_POPUP_MARKER_KEY = 'samyoj_wa_oauth_popup_marker';
 const WA_OAUTH_RESULT_KEY = 'samyoj_wa_oauth_result';
-const WA_OAUTH_POPUP_MARKER_MAX_AGE_MS = 15 * 60 * 1000;
 
 export type WaOAuthMessage = {
   type: typeof WA_OAUTH_MESSAGE;
@@ -18,11 +17,17 @@ export type WaOAuthMessage = {
 
 export type WaOAuthResultHandler = (message: WaOAuthMessage) => void;
 
+/** Dedicated popup callback — treat as popup even if Facebook cleared window.name / opener. */
+export function isWhatsAppPopupCallbackPath(pathname: string): boolean {
+  return pathname === WA_OAUTH_POPUP_CALLBACK_PATH || pathname === WA_OAUTH_CALLBACK_PATH;
+}
+
 /** True when this window was opened as the Meta OAuth popup (opener may be null after Facebook redirect). */
 export function isOAuthPopupWindow(): boolean {
+  if (typeof window === 'undefined') return false;
   return (
     window.name === WA_OAUTH_POPUP_NAME ||
-    (window.location.pathname === WA_OAUTH_POPUP_CALLBACK_PATH && hasPopupMarker())
+    isWhatsAppPopupCallbackPath(window.location.pathname)
   );
 }
 
@@ -48,16 +53,6 @@ function clearPopupMarker() {
     localStorage.removeItem(WA_OAUTH_POPUP_MARKER_KEY);
   } catch {
     // Ignore storage failures.
-  }
-}
-
-function hasPopupMarker(): boolean {
-  try {
-    const raw = localStorage.getItem(WA_OAUTH_POPUP_MARKER_KEY);
-    const startedAt = raw ? Number(raw) : NaN;
-    return Number.isFinite(startedAt) && Date.now() - startedAt <= WA_OAUTH_POPUP_MARKER_MAX_AGE_MS;
-  } catch {
-    return false;
   }
 }
 
@@ -179,7 +174,18 @@ export function completeOAuthPopupFlow(payload: Omit<WaOAuthMessage, 'type'>): b
   if (!isOAuthPopupContext()) return false;
   publishWaOAuthResult(payload);
   clearPopupMarker();
-  window.close();
+  try {
+    window.close();
+  } catch {
+    // Brave / popup policy may block close; parent still got the result.
+  }
+  window.setTimeout(() => {
+    try {
+      window.close();
+    } catch {
+      // ignore
+    }
+  }, 250);
   return true;
 }
 

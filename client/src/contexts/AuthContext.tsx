@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
 import { authApi, teamApi } from '../services/api';
 import type { AgentAvailability, User, Organization, OrgRole } from '../types';
 import {
@@ -66,9 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [availability, setAvailabilityState] = useState<AgentAvailability | null>(null);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef(user);
+  userRef.current = user;
 
   const heartbeat = useCallback(() => {
-    if (!user) return;
+    if (!userRef.current) return;
     teamApi.heartbeat().then(({ data }) => {
       setAvailabilityState(data.data.availability);
     }).catch((err) => {
@@ -76,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // keep session; transient heartbeat failures must not log the user out
       }
     });
-  }, [user]);
+  }, []);
 
   const hydrateFromMe = useCallback(async () => {
     const { data } = await authApi.me();
@@ -115,7 +117,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         await hydrateFromMe();
-        heartbeat();
       } catch (err) {
         if (isRequestAborted(err)) {
           setLoading(false);
@@ -130,14 +131,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     void boot();
-  }, [heartbeat, hydrateFromMe]);
+  }, [hydrateFromMe]);
 
   useEffect(() => {
     if (!user) return;
     heartbeat();
     const interval = setInterval(heartbeat, 60_000);
     return () => clearInterval(interval);
-  }, [user, heartbeat]);
+  }, [user?.id, heartbeat]);
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
