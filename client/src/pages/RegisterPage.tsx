@@ -177,6 +177,27 @@ export default function RegisterPage() {
           </AuthButton>
         </div>
 
+        <p className="pt-1.5 text-center text-[11px] leading-relaxed text-slate-400">
+          By creating an account, you agree to our{' '}
+          <a
+            href="/terms.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-slate-600 underline hover:text-slate-800"
+          >
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a
+            href="/privacy.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-slate-600 underline hover:text-slate-800"
+          >
+            Privacy Policy
+          </a>.
+        </p>
+
         <p className="pt-1 text-center text-[13px] font-medium text-slate-500">
           Already have an account?{' '}
           <Link

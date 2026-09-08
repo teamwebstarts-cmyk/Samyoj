@@ -1,48 +1,384 @@
-# Terms of Service
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service | Samyoj - WhatsApp Automation Platform</title>
+  <meta name="description" content="Terms of Service for Samyoj WhatsApp Automation Platform. Terms governing use of our SaaS software, WhatsApp Business Cloud API integration, and billing.">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" type="image/png" href="/brand/samyoj-mark.png">
+  <style>
+    :root {
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --fg: #0F172A;
+      --muted: #475569;
+      --border: #E2E8F0;
+      --primary: #0A8954;
+      --primary-hover: #087A4A;
+      --primary-subtle: #EBFDF5;
+      --badge-border: #BBF7D0;
+      --shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--fg);
+      line-height: 1.7;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+    .header-inner {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--fg);
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0A8954 0%, #055C3A 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      color: var(--primary);
+    }
+    .nav-links .btn {
+      padding: 7px 14px;
+      background: var(--primary);
+      color: #FFFFFF !important;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: background 0.15s ease;
+    }
+    .nav-links .btn:hover {
+      background: var(--primary-hover);
+    }
+    .container {
+      max-width: 920px;
+      margin: 40px auto 80px;
+      padding: 0 24px;
+    }
+    .hero {
+      margin-bottom: 32px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--primary-subtle);
+      color: var(--primary);
+      border: 1px solid var(--badge-border);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #0F172A;
+      margin-bottom: 12px;
+    }
+    .meta-date {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .content-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 44px;
+      box-shadow: var(--shadow);
+    }
+    .callout-box {
+      background: #F0FDF4;
+      border: 1px solid #BBF7D0;
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 24px 0 32px;
+      font-size: 14px;
+      color: #166534;
+      line-height: 1.6;
+    }
+    .callout-box strong {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 700;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0F172A;
+      letter-spacing: -0.02em;
+      margin-top: 36px;
+      margin-bottom: 14px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    h2:first-of-type {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1E293B;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    p {
+      margin-bottom: 14px;
+      color: #334155;
+    }
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 16px;
+      color: #334155;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    strong {
+      color: #0F172A;
+    }
+    a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    a:hover {
+      color: var(--primary-hover);
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      background: #FFFFFF;
+      padding: 32px 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 12px;
+      list-style: none;
+    }
+    .footer-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .footer-links a:hover {
+      color: var(--primary);
+    }
+    @media (max-width: 640px) {
+      .content-card {
+        padding: 24px 20px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      .nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
 
-**Last updated:** June 2026
+  <header>
+    <div class="header-inner">
+      <a href="/" class="brand">
+        <div class="brand-mark">S</div>
+        <span>Samyoj</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="/privacy.html">Privacy Policy</a></li>
+        <li><a href="/terms.html" class="active">Terms of Service</a></li>
+        <li><a href="/data-deletion.html">Data Deletion</a></li>
+        <li><a href="/login" class="btn">Sign In</a></li>
+      </ul>
+    </div>
+  </header>
 
-## 1. Acceptance
+  <main class="container">
+    <div class="hero">
+      <div class="badge">Legal Agreement · B2B SaaS Terms</div>
+      <h1>Terms of Service</h1>
+      <p class="meta-date"><strong>Effective Date:</strong> September 1, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> September 8, 2026</p>
+    </div>
 
-By using Palermo WhatsApp Platform ("Service"), you agree to these Terms of Service.
+    <div class="content-card">
+      <p>
+        These Terms of Service ("Terms", "Agreement") constitute a legally binding agreement between <strong>Samyoj Technologies</strong> ("Samyoj", "we", "us", or "our") and the customer ("Customer", "User", "you", or "your") accessing or using our website, services, and software platform accessible at <strong>https://app.samyoj.com</strong> (the "Service").
+      </p>
 
-## 2. Service Description
+      <div class="callout-box">
+        <strong>Important Summary for WhatsApp Business API Users</strong>
+        Samyoj provides software tools enabling your organization to manage WhatsApp messaging using the official <strong>Meta WhatsApp Business Cloud API</strong>. You remain responsible for obtaining explicit opt-in consent from your customers and complying with Meta's messaging policies. Meta Cloud API delivery fees are billed directly to your Meta Business Account.
+      </div>
 
-Palermo provides a WhatsApp Business automation platform including messaging, automations, campaigns, AI chatbot, and team inbox features powered by the Meta WhatsApp Cloud API.
+      <h2>1. Acceptance of Terms</h2>
+      <p>
+        By creating an account, connecting a WhatsApp Business Account, or accessing the Service, you represent that you are authorized to bind your organization and agree to abide by these Terms, our <a href="/privacy.html">Privacy Policy</a>, and all applicable laws and Meta platform guidelines. If you do not agree, you must not access or use the Service.
+      </p>
 
-## 3. Account Responsibilities
+      <h2>2. Description of the Service</h2>
+      <p>
+        Samyoj is a B2B cloud-based communication and automation SaaS platform. Our features include:
+      </p>
+      <ul>
+        <li><strong>WhatsApp Cloud API Integration:</strong> Direct connection to the official Meta WhatsApp Business Platform via Embedded Signup and authorized OAuth flows.</li>
+        <li><strong>Shared Team Inbox:</strong> Multi-agent real-time chat interface with agent assignment, unread tracking, and conversation status management.</li>
+        <li><strong>Broadcast Campaigns:</strong> Automated batch sending of pre-approved Meta message templates to opted-in audiences with queue management.</li>
+        <li><strong>Workflow Automations:</strong> Keyword auto-responders, welcome greetings, business hours management, and AI-assisted conversational workflows.</li>
+        <li><strong>Contact Management:</strong> Contact segmentation, tagging, import/export, and verifiable consent audit trails.</li>
+      </ul>
 
-- You must provide accurate registration information
-- You are responsible for maintaining the security of your account credentials
-- You must comply with Meta's WhatsApp Business Policy and Commerce Policy
-- You must obtain proper opt-in consent before messaging customers
+      <h2>3. Meta WhatsApp Platform Compliance & Policies</h2>
+      <p>
+        As a condition of connecting your WhatsApp Business Account (WABA) to Samyoj, you explicitly agree to strictly adhere to:
+      </p>
+      <ul>
+        <li>The <a href="https://www.whatsapp.com/legal/business-terms/" target="_blank" rel="noopener">WhatsApp Business Terms of Service</a></li>
+        <li>The <a href="https://www.whatsapp.com/legal/business-policy/" target="_blank" rel="noopener">WhatsApp Business Policy</a></li>
+        <li>The <a href="https://www.facebook.com/policies/commerce" target="_blank" rel="noopener">Meta Commerce Policy</a></li>
+      </ul>
 
-## 4. Acceptable Use
+      <h3>Mandatory Messaging Rules:</h3>
+      <ul>
+        <li><strong>Explicit Opt-in Consent:</strong> You must obtain clear, verifiable opt-in consent from end recipients prior to initiating outbound marketing or transactional messages.</li>
+        <li><strong>Opt-Out Mechanism:</strong> You must honor customer requests to stop receiving messages (e.g. replies of "STOP", "UNSUBSCRIBE", or opt-out clicks) immediately.</li>
+        <li><strong>Prohibited Content:</strong> You may not use Samyoj to send unsolicited spam, illegal goods, adult content, fraudulent schemes, unauthorized pharmaceuticals, alcohol, tobacco, or weapons.</li>
+        <li><strong>Template Rules:</strong> You may only broadcast templates approved by Meta within their accurate category (Marketing, Utility, or Authentication).</li>
+      </ul>
 
-You may not use the Service to:
-- Send spam or unsolicited messages
-- Transmit illegal, harmful, or deceptive content
-- Violate WhatsApp's messaging limits or quality guidelines
-- Attempt to circumvent rate limits or billing controls
+      <h2>4. Partner Model & Billing Transparency (Tech Provider)</h2>
+      <p>
+        Samyoj operates under Meta's <strong>Tech Provider</strong> partner framework:
+      </p>
+      <ul>
+        <li><strong>Samyoj Software Fees:</strong> Samyoj charges a monthly or annual SaaS subscription fee for platform access, software seats, automations, and support. Subscription fees are billed in INR via Razorpay.</li>
+        <li><strong>Meta API Usage Fees:</strong> Meta bills conversation and template message delivery charges directly to your company's payment method attached to your WhatsApp Business Manager / WABA. Samyoj does not collect, markup, or resell Meta message delivery credits.</li>
+        <li><strong>Payment Method Requirement:</strong> You must maintain a valid payment card in your Meta Business Suite / WhatsApp Manager to ensure outbound template messages are delivered without restriction.</li>
+      </ul>
 
-## 5. Billing
+      <h2>5. Customer Account & Security</h2>
+      <p>
+        You are responsible for:
+      </p>
+      <ul>
+        <li>Maintaining the confidentiality of your account credentials and multi-factor authentication tokens.</li>
+        <li>All activities that occur under your workspace organization.</li>
+        <li>Promptly notifying Samyoj at <a href="mailto:support@samyoj.com">support@samyoj.com</a> if you suspect any unauthorized access or security incident.</li>
+      </ul>
 
-- Subscription fees are billed monthly in INR via Razorpay
-- WhatsApp messaging costs are charged separately per Meta's pricing
-- Refunds are handled on a case-by-case basis within 7 days of payment
+      <h2>6. Customer Data Ownership & Processing</h2>
+      <ul>
+        <li><strong>Ownership:</strong> You retain all intellectual property rights and full ownership of your customer lists, conversation records, and uploaded media ("Customer Data").</li>
+        <li><strong>License to Host:</strong> You grant Samyoj a limited, non-exclusive license to host, process, and transmit Customer Data solely to the extent necessary to deliver the Service and route messages through Meta's Cloud API.</li>
+        <li><strong>Data Protection:</strong> We process Customer Data in strict compliance with our <a href="/privacy.html">Privacy Policy</a> and applicable data protection regulations (including the India DPDP Act 2023).</li>
+      </ul>
 
-## 6. Data Processing
+      <h2>7. Platform Availability & Service Limitations</h2>
+      <ul>
+        <li><strong>Target Availability:</strong> We strive to maintain a 99.9% platform uptime for the Samyoj web application and webhook processing queues.</li>
+        <li><strong>Third-Party Dependencies:</strong> You acknowledge that message delivery relies on Meta's WhatsApp infrastructure, telecommunications carriers, and internet connectivity. Samyoj is not liable for message delays, Meta API downtime, template rejections, or account suspensions imposed by Meta due to Customer's policy violations.</li>
+      </ul>
 
-We process customer data as described in our Privacy Policy and Data Processing Agreement. You remain the data controller for your end-customer data.
+      <h2>8. Limitation of Liability</h2>
+      <p>
+        To the maximum extent permitted by law, in no event shall Samyoj, its directors, employees, or partners be liable for any indirect, incidental, consequential, special, or punitive damages (including loss of profits, business interruption, or loss of data) arising out of or in connection with the use of the Service.
+      </p>
+      <p>
+        Our total aggregate liability for all claims arising under this Agreement shall not exceed the total fees paid by you to Samyoj during the twelve (12) months preceding the incident.
+      </p>
 
-## 7. Limitation of Liability
+      <h2>9. Termination and Data Retrieval</h2>
+      <ul>
+        <li><strong>Termination by Customer:</strong> You may cancel your subscription at any time via the Settings billing panel.</li>
+        <li><strong>Termination by Samyoj:</strong> We reserve the right to suspend or terminate accounts that violate Meta's messaging policies, engage in fraudulent activity, or fail to pay subscription invoices.</li>
+        <li><strong>Post-Termination Data Retrieval:</strong> Following termination, you may request an export of your contacts and message logs within thirty (30) days. Thereafter, your workspace data will be permanently purged in accordance with our <a href="/data-deletion.html">Data Deletion Instructions</a>.</li>
+      </ul>
 
-The Service is provided "as is". We are not liable for Meta API outages, message delivery failures, or indirect damages.
+      <h2>10. Governing Law & Dispute Resolution</h2>
+      <p>
+        This Agreement shall be governed by and construed in accordance with the laws of India. Any legal dispute or claim arising out of these Terms shall be subject to the exclusive jurisdiction of the competent courts in Bengaluru, Karnataka, India.
+      </p>
 
-## 8. Termination
+      <h2>11. Contact Information</h2>
+      <p>
+        For inquiries or legal notices regarding these Terms of Service, please contact:
+      </p>
+      <ul>
+        <li><strong>Legal & Compliance:</strong> <a href="mailto:legal@samyoj.com">legal@samyoj.com</a></li>
+        <li><strong>Customer Support:</strong> <a href="mailto:support@samyoj.com">support@samyoj.com</a></li>
+        <li><strong>Company:</strong> Samyoj Technologies</li>
+        <li><strong>Website:</strong> <a href="https://app.samyoj.com">https://app.samyoj.com</a></li>
+      </ul>
+    </div>
+  </main>
 
-Either party may terminate with 30 days notice. Upon termination, you may export your data within 30 days.
+  <footer>
+    <ul class="footer-links">
+      <li><a href="/privacy.html">Privacy Policy</a></li>
+      <li><a href="/terms.html">Terms of Service</a></li>
+      <li><a href="/data-deletion.html">Data Deletion Instructions</a></li>
+      <li><a href="mailto:support@samyoj.com">Contact Support</a></li>
+    </ul>
+    <p>&copy; 2026 Samyoj Technologies. All rights reserved. Powered by Meta WhatsApp Business Cloud API.</p>
+  </footer>
 
-## 9. Contact
-
-For questions: legal@palermo.app
+</body>
+</html>

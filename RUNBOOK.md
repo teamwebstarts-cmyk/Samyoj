@@ -1,4 +1,4 @@
-# Palermo WhatsApp Platform — Production Runbook
+# Samyoj WhatsApp Platform — Production Runbook
 
 > **Correction (2026-08-15):** Workers are embedded in `whatsapp-api` via `startWorkers()`. Do not run PM2 `whatsapp-worker` or `npm run start:worker`. See `config/ecosystem.config.js` and `docs/deployment/DEPLOYMENT_GUIDE.md`.
 
@@ -26,8 +26,8 @@ cd server && npx prisma migrate deploy && npx prisma generate
 cd ../client && npm run build
 cd ../server && npm run build
 
-# 5. Restart services
-pm2 restart whatsapp-api whatsapp-worker
+# 5. Restart services (workers are embedded in the API)
+pm2 restart whatsapp-api
 ```
 
 ## Environment Variables (Production)
