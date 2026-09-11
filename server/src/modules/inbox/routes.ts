@@ -24,6 +24,11 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
 import {
+  findMessageByIdempotencyKey,
+  isIdempotencyConflict,
+  readIdempotencyKey,
+} from '../messages/outbound-idempotency';
+import {
   applyGlobalChatToConversation,
   getChatSettingsForNumber,
   NEW_CONVERSATION_CHAT_DEFAULTS,
@@ -1328,6 +1333,15 @@ router.post(
       throw new AppError(400, 'No WhatsApp number connected');
     }
 
+    const idempotencyKey = readIdempotencyKey(req);
+    if (idempotencyKey) {
+      const replay = await findMessageByIdempotencyKey(conversation.id, idempotencyKey);
+      if (replay) {
+        sendSuccess(res, replay, 200);
+        return;
+      }
+    }
+
     const windowOpensAt = await resolveCs24hWindowOpensAt(
       conversation.id,
       conversation.cs24hWindowOpensAt
@@ -1577,7 +1591,9 @@ router.post(
       };
     }
 
-    const message = await prisma.message.create({
+    let message;
+    try {
+      message = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         direction: 'OUTBOUND',
@@ -1591,8 +1607,19 @@ router.post(
         content: messageContent,
         status: 'PENDING',
         metadata: messageMetadata as Prisma.InputJsonValue,
+        idempotencyKey,
       },
     });
+    } catch (err) {
+      if (idempotencyKey && isIdempotencyConflict(err)) {
+        const replay = await findMessageByIdempotencyKey(conversation.id, idempotencyKey);
+        if (replay) {
+          sendSuccess(res, replay, 200);
+          return;
+        }
+      }
+      throw err;
+    }
 
     await prisma.conversation.update({
       where: { id: conversation.id },

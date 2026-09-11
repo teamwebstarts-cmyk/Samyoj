@@ -21,8 +21,12 @@ const EXEMPT_PREFIXES = [
   '/api/v1/',
 ];
 
-function isExemptPath(path: string): boolean {
-  return EXEMPT_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix));
+/** Path-boundary match so `/api/whatsapp/webhook-replay` is not CSRF-exempt. */
+export function isTenantCsrfExemptPath(path: string): boolean {
+  return EXEMPT_PREFIXES.some((prefix) => {
+    if (path === prefix) return true;
+    return path.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`);
+  });
 }
 
 /**
@@ -36,7 +40,7 @@ export function requireTenantCsrf(req: Request, _res: Response, next: NextFuncti
   }
 
   const path = req.path || '';
-  if (isExemptPath(path)) {
+  if (isTenantCsrfExemptPath(path)) {
     next();
     return;
   }

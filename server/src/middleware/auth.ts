@@ -74,6 +74,11 @@ export async function loadOrgRole(req: Request, _res: Response, next: NextFuncti
       return next(new AppError(403, 'Organization context required'));
     }
 
+    // API keys are org-bound integrations, not human OWNER/ADMIN members.
+    if (req.user.userId === 'api-key') {
+      return next(new AppError(403, 'Insufficient permissions'));
+    }
+
     const membership = await prisma.organizationUser.findUnique({
       where: {
         organizationId_userId: {
@@ -101,4 +106,15 @@ export function requireOrgRole(...roles: OrgRole[]) {
     }
     next();
   };
+}
+
+/** GET/HEAD stay member-readable. Mutations need a loaded OWNER/ADMIN role. */
+export function requireAdminOnMutation(req: Request, res: Response, next: NextFunction) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    return next();
+  }
+  void loadOrgRole(req, res, (err) => {
+    if (err) return next(err);
+    requireOrgRole('OWNER', 'ADMIN')(req, res, next);
+  });
 }

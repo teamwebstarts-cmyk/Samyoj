@@ -149,7 +149,7 @@ async function resolveMediaRef(options: {
     // Prefer uploading even from our own public URL so Meta caches the asset.
     if (options.mediaUrl.includes('/api/media/public/')) {
       try {
-        const relative = options.mediaUrl.split('/api/media/public/')[1];
+        const relative = options.mediaUrl.split('/api/media/public/')[1]?.split('?')[0];
         if (relative) {
           const { fetchMediaBuffer } = await import('../media/storage-adapter');
           let buffer = await fetchMediaBuffer(decodeURIComponent(relative));

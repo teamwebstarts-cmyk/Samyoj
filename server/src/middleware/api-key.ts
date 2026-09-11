@@ -27,6 +27,7 @@ export async function authenticateApiKey(req: Request, _res: Response, next: Nex
     data: { lastUsedAt: new Date() },
   });
 
+  // Integration principal only. loadOrgRole / OWNER|ADMIN routes reject this userId.
   req.user = {
     userId: 'api-key',
     email: 'api@integration',

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { GenerationJobKind, MediaAssetKind, MediaAssetStatus } from '@prisma/client';
+import { GenerationJobKind } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../../config/database';
 import { contentVideoQueue } from '../../../config/queues';
@@ -73,53 +73,15 @@ export async function processVideoGenerationJob(jobId: string, organizationId: s
   });
   if (!job || job.status !== 'QUEUED') return;
 
+  // ponytail: no provider; fail closed and skip recordUsage. Wire a real provider when one exists.
   await prisma.generationJob.update({
     where: { id: jobId },
-    data: { status: 'RUNNING', attempts: { increment: 1 } },
+    data: {
+      status: 'FAILED',
+      attempts: { increment: 1 },
+      errorMessage: 'Demo stub — video generation is not connected. Not billed.',
+    },
   });
-
-  try {
-    const params = (job.params as { aspectRatio?: string }) || {};
-    const placeholderPath = `content-studio/${organizationId}/video/${jobId}.mp4`;
-
-    const asset = await prisma.mediaAsset.create({
-      data: {
-        organizationId,
-        kind: MediaAssetKind.VIDEO,
-        status: MediaAssetStatus.DRAFT,
-        provider: job.provider || 'stub',
-        modelUsed: 'stub-v1',
-        prompt: job.prompt,
-        params: job.params ?? undefined,
-        storageDriver: 'local',
-        storagePath: placeholderPath,
-        mimeType: 'video/mp4',
-        sizeBytes: 0,
-        widthPx: params.aspectRatio === '16:9' ? 1920 : 1080,
-        heightPx: params.aspectRatio === '16:9' ? 1080 : 1920,
-        costCents: job.costCents,
-        createdById: job.triggeredBy?.replace('user:', ''),
-      },
-    });
-
-    await prisma.generationJob.update({
-      where: { id: jobId },
-      data: { status: 'SUCCEEDED', resultAssetId: asset.id, durationMs: 100 },
-    });
-
-    const { recordUsage } = await import('../shared/cost-guard');
-    const durationSeconds = Number((job.params as { durationSeconds?: number } | null)?.durationSeconds) || 1;
-    await recordUsage(organizationId, GenerationJobKind.VIDEO, durationSeconds);
-  } catch (err) {
-    await prisma.generationJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'FAILED',
-        errorMessage: err instanceof Error ? err.message : 'Video generation failed',
-      },
-    });
-    throw err;
-  }
 }
 
 export default router;

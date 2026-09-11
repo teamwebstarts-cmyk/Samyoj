@@ -4,6 +4,7 @@ import { authenticateJwtOrApiKey } from '../../middleware/authenticate-jwt-or-ap
 import { sendSuccess, asyncHandler } from '../../utils/response';
 import { phoneFieldSchema } from '../../utils/phone';
 import { sendDirectMessage } from './service';
+import { readIdempotencyKey } from './outbound-idempotency';
 import { z } from 'zod';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
@@ -30,6 +31,7 @@ router.post(
     const result = await sendDirectMessage(req.user!.organizationId!, {
       ...data,
       whatsappNumberId: req.activeWhatsappNumberId,
+      idempotencyKey: readIdempotencyKey(req),
     });
 
     sendSuccess(

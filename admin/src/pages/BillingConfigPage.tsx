@@ -420,7 +420,7 @@ export function BillingConfigPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-500">
-              Configuring live Razorpay recurring SKUs, prices, GST components, and UPI Autopay eligibility.
+              Catalog SKU prices and GST display components. Recurring Razorpay checkout is not live.
             </p>
             <Button size="sm" onClick={addSku}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add New SKU
@@ -526,7 +526,7 @@ export function BillingConfigPage() {
                       onChange={(e) => updateSku(index, 'upiAutopayAllowed', e.target.checked)}
                       className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
-                    UPI Autopay Allowed (Auto-checks ≤ ₹15,000 RBI cap)
+                    UPI Autopay eligible in catalog (not wired to checkout)
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700">
                     <input

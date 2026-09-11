@@ -15,6 +15,16 @@ describe('dedupeRecipients', () => {
     expect(result).toHaveLength(2);
     expect(result[0].name).toBe('A');
   });
+
+  it('collapses +91 and 91 variants of the same Indian mobile', () => {
+    const result = dedupeRecipients([
+      { phone: '+919876543210', name: 'A' },
+      { phone: '919876543210', name: 'B' },
+      { phone: '9876543210', name: 'C' },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('A');
+  });
 });
 
 describe('campaign consent', () => {

@@ -109,6 +109,7 @@ export interface PublicWebhookHealth {
   totalErrors: number;
   lastReceivedAt: string | null;
   queueDepth: number;
+  oldestWaitingMs: number | null;
   webhookConfigured: boolean;
   verifyTokenConfigured: boolean;
   appSecretConfigured: boolean;
@@ -117,6 +118,7 @@ export interface PublicWebhookHealth {
 /** Unauthenticated health JSON — never include the live tunnel URL or error text. */
 export function toPublicWebhookHealth(flags: {
   queueDepth: number;
+  oldestWaitingMs?: number | null;
   webhookConfigured: boolean;
   verifyTokenConfigured: boolean;
   appSecretConfigured: boolean;
@@ -129,6 +131,7 @@ export function toPublicWebhookHealth(flags: {
     totalErrors: webhookHealth.totalErrors,
     lastReceivedAt: webhookHealth.lastReceivedAt,
     queueDepth: flags.queueDepth,
+    oldestWaitingMs: flags.oldestWaitingMs ?? null,
     webhookConfigured: flags.webhookConfigured,
     verifyTokenConfigured: flags.verifyTokenConfigured,
     appSecretConfigured: flags.appSecretConfigured,

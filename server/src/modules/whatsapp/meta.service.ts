@@ -1,6 +1,6 @@
 import { config } from '../../config';
 import { AppError } from '../../errors';
-import { classifyMetaError, metaBackoffDelayMs } from '../../errors/meta';
+import { classifyMetaError, metaBackoffDelayMs, shouldRetryMetaSend } from '../../errors/meta';
 import { decrypt, encrypt } from '../../utils/crypto';
 import { createModuleLogger } from '../../utils/logger';
 import {
@@ -988,16 +988,34 @@ export class MetaWhatsAppService {
     });
 
     let lastError: MetaApiError | null = null;
+    const timeoutMs = 20_000;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const res = await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body,
-      });
+      let res: Awaited<ReturnType<typeof fetch>>;
+      try {
+        res = await fetch(`${META_BASE}/${phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (err) {
+        const aborted =
+          (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) ||
+          (err instanceof Error && /aborted|timeout/i.test(err.message));
+        lastError = new MetaApiError(
+          aborted
+            ? 'Send timed out after the request started'
+            : err instanceof Error
+              ? err.message
+              : 'Send message failed',
+          { status: 0 }
+        );
+        throw lastError;
+      }
 
       if (res.ok) {
         return res.json() as Promise<{ messages: { id: string }[] }>;
@@ -1035,7 +1053,15 @@ export class MetaWhatsAppService {
       const classified = classifyMetaError(
         metaCode !== undefined ? { error: { message, code: metaCode } } : {}
       );
-      if (!classified.retryable || attempt >= maxAttempts) {
+      if (
+        !shouldRetryMetaSend({
+          gotHttpResponse: true,
+          status: res.status,
+          retryable: classified.retryable,
+          backoff: classified.backoff,
+        }) ||
+        attempt >= maxAttempts
+      ) {
         throw lastError;
       }
 

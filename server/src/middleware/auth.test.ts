@@ -15,7 +15,7 @@ vi.mock('../utils/jwt', () => ({
 
 import prisma from '../config/database';
 import { verifyAccessToken } from '../utils/jwt';
-import { authenticate, loadOrgRole, requireOrgRole, hasActiveOrgMembership, requireOrg } from './auth';
+import { authenticate, loadOrgRole, requireOrgRole, hasActiveOrgMembership, requireOrg, requireAdminOnMutation } from './auth';
 import { AppError } from '../utils/response';
 
 const findUnique = vi.mocked(prisma.organizationUser.findUnique);
@@ -169,6 +169,15 @@ describe('loadOrgRole middleware', () => {
       where: { organizationId_userId: { organizationId: 'org-42', userId: 'u99' } },
     });
   });
+
+  it('api-key is not an org role', async () => {
+    const err = await invokeLoadOrgRole({
+      user: { userId: 'api-key', email: 'api@integration', organizationId: 'org-1' },
+    });
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect(findUnique).not.toHaveBeenCalled();
+  });
 });
 
 describe('requireOrgRole middleware', () => {
@@ -203,6 +212,54 @@ describe('requireOrgRole middleware', () => {
       orgRole: 'OWNER',
     });
     expect(err).toBeUndefined();
+  });
+});
+
+describe('requireAdminOnMutation', () => {
+  beforeEach(() => {
+    findUnique.mockReset();
+  });
+
+  function invoke(req: Partial<Request>) {
+    return new Promise<unknown>((resolve) => {
+      const next: NextFunction = (err?: unknown) => resolve(err);
+      requireAdminOnMutation(req as Request, mockRes(), next);
+    });
+  }
+
+  it('lets GET through without loading a role', async () => {
+    const err = await invoke({ method: 'GET', user: { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' } });
+    expect(err).toBeUndefined();
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects AGENT POST', async () => {
+    findUnique.mockResolvedValue({ id: 'mem-1', role: 'AGENT' } as never);
+    const err = await invoke({
+      method: 'POST',
+      user: { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' },
+    });
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('allows ADMIN POST', async () => {
+    findUnique.mockResolvedValue({ id: 'mem-1', role: 'ADMIN' } as never);
+    const err = await invoke({
+      method: 'POST',
+      user: { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' },
+    });
+    expect(err).toBeUndefined();
+  });
+
+  it('rejects api-key POST', async () => {
+    const err = await invoke({
+      method: 'POST',
+      user: { userId: 'api-key', email: 'api@integration', organizationId: 'org-1' },
+    });
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect(findUnique).not.toHaveBeenCalled();
   });
 });
 

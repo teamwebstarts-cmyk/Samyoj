@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { GenerationJobKind, MediaAssetKind, MediaAssetStatus } from '@prisma/client';
+import { GenerationJobKind } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../../config/database';
 import { contentQueue } from '../../../config/queues';
@@ -108,49 +108,15 @@ export async function processVoiceGenerationJob(jobId: string, organizationId: s
   });
   if (!job || job.status !== 'QUEUED') return;
 
+  // ponytail: no provider; fail closed and skip recordUsage. Wire a real provider when one exists.
   await prisma.generationJob.update({
     where: { id: jobId },
-    data: { status: 'RUNNING', attempts: { increment: 1 } },
+    data: {
+      status: 'FAILED',
+      attempts: { increment: 1 },
+      errorMessage: 'Demo stub — voice generation is not connected. Not billed.',
+    },
   });
-
-  try {
-    const placeholderPath = `content-studio/${organizationId}/voice/${jobId}.mp3`;
-
-    const asset = await prisma.mediaAsset.create({
-      data: {
-        organizationId,
-        kind: MediaAssetKind.AUDIO,
-        status: MediaAssetStatus.DRAFT,
-        provider: 'elevenlabs-stub',
-        modelUsed: 'stub-v1',
-        prompt: job.prompt,
-        params: job.params ?? undefined,
-        storageDriver: 'local',
-        storagePath: placeholderPath,
-        mimeType: 'audio/mpeg',
-        sizeBytes: 0,
-        costCents: job.costCents,
-        createdById: job.triggeredBy?.replace('user:', ''),
-      },
-    });
-
-    await prisma.generationJob.update({
-      where: { id: jobId },
-      data: { status: 'SUCCEEDED', resultAssetId: asset.id, durationMs: 50 },
-    });
-
-    const { recordUsage } = await import('../shared/cost-guard');
-    await recordUsage(organizationId, GenerationJobKind.VOICE, 1);
-  } catch (err) {
-    await prisma.generationJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'FAILED',
-        errorMessage: err instanceof Error ? err.message : 'Voice generation failed',
-      },
-    });
-    throw err;
-  }
 }
 
 export default router;

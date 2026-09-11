@@ -7,6 +7,7 @@ vi.mock('../../config', () => ({
       driver: 'local',
       s3PublicUrl: '',
     },
+    jwt: { secret: 'test-secret-for-media-signing-32chars' },
   },
 }));
 
@@ -50,7 +51,9 @@ describe('buildRelativePath', () => {
 describe('getPublicMediaUrl', () => {
   it('returns local URL when driver is local', () => {
     const url = getPublicMediaUrl('org-1/msg-2.jpg');
-    expect(url).toBe('http://localhost:8000/api/media/public/org-1/msg-2.jpg');
+    expect(url).toMatch(
+      /^http:\/\/localhost:8000\/api\/media\/public\/org-1\/msg-2\.jpg\?exp=\d+&sig=[a-f0-9]{64}$/i
+    );
   });
 
   it('returns S3 URL when driver is s3 and s3PublicUrl is set', () => {

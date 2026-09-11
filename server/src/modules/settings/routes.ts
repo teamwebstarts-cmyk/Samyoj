@@ -119,9 +119,7 @@ router.get(
 
 router.patch(
   '/business-hours',
-  authenticate,
-  requireOrg,
-  requireActiveCommercialOnMutation(),
+  ...adminGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const data = businessHoursSchema.parse(req.body);
     const orgId = req.user!.organizationId!;

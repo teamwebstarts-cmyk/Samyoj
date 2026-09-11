@@ -17,6 +17,10 @@ function stableValue(value: unknown): string {
     .join(',')}}`;
 }
 
+export function hashWebhookPayload(value: unknown): string {
+  return createHash('sha256').update(stableValue(value)).digest('hex');
+}
+
 export function providerWebhookEventKey(
   entryId: string | undefined,
   field: string,
@@ -24,7 +28,7 @@ export function providerWebhookEventKey(
 ): string {
   const explicit = value.event_id || value.eventId;
   if (typeof explicit === 'string' && explicit) return `${field}:${explicit}`;
-  return `${entryId || 'unknown'}:${field}:${createHash('sha256').update(stableValue(value)).digest('hex')}`;
+  return `${entryId || 'unknown'}:${field}:${hashWebhookPayload(value)}`;
 }
 
 export const PROVIDER_WEBHOOK_CLAIM_STALE_MS = 60_000;

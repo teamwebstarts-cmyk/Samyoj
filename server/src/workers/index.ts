@@ -136,9 +136,13 @@ const webhookWorker = new Worker(
     if (!payload) return;
     try {
       await processWebhookFields(payload);
-      await processWebhookPayload(payload, {
-        whatsappNumberId: job.data?.whatsappNumberId,
-      });
+      await processWebhookPayload(payload);
+      if (job.data?.organizationId && job.data?.eventKey) {
+        const { completeInboundWebhookEnvelope } = await import(
+          '../modules/whatsapp/webhook-accept'
+        );
+        await completeInboundWebhookEnvelope(job.data.organizationId, job.data.eventKey);
+      }
       trackWebhookProcessed();
     } catch (err) {
       // Count terminal worker failures once; transient BullMQ retry attempts

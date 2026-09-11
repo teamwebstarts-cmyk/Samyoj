@@ -172,7 +172,7 @@ export default function IntegrationsPanel({ showDeveloperTools = false }: Integr
     <div className="space-y-4">
       <SettingsPanel
         title="Data & export"
-        description="Download your contacts or a full workspace backup."
+        description="Download contacts or a JSON export of selected records. This is not a restorable server backup."
         icon={Download}
       >
         <div className="grid gap-3 sm:grid-cols-2">
@@ -193,9 +193,9 @@ export default function IntegrationsPanel({ showDeveloperTools = false }: Integr
           </div>
 
           <div className="rounded-xl border border-theme-border/80 bg-theme-subtle/25 p-3.5">
-            <p className="text-[13px] font-bold text-theme-fg">Full backup</p>
+            <p className="text-[13px] font-bold text-theme-fg">Workspace JSON export</p>
             <p className="mt-1 text-[11px] leading-relaxed text-theme-secondary">
-              Contacts, messages, and settings in one JSON file.
+              Partial JSON of contacts, messages, and settings — not a restorable server backup.
             </p>
             <AppButton
               className="mt-3"
@@ -205,7 +205,7 @@ export default function IntegrationsPanel({ showDeveloperTools = false }: Integr
               icon={<Copy className="h-4 w-4" />}
               onClick={() => void handleFullExport()}
             >
-              Download backup
+              Download JSON
             </AppButton>
           </div>
         </div>

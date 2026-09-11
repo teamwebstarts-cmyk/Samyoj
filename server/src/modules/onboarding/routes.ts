@@ -1,8 +1,15 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
-import { authenticate, requireOrg } from '../../middleware/auth';
-import { sendSuccess, asyncHandler } from '../../utils/response';
+import { authenticate, requireOrg, requireAdminOnMutation } from '../../middleware/auth';
+import { sendSuccess, asyncHandler, AppError } from '../../utils/response';
 import { getOrgReadiness } from './readiness';
+
+const ALLOWED_ONBOARDING_STEPS = new Set([
+  'connect_whatsapp',
+  'approve_template',
+  'send_test_message',
+  'import_contacts',
+]);
 
 const router = Router();
 
@@ -115,9 +122,13 @@ router.post(
   '/complete-step',
   authenticate,
   requireOrg,
+  requireAdminOnMutation,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const { stepId } = req.body as { stepId: string };
+    if (!stepId || !ALLOWED_ONBOARDING_STEPS.has(stepId)) {
+      throw new AppError(400, 'Unknown onboarding step');
+    }
 
     const org = await prisma.organization.findUnique({ where: { id: orgId } });
     const settings = (org?.settings as Record<string, unknown>) || {};

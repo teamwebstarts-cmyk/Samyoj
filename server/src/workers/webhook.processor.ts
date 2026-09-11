@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../config/database';
 import { MetaWhatsAppService } from '../modules/whatsapp/meta.service';
 import { handleInboundAutomations } from '../modules/automation/engine';
-import { parseInboundMessage } from '../modules/inbox/message-parser';
+import { parseInboundMessage, type ParsedInboundMessage } from '../modules/inbox/message-parser';
 import { downloadAndStoreMessageMedia } from '../modules/media/download.service';
 import { emitToOrg } from '../realtime';
 import { logError } from '../errors';
@@ -46,9 +46,298 @@ function mapInboundMessageType(
   return 'TEXT';
 }
 
+type InboundFollowupMessage = {
+  id: string;
+  conversationId: string;
+  direction: string;
+  type: string;
+  content: string | null;
+  createdAt: Date;
+  status: string;
+  metadata: Prisma.JsonValue | null;
+};
+
+async function applyInboundMessageFollowups(params: {
+  orgId: string;
+  whatsappNumber: { id: string; accessToken: string };
+  conversation: { id: string };
+  contact: { id: string };
+  message: InboundFollowupMessage;
+  parsed: ParsedInboundMessage;
+  inboundMetadata: Record<string, unknown> | undefined;
+  contactPhone: string;
+  inboundTimestamp: Date;
+  metaMessageId: string;
+  isNew: boolean;
+  msgType: string;
+  startMsgTime: number;
+}): Promise<void> {
+  const {
+    orgId,
+    whatsappNumber,
+    conversation,
+    contact,
+    parsed,
+    inboundMetadata,
+    contactPhone,
+    inboundTimestamp,
+    metaMessageId,
+    isNew,
+    msgType,
+    startMsgTime,
+  } = params;
+  let message = params.message;
+  const storedMeta = (message.metadata as Record<string, unknown> | null) || {};
+
+  if (parsed.metadata?.mediaId && !storedMeta.mediaPath) {
+    try {
+      const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
+      const stored = await downloadAndStoreMessageMedia({
+        organizationId: orgId,
+        messageId: message.id,
+        mediaId: parsed.metadata.mediaId,
+        mimeType: parsed.metadata.mimeType,
+        filename: parsed.metadata.filename,
+        accessToken,
+        isSticker: Boolean((inboundMetadata as { isSticker?: boolean } | null)?.isSticker),
+        isGif: Boolean((inboundMetadata as { isGif?: boolean } | null)?.isGif),
+      });
+      message = await prisma.message.update({
+        where: { id: message.id },
+        data: {
+          metadata: {
+            ...storedMeta,
+            ...(inboundMetadata || {}),
+            ...stored,
+          },
+        },
+      });
+    } catch (err) {
+      logError(err, {
+        source: 'webhook',
+        action: 'Inbound media download failed',
+        messageId: message.id,
+        organizationId: orgId,
+      });
+    }
+  }
+
+  const content = parsed.content;
+
+  log.info('Saved inbound message', {
+    messageId: message.id,
+    metaMessageId,
+    contactPhone,
+    organizationId: orgId,
+    conversationId: conversation.id,
+    messageType: mapInboundMessageType(msgType),
+    hasMedia: Boolean(parsed.metadata?.mediaId),
+    processingTimeMs: Date.now() - startMsgTime,
+  });
+
+  const conversationSummary = await prisma.conversation.findUnique({
+    where: { id: conversation.id },
+    select: { id: true, lastMessageAt: true, unreadCount: true },
+  });
+
+  emitToOrg(orgId, 'message:new', {
+    conversationId: conversation.id,
+    message,
+    contact,
+    conversation: conversationSummary
+      ? {
+          ...conversationSummary,
+          lastMessage: {
+            id: message.id,
+            direction: message.direction,
+            type: message.type,
+            content: message.content,
+            status: message.status,
+            createdAt: message.createdAt,
+          },
+        }
+      : undefined,
+  });
+
+  const { dispatchOrgWebhook } = await import('../modules/integrations/dispatch');
+
+  if (parsed.orderPayload && !storedMeta.orderId) {
+    try {
+      const { createOrderFromInbound } = await import('../modules/commerce/service');
+      const items = parsed.orderPayload.productItems.map((item) => ({
+        retailerId: item.product_retailer_id,
+        name: item.product_retailer_id,
+        quantity: item.quantity,
+        amountCents: Math.round((item.item_price || 0) * 100),
+      }));
+      const subtotalCents = items.reduce((sum, item) => sum + item.amountCents * item.quantity, 0);
+      const referenceId = `ord_${Date.now()}_${contact.id.slice(0, 8)}`;
+      const order = await createOrderFromInbound(orgId, {
+        contactId: contact.id,
+        conversationId: conversation.id,
+        whatsappNumberId: whatsappNumber.id,
+        catalogId: parsed.orderPayload.catalogId,
+        referenceId,
+        items,
+        amounts: {
+          subtotalCents,
+          taxCents: 0,
+          shippingCents: 0,
+          totalCents: subtotalCents,
+          currency: parsed.orderPayload.productItems[0]?.currency || 'INR',
+        },
+        metadata: { inboundMessageId: message.id },
+      });
+      await prisma.message.update({
+        where: { id: message.id },
+        data: {
+          metadata: {
+            ...((message.metadata as Record<string, unknown> | null) || {}),
+            orderId: order.id,
+          },
+        },
+      });
+    } catch (err) {
+      logError(err, {
+        source: 'webhook',
+        action: 'Catalog order creation failed',
+        messageId: message.id,
+        organizationId: orgId,
+      });
+    }
+  }
+
+  if (parsed.referral) {
+    try {
+      const existingConv = await prisma.conversation.findUnique({
+        where: { id: conversation.id },
+        select: { botState: true },
+      });
+      const priorState =
+        existingConv?.botState && typeof existingConv.botState === 'object'
+          ? (existingConv.botState as Record<string, unknown>)
+          : {};
+      if (!priorState.ctwaReferral) {
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            botState: {
+              ...priorState,
+              ctwaReferral: parsed.referral,
+              ctwaReceivedAt: new Date().toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+        });
+        void dispatchOrgWebhook(orgId, 'referral.received', {
+          conversationId: conversation.id,
+          contactPhone,
+          referral: parsed.referral,
+        });
+      }
+    } catch (err) {
+      logError(err, {
+        source: 'webhook',
+        action: 'CTWA referral handling failed',
+        messageId: message.id,
+        organizationId: orgId,
+      });
+    }
+  }
+
+  void dispatchOrgWebhook(orgId, 'message.received', {
+    conversationId: conversation.id,
+    messageId: message.id,
+    contactPhone,
+  });
+
+  const hasMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(msgType);
+
+  const textContent = (content || '').trim();
+  if (textContent && !hasMedia) {
+    const { isOptOutMessage, isOptInMessage, handleOptOut, handleOptIn } = await import(
+      '../modules/compliance/opt-out'
+    );
+    if (isOptOutMessage(textContent)) {
+      log.info('Opt-out detected in inbound message', {
+        messageId: message.id,
+        organizationId: orgId,
+        contactPhone,
+      });
+      await handleOptOut(orgId, contact.id, conversation.id, whatsappNumber.id, inboundTimestamp, metaMessageId);
+      return;
+    }
+    if (isOptInMessage(textContent)) {
+      await handleOptIn(orgId, contact.id, inboundTimestamp, metaMessageId, whatsappNumber.id);
+    }
+  }
+
+  try {
+    await handleInboundAutomations({
+      organizationId: orgId,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      messageId: message.id,
+      contactPhone,
+      whatsappNumberId: whatsappNumber.id,
+      content: content || '',
+      buttonReplyId: parsed.buttonReplyId,
+      isNewConversation: isNew,
+      messageType: msgType,
+      hasMedia,
+      waFlowResponse: parsed.waFlowResponse,
+    });
+  } catch (err) {
+    logError(err, {
+      source: 'webhook',
+      action: 'Automation processing failed; queued durable retry',
+      messageId: message.id,
+      organizationId: orgId,
+    });
+    const retryJobId = `inbound-automation-${message.id}`;
+    try {
+      const existingRetry = await flowQueue.getJob(retryJobId);
+      if (!existingRetry) {
+        await flowQueue.add(
+          'retry-inbound-message',
+          {
+            organizationId: orgId,
+            conversationId: conversation.id,
+            contactId: contact.id,
+            messageId: message.id,
+            whatsappNumberId: whatsappNumber.id,
+            isNewConversation: isNew,
+          },
+          {
+            jobId: retryJobId,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
+            removeOnComplete: 200,
+            removeOnFail: 500,
+          }
+        );
+      }
+    } catch (queueError) {
+      logError(queueError, {
+        source: 'webhook',
+        action: 'Could not queue automation retry',
+        messageId: message.id,
+        organizationId: orgId,
+      });
+    }
+  }
+
+  log.info('Inbound message processing complete', {
+    messageId: message.id,
+    metaMessageId,
+    conversationId: conversation.id,
+    isNewConversation: isNew,
+    totalTimeMs: Date.now() - startMsgTime,
+  });
+}
+
 export async function processWebhookPayload(
   payload: Record<string, unknown>,
-  context?: { whatsappNumberId?: string }
+  _context?: { whatsappNumberId?: string }
 ) {
   const startTime = Date.now();
 
@@ -67,7 +356,6 @@ export async function processWebhookPayload(
         where: {
           phoneNumberId,
           isActive: true,
-          ...(context?.whatsappNumberId ? { id: context.whatsappNumberId } : {}),
         },
       });
       if (!whatsappNumber) {
@@ -330,7 +618,8 @@ export async function processWebhookPayload(
           };
         }
 
-        let message;
+        let message: InboundFollowupMessage | null = null;
+        let duplicateInsert = false;
         try {
           message = await prisma.$transaction(async (tx) => {
             const created = await tx.message.create({
@@ -357,7 +646,7 @@ export async function processWebhookPayload(
         } catch (err) {
           // Meta may retry the same webhook; metaMessageId is unique.
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-            log.info('Duplicate inbound message skipped (Meta retry)', {
+            log.info('Duplicate inbound message — resuming incomplete side-effects', {
               metaMessageId,
               organizationId: orgId,
             });
@@ -366,272 +655,63 @@ export async function processWebhookPayload(
                 metaMessageId,
                 conversation: { organizationId: orgId, whatsappNumberId: whatsappNumber.id },
               },
-              select: { conversationId: true },
+              select: {
+                id: true,
+                conversationId: true,
+                direction: true,
+                type: true,
+                content: true,
+                createdAt: true,
+                status: true,
+                metadata: true,
+              },
             });
-            if (existing) {
-              const conversationState = await prisma.conversation.findUnique({
-                where: { id: existing.conversationId },
-                select: { lastMessageAt: true, firstResponseAt: true, slaDueAt: true },
+            if (!existing) continue;
+            duplicateInsert = true;
+            message = existing;
+            const conversationState = await prisma.conversation.findUnique({
+              where: { id: existing.conversationId },
+              select: { lastMessageAt: true, firstResponseAt: true, slaDueAt: true },
+            });
+            if (needsInboundConversationRepair(conversationState?.lastMessageAt, inboundTimestamp)) {
+              const repaired = await prisma.conversation.updateMany({
+                where: inboundConversationRepairWhere(existing.conversationId, inboundTimestamp),
+                data: inboundConversationSideEffectData(inboundTimestamp, conversationState ?? null),
               });
-              if (needsInboundConversationRepair(conversationState?.lastMessageAt, inboundTimestamp)) {
-                const repaired = await prisma.conversation.updateMany({
-                  where: inboundConversationRepairWhere(existing.conversationId, inboundTimestamp),
-                  data: inboundConversationSideEffectData(inboundTimestamp, conversationState ?? null),
-                });
-                if (repaired.count === 1) {
-                  log.info('Repaired inbound conversation side-effects after duplicate insert', {
-                    metaMessageId,
-                    conversationId: existing.conversationId,
-                    organizationId: orgId,
-                  });
-                }
-              }
-            }
-            continue;
-          }
-          throw err;
-        }
-        emitProductEvent({
-          organizationId: orgId,
-          name: 'MESSAGE_IN',
-        });
-
-        if (parsed.metadata?.mediaId) {
-          try {
-            const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
-            const stored = await downloadAndStoreMessageMedia({
-              organizationId: orgId,
-              messageId: message.id,
-              mediaId: parsed.metadata.mediaId,
-              mimeType: parsed.metadata.mimeType,
-              filename: parsed.metadata.filename,
-              accessToken,
-              isSticker: Boolean((inboundMetadata as { isSticker?: boolean } | null)?.isSticker),
-              isGif: Boolean((inboundMetadata as { isGif?: boolean } | null)?.isGif),
-            });
-            message = await prisma.message.update({
-              where: { id: message.id },
-              data: {
-                metadata: {
-                  ...(inboundMetadata || {}),
-                  ...stored,
-                },
-              },
-            });
-          } catch (err) {
-            logError(err, {
-              source: 'webhook',
-              action: 'Inbound media download failed',
-              messageId: message.id,
-              organizationId: orgId,
-            });
-          }
-        }
-
-        const content = parsed.content;
-
-        log.info('Saved inbound message', {
-          messageId: message.id,
-          metaMessageId,
-          contactPhone,
-          organizationId: orgId,
-          conversationId: conversation.id,
-          messageType: inboundType,
-          hasMedia: Boolean(parsed.metadata?.mediaId),
-          processingTimeMs: Date.now() - startMsgTime,
-        });
-
-        const conversationSummary = await prisma.conversation.findUnique({
-          where: { id: conversation.id },
-          select: { id: true, lastMessageAt: true, unreadCount: true },
-        });
-
-        emitToOrg(orgId, 'message:new', {
-          conversationId: conversation.id,
-          message,
-          contact,
-          conversation: conversationSummary
-            ? {
-                ...conversationSummary,
-                lastMessage: {
-                  id: message.id,
-                  direction: message.direction,
-                  type: message.type,
-                  content: message.content,
-                  status: message.status,
-                  createdAt: message.createdAt,
-                },
-              }
-            : undefined,
-        });
-
-        const { dispatchOrgWebhook } = await import('../modules/integrations/dispatch');
-
-        if (parsed.orderPayload) {
-          try {
-            const { createOrderFromInbound } = await import('../modules/commerce/service');
-            const items = parsed.orderPayload.productItems.map((item) => ({
-              retailerId: item.product_retailer_id,
-              name: item.product_retailer_id,
-              quantity: item.quantity,
-              amountCents: Math.round((item.item_price || 0) * 100),
-            }));
-            const subtotalCents = items.reduce(
-              (sum, item) => sum + item.amountCents * item.quantity,
-              0
-            );
-            const referenceId = `ord_${Date.now()}_${contact.id.slice(0, 8)}`;
-            await createOrderFromInbound(orgId, {
-              contactId: contact.id,
-              conversationId: conversation.id,
-              whatsappNumberId: whatsappNumber.id,
-              catalogId: parsed.orderPayload.catalogId,
-              referenceId,
-              items,
-              amounts: {
-                subtotalCents,
-                taxCents: 0,
-                shippingCents: 0,
-                totalCents: subtotalCents,
-                currency: parsed.orderPayload.productItems[0]?.currency || 'INR',
-              },
-              metadata: { inboundMessageId: message.id },
-            });
-          } catch (err) {
-            logError(err, {
-              source: 'webhook',
-              action: 'Catalog order creation failed',
-              messageId: message.id,
-              organizationId: orgId,
-            });
-          }
-        }
-
-        if (parsed.referral) {
-          try {
-            const existingConv = await prisma.conversation.findUnique({
-              where: { id: conversation.id },
-              select: { botState: true },
-            });
-            const priorState =
-              existingConv?.botState && typeof existingConv.botState === 'object'
-                ? (existingConv.botState as Record<string, unknown>)
-                : {};
-
-            await prisma.conversation.update({
-              where: { id: conversation.id },
-              data: {
-                botState: {
-                  ...priorState,
-                  ctwaReferral: parsed.referral,
-                  ctwaReceivedAt: new Date().toISOString(),
-                } as Prisma.InputJsonValue,
-              },
-            });
-            void dispatchOrgWebhook(orgId, 'referral.received', {
-              conversationId: conversation.id,
-              contactPhone,
-              referral: parsed.referral,
-            });
-          } catch (err) {
-            logError(err, {
-              source: 'webhook',
-              action: 'CTWA referral handling failed',
-              messageId: message.id,
-              organizationId: orgId,
-            });
-          }
-        }
-
-        void dispatchOrgWebhook(orgId, 'message.received', {
-          conversationId: conversation.id,
-          messageId: message.id,
-          contactPhone,
-        });
-
-        const msgType = (msg.type as string | undefined)?.toLowerCase() || 'text';
-        const hasMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(msgType);
-
-        const textContent = (content || '').trim();
-        if (textContent && !hasMedia) {
-          const { isOptOutMessage, isOptInMessage, handleOptOut, handleOptIn } = await import(
-            '../modules/compliance/opt-out'
-          );
-          if (isOptOutMessage(textContent)) {
-            log.info('Opt-out detected in inbound message', {
-              messageId: message.id,
-              organizationId: orgId,
-              contactPhone,
-            });
-            await handleOptOut(orgId, contact.id, conversation.id, whatsappNumber.id, inboundTimestamp, metaMessageId);
-            continue;
-          }
-          if (isOptInMessage(textContent)) {
-            await handleOptIn(orgId, contact.id, inboundTimestamp, metaMessageId, whatsappNumber.id);
-          }
-        }
-
-        try {
-          await handleInboundAutomations({
-            organizationId: orgId,
-            conversationId: conversation.id,
-            contactId: contact.id,
-            messageId: message.id,
-            contactPhone,
-            whatsappNumberId: whatsappNumber.id,
-            content: content || '',
-            buttonReplyId: parsed.buttonReplyId,
-            isNewConversation: isNew,
-            messageType: msgType,
-            hasMedia,
-            waFlowResponse: parsed.waFlowResponse,
-          });
-        } catch (err) {
-          logError(err, {
-            source: 'webhook',
-            action: 'Automation processing failed; queued durable retry',
-            messageId: message.id,
-            organizationId: orgId,
-          });
-          const retryJobId = `inbound-automation-${message.id}`;
-          try {
-            const existingRetry = await flowQueue.getJob(retryJobId);
-            if (!existingRetry) {
-              await flowQueue.add(
-                'retry-inbound-message',
-                {
+              if (repaired.count === 1) {
+                log.info('Repaired inbound conversation side-effects after duplicate insert', {
+                  metaMessageId,
+                  conversationId: existing.conversationId,
                   organizationId: orgId,
-                  conversationId: conversation.id,
-                  contactId: contact.id,
-                  messageId: message.id,
-                  whatsappNumberId: whatsappNumber.id,
-                  isNewConversation: isNew,
-                },
-                {
-                  jobId: retryJobId,
-                  attempts: 3,
-                  backoff: { type: 'exponential', delay: 2000 },
-                  removeOnComplete: 200,
-                  removeOnFail: 500,
-                }
-              );
+                });
+              }
             }
-          } catch (queueError) {
-            logError(queueError, {
-              source: 'webhook',
-              action: 'Could not queue automation retry',
-              messageId: message.id,
-              organizationId: orgId,
-            });
+          } else {
+            throw err;
           }
         }
+        if (!message) continue;
+        if (!duplicateInsert) {
+          emitProductEvent({
+            organizationId: orgId,
+            name: 'MESSAGE_IN',
+          });
+        }
 
-        log.info('Inbound message processing complete', {
-          messageId: message.id,
+        await applyInboundMessageFollowups({
+          orgId,
+          whatsappNumber,
+          conversation,
+          contact,
+          message,
+          parsed,
+          inboundMetadata,
+          contactPhone,
+          inboundTimestamp,
           metaMessageId,
-          conversationId: conversation.id,
-          isNewConversation: isNew,
-          totalTimeMs: Date.now() - startMsgTime,
+          isNew,
+          msgType: (msg.type as string | undefined)?.toLowerCase() || 'text',
+          startMsgTime,
         });
       }
 

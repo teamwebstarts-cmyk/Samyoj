@@ -580,7 +580,7 @@ export default function ContentStudioPage() {
     setGenerating(true);
     try {
       await contentStudioApi.generateImage({ prompt: imagePrompt.trim(), aspectRatio });
-      toastSuccess('Image queued — it will land in Library');
+      toastSuccess('Image queued as a stub — not billed until a provider is connected');
       setImagePrompt('');
       await loadLibrary();
       setTab('library');
@@ -604,7 +604,7 @@ export default function ContentStudioPage() {
         aspectRatio: videoAspect,
         durationSeconds: Number(videoDuration) || 15,
       });
-      toastSuccess('Video queued as a stub — it will land in Library');
+      toastSuccess('Video queued as a stub — not billed until a provider is connected');
       setVideoPrompt('');
       await loadLibrary();
       setTab('library');
@@ -627,7 +627,7 @@ export default function ContentStudioPage() {
         voiceId,
         language: locale.split('-')[0] || 'en',
       });
-      toastSuccess('Voice queued as a stub — it will land in Library');
+      toastSuccess('Voice queued as a stub — not billed until a provider is connected');
       setVoiceScript('');
       await loadLibrary();
       setTab('library');
@@ -1004,6 +1004,9 @@ export default function ContentStudioPage() {
 
             {tab === 'images' && (
               <div className="mx-auto max-w-2xl space-y-4">
+                <HonestyNote>
+                  Image jobs queue as stubs until a provider is configured. Failed demo jobs are not billed.
+                </HonestyNote>
                 <StudioSection
                   title="Image studio"
                   subtitle="Meta-ready sizes — 1:1 header, 9:16 story, 16:9 wide, 4:5 catalog"
@@ -1058,7 +1061,7 @@ export default function ContentStudioPage() {
             {tab === 'videos' && (
               <div className="mx-auto max-w-2xl space-y-4">
                 <HonestyNote>
-                  Video jobs queue as stubs until a provider is configured. They still use today&apos;s video-second budget.
+                  Video jobs queue as stubs until a provider is configured. Failed demo jobs are not billed.
                 </HonestyNote>
                 <StudioSection title="Video studio" subtitle="Short-form MP4 for stories, ads, and headers">
                   <div className="grid gap-3 sm:grid-cols-3">
@@ -1113,7 +1116,7 @@ export default function ContentStudioPage() {
               <div className="mx-auto max-w-2xl space-y-4">
                 <HonestyNote>
                   {voiceHint ||
-                    'Voice jobs queue as stubs until ElevenLabs is configured. Standard library voices only — no cloning.'}
+                    'Voice jobs queue as stubs until ElevenLabs is configured. Failed demo jobs are not billed. Standard library voices only — no cloning.'}
                 </HonestyNote>
                 <StudioSection title="Voice studio" subtitle="TTS for WhatsApp notes and template voiceovers">
                   <AppSelect

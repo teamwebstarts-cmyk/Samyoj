@@ -24,6 +24,7 @@ import {
   sendTestMessage,
   syncRunningCampaignStatuses,
 } from './service';
+import { findCampaignBySendIdempotencyKey, readIdempotencyKey } from '../messages/outbound-idempotency';
 import { getDailySendUsage } from './quota';
 import {
   getCampaignCohortAudience,
@@ -633,7 +634,25 @@ router.post(
     });
     if (!campaign) throw new AppError(404, 'Campaign not found');
 
+    const idempotencyKey = readIdempotencyKey(req);
+    if (idempotencyKey) {
+      const replay = await findCampaignBySendIdempotencyKey(orgId, idempotencyKey);
+      if (replay?.id === campaign.id) {
+        sendSuccess(res, {
+          message: 'Campaign queued for sending',
+          recipientCount: replay.totalContacts,
+        });
+        return;
+      }
+    }
+
     const result = await queueCampaignSend(campaign, req.user!.userId);
+    if (idempotencyKey) {
+      await prisma.campaign.update({
+        where: { id: campaign.id },
+        data: { sendIdempotencyKey: idempotencyKey },
+      }).catch(() => undefined);
+    }
     await logCampaignAudit(orgId, req.user!.userId, 'campaign.send', {
       campaignId: id,
       recipientCount: result.recipientCount,

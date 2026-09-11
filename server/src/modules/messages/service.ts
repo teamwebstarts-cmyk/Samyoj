@@ -4,6 +4,7 @@ import { validatePhone } from '../../utils/phone';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { getTemplateDisplayText, isWithin24HourWindow, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { deliverOutboundMessage } from './send.service';
+import { findMessageByIdempotencyKey, isIdempotencyConflict } from './outbound-idempotency';
 import { emitToOrg } from '../../realtime';
 import type { MessageStatus, MessageType } from '@prisma/client';
 import { emitProductEvent } from '../platform/events';
@@ -19,6 +20,7 @@ interface SendDirectMessageInput {
   templateName?: string;
   templateLanguage?: string;
   whatsappNumberId?: string;
+  idempotencyKey?: string;
 }
 
 export interface RecordOutboundInput {
@@ -283,6 +285,13 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
     );
   }
 
+  if (input.idempotencyKey) {
+    const replay = await findMessageByIdempotencyKey(conversation.id, input.idempotencyKey);
+    if (replay) {
+      return { message: replay, conversationId: conversation.id, contact };
+    }
+  }
+
   let messageContent = input.content;
   let messageMetadata: Record<string, unknown> | undefined;
 
@@ -300,16 +309,26 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
     };
   }
 
-  const message = await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      direction: 'OUTBOUND',
-      type: type === 'TEMPLATE' ? 'TEMPLATE' : 'TEXT',
-      content: messageContent,
-      status: 'PENDING',
-      metadata: messageMetadata as import('@prisma/client').Prisma.InputJsonValue,
-    },
-  });
+  let message;
+  try {
+    message = await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'OUTBOUND',
+        type: type === 'TEMPLATE' ? 'TEMPLATE' : 'TEXT',
+        content: messageContent,
+        status: 'PENDING',
+        metadata: messageMetadata as import('@prisma/client').Prisma.InputJsonValue,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+  } catch (err) {
+    if (input.idempotencyKey && isIdempotencyConflict(err)) {
+      const replay = await findMessageByIdempotencyKey(conversation.id, input.idempotencyKey);
+      if (replay) return { message: replay, conversationId: conversation.id, contact };
+    }
+    throw err;
+  }
 
   await prisma.conversation.update({
     where: { id: conversation.id },

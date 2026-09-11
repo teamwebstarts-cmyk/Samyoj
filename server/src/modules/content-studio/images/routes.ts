@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { GenerationJobKind, MediaAssetKind, MediaAssetStatus } from '@prisma/client';
+import { GenerationJobKind } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../../config/database';
 import { contentImageQueue } from '../../../config/queues';
@@ -73,57 +73,15 @@ export async function processImageGenerationJob(jobId: string, organizationId: s
   });
   if (!job || job.status !== 'QUEUED') return;
 
+  // ponytail: no provider; fail closed and skip recordUsage. Wire a real provider when one exists.
   await prisma.generationJob.update({
     where: { id: jobId },
-    data: { status: 'RUNNING', attempts: { increment: 1 } },
+    data: {
+      status: 'FAILED',
+      attempts: { increment: 1 },
+      errorMessage: 'Demo stub — image generation is not connected. Not billed.',
+    },
   });
-
-  try {
-    const params = (job.params as { aspectRatio?: string }) || {};
-    const placeholderPath = `content-studio/${organizationId}/${jobId}.png`;
-
-    const asset = await prisma.mediaAsset.create({
-      data: {
-        organizationId,
-        kind: MediaAssetKind.IMAGE,
-        status: MediaAssetStatus.DRAFT,
-        provider: job.provider || 'stub',
-        modelUsed: 'stub-v1',
-        prompt: job.prompt,
-        params: job.params ?? undefined,
-        storageDriver: 'local',
-        storagePath: placeholderPath,
-        publicUrl: null,
-        mimeType: 'image/png',
-        sizeBytes: 0,
-        widthPx: params.aspectRatio === '9:16' ? 1080 : 1024,
-        heightPx: params.aspectRatio === '9:16' ? 1920 : 1024,
-        costCents: job.costCents,
-        createdById: job.triggeredBy?.replace('user:', ''),
-      },
-    });
-
-    await prisma.generationJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'SUCCEEDED',
-        resultAssetId: asset.id,
-        durationMs: 100,
-      },
-    });
-
-    const { recordUsage } = await import('../shared/cost-guard');
-    await recordUsage(organizationId, GenerationJobKind.IMAGE, 1);
-  } catch (err) {
-    await prisma.generationJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'FAILED',
-        errorMessage: err instanceof Error ? err.message : 'Image generation failed',
-      },
-    });
-    throw err;
-  }
 }
 
 export default router;

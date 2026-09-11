@@ -67,6 +67,18 @@ export function metaBackoffDelayMs(backoff: MetaBackoff, attempt: number): numbe
   return 0;
 }
 
+/** Only retry when Meta answered with a known rate-limit. Timeouts/5xx after the request left must not send twice. */
+export function shouldRetryMetaSend(input: {
+  gotHttpResponse: boolean;
+  status?: number;
+  retryable: boolean;
+  backoff: MetaBackoff;
+}): boolean {
+  if (!input.gotHttpResponse) return false;
+  if (!input.retryable) return false;
+  return input.backoff === '4x' || input.backoff === '2x' || input.status === 429;
+}
+
 export function handleSendError(body: MetaErrorResponse, jobId: string): never {
   const classified = classifyMetaError(body);
   logError(new AppError(classified.retryable ? 502 : 400, classified.userFacingMessage, `META_${classified.code}`), {

@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { config } from '../../config';
+import { signPublicMediaQuery } from './public-sign';
 
 const UPLOAD_ROOT = path.join(process.cwd(), 'uploads', 'media');
 
@@ -120,7 +121,8 @@ export function getPublicMediaUrl(relativePath: string): string {
   if (config.storage.driver === 's3' && config.storage.s3PublicUrl) {
     return `${config.storage.s3PublicUrl.replace(/\/$/, '')}/${relativePath}`;
   }
-  return `${config.serverUrl}/api/media/public/${relativePath}`;
+  const { exp, sig } = signPublicMediaQuery(relativePath);
+  return `${config.serverUrl}/api/media/public/${relativePath}?exp=${exp}&sig=${sig}`;
 }
 
 export async function persistMediaBuffer(options: {

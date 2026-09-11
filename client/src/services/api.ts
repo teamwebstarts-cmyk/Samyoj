@@ -225,6 +225,14 @@ export const authApi = {
   resendVerification: (email: string) => api.post('/auth/resend-verification', { email }),
 };
 
+function idempotencyHeaders() {
+  const key =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return { headers: { 'Idempotency-Key': key } };
+}
+
 export const inboxApi = {
   list: (params?: Record<string, string>) => api.get('/inbox', { params }),
   unreadTotal: () => api.get('/inbox/unread-total'),
@@ -259,7 +267,8 @@ export const inboxApi = {
   send: (id: string, payload: string | import('../types').SendMessagePayload) =>
     api.post(
       `/inbox/${id}/messages`,
-      typeof payload === 'string' ? { content: payload } : payload
+      typeof payload === 'string' ? { content: payload } : payload,
+      idempotencyHeaders()
     ),
   assign: (id: string, agentId: string | null) =>
     api.patch(`/inbox/${id}/assign`, { agentId }),
@@ -336,8 +345,6 @@ export interface WhatsappConnectResult {
 
 export const whatsappApi = {
   metaConfig: () => api.get<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config'),
-  updateMetaConfig: (data: { appId: string; appSecret?: string }) =>
-    api.patch<{ data: import('../types').OrgMetaSettings }>('/whatsapp/meta-config', data),
   connectUrl: (redirectUri?: string, mode?: 'standard' | 'coexistence') =>
     api.get('/whatsapp/connect-url', {
       params: {
@@ -564,7 +571,7 @@ export const campaignApi = {
   create: (data: Record<string, unknown>) => api.post('/campaigns', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/campaigns/${id}`, data),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
-  send: (id: string) => api.post(`/campaigns/${id}/send`),
+  send: (id: string) => api.post(`/campaigns/${id}/send`, {}, idempotencyHeaders()),
   test: (id: string, phone: string) => api.post(`/campaigns/${id}/test`, { phone }),
   pause: (id: string) => api.post(`/campaigns/${id}/pause`),
   resume: (id: string) => api.post(`/campaigns/${id}/resume`),

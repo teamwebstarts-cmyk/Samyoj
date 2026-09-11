@@ -1137,11 +1137,14 @@ model Message {
   metadata       Json?
   /** Set immediately before the Meta HTTP call. Retry must not send again. */
   providerCallStartedAt DateTime? @map("provider_call_started_at")
+  /** Client click key. Same conversation + key = replay, second Meta POST nahi. */
+  idempotencyKey String? @map("idempotency_key")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
+  @@unique([conversationId, idempotencyKey])
   @@index([conversationId, createdAt])
   @@map("messages")
 }
@@ -1525,6 +1528,7 @@ model Campaign {
   failedCount           Int            @default(0) @map("failed_count")
   createdById           String?        @map("created_by_id")
   sentById              String?        @map("sent_by_id")
+  sendIdempotencyKey    String?        @unique @map("send_idempotency_key")
   createdAt             DateTime       @default(now()) @map("created_at")
   updatedAt             DateTime       @updatedAt @map("updated_at")
 
@@ -1630,14 +1634,17 @@ model AuditLog {
 }
 
 model ProviderWebhookEvent {
-  id             String    @id @default(uuid())
-  organizationId String    @map("organization_id")
-  eventKey       String    @map("event_key")
-  field          String
-  status         String    @default("COMPLETED")
-  claimedAt      DateTime  @default(now()) @map("claimed_at")
-  processedAt    DateTime? @map("processed_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id                String    @id @default(uuid())
+  organizationId    String    @map("organization_id")
+  eventKey          String    @map("event_key")
+  field             String
+  status            String    @default("COMPLETED")
+  claimedAt         DateTime  @default(now()) @map("claimed_at")
+  processedAt       DateTime? @map("processed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  payloadCiphertext String?   @map("payload_ciphertext")
+  requestId         String?   @map("request_id")
+  phoneNumberId     String?   @map("phone_number_id")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

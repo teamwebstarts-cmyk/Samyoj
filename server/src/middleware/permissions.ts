@@ -17,7 +17,8 @@ export async function loadPermissions(req: Request, _res: Response, next: NextFu
       return next(new AppError(403, 'Organization context required'));
     }
 
-    // Org API keys are integration credentials — bypass the human role matrix.
+    // ponytail: keys stay integration-grade (contacts/campaigns/public-api), not org admins.
+    // Studio/settings/wa-forms use loadOrgRole and reject api-key. Do not copy this ADMIN grant there.
     if (req.user.userId === 'api-key') {
       req.orgRole = 'ADMIN';
       req.permissions = { ...DEFAULT_PERMISSIONS.ADMIN };

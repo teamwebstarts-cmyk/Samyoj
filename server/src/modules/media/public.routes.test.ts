@@ -17,6 +17,12 @@ vi.mock('../../utils/logger', () => ({
   },
 }));
 
+vi.mock('../../config', () => ({
+  config: {
+    jwt: { secret: 'test-secret-for-media-signing-32chars' },
+  },
+}));
+
 const mockReadMediaFile = vi.fn();
 const mockMediaFileExists = vi.fn();
 
@@ -29,11 +35,17 @@ vi.mock('./storage', () => ({
 }));
 
 import router from './public.routes';
+import { signPublicMediaQuery } from './public-sign';
 
 function createApp() {
   const app = express();
   app.use('/api/media/public', router);
   return app;
+}
+
+function signedPath(orgFile: string) {
+  const { exp, sig } = signPublicMediaQuery(orgFile);
+  return `/api/media/public/${orgFile}?exp=${exp}&sig=${sig}`;
 }
 
 describe('public media routes', () => {
@@ -43,17 +55,14 @@ describe('public media routes', () => {
 
   it('path traversal attempt is rejected or unmatched (non-200)', async () => {
     const app = createApp();
-    // Express normalizes ../../ in URL paths before routing, so the route never matches.
     const res1 = await request(app).get('/api/media/public/org-1/../../etc/passwd');
     expect(res1.status).not.toBe(200);
 
-    // Encoded dots: Express decodes %2e to . before routing; still normalized away.
     const res2 = await request(app).get('/api/media/public/org-1/%2e%2e/%2e%2e/etc/passwd');
     expect(res2.status).not.toBe(200);
   });
 
   it('rejects filename containing .. when it reaches the route handler', async () => {
-    // Supertest can inject params directly; the route checks filename.includes('..')
     const testApp = express();
     testApp.get('/test/:orgId/:filename', (req, res) => {
       const filename = String(req.params.filename);
@@ -64,15 +73,22 @@ describe('public media routes', () => {
       res.status(200).send('ok');
     });
     const res = await request(testApp).get('/test/org-1/..%2Fsecret');
-    // If Express decodes to '../secret', the handler sees '..' and rejects with 400
-    // Either way the traversal does not produce a 200
     expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('rejects unsigned public media with 401', async () => {
+    mockMediaFileExists.mockResolvedValue(true);
+    mockReadMediaFile.mockResolvedValue(Buffer.from('fake-image'));
+    const app = createApp();
+    const res = await request(app).get('/api/media/public/org-1/photo.jpg');
+    expect(res.status).toBe(401);
+    expect(mockReadMediaFile).not.toHaveBeenCalled();
   });
 
   it('returns 404 for missing file', async () => {
     mockMediaFileExists.mockResolvedValue(false);
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/missing.jpg');
+    const res = await request(app).get(signedPath('org-1/missing.jpg'));
     expect(res.status).toBe(404);
     expect(res.text).toBe('Not found');
   });
@@ -81,17 +97,17 @@ describe('public media routes', () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('fake-image'));
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/photo.jpg');
+    const res = await request(app).get(signedPath('org-1/photo.jpg'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/image\/jpeg/);
-    expect(res.headers['cache-control']).toBe('public, max-age=3600');
+    expect(res.headers['cache-control']).toBe('private, max-age=300');
   });
 
   it('serves file with correct MIME type for png', async () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('fake-png'));
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/image.png');
+    const res = await request(app).get(signedPath('org-1/image.png'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/image\/png/);
   });
@@ -100,7 +116,7 @@ describe('public media routes', () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('fake-pdf'));
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/doc.pdf');
+    const res = await request(app).get(signedPath('org-1/doc.pdf'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/pdf/);
   });
@@ -109,7 +125,7 @@ describe('public media routes', () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('fake-video'));
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/clip.mp4');
+    const res = await request(app).get(signedPath('org-1/clip.mp4'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/video\/mp4/);
   });
@@ -118,7 +134,7 @@ describe('public media routes', () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('fake-audio'));
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/voice.ogg');
+    const res = await request(app).get(signedPath('org-1/voice.ogg'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/audio\/ogg/);
   });
@@ -127,7 +143,7 @@ describe('public media routes', () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('data'));
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/file.xyz');
+    const res = await request(app).get(signedPath('org-1/file.xyz'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/octet-stream/);
   });
@@ -137,7 +153,7 @@ describe('public media routes', () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(body);
     const app = createApp();
-    const res = await request(app).get('/api/media/public/org-1/file.txt');
+    const res = await request(app).get(signedPath('org-1/file.txt'));
     expect(res.headers['content-length']).toBe(String(body.length));
   });
 });

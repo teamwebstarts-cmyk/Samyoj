@@ -35,11 +35,15 @@ import {
   hydrateWebhookHealth,
   toPublicWebhookHealth,
   trackWebhookFailed,
-  trackWebhookProcessed,
   trackWebhookQueued,
   trackWebhookReceived,
   webhookHealth,
 } from './webhook-health';
+import {
+  oldestWebhookWaitingMs,
+  persistAndEnqueueInboundWebhook,
+  replayInboundWebhookEnvelope,
+} from './webhook-accept';
 import { emitProductEvent } from '../platform/events';
 import { requireActiveCommercial, requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
@@ -798,17 +802,49 @@ router.get('/webhook/health', async (_req: Request, res: Response) => {
   }
 
   await hydrateWebhookHealth();
+  let oldestWaitingMs: number | null = null;
+  try {
+    oldestWaitingMs = await oldestWebhookWaitingMs();
+  } catch {
+    oldestWaitingMs = null;
+  }
 
   sendSuccess(
     res,
     toPublicWebhookHealth({
       queueDepth,
+      oldestWaitingMs,
       webhookConfigured: Boolean(config.meta.webhookUrl),
       verifyTokenConfigured: Boolean(config.meta.verifyToken),
       appSecretConfigured: Boolean(config.meta.appSecret),
     })
   );
 });
+
+router.post(
+  '/webhook-replay',
+  ...metaAdminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const parsed = z.object({ eventKey: z.string().min(1) }).safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, 'eventKey is required');
+    }
+    try {
+      const replayed = await replayInboundWebhookEnvelope({
+        organizationId: orgId,
+        eventKey: parsed.data.eventKey,
+        actorUserId: req.user!.userId,
+      });
+      sendSuccess(res, replayed);
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) {
+        throw new AppError(404, 'Webhook envelope not found');
+      }
+      throw err;
+    }
+  })
+);
 
 // =============================================================================
 // Webhook events (POST) — receive inbound messages, calls, and status updates
@@ -905,85 +941,46 @@ router.post('/webhook', async (req: Request, res: Response) => {
     }
   }
 
-  // --- 4. Ack Meta immediately — process asynchronously ---
-  res.status(200).send('EVENT_RECEIVED');
-
-  // --- 5. Queue processing ---
+  // --- 4. Persist durable envelope, then queue, then ack ---
   const totalCount = messageCount + callCount + statusCount;
-  trackWebhookReceived();
-
   try {
-    const routedNumber = metaPhoneNumberId
-      ? await prisma.whatsappNumber.findFirst({
-          where: { phoneNumberId: metaPhoneNumberId, isActive: true },
-          select: { id: true, organizationId: true },
-        })
-      : null;
-
-    if (routedNumber?.organizationId) {
-      const { recordProviderWebhookReceipt } = await import('./webhook-dispatcher');
-      void recordProviderWebhookReceipt({
-        organizationId: routedNumber.organizationId,
-        eventKey: `receipt:${requestId}`,
-        field: field || 'unknown',
-      });
-    }
-
-    // Inbound WhatsApp calls must pre-accept within seconds. Do not wait for
-    // the BullMQ message worker — the connect lock de-dupes the queued retry.
-    if (callCount > 0) {
-      const { processWebhookFields } = await import('../calling/call.processor');
-      void processWebhookFields(payload).catch((err) => {
-        logError(err, {
-          source: 'webhook',
-          action: 'Inline call webhook processing failed',
-          requestId,
-        });
-      });
-    }
-
-    const job = await webhookQueue.add(
-      'process-webhook',
-      {
-        payload,
-        requestId,
-        receivedAt: new Date().toISOString(),
-        whatsappNumberId: routedNumber?.id,
-      },
-      { attempts: 4 }
-    );
-    log.info('Webhook queued for processing', {
+    const accepted = await persistAndEnqueueInboundWebhook({ payload, requestId });
+    trackWebhookReceived();
+    trackWebhookQueued();
+    log.info('Webhook persisted and queued', {
       requestId,
-      jobId: job.id,
+      eventKey: accepted.eventKey,
       field,
       totalCount,
+      persist: accepted.persist,
+      queue: accepted.queue,
       queueLatencyMs: Date.now() - startTime,
       source: 'webhook',
     });
-    trackWebhookQueued();
   } catch (err) {
     trackWebhookFailed(err);
     logError(err, {
       source: 'webhook',
-      action: 'BullMQ queue add failed — processing inline',
+      action: 'Webhook persist or queue failed — Meta will retry',
       requestId,
     });
-    const { processWebhookPayload } = await import('../../workers/webhook.processor');
-    const { processWebhookFields } = await import('../calling/call.processor');
-    Promise.all([processWebhookPayload(payload), processWebhookFields(payload)])
-      .then(() => {
-        trackWebhookProcessed();
-        log.info('Inline webhook processing completed', { requestId, source: 'webhook' });
-      })
-      .catch((e) => {
-        trackWebhookFailed(e);
-        logError(e, {
-          source: 'webhook',
-          action: 'Inline webhook processing failed',
-          requestId,
-        });
-      });
+    return res.status(500).send('Webhook persist failed');
   }
+
+  // Inbound WhatsApp calls must pre-accept within seconds. Do not wait for
+  // the BullMQ message worker — the connect lock de-dupes the queued retry.
+  if (callCount > 0) {
+    const { processWebhookFields } = await import('../calling/call.processor');
+    void processWebhookFields(payload).catch((err) => {
+      logError(err, {
+        source: 'webhook',
+        action: 'Inline call webhook processing failed',
+        requestId,
+      });
+    });
+  }
+
+  res.status(200).send('EVENT_RECEIVED');
 });
 
 export default router;

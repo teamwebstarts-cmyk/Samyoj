@@ -1,4 +1,4 @@
-import { isSamePhoneIdentity } from '../../utils/phone';
+import { isSamePhoneIdentity, normalizePhoneIdentity } from '../../utils/phone';
 
 export interface ResolvedRecipient {
   phone: string;
@@ -38,8 +38,11 @@ export function dedupeRecipients(recipients: ResolvedRecipient[]): ResolvedRecip
   const seen = new Set<string>();
   const result: ResolvedRecipient[] = [];
   for (const r of recipients) {
-    if (seen.has(r.phone)) continue;
-    seen.add(r.phone);
+    const n = normalizePhoneIdentity(r.phone);
+    // ponytail: last-10 key; split by country if non-IN collisions show up
+    const key = n.length >= 10 ? n.slice(-10) : n;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
     result.push(r);
   }
   return result;

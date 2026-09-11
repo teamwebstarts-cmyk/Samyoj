@@ -7,10 +7,12 @@ import calendarRoutes from './calendar/routes';
 import approvalsRoutes from './approvals/routes';
 import voicesRoutes from './voices/routes';
 import videosRoutes from './videos/routes';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, requireAdminOnMutation } from '../../middleware/auth';
 import { sendSuccess, asyncHandler } from '../../utils/response';
 
 const router = Router();
+
+router.use(authenticate, requireOrg, requireAdminOnMutation);
 
 router.get(
   '/credits',

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../../utils/response';
 import { readMediaFile, mediaFileExists } from './storage';
+import { isValidPublicMediaSig } from './public-sign';
 
 const router = Router();
 
@@ -15,6 +16,11 @@ router.get(
     }
 
     const relativePath = `${orgId}/${filename}`;
+    if (!isValidPublicMediaSig(relativePath, req.query.exp, req.query.sig)) {
+      res.status(401).send('Unauthorized');
+      return;
+    }
+
     if (!(await mediaFileExists(relativePath))) {
       res.status(404).send('Not found');
       return;
@@ -39,7 +45,7 @@ router.get(
 
     res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
     res.setHeader('Content-Length', buffer.length);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Cache-Control', 'private, max-age=300');
     res.send(buffer);
   })
 );

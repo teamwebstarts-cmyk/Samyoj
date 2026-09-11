@@ -21,6 +21,21 @@ describe('WhatsApp route hardening', () => {
     expect(healthBlock).toContain('toPublicWebhookHealth');
     expect(healthBlock).not.toContain('webhookUrl:');
     expect(healthBlock).toContain('webhookConfigured');
+    expect(healthBlock).toContain('oldestWaitingMs');
+  });
+
+  it('acks Meta only after persistAndEnqueueInboundWebhook', () => {
+    const postBlock = routesSrc.slice(routesSrc.indexOf("router.post('/webhook'"));
+    const persistIdx = postBlock.indexOf('persistAndEnqueueInboundWebhook');
+    const ackIdx = postBlock.indexOf("EVENT_RECEIVED");
+    const hmacIdx = postBlock.indexOf('inboundWebhookSignatureGate');
+    expect(hmacIdx).toBeGreaterThan(-1);
+    expect(persistIdx).toBeGreaterThan(-1);
+    expect(ackIdx).toBeGreaterThan(-1);
+    expect(hmacIdx).toBeLessThan(persistIdx);
+    expect(persistIdx).toBeLessThan(ackIdx);
+    expect(postBlock).toContain("status(500).send('Webhook persist failed')");
+    expect(routesSrc).toContain("'/webhook-replay'");
   });
 
   it('GET /numbers does not expose tokenExpiresAt', () => {

@@ -681,7 +681,7 @@ export default function BillingPage() {
                                   {statusLabel === 'Captured'
                                     ? `Captured on ${payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'N/A'}`
                                     : `Created on ${payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'N/A'}`}
-                                  {' · '}Base ₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + GST ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')}
+                                  {' · '}₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + tax ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')} (catalog split — not a GST invoice)
                                 </p>
                                 {statusLabel === 'Captured' && payment.periodEnd && (
                                   <p className="text-[11px] font-semibold text-theme-secondary">

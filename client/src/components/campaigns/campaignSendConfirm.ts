@@ -70,6 +70,9 @@ export function getCampaignSendErrorMessage(error: unknown, fallback: string) {
   if (message === 'A record with this value already exists') {
     return 'This campaign is already queued or was just sent. Refresh the Campaigns page and check its status before trying again.';
   }
+  if (message === 'Campaign must have at least one recipient') {
+    return 'Add contacts who are subscribed to campaign messages, then send again.';
+  }
   if (/already being sent|already queued|active reservation/i.test(message)) {
     return 'This campaign is already sending. Open Campaigns to view live progress.';
   }

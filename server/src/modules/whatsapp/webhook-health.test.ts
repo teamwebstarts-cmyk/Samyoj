@@ -45,6 +45,7 @@ describe('webhook health lifecycle', () => {
   it('omits the live webhook URL from the public health payload', () => {
     const payload = toPublicWebhookHealth({
       queueDepth: 2,
+      oldestWaitingMs: 1500,
       webhookConfigured: true,
       verifyTokenConfigured: true,
       appSecretConfigured: true,
@@ -52,6 +53,7 @@ describe('webhook health lifecycle', () => {
 
     expect(payload).toMatchObject({
       queueDepth: 2,
+      oldestWaitingMs: 1500,
       webhookConfigured: true,
       verifyTokenConfigured: true,
       appSecretConfigured: true,

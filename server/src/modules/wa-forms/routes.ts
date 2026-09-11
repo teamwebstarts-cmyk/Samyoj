@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { authenticate, requireOrg } from '../../middleware/auth';
+import { authenticate, requireOrg, requireAdminOnMutation } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
@@ -38,6 +38,7 @@ router.post(
   '/',
   authenticate,
   requireOrg,
+  requireAdminOnMutation,
   requireActiveCommercialOnMutation(),
   requireFeatureOnMutation('forms'),
   asyncHandler(async (req: Request, res: Response) => {
@@ -80,6 +81,7 @@ router.post(
   '/:id/publish',
   authenticate,
   requireOrg,
+  requireAdminOnMutation,
   requireActiveCommercialOnMutation(),
   requireFeatureOnMutation('forms'),
   asyncHandler(async (req: Request, res: Response) => {
