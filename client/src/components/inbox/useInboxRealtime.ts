@@ -77,10 +77,17 @@ export function useInboxRealtime({
       };
       if (!resolved || !activeNumber) return;
       const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
+      const requiresNumberId =
+        event === 'message:new' ||
+        event === 'message:status' ||
+        event === 'message:reaction' ||
+        event === 'messages:deleted' ||
+        event === 'messages:cleared';
       if (
-        eventNumberId &&
-        eventNumberId !== activeNumber.id &&
-        eventNumberId !== activeNumber.phoneNumberId
+        (requiresNumberId && !eventNumberId) ||
+        (eventNumberId &&
+          eventNumberId !== activeNumber.id &&
+          eventNumberId !== activeNumber.phoneNumberId)
       )
         return;
       const openId = selectedRef.current?.id;

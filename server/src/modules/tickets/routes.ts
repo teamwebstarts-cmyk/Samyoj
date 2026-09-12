@@ -48,6 +48,15 @@ const ticketSchema = z.object({
   slaDueAt: z.string().datetime().optional(),
 });
 
+const ticketStatusSchema = z.enum(['OPEN', 'PENDING', 'WAITING', 'RESOLVED', 'CLOSED']);
+const allowedTicketTransitions: Record<z.infer<typeof ticketStatusSchema>, readonly string[]> = {
+  OPEN: ['OPEN', 'PENDING', 'WAITING', 'RESOLVED', 'CLOSED'],
+  PENDING: ['OPEN', 'PENDING', 'WAITING', 'RESOLVED', 'CLOSED'],
+  WAITING: ['OPEN', 'PENDING', 'WAITING', 'RESOLVED', 'CLOSED'],
+  RESOLVED: ['OPEN', 'RESOLVED', 'CLOSED'],
+  CLOSED: ['OPEN', 'CLOSED'],
+};
+
 async function validateTicketScope(
   organizationId: string,
   whatsappNumberId: string,
@@ -117,7 +126,9 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const status = req.query.status as string | undefined;
+    const status = req.query.status
+      ? ticketStatusSchema.parse(req.query.status)
+      : undefined;
 
     const tickets = await prisma.ticket.findMany({
       where: {
@@ -234,6 +245,12 @@ router.patch(
       where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
     });
     if (!existing) throw new AppError(404, 'Ticket not found');
+    if (
+      data.status &&
+      !allowedTicketTransitions[existing.status].includes(data.status)
+    ) {
+      throw new AppError(409, `Cannot move a ${existing.status.toLowerCase()} ticket to ${data.status.toLowerCase()}`);
+    }
     const whatsappNumberId = req.activeWhatsappNumberId;
     if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before updating tickets');
     const conversationId = data.conversationId === undefined ? existing.conversationId : data.conversationId;
@@ -275,6 +292,9 @@ router.delete(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const id = paramId(req);
+    if (req.orgRole !== 'OWNER' && req.orgRole !== 'ADMIN') {
+      throw new AppError(403, 'Only workspace admins can delete tickets');
+    }
     const existing = await prisma.ticket.findFirst({
       where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
       select: { id: true, whatsappNumberId: true, conversationId: true, status: true },

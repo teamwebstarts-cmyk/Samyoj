@@ -11,7 +11,7 @@ vi.mock('../../config', () => ({
   },
 }));
 
-import { buildRelativePath, getPublicMediaUrl } from './storage-adapter';
+import { buildRelativePath, getPublicMediaUrl, resolveLocalMediaPath } from './storage-adapter';
 import { config } from '../../config';
 
 describe('buildRelativePath', () => {
@@ -56,27 +56,35 @@ describe('getPublicMediaUrl', () => {
     );
   });
 
-  it('returns S3 URL when driver is s3 and s3PublicUrl is set', () => {
-    // Override config for this test
+  it('keeps S3 media behind the signed media route', () => {
     (config.storage as any).driver = 's3';
     (config.storage as any).s3PublicUrl = 'https://cdn.example.com';
 
     const url = getPublicMediaUrl('org-1/msg-2.jpg');
-    expect(url).toBe('https://cdn.example.com/org-1/msg-2.jpg');
+    expect(url).toMatch(
+      /^http:\/\/localhost:8000\/api\/media\/public\/org-1\/msg-2\.jpg\?exp=\d+&sig=[a-f0-9]{64}$/i
+    );
 
-    // Reset
     (config.storage as any).driver = 'local';
     (config.storage as any).s3PublicUrl = '';
   });
 
-  it('strips trailing slash from s3PublicUrl', () => {
+  it('does not use a configured public S3 URL', () => {
     (config.storage as any).driver = 's3';
     (config.storage as any).s3PublicUrl = 'https://cdn.example.com/';
 
     const url = getPublicMediaUrl('org-1/msg-2.jpg');
-    expect(url).toBe('https://cdn.example.com/org-1/msg-2.jpg');
+    expect(url).not.toContain('cdn.example.com');
 
     (config.storage as any).driver = 'local';
     (config.storage as any).s3PublicUrl = '';
+  });
+});
+
+describe('resolveLocalMediaPath', () => {
+  it('rejects traversal outside the media root', () => {
+    expect(() => resolveLocalMediaPath('org-1/../org-2/message.jpg')).toThrow(
+      'Invalid media path'
+    );
   });
 });

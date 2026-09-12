@@ -342,6 +342,7 @@ router.get(
         where: {
           organizationId: orgId,
           createdAt: { gte: since, lte: until },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
         },
         _sum: { totalTokens: true, promptTokens: true, completionTokens: true },
         _count: true,
@@ -920,6 +921,7 @@ router.get(
         where: {
           organizationId: orgId,
           createdAt: { gte: since, lte: until },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
         },
         _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
         _count: true,
@@ -928,6 +930,7 @@ router.get(
         where: {
           organizationId: orgId,
           createdAt: { gte: since, lte: until },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
         },
         select: {
           action: true,
@@ -961,14 +964,6 @@ router.get(
       string,
       { label: string; requests: number; promptTokens: number; completionTokens: number; totalTokens: number }
     >();
-
-    const fallbackQueries: Array<{ query: string; count: number }> = [
-      { query: 'Return & refund policy for opened items', count: 18 },
-      { query: 'International shipping timelines to UAE', count: 14 },
-      { query: 'Bulk order discount tier for 500+ units', count: 11 },
-      { query: 'Store location in South Delhi', count: 8 },
-      { query: 'Payment failure with UPI debit', count: 6 },
-    ];
 
     for (const log of aiLogs) {
       const key = log.action || 'chat_completion';
@@ -1012,7 +1007,7 @@ router.get(
         estimatedCostINR,
       },
       featureBreakdown: Array.from(featureMap.values()),
-      fallbackQueries,
+      fallbackQueries: [],
     });
   })
 );
@@ -1154,7 +1149,11 @@ router.get(
 
     if (type === 'templates') {
       const campaigns = await prisma.campaign.findMany({
-        where: { organizationId: orgId, createdAt: { gte: since, lte: until } },
+        where: {
+          organizationId: orgId,
+          createdAt: { gte: since, lte: until },
+          ...(numberId ? { whatsappNumberId: numberId } : {}),
+        },
         select: { templateName: true, sentCount: true, deliveredCount: true, readCount: true, failedCount: true },
       });
 

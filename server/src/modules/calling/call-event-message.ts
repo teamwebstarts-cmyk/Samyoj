@@ -122,6 +122,7 @@ export async function publishCallEventMessage(callId: string): Promise<void> {
 
     emitToOrg(call.organizationId, 'message:new', {
       conversationId: call.conversationId,
+      whatsappNumberId: call.whatsappNumberId,
       message,
       conversation: {
         id: call.conversationId,
@@ -224,6 +225,7 @@ export async function publishCallSummaryMessage(input: {
 
   emitToOrg(input.organizationId, 'message:new', {
     conversationId: conversation.id,
+    whatsappNumberId: conversation.whatsappNumberId,
     message,
     conversation: {
       id: conversation.id,

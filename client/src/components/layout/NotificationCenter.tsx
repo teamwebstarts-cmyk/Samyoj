@@ -63,12 +63,11 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
   useSocket((event, data) => {
     if (event === 'ticket:new' || event === 'ticket:updated') {
       const payload = data as { whatsappNumberId?: string; numberId?: string };
+      const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
       if (
-        (payload.whatsappNumberId || payload.numberId) &&
-        activeNumber &&
-        ![activeNumber.id, activeNumber.phoneNumberId].includes(
-          payload.whatsappNumberId ?? payload.numberId ?? ''
-        )
+        !eventNumberId ||
+        !activeNumber ||
+        ![activeNumber.id, activeNumber.phoneNumberId].includes(eventNumberId)
       )
         return;
       load();
@@ -83,12 +82,11 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
       whatsappNumberId?: string;
       numberId?: string;
     };
+    const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
     if (
-      (payload.whatsappNumberId || payload.numberId) &&
-      activeNumber &&
-      ![activeNumber.id, activeNumber.phoneNumberId].includes(
-        payload.whatsappNumberId ?? payload.numberId ?? ''
-      )
+      !eventNumberId ||
+      !activeNumber ||
+      ![activeNumber.id, activeNumber.phoneNumberId].includes(eventNumberId)
     )
       return;
     const conversationId = payload.conversationId ?? payload.conversation?.id;

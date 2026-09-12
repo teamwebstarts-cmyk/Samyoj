@@ -97,6 +97,7 @@ export async function processMessageEchoes(
 
       emitToOrg(orgId, 'message:new', {
         conversationId: conversation.id,
+        whatsappNumberId: whatsappNumber.id,
         message,
         contact,
       });

@@ -78,6 +78,7 @@ export async function persistUnmatchedProviderStatus(input: {
 
 export async function applyProviderMessageStatus(input: {
   organizationId: string;
+  whatsappNumberId?: string;
   phoneNumberId: string;
   metaMessageId: string;
   statusValue: string;
@@ -153,6 +154,7 @@ export async function applyProviderMessageStatus(input: {
       messageId: existingMsg.id,
       status: input.statusValue,
       conversationId: existingMsg.conversationId,
+      ...(input.whatsappNumberId ? { whatsappNumberId: input.whatsappNumberId } : {}),
       ...(failure?.socketPatch || {}),
     });
   }

@@ -1,4 +1,4 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { inboxApi } from '../../services/api';
 import { toastError } from '../../utils/toast';
 import { useDraft } from './useDraft';
@@ -26,9 +26,15 @@ function makeOptimisticId() {
   return `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function makeIdempotencyKey() {
+  return `inbox-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+}
+
 interface SendPayloadOptions {
   /** When true (default for templates/interactive), lock composer with sending spinner. */
   lockComposer?: boolean;
+  /** Reuse the same key when recovering a timed-out logical send. */
+  idempotencyKey?: string;
 }
 
 function noticeMediaLimit(conversationId: string | undefined, message: string) {
@@ -71,6 +77,7 @@ export function useInboxSender({
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const retryKeyRef = useRef<string | null>(null);
 
   const resetComposer = useCallback(() => {
     setAttachment((prev) => {
@@ -132,13 +139,14 @@ export function useInboxSender({
         return false;
       }
       const lockComposer = options?.lockComposer !== false;
+      const idempotencyKey = options?.idempotencyKey || makeIdempotencyKey();
       if (lockComposer) setSending(true);
       try {
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Network request timed out. Please retry.')), 20000)
         );
         const { data } = await Promise.race([
-          inboxApi.send(selected.id, payload),
+          inboxApi.send(selected.id, payload, idempotencyKey),
           timeoutPromise,
         ]);
         const sent = data.data as Message;
@@ -270,6 +278,8 @@ export function useInboxSender({
     const pendingAttachment = attachment;
     const pendingReply = replyTo;
     const optimisticId = makeOptimisticId();
+    const idempotencyKey = retryKeyRef.current || makeIdempotencyKey();
+    retryKeyRef.current = null;
     const replyMeta = pendingReply
       ? {
           replyToMessageId: pendingReply.id,
@@ -292,13 +302,16 @@ export function useInboxSender({
               ? '[audio]'
               : pendingAttachment?.file.name || ''),
       status: 'PENDING',
-      metadata: pendingAttachment
-        ? {
-            ...(replyMeta || {}),
-            filename: pendingAttachment.file.name,
-            mimeType: pendingAttachment.file.type || undefined,
-          }
-        : replyMeta || null,
+      metadata: {
+        ...(replyMeta || {}),
+        idempotencyKey,
+        ...(pendingAttachment
+          ? {
+              filename: pendingAttachment.file.name,
+              mimeType: pendingAttachment.file.type || undefined,
+            }
+          : {}),
+      },
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
@@ -348,6 +361,7 @@ export function useInboxSender({
 
     return sendPayload(payload, optimisticId, {
       lockComposer: false,
+      idempotencyKey,
     });
   };
 
@@ -420,6 +434,8 @@ export function useInboxSender({
     }
     if (message.id.startsWith('optimistic-')) {
       if (message.content && !message.content.startsWith('[')) {
+        const previousKey = message.metadata?.idempotencyKey;
+        retryKeyRef.current = typeof previousKey === 'string' ? previousKey : null;
         setDraft(message.content);
         setMessages((prev) => prev.filter((m) => m.id !== message.id));
         noticeSendError(selected?.id, 'Message restored to composer. Click Send to retry.');

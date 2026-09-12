@@ -23,18 +23,32 @@ export async function incrementFlowStat(
   });
 }
 
-export async function getFlowAnalytics(flowId: string, organizationId: string) {
+export async function getFlowAnalytics(
+  flowId: string,
+  organizationId: string,
+  whatsappNumberId: string
+) {
   const flow = await prisma.flow.findFirst({
-    where: { id: flowId, organizationId },
+    where: { id: flowId, organizationId, whatsappNumberId },
     select: { stats: true, name: true },
   });
   if (!flow) return null;
 
   const stats = (flow.stats as unknown as FlowStats) || { starts: 0, completions: 0, handoffs: 0, dropoffs: {} };
+  const conversations = await prisma.conversation.findMany({
+    where: { organizationId, whatsappNumberId },
+    select: { id: true },
+  });
+  const conversationIds = conversations.map(({ id }) => id);
 
   const [recentRuns, successCount, failedCount, skippedLogs] = await Promise.all([
     prisma.automationLog.findMany({
-      where: { flowId, organizationId, triggerType: 'FLOW' },
+      where: {
+        flowId,
+        organizationId,
+        triggerType: 'FLOW',
+        conversationId: { in: conversationIds },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
       select: {
@@ -49,13 +63,31 @@ export async function getFlowAnalytics(flowId: string, organizationId: string) {
       },
     }),
     prisma.automationLog.count({
-      where: { flowId, organizationId, triggerType: 'FLOW', status: 'success' },
+      where: {
+        flowId,
+        organizationId,
+        triggerType: 'FLOW',
+        status: 'success',
+        conversationId: { in: conversationIds },
+      },
     }),
     prisma.automationLog.count({
-      where: { flowId, organizationId, triggerType: 'FLOW', status: 'failed' },
+      where: {
+        flowId,
+        organizationId,
+        triggerType: 'FLOW',
+        status: 'failed',
+        conversationId: { in: conversationIds },
+      },
     }),
     prisma.automationLog.findMany({
-      where: { flowId, organizationId, triggerType: 'FLOW', status: 'skipped' },
+      where: {
+        flowId,
+        organizationId,
+        triggerType: 'FLOW',
+        status: 'skipped',
+        conversationId: { in: conversationIds },
+      },
       select: { status: true, action: true, output: true, error: true },
     }),
   ]);

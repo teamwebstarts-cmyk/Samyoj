@@ -195,8 +195,13 @@ export async function isCallHungUp(metaCallId: string): Promise<boolean> {
   if (!metaCallId) return false;
   try {
     return (await getRedis().get(`${HANGUP_PREFIX}${metaCallId}`)) === '1';
-  } catch {
-    return false;
+  } catch (err) {
+    // A failed read must not let a late connect revive a terminated call.
+    log.warn('Hangup marker unavailable — failing closed', {
+      metaCallId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return true;
   }
 }
 

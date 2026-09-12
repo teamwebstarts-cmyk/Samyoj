@@ -1,4 +1,4 @@
-import type { MessageType } from '@prisma/client';
+import type { Message, MessageType } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { MetaWhatsAppService, extractMetaErrorFields, isWithin24HourWindow } from '../whatsapp/meta.service';
@@ -15,6 +15,12 @@ import { getOrgEntitlements } from '../billing/entitlements.service';
 import { outboundStatusAfterProviderCallError } from './send-lease';
 
 const log = createModuleLogger('messages');
+
+class OutboundProviderLeaseHeld extends Error {
+  constructor(readonly messageRow: Message) {
+    super('Outbound provider lease is already held');
+  }
+}
 
 export const CSW_CLOSED_CODE = 'CSW_CLOSED';
 export const META_CSW_ERROR_CODE = 131047;
@@ -233,9 +239,24 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
     whatsappNumberId: whatsappNumber.id,
     isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
   };
-  const sendViaMeta = (
+  const sendViaMeta = async (
     payload: Parameters<typeof MetaWhatsAppService.sendMessage>[2]
-  ) => MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, payload, sendOpts);
+  ) => {
+    const leased = await prisma.message.updateMany({
+      where: {
+        id: input.messageId,
+        status: 'PENDING',
+        providerCallStartedAt: null,
+      },
+      data: { providerCallStartedAt: new Date() },
+    });
+    if (leased.count !== 1) {
+      const existing = await prisma.message.findUnique({ where: { id: input.messageId } });
+      if (!existing) throw new AppError(404, 'Message not found');
+      throw new OutboundProviderLeaseHeld(existing);
+    }
+    return MetaWhatsAppService.sendMessage(phoneNumberId, accessToken, payload, sendOpts);
+  };
 
   try {
     const ownedMessage = await prisma.message.findFirst({
@@ -323,40 +344,11 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
             status: 'FAILED',
             ...cswFailure.socketPatch,
             conversationId: messageRow.conversationId,
+            whatsappNumberId: whatsappNumber.id,
           });
           throw new AppError(400, errorMessage, CSW_CLOSED_CODE);
         }
       }
-    }
-
-    const leased = await prisma.message.updateMany({
-      where: {
-        id: input.messageId,
-        status: 'PENDING',
-        providerCallStartedAt: null,
-      },
-      data: { providerCallStartedAt: new Date() },
-    });
-    if (leased.count !== 1) {
-      const existingLease = await prisma.message.findUnique({
-        where: { id: input.messageId },
-      });
-      if (!existingLease) {
-        throw new AppError(404, 'Message not found');
-      }
-      if (
-        existingLease.status === 'SENT' ||
-        existingLease.status === 'DELIVERED' ||
-        existingLease.status === 'READ'
-      ) {
-        return existingLease;
-      }
-      log.warn('Skipped duplicate Meta send — provider lease already held', {
-        organizationId: input.organizationId,
-        messageId: input.messageId,
-        status: existingLease.status,
-      });
-      return existingLease;
     }
 
     let result;
@@ -534,6 +526,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
     emitToOrg(input.organizationId, 'message:new', {
       conversationId: message.conversationId,
+      whatsappNumberId: whatsappNumber.id,
       message,
       conversation: conversation
         ? {
@@ -553,6 +546,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       messageId: input.messageId,
       status: 'SENT',
       conversationId: message.conversationId,
+      whatsappNumberId: whatsappNumber.id,
     });
     emitProductEvent({
       organizationId: input.organizationId,
@@ -561,6 +555,14 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
 
     return message;
   } catch (error) {
+    if (error instanceof OutboundProviderLeaseHeld) {
+      log.warn('Skipped duplicate Meta send — provider lease already held', {
+        organizationId: input.organizationId,
+        messageId: input.messageId,
+        status: error.messageRow.status,
+      });
+      return error.messageRow;
+    }
     if (error instanceof AppError && error.code === CSW_CLOSED_CODE) {
       throw error;
     }
@@ -624,6 +626,7 @@ export async function deliverOutboundMessage(input: DeliverMessageInput) {
       ...failure.socketPatch,
       fbtraceId,
       conversationId: message.conversationId,
+      whatsappNumberId: whatsappNumber.id,
     });
 
     if (nextStatus === 'AMBIGUOUS') {

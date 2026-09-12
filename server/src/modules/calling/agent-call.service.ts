@@ -35,30 +35,43 @@ export async function acceptCallWithAgentAnswer(params: {
   const accessToken = await resolvePendingCallAccessToken(pending);
   if (!accessToken) throw new Error('WhatsApp number no longer available for this call');
 
-  await MetaCallingService.preAccept(
-    pending.phoneNumberId,
-    accessToken,
-    pending.metaCallId,
-    params.sdpAnswer
-  );
-
-  await MetaCallingService.accept(
-    pending.phoneNumberId,
-    accessToken,
-    pending.metaCallId,
-    params.sdpAnswer
-  );
-
-  await prisma.call.update({
-    where: { id: call.id },
-    data: {
-      status: 'CONNECTED',
-      handler: 'AGENT',
-      assignedAgentId: params.agentId,
-      answeredAt: new Date(),
-      startedAt: new Date(),
+  const claimed = await prisma.call.updateMany({
+    where: {
+      id: call.id,
+      organizationId: params.organizationId,
+      status: { in: ['RINGING', 'CONNECTING'] },
     },
+    data: { status: 'CONNECTING', handler: 'AGENT', assignedAgentId: params.agentId },
   });
+  if (claimed.count !== 1) throw new Error('Call is no longer available to answer');
+
+  try {
+    await MetaCallingService.preAccept(
+      pending.phoneNumberId,
+      accessToken,
+      pending.metaCallId,
+      params.sdpAnswer
+    );
+
+    await MetaCallingService.accept(
+      pending.phoneNumberId,
+      accessToken,
+      pending.metaCallId,
+      params.sdpAnswer
+    );
+  } catch (error) {
+    await prisma.call.updateMany({
+      where: { id: call.id, status: 'CONNECTING', assignedAgentId: params.agentId },
+      data: { status: 'RINGING', handler: call.handler, assignedAgentId: null },
+    });
+    throw error;
+  }
+
+  const connected = await prisma.call.updateMany({
+    where: { id: call.id, organizationId: params.organizationId, status: 'CONNECTING' },
+    data: { status: 'CONNECTED', answeredAt: new Date(), startedAt: new Date() },
+  });
+  if (connected.count !== 1) throw new Error('Call ended while it was being answered');
 
   await registerActiveCall(call.metaCallId, params.organizationId);
   await removePendingCall(call.metaCallId);
@@ -101,10 +114,20 @@ export async function declineCallAsAgent(params: {
     await removePendingCall(call.metaCallId);
   }
 
-  await prisma.call.update({
-    where: { id: call.id },
-    data: { status: 'REJECTED', handler: 'AGENT', endedAt: new Date(), assignedAgentId: params.agentId },
+  const rejected = await prisma.call.updateMany({
+    where: {
+      id: call.id,
+      organizationId: params.organizationId,
+      status: 'RINGING',
+    },
+    data: {
+      status: 'REJECTED',
+      handler: 'AGENT',
+      endedAt: new Date(),
+      assignedAgentId: params.agentId,
+    },
   });
+  if (rejected.count !== 1) return;
 
   emitToOrg(params.organizationId, 'call:declined', {
     callId: params.callId,

@@ -414,8 +414,8 @@ export async function processAiChatbotJob(payload: InboundAutomationPayload): Pr
 
   // Lock was busy — another job is already processing this conversation.
   if (!result) {
-    log.info('AI chatbot job skipped — lock busy', { conversationId: payload.conversationId });
-    return;
+    log.info('AI chatbot job will retry — lock busy', { conversationId: payload.conversationId });
+    throw new Error('AI chatbot conversation lock busy');
   }
 
   const processingStart = Date.now();
@@ -586,7 +586,11 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
   }
 
   const optedOut = await prisma.contact.findFirst({
-    where: { id: payload.contactId, organizationId: payload.organizationId },
+    where: {
+      id: payload.contactId,
+      organizationId: payload.organizationId,
+      whatsappNumberId: payload.whatsappNumberId,
+    },
     select: { optedIn: true },
   });
   const afterOptOut = decideInboundFunnel({

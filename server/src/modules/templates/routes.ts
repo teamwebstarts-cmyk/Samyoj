@@ -7,7 +7,7 @@ import { MetaApiError, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
-import { buildTemplateComponents, mergeTemplateParams } from '../campaigns/template-params';
+import { mergeTemplateParams } from '../campaigns/template-params';
 import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { buildTemplateComponents as buildCreateComponents } from './builder';
 import { getTemplateUsage } from './analytics';
@@ -27,6 +27,8 @@ import {
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { emitProductEvent } from '../platform/events';
+import { sendDirectMessage } from '../messages/service';
+import { hasAuditableCampaignConsent } from '../contacts/consent';
 import {
   requireActiveCommercialOnMutation,
   requireFeatureOnMutation,
@@ -217,6 +219,19 @@ const variableMetaSchema = z.object({
       customKey: z.string().max(64).optional(),
     })
   ),
+}).superRefine((data, ctx) => {
+  const seen = new Set<string>();
+  for (const item of data.meta) {
+    const key = `${item.scope}:${item.index}`;
+    if (seen.has(key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['meta'],
+        message: `Duplicate variable mapping for ${key}`,
+      });
+    }
+    seen.add(key);
+  }
 });
 
 router.get(
@@ -357,7 +372,6 @@ router.post(
       orgId,
       req.activeWhatsappNumberId
     );
-    const phoneNumberId = whatsappNumber.phoneNumberId;
     const template = await MetaWhatsAppService.getMessageTemplate(wabaId, accessToken, name);
     if (!template) throw new AppError(404, 'Template not found');
     if (template.status !== 'APPROVED') {
@@ -373,21 +387,35 @@ router.post(
           normalizedPhone: normalizePhoneIdentity(phone),
         },
       },
-      select: { name: true, phone: true, email: true, customAttributes: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        customAttributes: true,
+        optedIn: true,
+        consentSource: true,
+        consentAt: true,
+        optOutAt: true,
+      },
     });
+    if (!contact) {
+      throw new AppError(404, 'Test sends require an existing contact on the active WhatsApp number');
+    }
+    if (!hasAuditableCampaignConsent(contact)) {
+      throw new AppError(400, 'Test sends require auditable campaign consent for this contact');
+    }
     const resolvedParams = mergeTemplateParams(
       templateParams || null,
       null,
       contact?.name,
       template,
-      contact
-        ? {
-            name: contact.name,
-            phone: contact.phone,
-            email: contact.email,
-            customAttributes: contact.customAttributes,
-          }
-        : { phone }
+      {
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        customAttributes: contact.customAttributes,
+      }
     );
     try {
       assertApprovedCampaignTemplate(template, {
@@ -398,27 +426,18 @@ router.post(
     } catch (error) {
       throw new AppError(400, error instanceof Error ? error.message : String(error));
     }
-    const components = buildTemplateComponents(resolvedParams, template);
+    const result = await sendDirectMessage(orgId, {
+      phone: contact.phone,
+      content: name,
+      type: 'TEMPLATE',
+      templateName: name,
+      templateLanguage,
+      templateParams: resolvedParams,
+      whatsappNumberId: whatsappNumber.id,
+      idempotencyKey: req.get('Idempotency-Key') || undefined,
+    });
 
-    const result = await MetaWhatsAppService.sendMessage(
-      phoneNumberId,
-      accessToken,
-      {
-        to: phone,
-        type: 'template',
-        template: {
-          name,
-          language: { code: templateLanguage },
-          ...(components.length ? { components } : {}),
-        },
-      },
-      {
-        whatsappNumberId: whatsappNumber.id,
-        isOnBizApp: Boolean(whatsappNumber.isOnBizApp),
-      }
-    );
-
-    sendSuccess(res, { metaMessageId: result.messages?.[0]?.id });
+    sendSuccess(res, { metaMessageId: result.message.metaMessageId });
   })
 );
 

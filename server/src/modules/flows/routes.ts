@@ -272,13 +272,21 @@ router.get('/:id', ...memberGuard, asyncHandler(async (req, res) => {
 }));
 
 router.get('/:id/analytics', ...memberGuard, asyncHandler(async (req, res) => {
-  const analytics = await getFlowAnalytics(paramId(req), req.user!.organizationId!);
+  const analytics = await getFlowAnalytics(
+    paramId(req),
+    req.user!.organizationId!,
+    req.activeWhatsappNumberId!
+  );
   if (!analytics) throw new AppError(404, 'Flow not found');
   sendSuccess(res, analytics);
 }));
 
 router.get('/:id/versions', ...memberGuard, asyncHandler(async (req, res) => {
-  const versions = await getFlowVersions(paramId(req), req.user!.organizationId!);
+  const versions = await getFlowVersions(
+    paramId(req),
+    req.user!.organizationId!,
+    req.activeWhatsappNumberId!
+  );
   if (!versions) throw new AppError(404, 'Flow not found');
   sendSuccess(res, { versions });
 }));

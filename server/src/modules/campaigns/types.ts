@@ -69,7 +69,11 @@ export const templateParamsSchema = z
   .object({
     body: z.array(z.string()).optional(),
     header: z.array(z.string()).optional(),
-    headerMediaUrl: z.string().url().optional(),
+    headerMediaUrl: z
+      .string()
+      .url()
+      .refine((value) => new URL(value).protocol === 'https:', 'Media URL must use HTTPS')
+      .optional(),
     couponCode: z.string().max(15).optional(),
     buttonUrlSuffixes: z.array(z.string().max(2000)).optional(),
   })

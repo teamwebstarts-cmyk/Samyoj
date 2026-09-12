@@ -71,9 +71,9 @@ export async function getTemplateVariableMeta(
   if (Array.isArray(exact)) return exact;
   const wildcard = maps[variableMetaKey(name, '*')];
   if (Array.isArray(wildcard)) return wildcard;
-  const prefix = `${name.trim().toLowerCase()}::`;
-  const fallback = Object.entries(maps).find(([key, meta]) => key.startsWith(prefix) && meta.length);
-  return fallback?.[1] || [];
+  // Never borrow metadata from an arbitrary language; component indexes can
+  // differ between localized template versions.
+  return [];
 }
 
 export async function saveTemplateVariableMeta(

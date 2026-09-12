@@ -338,26 +338,39 @@ export async function createOrderFromInbound(
   );
   const items = applyCatalogNames(input.catalogId, input.items, lookup);
 
-  const order = await prisma.order.create({
-    data: {
-      organizationId,
-      contactId: input.contactId,
-      conversationId: input.conversationId,
-      whatsappNumberId: input.whatsappNumberId,
-      catalogId: input.catalogId,
-      referenceId: input.referenceId,
-      items: items as unknown as Prisma.InputJsonValue,
-      subtotalCents: input.amounts.subtotalCents,
-      taxCents: input.amounts.taxCents,
-      shippingCents: input.amounts.shippingCents,
-      totalCents: input.amounts.totalCents,
-      currency: input.amounts.currency,
-      metadata: input.metadata as Prisma.InputJsonValue | undefined,
-    },
-    include: {
-      contact: { select: { id: true, name: true, phone: true } },
-    },
-  });
+  let order;
+  try {
+    order = await prisma.order.create({
+      data: {
+        organizationId,
+        contactId: input.contactId,
+        conversationId: input.conversationId,
+        whatsappNumberId: input.whatsappNumberId,
+        catalogId: input.catalogId,
+        referenceId: input.referenceId,
+        items: items as unknown as Prisma.InputJsonValue,
+        subtotalCents: input.amounts.subtotalCents,
+        taxCents: input.amounts.taxCents,
+        shippingCents: input.amounts.shippingCents,
+        totalCents: input.amounts.totalCents,
+        currency: input.amounts.currency,
+        metadata: input.metadata as Prisma.InputJsonValue | undefined,
+      },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      throw error;
+    }
+    const existing = await prisma.order.findFirst({
+      where: { organizationId, referenceId: input.referenceId },
+      include: { contact: { select: { id: true, name: true, phone: true } } },
+    });
+    if (!existing) throw error;
+    return existing;
+  }
 
   emitToOrg(organizationId, 'order:new', {
     orderId: order.id,
@@ -382,10 +395,25 @@ export async function updateOrderStatus(
   });
   if (!existing) return null;
 
-  const updated = await prisma.order.update({
-    where: { id: orderId },
+  const allowed: Record<OrderStatus, readonly OrderStatus[]> = {
+    PENDING: ['PENDING', 'PROCESSING', 'CANCELED'],
+    PROCESSING: ['PROCESSING', 'PARTIALLY_SHIPPED', 'SHIPPED', 'CANCELED'],
+    PARTIALLY_SHIPPED: ['PARTIALLY_SHIPPED', 'SHIPPED', 'COMPLETED'],
+    SHIPPED: ['SHIPPED', 'COMPLETED'],
+    COMPLETED: ['COMPLETED'],
+    CANCELED: ['CANCELED'],
+  };
+  if (!allowed[existing.status].includes(status)) {
+    throw new AppError(409, `Cannot move a ${existing.status.toLowerCase()} order to ${status.toLowerCase()}`);
+  }
+  const updatedCount = await prisma.order.updateMany({
+    where: { id: orderId, organizationId, whatsappNumberId, status: existing.status },
     data: { status, statusNote },
   });
+  if (updatedCount.count !== 1) {
+    throw new AppError(409, 'Order changed while it was being updated');
+  }
+  const updated = await prisma.order.findUniqueOrThrow({ where: { id: orderId } });
 
   emitToOrg(organizationId, 'order:updated', {
     orderId: updated.id,
@@ -408,10 +436,30 @@ export async function updateOrderPaymentStatus(
   });
   if (!existing) return null;
 
-  return prisma.order.update({
-    where: { id: orderId },
+  const allowed: Record<OrderPaymentStatus, readonly OrderPaymentStatus[]> = {
+    PENDING: ['PENDING', 'CAPTURED', 'FAILED'],
+    CAPTURED: ['CAPTURED'],
+    FAILED: ['FAILED', 'PENDING'],
+  };
+  if (!allowed[existing.paymentStatus].includes(paymentStatus)) {
+    throw new AppError(
+      409,
+      `Cannot move a ${existing.paymentStatus.toLowerCase()} payment to ${paymentStatus.toLowerCase()}`
+    );
+  }
+  const updatedCount = await prisma.order.updateMany({
+    where: {
+      id: orderId,
+      organizationId,
+      whatsappNumberId,
+      paymentStatus: existing.paymentStatus,
+    },
     data: { paymentStatus },
   });
+  if (updatedCount.count !== 1) {
+    throw new AppError(409, 'Payment status changed while it was being updated');
+  }
+  return prisma.order.findUniqueOrThrow({ where: { id: orderId } });
 }
 
 export async function listOrders(

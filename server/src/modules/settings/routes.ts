@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler, AppError } from '../../utils/response';
 import { z } from 'zod';
 import { DEFAULT_BUSINESS_HOURS } from '../flows/types';
@@ -70,6 +71,8 @@ const adminGuard = [
   requireActiveCommercialOnMutation(),
   loadOrgRole,
   requireOrgRole('OWNER', 'ADMIN'),
+  loadPermissions,
+  requirePermission('manageSettings'),
 ];
 const aiAdminGuard = [
   ...adminGuard,

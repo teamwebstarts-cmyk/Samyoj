@@ -3,6 +3,7 @@ import { OrderPaymentStatus, OrderStatus } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
+import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { logError } from '../../errors';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
@@ -17,10 +18,17 @@ import {
   updateOrderPaymentStatus,
   updateOrderStatus,
 } from './service';
+import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
 const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+
+const commerceMutationGuard = [
+  loadPermissions,
+  requirePermission('manageBilling'),
+  requireActiveCommercialOnMutation(),
+];
 
 router.get(
   '/orders',
@@ -60,8 +68,7 @@ const statusSchema = z.object({
 
 router.patch(
   '/orders/:id/status',
-  authenticate,
-  requireOrg,
+  ...commerceMutationGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const orderId = paramId(req);
@@ -129,8 +136,7 @@ const paymentStatusSchema = z.object({
 
 router.patch(
   '/orders/:id/payment-status',
-  authenticate,
-  requireOrg,
+  ...commerceMutationGuard,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const orderId = paramId(req);

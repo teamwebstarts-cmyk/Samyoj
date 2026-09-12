@@ -12,6 +12,14 @@ const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
 
+async function assertAgentInOrg(organizationId: string, userId: string) {
+  const member = await prisma.organizationUser.findFirst({
+    where: { organizationId, userId },
+    select: { userId: true },
+  });
+  if (!member) throw new AppError(400, 'That teammate is not in this workspace');
+}
+
 const leadSchema = z.object({
   title: z.string().min(1),
   contactId: z.string().uuid().optional(),
@@ -77,6 +85,7 @@ router.post(
       });
       if (!contact) throw new AppError(404, 'Contact not found');
     }
+    if (data.assignedAgentId) await assertAgentInOrg(orgId, data.assignedAgentId);
 
     const lead = await prisma.lead.create({
       data: {
@@ -120,6 +129,7 @@ router.patch(
       });
       if (!contact) throw new AppError(404, 'Contact not found for the active WhatsApp number');
     }
+    if (data.assignedAgentId) await assertAgentInOrg(orgId, data.assignedAgentId);
 
     const lead = await prisma.lead.update({
       where: { id },
@@ -159,32 +169,35 @@ router.post(
     });
     if (!contact) throw new AppError(404, 'Contact not found');
 
-    const existing = await prisma.lead.findFirst({
-      where: { organizationId: orgId, contactId: contact.id },
-      include: {
-        contact: { select: { id: true, phone: true, name: true } },
-      },
-    });
-    if (existing) {
-      sendSuccess(res, { lead: existing, created: false });
-      return;
-    }
+    const lead = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      const existing = await tx.lead.findFirst({
+        where: { organizationId: orgId, whatsappNumberId, contactId: contact.id },
+        include: {
+          contact: { select: { id: true, phone: true, name: true } },
+        },
+      });
+      if (existing) return { lead: existing, created: false };
 
-    const lead = await prisma.lead.create({
-      data: {
-        organizationId: orgId,
-        contactId: contact.id,
-        whatsappNumberId,
-        title: contact.name || contact.phone,
-        source: contact.source,
-        stage: 'NEW',
-      },
-      include: {
-        contact: { select: { id: true, phone: true, name: true } },
-      },
+      return {
+        lead: await tx.lead.create({
+          data: {
+            organizationId: orgId,
+            contactId: contact.id,
+            whatsappNumberId,
+            title: contact.name || contact.phone,
+            source: contact.source,
+            stage: 'NEW',
+          },
+          include: {
+            contact: { select: { id: true, phone: true, name: true } },
+          },
+        }),
+        created: true,
+      };
     });
 
-    sendSuccess(res, { lead, created: true }, 201);
+    sendSuccess(res, lead, lead.created ? 201 : 200);
   })
 );
 

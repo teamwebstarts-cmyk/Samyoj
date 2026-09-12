@@ -12,13 +12,13 @@ export async function saveFlowVersion(
   note?: string,
   startNodeId?: string | null
 ) {
-  const flow = await prisma.flow.findUnique({ where: { id: flowId } });
-  if (!flow) return null;
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM flows WHERE id = ${flowId} FOR UPDATE`;
+    const flow = await tx.flow.findUnique({ where: { id: flowId } });
+    if (!flow) return null;
 
-  const nextVersion = flow.version + 1;
-
-  await prisma.$transaction([
-    prisma.flowVersion.create({
+    const nextVersion = flow.version + 1;
+    await tx.flowVersion.create({
       data: {
         flowId,
         version: nextVersion,
@@ -28,8 +28,8 @@ export async function saveFlowVersion(
         startNodeId,
         note,
       },
-    }),
-    prisma.flow.update({
+    });
+    await tx.flow.update({
       where: { id: flowId },
       data: {
         version: nextVersion,
@@ -37,10 +37,9 @@ export async function saveFlowVersion(
         nodes: nodes as unknown as Prisma.InputJsonValue,
         draftNodes: Prisma.JsonNull,
       },
-    }),
-  ]);
-
-  return nextVersion;
+    });
+    return nextVersion;
+  });
 }
 
 export async function saveFlowDraft(
@@ -94,8 +93,12 @@ export async function publishFlowDraft(flowId: string, organizationId: string, n
   );
 }
 
-export async function getFlowVersions(flowId: string, organizationId: string) {
-  const flow = await prisma.flow.findFirst({ where: { id: flowId, organizationId } });
+export async function getFlowVersions(
+  flowId: string,
+  organizationId: string,
+  whatsappNumberId: string
+) {
+  const flow = await prisma.flow.findFirst({ where: { id: flowId, organizationId, whatsappNumberId } });
   if (!flow) return null;
 
   return prisma.flowVersion.findMany({

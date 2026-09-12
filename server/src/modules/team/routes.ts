@@ -81,6 +81,15 @@ async function getMembership(orgId: string, userId: string) {
   });
 }
 
+async function assertDepartmentInOrg(organizationId: string, departmentId?: string | null) {
+  if (!departmentId) return;
+  const department = await prisma.teamDepartment.findFirst({
+    where: { id: departmentId, organizationId },
+    select: { id: true },
+  });
+  if (!department) throw new AppError(400, 'That department is not in this workspace');
+}
+
 function formatMember(
   m: Awaited<ReturnType<typeof getMembership>> & object,
   extras: {
@@ -275,7 +284,6 @@ router.post(
     const { availability } = z
       .object({ availability: z.enum(['ONLINE', 'AWAY', 'OFFLINE']).optional() })
       .parse(req.body);
-
     const membership = await prisma.organizationUser.update({
       where: { organizationId_userId: { organizationId: orgId, userId } },
       data: {
@@ -471,6 +479,7 @@ router.post(
         permissions: permissionsSchema.optional(),
       })
       .parse(req.body);
+    await assertDepartmentInOrg(orgId, data.departmentId);
 
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
@@ -1086,6 +1095,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const data = createMemberSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
+    await assertDepartmentInOrg(orgId, data.departmentId);
 
     const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
     if (existingUser) {
@@ -1182,6 +1192,7 @@ router.patch(
     const userId = paramId(req);
     const data = updateMemberSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
+    await assertDepartmentInOrg(orgId, data.departmentId);
 
     const membership = await getMembership(orgId, userId);
     if (!membership) throw new AppError(404, 'Team member not found');

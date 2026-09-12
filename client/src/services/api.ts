@@ -225,12 +225,13 @@ export const authApi = {
   resendVerification: (email: string) => api.post('/auth/resend-verification', { email }),
 };
 
-function idempotencyHeaders() {
-  const key =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+function idempotencyHeaders(key?: string) {
+  const resolvedKey =
+    key ||
+    (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
-      : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return { headers: { 'Idempotency-Key': key } };
+      : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+  return { headers: { 'Idempotency-Key': resolvedKey } };
 }
 
 export const inboxApi = {
@@ -264,11 +265,15 @@ export const inboxApi = {
   markUnread: (id: string) => api.post(`/inbox/${id}/unread`),
   mediaUrl: (messageId: string) => api.get(`/inbox/messages/${messageId}/media-url`),
   retryMessage: (messageId: string) => api.post(`/inbox/messages/${messageId}/retry`),
-  send: (id: string, payload: string | import('../types').SendMessagePayload) =>
+  send: (
+    id: string,
+    payload: string | import('../types').SendMessagePayload,
+    idempotencyKey?: string
+  ) =>
     api.post(
       `/inbox/${id}/messages`,
       typeof payload === 'string' ? { content: payload } : payload,
-      idempotencyHeaders()
+      idempotencyHeaders(idempotencyKey)
     ),
   assign: (id: string, agentId: string | null) =>
     api.patch(`/inbox/${id}/assign`, { agentId }),

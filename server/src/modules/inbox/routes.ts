@@ -587,6 +587,7 @@ router.post(
       messageId: message.id,
       status: 'PENDING',
       conversationId: conversation.id,
+      whatsappNumberId: req.activeWhatsappNumberId,
     });
 
     const sentMessage = await deliverOutboundMessage({
@@ -973,7 +974,11 @@ router.post(
     await syncConversationPreview(id);
 
     const deletedIds = rows.map((r) => r.id);
-    emitToOrg(orgId, 'messages:deleted', { conversationId: id, messageIds: deletedIds });
+    emitToOrg(orgId, 'messages:deleted', {
+      conversationId: id,
+      messageIds: deletedIds,
+      whatsappNumberId: req.activeWhatsappNumberId,
+    });
     emitToOrg(orgId, 'conversation:updated', { conversationId: id });
     sendSuccess(res, { deleted: deletedIds.length, messageIds: deletedIds });
   })
@@ -1004,7 +1009,11 @@ router.delete(
       data: { lastMessageAt: null, unreadCount: 0 },
     });
 
-    emitToOrg(orgId, 'messages:cleared', { conversationId: id, deleted: result.count });
+    emitToOrg(orgId, 'messages:cleared', {
+      conversationId: id,
+      deleted: result.count,
+      whatsappNumberId: req.activeWhatsappNumberId,
+    });
     emitToOrg(orgId, 'conversation:updated', {
       conversationId: id,
       unreadCount: 0,
@@ -1067,6 +1076,7 @@ router.delete(
     emitToOrg(orgId, 'messages:deleted', {
       conversationId: message.conversationId,
       messageIds: [message.id],
+      whatsappNumberId: req.activeWhatsappNumberId,
     });
     emitToOrg(orgId, 'conversation:updated', { conversationId: message.conversationId });
     sendSuccess(res, { deleted: 1, messageIds: [message.id] });
@@ -1190,7 +1200,11 @@ const templateParamsSchema = z
   .object({
     body: z.array(z.string()).optional(),
     header: z.array(z.string()).optional(),
-    headerMediaUrl: z.string().url().optional(),
+    headerMediaUrl: z
+      .string()
+      .url()
+      .refine((value) => new URL(value).protocol === 'https:', 'Media URL must use HTTPS')
+      .optional(),
     couponCode: z.string().max(15).optional(),
     buttonUrlSuffixes: z.array(z.string().max(2000)).optional(),
   })
@@ -1405,6 +1419,7 @@ router.post(
       emitToOrg(orgId, 'message:reaction', {
         conversationId: conversation.id,
         messageId: updated.id,
+        whatsappNumberId: conversation.whatsappNumberId,
         reactions: (updated.metadata as { reactions?: unknown } | null)?.reactions ?? [],
         metadata: updated.metadata,
       });
@@ -1442,7 +1457,11 @@ router.post(
 
       if (data.media.mediaPath) {
         const relativePath = data.media.mediaPath;
-        if (!relativePath.startsWith(`${orgId}/`)) {
+        if (
+          !relativePath.startsWith(`${orgId}/`) ||
+          relativePath.includes('..') ||
+          relativePath.includes('\\')
+        ) {
           throw new AppError(400, 'Invalid media path');
         }
         if (!(await mediaExists(relativePath))) {

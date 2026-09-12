@@ -5,6 +5,18 @@ import { signPublicMediaQuery } from './public-sign';
 
 const UPLOAD_ROOT = path.join(process.cwd(), 'uploads', 'media');
 
+export function resolveLocalMediaPath(relativePath: string): string {
+  if (path.isAbsolute(relativePath) || relativePath.split(/[\\/]/).includes('..')) {
+    throw new Error('Invalid media path');
+  }
+  const root = path.resolve(UPLOAD_ROOT);
+  const absolute = path.resolve(root, relativePath);
+  if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) {
+    throw new Error('Invalid media path');
+  }
+  return absolute;
+}
+
 function extensionFromMime(mimeType?: string, filename?: string): string {
   if (filename) {
     const ext = path.extname(filename);
@@ -34,18 +46,18 @@ export function buildRelativePath(orgId: string, messageId: string, mimeType?: s
 }
 
 async function saveLocal(relativePath: string, buffer: Buffer) {
-  const absolute = path.join(UPLOAD_ROOT, relativePath);
+  const absolute = resolveLocalMediaPath(relativePath);
   await fs.mkdir(path.dirname(absolute), { recursive: true });
   await fs.writeFile(absolute, buffer);
 }
 
 async function readLocal(relativePath: string): Promise<Buffer> {
-  return fs.readFile(path.join(UPLOAD_ROOT, relativePath));
+  return fs.readFile(resolveLocalMediaPath(relativePath));
 }
 
 async function existsLocal(relativePath: string): Promise<boolean> {
   try {
-    await fs.access(path.join(UPLOAD_ROOT, relativePath));
+    await fs.access(resolveLocalMediaPath(relativePath));
     return true;
   } catch {
     return false;
@@ -118,9 +130,6 @@ async function existsS3(relativePath: string): Promise<boolean> {
 }
 
 export function getPublicMediaUrl(relativePath: string): string {
-  if (config.storage.driver === 's3' && config.storage.s3PublicUrl) {
-    return `${config.storage.s3PublicUrl.replace(/\/$/, '')}/${relativePath}`;
-  }
   const { exp, sig } = signPublicMediaQuery(relativePath);
   return `${config.serverUrl}/api/media/public/${relativePath}?exp=${exp}&sig=${sig}`;
 }
@@ -178,7 +187,7 @@ export async function deleteMediaObject(relativePath: string): Promise<void> {
       await client.send(new DeleteObjectCommand({ Bucket: s3Bucket, Key: relativePath }));
       return;
     }
-    const absolute = path.join(UPLOAD_ROOT, relativePath);
+    const absolute = resolveLocalMediaPath(relativePath);
     await fs.unlink(absolute).catch(() => undefined);
   } catch {
     /* ignore missing / permission errors — clearing chat must still succeed */

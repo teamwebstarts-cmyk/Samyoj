@@ -142,6 +142,7 @@ async function applyInboundMessageFollowups(params: {
 
   emitToOrg(orgId, 'message:new', {
     conversationId: conversation.id,
+    whatsappNumberId: whatsappNumber.id,
     message,
     contact,
     conversation: conversationSummary
@@ -171,7 +172,7 @@ async function applyInboundMessageFollowups(params: {
         amountCents: Math.round((item.item_price || 0) * 100),
       }));
       const subtotalCents = items.reduce((sum, item) => sum + item.amountCents * item.quantity, 0);
-      const referenceId = `ord_${Date.now()}_${contact.id.slice(0, 8)}`;
+      const referenceId = `ord_msg_${message.id}`;
       const order = await createOrderFromInbound(orgId, {
         contactId: contact.id,
         conversationId: conversation.id,
@@ -637,9 +638,18 @@ export async function processWebhookPayload(
               where: { id: conversation.id },
               select: { firstResponseAt: true, slaDueAt: true },
             });
+            const sideEffects = inboundConversationSideEffectData(
+              inboundTimestamp,
+              conversationState
+            );
+            const { unreadCount: _unreadCount, ...timestampSideEffects } = sideEffects;
+            await tx.conversation.updateMany({
+              where: inboundConversationRepairWhere(conversation.id, inboundTimestamp),
+              data: timestampSideEffects,
+            });
             await tx.conversation.update({
               where: { id: conversation.id },
-              data: inboundConversationSideEffectData(inboundTimestamp, conversationState),
+              data: { unreadCount: { increment: 1 } },
             });
             return created;
           });

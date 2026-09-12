@@ -19,6 +19,13 @@ interface SendDirectMessageInput {
   type?: 'TEXT' | 'TEMPLATE';
   templateName?: string;
   templateLanguage?: string;
+  templateParams?: {
+    body?: string[];
+    header?: string[];
+    headerMediaUrl?: string;
+    couponCode?: string;
+    buttonUrlSuffixes?: string[];
+  };
   whatsappNumberId?: string;
   idempotencyKey?: string;
 }
@@ -91,7 +98,7 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
           normalizedPhone: phone,
           whatsappNumberId: input.whatsappNumberId,
           name: input.name,
-          optedIn: true,
+          optedIn: false,
           ...NEW_CONTACT_CALLING_DEFAULTS,
         },
         update: { name: input.name || undefined },
@@ -156,6 +163,7 @@ export async function recordOutboundInConversation(input: RecordOutboundInput) {
 
   emitToOrg(input.organizationId, 'message:new', {
     conversationId: conversation.id,
+    whatsappNumberId: input.whatsappNumberId,
     message,
     conversation: conversationSummary
       ? {
@@ -234,7 +242,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
           normalizedPhone: phone,
           whatsappNumberId: whatsappNumber.id,
           name: input.name,
-          optedIn: true,
+          optedIn: false,
           source: 'OUTBOUND',
           ...NEW_CONTACT_CALLING_DEFAULTS,
         },
@@ -306,6 +314,7 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
     messageMetadata = {
       templateName: input.templateName,
       templateLanguage: input.templateLanguage || template?.language || 'en_US',
+      ...(input.templateParams ? { templateParams: input.templateParams } : {}),
     };
   }
 
@@ -346,10 +355,12 @@ export async function sendDirectMessage(organizationId: string, input: SendDirec
     type,
     templateName: input.templateName,
     templateLanguage: input.templateLanguage || 'en_US',
+    templateParams: input.templateParams,
   });
 
   emitToOrg(organizationId, 'message:new', {
     conversationId: conversation.id,
+    whatsappNumberId: whatsappNumber.id,
     message,
     conversation: {
       id: conversation.id,

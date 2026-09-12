@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import prisma from '../config/database';
 import { createModuleLogger } from '../utils/logger';
+import { deleteMediaObject } from '../modules/media/storage-adapter';
 
 const log = createModuleLogger('media-retention');
 
@@ -97,12 +98,24 @@ export async function runMediaRetentionPass(): Promise<{
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - retentionDays);
 
-    const result = await prisma.message.deleteMany({
-      where: {
-        conversation: { organizationId: org.id },
-        createdAt: { lt: cutoff },
-      },
+    const messageWhere = {
+      conversation: { organizationId: org.id },
+      createdAt: { lt: cutoff },
+    };
+    const oldMessages = await prisma.message.findMany({
+      where: messageWhere,
+      select: { metadata: true },
     });
+    const mediaPaths = oldMessages
+      .map((message) => {
+        const metadata = message.metadata as { mediaPath?: unknown } | null;
+        return typeof metadata?.mediaPath === 'string' ? metadata.mediaPath : null;
+      })
+      .filter((mediaPath): mediaPath is string => Boolean(mediaPath));
+    for (const mediaPath of mediaPaths) {
+      await deleteMediaObject(mediaPath);
+    }
+    const result = await prisma.message.deleteMany({ where: messageWhere });
 
     scanned += 1;
     purged += result.count;

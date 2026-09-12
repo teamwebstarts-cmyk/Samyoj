@@ -138,6 +138,7 @@ export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [numberLimit, setNumberLimit] = useState<number | 'unlimited' | null>(null);
   const [planName, setPlanName] = useState<string | null>(null);
 
@@ -203,6 +204,7 @@ export default function SettingsPage() {
 
   // Initial Data Fetch
   const loadData = (options?: { silent?: boolean }) => {
+    setLoadError(null);
     if (options?.silent) setRefreshing(true);
     else setInitialLoading(true);
     Promise.allSettled([
@@ -211,7 +213,14 @@ export default function SettingsPage() {
       whatsappApi.webhookStatus(),
       refreshNumbers({ silent: true }),
     ])
-      .then(([settingsRes, billingRes, webhookRes]) => {
+      .then(([settingsRes, billingRes, webhookRes, numbersRes]) => {
+        if (
+          [settingsRes, billingRes, webhookRes, numbersRes].some(
+            (result) => result.status === 'rejected'
+          )
+        ) {
+          setLoadError('Some workspace settings could not be loaded. Retry before saving changes.');
+        }
         if (settingsRes.status === 'fulfilled') {
           const s = settingsRes.value.data.data;
           if (s.businessHours) setBusinessHours(s.businessHours);
@@ -316,6 +325,21 @@ export default function SettingsPage() {
           <SettingsSkeleton />
         ) : (
           <>
+            {loadError && (
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+              >
+                <span>{loadError}</span>
+                <button
+                  type="button"
+                  className="font-semibold underline underline-offset-2"
+                  onClick={() => loadData()}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <SettingsHero
               badge="Settings"
               badgeIcon={Settings2}
@@ -380,7 +404,7 @@ export default function SettingsPage() {
                       businessHours={businessHours}
                       onSaveBusinessHours={handleSaveBusinessHours}
                       savingHours={savingHours}
-                      canEdit={isOwnerOrAdmin}
+                      canEdit={isOwnerOrAdmin && !loadError}
                     />
                   )}
 

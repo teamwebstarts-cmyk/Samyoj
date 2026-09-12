@@ -98,12 +98,14 @@ export class SarvamStreamTranscriber {
 
     return new Promise<void>((resolve, reject) => {
       if (!this.ws) return reject(new Error('No WebSocket'));
+      let opened = false;
 
       const failTimer = setTimeout(() => {
         reject(new Error('Sarvam STT connect timed out'));
       }, 12_000);
 
       this.ws.onopen = () => {
+        opened = true;
         clearTimeout(failTimer);
         log.info('Sarvam STT realtime connected', {
           language,
@@ -147,6 +149,11 @@ export class SarvamStreamTranscriber {
         if (this.pingInterval) {
           clearInterval(this.pingInterval);
           this.pingInterval = null;
+        }
+        if (opened && !this.closed) {
+          this.handlers.onError?.(
+            new Error(`Sarvam STT WebSocket closed unexpectedly (${ev.code})`)
+          );
         }
       };
     });

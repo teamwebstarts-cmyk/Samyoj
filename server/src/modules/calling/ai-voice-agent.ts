@@ -236,6 +236,7 @@ export class AiVoiceCallSession {
       },
       onError: (err) => {
         log.error('Sarvam transcriber error during call', { callId: this.ctx.callId, error: err.message });
+        if (!this.ended) void this.end('stt_provider_error');
       },
     });
     await this.transcriber.connect({
@@ -1065,33 +1066,6 @@ export class AiVoiceCallSession {
       this.maxDurationTimer = null;
     }
 
-    // Post-call summary: generate once; publish in Inbox after the call-event pill.
-    let postCallSummary: string | null = null;
-    if (this.transcript.length > 0) {
-      try {
-        const summary = await this.generateSummary();
-        if (summary) {
-          postCallSummary = summary;
-          const call = await prisma.call.findUnique({ where: { id: this.ctx.callId } });
-          const metadata = ((call?.metadata as Record<string, unknown>) || {});
-          await prisma.call.update({
-            where: { id: this.ctx.callId },
-            data: { metadata: { ...metadata, summary } },
-          });
-
-          // Agent-only internal note (never a WhatsApp bubble).
-          if (this.ctx.conversationId) {
-            await this.persistCallSummaryInternalNote(summary, reason);
-          }
-        }
-      } catch (err) {
-        log.warn('Post-call summary generation failed', {
-          callId: this.ctx.callId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
     try {
       await MetaCallingService.terminate(
         this.ctx.phoneNumberId,
@@ -1218,30 +1192,38 @@ export class AiVoiceCallSession {
       }
     }
 
-    void publishCallEventMessage(this.ctx.callId);
+    await publishCallEventMessage(this.ctx.callId);
 
-    if (postCallSummary && this.ctx.conversationId) {
-      try {
-        const ended = await prisma.call.findUnique({
-          where: { id: this.ctx.callId },
-          select: { endedAt: true },
-        });
-        const summaryAt = ended?.endedAt
-          ? new Date(ended.endedAt.getTime() + 1)
-          : new Date();
-        await publishCallSummaryMessage({
-          callId: this.ctx.callId,
-          organizationId: this.ctx.organizationId,
-          conversationId: this.ctx.conversationId,
-          summary: postCallSummary,
-          createdAt: summaryAt,
-        });
-      } catch (err) {
-        log.warn('Failed to publish call summary in Inbox', {
-          callId: this.ctx.callId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+    if (this.transcript.length > 0) {
+      void (async () => {
+        try {
+          const summary = await this.generateSummary();
+          if (!summary) return;
+          const call = await prisma.call.findUnique({ where: { id: this.ctx.callId } });
+          const metadata = ((call?.metadata as Record<string, unknown>) || {});
+          await prisma.call.update({
+            where: { id: this.ctx.callId },
+            data: { metadata: { ...metadata, summary } },
+          });
+          if (this.ctx.conversationId) {
+            await this.persistCallSummaryInternalNote(summary, reason);
+            await publishCallSummaryMessage({
+              callId: this.ctx.callId,
+              organizationId: this.ctx.organizationId,
+              conversationId: this.ctx.conversationId,
+              summary,
+              createdAt: call?.endedAt
+                ? new Date(call.endedAt.getTime() + 1)
+                : new Date(),
+            });
+          }
+        } catch (err) {
+          log.warn('Post-call summary generation failed', {
+            callId: this.ctx.callId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
     }
 
     log.info('AI voice call session ended', { callId: this.ctx.callId, reason });

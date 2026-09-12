@@ -305,17 +305,9 @@ export async function resolveVoiceKnowledge(
     ? await searchVoiceKnowledgeQueriesTokenOnly(botId, queries)
     : await searchVoiceKnowledgeQueries(botId, queries, organizationId, whatsappNumberId);
   if (primary.length > 0) return primary;
-
-  const chatBot = await prisma.aiBot.findFirst({
-    where: { organizationId, channel: 'CHAT', enabled: true },
-    orderBy: [{ isSystem: 'desc' }, { isDefault: 'desc' }, { createdAt: 'asc' }],
-    select: { id: true },
-  });
-  if (!chatBot || chatBot.id === botId) return [];
-
-  return tokenOnly
-    ? searchVoiceKnowledgeQueriesTokenOnly(chatBot.id, queries)
-    : searchVoiceKnowledgeQueries(chatBot.id, queries, organizationId, whatsappNumberId);
+  // Chat and Calling bots have separate knowledge contracts. A calling miss
+  // must stay a miss instead of leaking a Chat bot's FAQ into a voice call.
+  return [];
 }
 
 /** Titles only — never dump full FAQ bodies on a miss (that hallucinates store answers). */

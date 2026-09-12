@@ -69,9 +69,14 @@ export async function publishCallPermissionMessage(input: {
       where: { id: input.conversationId },
       data: { lastMessageAt: message.createdAt },
     });
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: input.conversationId },
+      select: { whatsappNumberId: true },
+    });
 
     emitToOrg(input.organizationId, 'message:new', {
       conversationId: input.conversationId,
+      whatsappNumberId: conversation?.whatsappNumberId,
       message,
       conversation: {
         id: input.conversationId,

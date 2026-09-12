@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -30,6 +31,8 @@ const adminGuard = [
   requireActiveCommercialOnMutation(),
   loadOrgRole,
   requireOrgRole('OWNER', 'ADMIN'),
+  loadPermissions,
+  requirePermission('manageAutomations'),
 ] as const;
 
 const automationSchema = z.object({
@@ -151,22 +154,22 @@ router.post(
       throw new AppError(400, 'Connect a WhatsApp number before using this feature.');
     }
 
-    if (data.enabled) {
-      await assertNoBlockingConflicts(
-        orgId,
-        {
-          kind: 'automation',
-          name: data.name,
-          triggerType: data.triggerType,
-          config: data.config,
-          enabled: true,
-        },
-        numberId
-      );
-    }
-
     const automation = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+      if (data.enabled) {
+        await assertNoBlockingConflicts(
+          orgId,
+          {
+            kind: 'automation',
+            name: data.name,
+            triggerType: data.triggerType,
+            config: data.config,
+            enabled: true,
+          },
+          numberId,
+          tx
+        );
+      }
       if (data.enabled) {
         const quotaCheck = await checkQuota(orgId, 'publishedWorkflows', 1);
         if (!quotaCheck.allowed) {
@@ -224,7 +227,8 @@ router.patch(
             config: data.config ?? existing.config,
             enabled: true,
           },
-          numberId
+          numberId,
+          tx
         );
       }
 

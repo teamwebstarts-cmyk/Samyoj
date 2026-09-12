@@ -237,6 +237,8 @@ export interface MessageMetadata {
   templateName?: string;
   templateLanguage?: string;
   templateParams?: TemplateParams;
+  /** Reused by the client when recovering a timed-out logical send. */
+  idempotencyKey?: string;
   source?: 'flow' | 'automation' | 'biz_app';
   triggerType?: string;
   flowId?: string;

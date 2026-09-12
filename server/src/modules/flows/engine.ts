@@ -2098,7 +2098,9 @@ export async function scheduleFlowStart(params: {
     },
     {
       delay: Math.min(Math.max(params.delayMs, 0), 7 * 86400000),
-      jobId: `flow-start-${params.conversationId}-${params.flowId}-${Date.now()}`,
+      jobId: `flow-start-${params.conversationId}-${params.flowId}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
     }
   );
 }

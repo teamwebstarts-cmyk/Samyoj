@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
+import type { Prisma } from '@prisma/client';
 import { automationsForNumberFilter, flowsForNumberFilter } from '../whatsapp/active-number';
 
 export interface AutomationConflictLink {
@@ -380,13 +381,14 @@ export async function detectAutomationConflicts(
 export async function previewAutomationConflicts(
   organizationId: string,
   proposed: ConflictPreviewInput,
-  whatsappNumberId: string
+  whatsappNumberId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<AutomationConflict[]> {
   const [automations, flows] = await Promise.all([
-    prisma.automation.findMany({
+    db.automation.findMany({
       where: { organizationId, ...automationsForNumberFilter(whatsappNumberId), enabled: true },
     }),
-    prisma.flow.findMany({
+    db.flow.findMany({
       where: {
         organizationId,
         ...flowsForNumberFilter(whatsappNumberId),
@@ -408,9 +410,10 @@ export function getBlockingConflicts(conflicts: AutomationConflict[]): Automatio
 export async function assertNoBlockingConflicts(
   organizationId: string,
   proposed: ConflictPreviewInput,
-  whatsappNumberId: string
+  whatsappNumberId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<void> {
-  const conflicts = await previewAutomationConflicts(organizationId, proposed, whatsappNumberId);
+  const conflicts = await previewAutomationConflicts(organizationId, proposed, whatsappNumberId, db);
   const blocking = getBlockingConflicts(conflicts);
   if (!blocking.length) return;
   throw new AppError(409, blocking.map((c) => c.message).join(' '), 'AUTOMATION_CONFLICT', {
