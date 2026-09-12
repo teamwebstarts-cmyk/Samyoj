@@ -147,6 +147,15 @@ export const config = {
     keySecret: process.env.RAZORPAY_KEY_SECRET || '',
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
   },
+  billing: {
+    supplierName: process.env.BILLING_SUPPLIER_NAME || 'Samyoj',
+    supplierGstin: process.env.BILLING_SUPPLIER_GSTIN || '',
+    supplierAddress: process.env.BILLING_SUPPLIER_ADDRESS || '',
+    supplierStateCode: process.env.BILLING_SUPPLIER_STATE_CODE || '',
+    sacCode: process.env.BILLING_SAC_CODE || '998314',
+    graceDays: parseInt(process.env.BILLING_GRACE_DAYS || '5', 10),
+    allowTestBypass: /^(1|true|yes)$/i.test(process.env.BILLING_TEST_BYPASS || ''),
+  },
   alerts: {
     checkIntervalMs: parseInt(process.env.ALERT_CHECK_INTERVAL_MS || '30000', 10),
     defaultSlaMinutes: parseInt(process.env.DEFAULT_SLA_MINUTES || '15', 10),

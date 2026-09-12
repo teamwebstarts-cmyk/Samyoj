@@ -722,3 +722,43 @@ export async function processWebhookPayload(
     }
   }
 }
+
+export async function replayInboundContactOverflow(overflowId: string): Promise<boolean> {
+  const overflow = await prisma.inboundContactOverflow.findUnique({
+    where: { id: overflowId },
+  });
+  if (!overflow || overflow.resolvedAt) return false;
+  const message = overflow.payload as Record<string, unknown>;
+  const whatsappNumber = await prisma.whatsappNumber.findFirst({
+    where: {
+      id: overflow.whatsappNumberId,
+      organizationId: overflow.organizationId,
+      isActive: true,
+    },
+    select: { phoneNumberId: true },
+  });
+  if (!whatsappNumber) return false;
+  const quota = await checkQuota(overflow.organizationId, 'contacts', 1);
+  if (!quota.allowed) return false;
+
+  await processWebhookPayload({
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              metadata: { phone_number_id: whatsappNumber.phoneNumberId },
+              contacts: [{ wa_id: overflow.contactPhone, profile: { name: overflow.contactPhone } }],
+              messages: [message],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  const resolved = await prisma.inboundContactOverflow.updateMany({
+    where: { id: overflow.id, resolvedAt: null },
+    data: { resolvedAt: new Date() },
+  });
+  return resolved.count === 1;
+}

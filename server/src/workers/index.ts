@@ -37,6 +37,8 @@ import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/w
 import { safeRecordMetaSendFailure } from '../modules/platform/meta-errors';
 import { startPlatformTelemetryWorker } from '../modules/platform/worker';
 import { whatsappSendFailurePatches } from '../modules/whatsapp/send-failure-explain';
+import { reconcileStalePaymentOrders } from '../modules/billing/fulfillment';
+import { reconcileBillingSubscriptions } from '../modules/billing/subscription.service';
 
 const log = createModuleLogger('worker');
 
@@ -960,6 +962,28 @@ setInterval(() => {
     .then(({ retryPendingCallingMinuteDeductions }) => retryPendingCallingMinuteDeductions())
     .catch((err) => logError(err, { source: 'worker', action: 'retryCallingMinuteDeductions' }));
 }, 60_000);
+
+// Reconcile delayed Razorpay captures and subscription state without
+// invalidating a provider payment merely because the browser was offline.
+setInterval(() => {
+  reconcileStalePaymentOrders().catch((err) =>
+    logError(err, { source: 'worker', action: 'reconcileStalePaymentOrders' })
+  );
+  reconcileBillingSubscriptions().catch((err) =>
+    logError(err, { source: 'worker', action: 'reconcileBillingSubscriptions' })
+  );
+  import('./webhook.processor')
+    .then(async ({ replayInboundContactOverflow }) => {
+      const rows = await prisma.inboundContactOverflow.findMany({
+        where: { resolvedAt: null },
+        orderBy: { receivedAt: 'asc' },
+        take: 25,
+        select: { id: true },
+      });
+      for (const row of rows) await replayInboundContactOverflow(row.id);
+    })
+    .catch((err) => logError(err, { source: 'worker', action: 'replayInboundContactOverflow' }));
+}, 5 * 60_000);
 
 }
 

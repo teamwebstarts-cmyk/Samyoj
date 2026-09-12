@@ -88,7 +88,7 @@ export default function BillingHero({ info }: BillingHeroProps) {
     statusText = 'Payment due';
     statusTone = 'amber';
     statusIcon = AlertCircle;
-    description = 'Your latest manual plan payment failed. Retry the purchase to restore access.';
+    description = 'Your recurring payment needs attention. Update billing before the grace period ends.';
   } else if (info.subscriptionStatus === 'grace') {
     statusText = 'Grace period';
     statusTone = 'amber';
@@ -109,6 +109,11 @@ export default function BillingHero({ info }: BillingHeroProps) {
     statusTone = 'rose';
     statusIcon = Lock;
     description = 'Your plan period has ended. Purchase a valid plan to restore access.';
+  } else if (info.subscriptionStatus === 'paused') {
+    statusText = 'Paused';
+    statusTone = 'slate';
+    statusIcon = Clock;
+    description = 'Your subscription is paused. Resume it with the billing team before access is restricted.';
   }
 
   const stats: BillingHeroStat[] = [

@@ -29,12 +29,62 @@ export function startAlertWorker() {
         where: {
           subscriptionStatus: 'active',
           planExpiresAt: { lte: now },
-          plan: { notIn: ['starter', 'launch'] },
+          plan: { not: 'launch' },
         },
         data: {
           subscriptionStatus: 'expired',
         },
       });
+
+      const overdue = await prisma.billingSubscription.findMany({
+        where: {
+          status: { in: ['PAST_DUE', 'GRACE'] },
+          graceEndsAt: { lte: now },
+        },
+        select: { id: true, organizationId: true },
+      });
+      const graceStart = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+      const grace = await prisma.billingSubscription.findMany({
+        where: {
+          status: 'PAST_DUE',
+          pastDueAt: { lte: graceStart },
+          graceEndsAt: { gt: now },
+        },
+        select: { id: true, organizationId: true },
+      });
+      for (const subscription of grace) {
+        await prisma.$transaction([
+          prisma.billingSubscription.update({
+            where: { id: subscription.id },
+            data: {
+              status: 'GRACE',
+              graceEndsAt: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
+            },
+          }),
+          prisma.organization.update({
+            where: { id: subscription.organizationId },
+            data: { subscriptionStatus: 'grace' },
+          }),
+        ]);
+        emitToOrg(subscription.organizationId, 'billing:grace', {
+          graceEndsAt: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
+        });
+      }
+      for (const subscription of overdue) {
+        await prisma.$transaction([
+          prisma.billingSubscription.update({
+            where: { id: subscription.id },
+            data: { status: 'HALTED' },
+          }),
+          prisma.organization.update({
+            where: { id: subscription.organizationId },
+            data: { subscriptionStatus: 'locked' },
+          }),
+        ]);
+        emitToOrg(subscription.organizationId, 'billing:locked', {
+          reason: 'payment_failed',
+        });
+      }
 
       // Notify orgs expiring within 3 days
       const expiring = await prisma.organization.findMany({

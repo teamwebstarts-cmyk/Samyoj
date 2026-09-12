@@ -5,6 +5,11 @@ import { AI_ADDON_PLAN_ID, getAiTopupSku } from './ai-credits/catalog';
 import { grantTopUpInTransaction } from './ai-credits/service';
 import { legacyPlanToTier } from './plans';
 import { TIER_ORDER } from './entitlements.service';
+import {
+  fetchRazorpayOrderPayments,
+  verifyCapturedPayment,
+} from './razorpay.service';
+import { issueInvoiceForCharge } from './invoice.service';
 
 export function parseTopupQuantity(cadence: string | null | undefined): number {
   if (!cadence?.startsWith('topup:')) return 1;
@@ -218,6 +223,21 @@ export async function fulfillCapturedPayment(params: {
       if (locked.paymentId && locked.paymentId !== params.paymentId) {
         throw new AppError(409, 'Payment order is already linked to another payment', 'DUPLICATE_PAYMENT');
       }
+      const existingInvoice = await tx.invoice.findUnique({
+        where: { paymentOrderId: locked.id },
+      });
+      if (!existingInvoice) {
+        const capturedSku = resolveSkuForPaymentOrder(locked);
+        if (capturedSku) {
+          await issueInvoiceForCharge(tx, {
+            organizationId: locked.organizationId,
+            paymentOrderId: locked.id,
+            providerPaymentId: params.paymentId,
+            sku: capturedSku,
+            totalPaise: locked.amountPaise,
+          });
+        }
+      }
       return {
         organizationId: locked.organizationId,
         plan: org.plan,
@@ -314,6 +334,13 @@ export async function fulfillCapturedPayment(params: {
         taxAmountPaise: Math.max(0, locked.amountPaise - sku.pricePaise),
         supersedesId: currentPeriod?.id ?? null,
       },
+    });
+    await issueInvoiceForCharge(tx, {
+      organizationId: locked.organizationId,
+      paymentOrderId: locked.id,
+      providerPaymentId: params.paymentId,
+      sku,
+      totalPaise: locked.amountPaise,
     });
 
     const updatedOrg = await tx.organization.update({
@@ -469,4 +496,48 @@ export async function expireStaleCreatedOrders(
       failureMessage: 'Checkout expired before payment confirmation',
     },
   });
+}
+
+export async function reconcileStalePaymentOrders(maxAgeMs = 30 * 60 * 1000) {
+  const before = new Date(Date.now() - maxAgeMs);
+  const orders = await prisma.paymentOrder.findMany({
+    where: { status: { in: ['CREATED', 'AUTHORIZED'] }, createdAt: { lt: before } },
+    take: 100,
+  });
+  for (const order of orders) {
+    try {
+      const payments = await fetchRazorpayOrderPayments(order.razorpayOrderId);
+      const captured = payments.find((payment) => payment.status === 'captured');
+      if (captured) {
+        const verified = await verifyCapturedPayment({
+          orderId: order.razorpayOrderId,
+          paymentId: captured.id,
+          amountPaise: order.amountPaise,
+          currency: order.currency,
+        });
+        await fulfillCapturedPayment({
+          paymentOrderId: order.id,
+          paymentId: captured.id,
+          providerPayment: {
+            orderId: verified.order.id,
+            paymentId: verified.payment.id,
+            amountPaise: verified.payment.amount,
+            currency: verified.payment.currency,
+            status: verified.payment.status,
+            orderStatus: verified.order.status,
+          },
+        });
+        continue;
+      }
+      const failed = payments.find((payment) => payment.status === 'failed');
+      if (failed) {
+        await markPaymentOrderFailed(order.id, {
+          code: failed.error_code || 'PAYMENT_FAILED',
+          message: failed.error_description || 'Provider reported payment failure',
+        });
+      }
+    } catch {
+      // Keep pending on provider/network errors; the next pass retries safely.
+    }
+  }
 }

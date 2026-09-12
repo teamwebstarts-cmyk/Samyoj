@@ -24,12 +24,14 @@ import { useAuth } from '../contexts/AuthContext';
 import type {
   AiCreditsResponse,
   BillingInfo,
+  BillingInvoice,
+  BillingProfile,
   BillingPaymentAttempt,
   BillingPlan,
   BillingUsage,
   ReportsOverviewFullData,
 } from '../types';
-import { openRazorpayCheckout } from '../utils/razorpay';
+import { openRazorpayCheckout, openRazorpaySubscriptionCheckout } from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
 type BillingTab = 'usage' | 'plans' | 'history';
@@ -83,11 +85,16 @@ export default function BillingPage() {
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [overview, setOverview] = useState<ReportsOverviewFullData | null>(null);
   const [aiCredits, setAiCredits] = useState<AiCreditsResponse | null>(null);
+  const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
+  const [profile, setProfile] = useState<BillingProfile>({});
+  const [savingProfile, setSavingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [overviewUnavailable, setOverviewUnavailable] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [purchasingSku, setPurchasingSku] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [openingPaymentMethod, setOpeningPaymentMethod] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<PaymentNotice | null>(null);
 
   const handleTabChange = useCallback(
@@ -131,8 +138,10 @@ export default function BillingPage() {
       billingApi.usage(),
       billingApi.aiCredits().catch(() => null),
       analyticsApi.overview({ days: '30' }).catch(() => null),
+      billingApi.invoices().catch(() => null),
+      billingApi.billingProfile().catch(() => null),
     ])
-      .then(([billingRes, currentRes, usageRes, aiCreditsRes, overviewRes]) => {
+      .then(([billingRes, currentRes, usageRes, aiCreditsRes, overviewRes, invoicesRes, profileRes]) => {
         const baseInfo = billingRes.data.data as BillingInfo;
         const currentData = currentRes?.data?.data as
           | {
@@ -160,6 +169,8 @@ export default function BillingPage() {
         });
         setUsage(usageRes.data.data);
         setAiCredits(aiCreditsRes?.data?.data ?? null);
+        setInvoices(invoicesRes?.data?.data ?? []);
+        setProfile(profileRes?.data?.data ?? {});
         if (overviewRes?.data?.data) {
           setOverview(overviewRes.data.data);
           setOverviewUnavailable(false);
@@ -174,6 +185,22 @@ export default function BillingPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const saveBillingProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const response = await billingApi.updateBillingProfile(profile);
+      setProfile(response.data.data);
+      toastSuccess('Billing details saved');
+    } catch (err: unknown) {
+      toastError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Could not save billing details'
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -193,7 +220,7 @@ export default function BillingPage() {
   const displayedPlanId = info?.planTier || info?.plan;
   const displayedPlanExpiry =
     info?.entitlements?.planExpiresAt || info?.planExpiresAt || info?.currentPeriodEnd;
-  const billingStatusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
+  const billingStatusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'paused'].includes(
     info?.subscriptionStatus || '',
   );
   const currentPlanIsActive = Boolean(
@@ -268,27 +295,27 @@ export default function BillingPage() {
     setPaymentNotice(null);
     setUpgrading(plan.id);
     try {
-      const res = await billingApi.createOrder(plan.id, cadence);
-      // If server returned alreadyActive: true, plan was restored with no additional charge!
-      if (res.data?.data?.alreadyActive) {
-        toastSuccess(res.data.data.message || `Switched to your active ${plan.name} plan!`);
+      const skuId = `${plan.id}_${cadence}`;
+      const checkoutKey = `subscription:${skuId}:${Date.now()}`;
+      const res = await billingApi.subscriptionCheckout(skuId, checkoutKey);
+      if (res.data?.data?.status === 'SCHEDULED') {
+        toastSuccess(`Your ${plan.name} downgrade is scheduled for the current period end.`);
         setUpgrading(null);
         load();
         return;
       }
 
-      const { orderId, amount, currency, keyId } = res.data.data;
-      await openRazorpayCheckout({
+      const { subscriptionId, sessionId, keyId } = res.data.data;
+      if (!subscriptionId || !sessionId) throw new Error('Subscription checkout is unavailable');
+      await openRazorpaySubscriptionCheckout({
         keyId,
-        amount,
-        currency,
-        orderId,
+        subscriptionId,
         name: 'Samyoj Platform',
-        description: `Manual purchase of ${plan.name} — valid until the purchased period ends`,
+        description: `${plan.name} ${cadence} subscription — GST-inclusive recurring billing`,
         prefillEmail: user?.email,
         onSuccess: async (response) => {
           try {
-            await billingApi.verifyPayment(response);
+            await billingApi.verifySubscription({ sessionId, ...response });
             toastSuccess(`Welcome to ${plan.name}!`);
             setPaymentNotice(null);
             await refreshSession();
@@ -298,8 +325,8 @@ export default function BillingPage() {
             setPaymentNotice({
               variant: 'error',
               planId: plan.id,
-              message:
-                'Payment received, but verification is still pending. Retry from this plan card later or contact support with your payment ID.',
+            message:
+                'Payment received, but subscription verification is still pending. Refresh billing shortly or contact support with your payment ID.',
             });
             toastError('Payment received but verification failed. If money was deducted, contact support with your payment ID.');
           } finally {
@@ -358,6 +385,39 @@ export default function BillingPage() {
       handleFreePlan(plan);
     } else {
       handlePaidPlan(plan);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!info?.subscription || !window.confirm('Cancel renewal at the current period end?')) return;
+    setCancelling(true);
+    try {
+      await billingApi.cancelSubscription();
+      toastSuccess('Subscription cancellation scheduled. Access remains until the period end.');
+      load();
+    } catch (err: unknown) {
+      toastError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Could not cancel subscription'
+      );
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handlePaymentMethod = async () => {
+    setOpeningPaymentMethod(true);
+    try {
+      const response = await billingApi.paymentMethodHandoff();
+      const url = response.data.data.url;
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      toastError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Payment-method update is not available yet'
+      );
+    } finally {
+      setOpeningPaymentMethod(false);
     }
   };
 
@@ -478,6 +538,27 @@ export default function BillingPage() {
           <>
             {/* Hero — always visible at top */}
             <BillingHero info={info} usage={usage} />
+            {info.subscription &&
+              info.canManageBilling &&
+              ['ACTIVE', 'PAST_DUE', 'GRACE'].includes(info.subscription.status) &&
+              !info.subscription.cancelAtPeriodEnd && (
+                <div className="flex justify-end gap-2">
+                  <AppButton
+                    variant="secondary"
+                    loading={openingPaymentMethod}
+                    onClick={handlePaymentMethod}
+                  >
+                    Update payment method
+                  </AppButton>
+                  <AppButton
+                    variant="secondary"
+                    loading={cancelling}
+                    onClick={handleCancelSubscription}
+                  >
+                    Cancel renewal
+                  </AppButton>
+                </div>
+              )}
 
             {/* Redesigned Instant Single-Click Tab Navigation */}
             <div className="flex rounded-xl border border-theme-border bg-theme-subtle/50 p-1">
@@ -640,9 +721,10 @@ export default function BillingPage() {
               )}
 
               {activeTab === 'history' && (
-                <SectionCard
+                <>
+                  <SectionCard
                   title="Payment history"
-                  subtitle="Manual plan purchases and their verification status"
+                  subtitle="Subscription charges and their verification status"
                 >
                   {paymentHistory.length === 0 ? (
                     <EmptyState
@@ -681,7 +763,7 @@ export default function BillingPage() {
                                   {statusLabel === 'Captured'
                                     ? `Captured on ${payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : 'N/A'}`
                                     : `Created on ${payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'N/A'}`}
-                                  {' · '}₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + tax ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')} (catalog split — not a GST invoice)
+                                  {' · '}₹{(payment.exclGstPaise / 100).toLocaleString('en-IN')} + GST ₹{(payment.gstAmountPaise / 100).toLocaleString('en-IN')}
                                 </p>
                                 {statusLabel === 'Captured' && payment.periodEnd && (
                                   <p className="text-[11px] font-semibold text-theme-secondary">
@@ -728,7 +810,94 @@ export default function BillingPage() {
                       })}
                     </div>
                   )}
+                  </SectionCard>
+                <SectionCard
+                  title="GST invoices"
+                  subtitle="Download Samyoj SaaS tax invoices. Meta WhatsApp fees are billed separately."
+                >
+                  {invoices.length === 0 ? (
+                    <EmptyState
+                      icon={Receipt}
+                      title="No GST invoices yet"
+                      description="Invoices appear after a successful subscription charge."
+                      compact
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {invoices.map((invoice) => (
+                        <div
+                          key={invoice.id}
+                          className="dashboard-card flex items-center justify-between gap-3 px-4 py-3.5"
+                        >
+                          <div>
+                            <p className="font-bold text-theme-fg">{invoice.invoiceNumber}</p>
+                            <p className="text-[11px] text-theme-muted">
+                              {invoice.description} · {new Date(invoice.issuedAt).toLocaleDateString()} · {invoice.status === 'ISSUED' ? 'Issued' : 'Complete billing details'}
+                            </p>
+                          </div>
+                          {invoice.status === 'ISSUED' ? (
+                            <a
+                              href={billingApi.invoiceDownloadUrl(invoice.id)}
+                              className="text-[11px] font-bold text-theme-secondary underline underline-offset-2"
+                            >
+                              Download PDF
+                            </a>
+                          ) : (
+                            <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                              Details needed
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </SectionCard>
+                {info.canManageBilling && (
+                  <SectionCard
+                    title="Billing details"
+                    subtitle="These details are snapshotted on future GST invoices."
+                  >
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(
+                        [
+                          ['legalName', 'Legal name'],
+                          ['billingEmail', 'Billing email'],
+                          ['gstin', 'GSTIN (optional)'],
+                          ['stateCode', 'State code (e.g. 27)'],
+                          ['stateName', 'State name'],
+                        ] as const
+                      ).map(([field, label]) => (
+                        <label key={field} className="space-y-1 text-xs font-semibold text-theme-secondary">
+                          {label}
+                          <input
+                            value={profile[field] ?? ''}
+                            onChange={(event) =>
+                              setProfile((current) => ({ ...current, [field]: event.target.value }))
+                            }
+                            className="w-full rounded-xl border border-theme-border bg-theme-surface px-3 py-2.5 text-sm text-theme-fg outline-none focus:border-whatsapp-500"
+                          />
+                        </label>
+                      ))}
+                      <label className="space-y-1 text-xs font-semibold text-theme-secondary sm:col-span-2">
+                        Billing address
+                        <textarea
+                          value={profile.address ?? ''}
+                          onChange={(event) =>
+                            setProfile((current) => ({ ...current, address: event.target.value }))
+                          }
+                          rows={3}
+                          className="w-full rounded-xl border border-theme-border bg-theme-surface px-3 py-2.5 text-sm text-theme-fg outline-none focus:border-whatsapp-500"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <AppButton loading={savingProfile} onClick={saveBillingProfile}>
+                        Save billing details
+                      </AppButton>
+                    </div>
+                  </SectionCard>
+                )}
+                </>
               )}
             </div>
           </>

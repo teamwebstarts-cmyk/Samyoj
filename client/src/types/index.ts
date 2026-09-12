@@ -392,7 +392,7 @@ export interface ConversationStats {
 
 export type PlanTier = 'launch' | 'starter' | 'growth' | 'pro' | 'enterprise';
 export type BillingCadence = 'trial' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
-export type SubscriptionStatus = 'trial' | 'trial_expired' | 'active' | 'past_due' | 'grace' | 'locked' | 'cancelled' | 'expired';
+export type SubscriptionStatus = 'trial' | 'trial_expired' | 'active' | 'past_due' | 'grace' | 'locked' | 'cancelled' | 'expired' | 'paused';
 
 export interface BillingSkuPricing {
   skuId: string;
@@ -437,6 +437,7 @@ export interface BillingEntitlementSnapshot {
   planName?: string;
   subscriptionStatus?: SubscriptionStatus | string;
   isLocked?: boolean;
+  softLocked?: boolean;
   planExpiresAt?: string | null;
   quotas?: {
     waNumbers?: BillingQuota;
@@ -499,6 +500,49 @@ export interface BillingInfo {
   entitlements?: BillingEntitlementSnapshot;
   pendingPayment?: BillingPaymentAttempt | null;
   recentPayments?: BillingPaymentAttempt[];
+  subscription?: BillingSubscription | null;
+}
+
+export interface BillingSubscription {
+  id: string;
+  razorpaySubscriptionId: string;
+  skuId: string;
+  planTier: string;
+  cadence: BillingCadence | string;
+  status: string;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd: boolean;
+  pendingSkuId?: string | null;
+  pendingPlanTier?: string | null;
+  pendingCadence?: string | null;
+  pastDueAt?: string | null;
+  graceEndsAt?: string | null;
+}
+
+export interface BillingInvoice {
+  id: string;
+  invoiceNumber: string;
+  financialYear: string;
+  status: string;
+  description: string;
+  recipientName: string;
+  recipientGstin?: string | null;
+  taxablePaise: number;
+  cgstPaise: number;
+  sgstPaise: number;
+  igstPaise: number;
+  totalPaise: number;
+  issuedAt: string;
+}
+
+export interface BillingProfile {
+  billingEmail?: string | null;
+  legalName?: string | null;
+  gstin?: string | null;
+  address?: string | null;
+  stateCode?: string | null;
+  stateName?: string | null;
 }
 
 export interface BillingUsage {

@@ -1,14 +1,9 @@
 import { type Request, type Response } from 'express';
-import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { asyncHandler, sendSuccess, AppError } from '../../utils/response';
 import { PLAN_TIERS, BILLING_SKUS } from '../billing/plans';
-import { refreshBillingConfig } from '../billing/config';
-
-const configSchema = z.object({
-  planTiers: z.record(z.string(), z.any()),
-  billingSkus: z.array(z.any()),
-});
+import { billingConfigSchema, parseBillingConfig, refreshBillingConfig } from '../billing/config';
 
 function assertSuperAdmin(req: Request) {
   if (req.platformOperator?.role !== 'SUPER_ADMIN') {
@@ -37,12 +32,13 @@ export const patchPlatformSettings = asyncHandler(
   async (req: Request, res: Response) => {
     assertSuperAdmin(req);
 
-    const data = configSchema.parse(req.body);
+    const data = billingConfigSchema.parse(req.body);
+    parseBillingConfig(data);
 
     const setting = await prisma.platformSetting.upsert({
       where: { key: 'BILLING_CONFIG' },
-      update: { value: data },
-      create: { key: 'BILLING_CONFIG', value: data },
+      update: { value: data as unknown as Prisma.InputJsonValue },
+      create: { key: 'BILLING_CONFIG', value: data as unknown as Prisma.InputJsonValue },
     });
 
     // Apply the updated config immediately across the running backend instances

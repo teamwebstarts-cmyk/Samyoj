@@ -84,13 +84,15 @@ export async function createRazorpayPlan(params: {
   name: string;
   amountPaise: number;
   description: string;
+  period?: 'monthly' | 'yearly';
+  interval?: number;
   notes?: Record<string, string>;
 }): Promise<{ id: string }> {
   return razorpayApi<{ id: string }>('/plans', {
     method: 'POST',
     body: JSON.stringify({
-      period: 'monthly',
-      interval: 1,
+      period: params.period || 'monthly',
+      interval: params.interval || 1,
       item: {
         name: params.name,
         amount: params.amountPaise,
@@ -104,6 +106,7 @@ export async function createRazorpayPlan(params: {
 
 export async function createRazorpaySubscription(params: {
   planId: string;
+  totalCount?: number;
   notes?: Record<string, string>;
 }): Promise<{ id: string; status: string; short_url?: string }> {
   return razorpayApi<{ id: string; status: string; short_url?: string }>('/subscriptions', {
@@ -111,6 +114,7 @@ export async function createRazorpaySubscription(params: {
     body: JSON.stringify({
       plan_id: params.planId,
       customer_notify: 1,
+      ...(params.totalCount ? { total_count: params.totalCount } : {}),
       notes: params.notes,
     }),
   });
@@ -129,10 +133,37 @@ export async function cancelRazorpaySubscription(
   );
 }
 
+export async function updateRazorpaySubscription(
+  subscriptionId: string,
+  planId: string
+): Promise<{ id: string; status: string }> {
+  return razorpayApi<{ id: string; status: string }>(`/subscriptions/${subscriptionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ plan_id: planId }),
+  });
+}
+
+export async function pauseRazorpaySubscription(subscriptionId: string) {
+  return razorpayApi<{ id: string; status: string }>(`/subscriptions/${subscriptionId}/pause`, {
+    method: 'POST',
+    body: JSON.stringify({ pause_at: 'now' }),
+  });
+}
+
+export async function resumeRazorpaySubscription(subscriptionId: string) {
+  return razorpayApi<{ id: string; status: string }>(`/subscriptions/${subscriptionId}/resume`, {
+    method: 'POST',
+    body: JSON.stringify({ resume_at: 'now' }),
+  });
+}
+
 export async function fetchRazorpaySubscription(subscriptionId: string): Promise<{
   id: string;
+  plan_id?: string;
   status: string;
+  current_start?: number;
   current_end?: number;
+  short_url?: string;
   notes?: Record<string, string>;
 }> {
   return razorpayApi(`/subscriptions/${subscriptionId}`);
@@ -148,12 +179,55 @@ export type RazorpayOrder = {
 export type RazorpayPayment = {
   id: string;
   order_id: string;
+  subscription_id?: string;
   amount: number;
   currency: string;
   status: string;
   error_code?: string | null;
   error_description?: string | null;
 };
+
+export async function verifySubscriptionPayment(params: {
+  subscriptionId: string;
+  paymentId: string;
+  amountPaise: number;
+  currency?: string;
+}): Promise<{
+  subscription: Awaited<ReturnType<typeof fetchRazorpaySubscription>>;
+  payment: RazorpayPayment;
+}> {
+  const [subscription, payment] = await Promise.all([
+    fetchRazorpaySubscription(params.subscriptionId),
+    fetchRazorpayPayment(params.paymentId),
+  ]);
+  if (
+    subscription.id !== params.subscriptionId ||
+    (subscription.status !== 'authenticated' &&
+      subscription.status !== 'active' &&
+      subscription.status !== 'pending') ||
+    payment.id !== params.paymentId ||
+    (payment.subscription_id && payment.subscription_id !== params.subscriptionId) ||
+    payment.amount !== params.amountPaise ||
+    payment.currency !== (params.currency || 'INR')
+  ) {
+    throw new AppError(
+      409,
+      'Subscription payment amount, currency, or subscription does not match',
+      'PAYMENT_MISMATCH'
+    );
+  }
+  if (payment.status === 'failed') {
+    throw new AppError(409, 'Provider reported that this subscription payment failed', 'PAYMENT_FAILED');
+  }
+  if (payment.status !== 'captured') {
+    throw new AppError(
+      202,
+      'Subscription payment verification is pending provider confirmation',
+      'VERIFICATION_PENDING'
+    );
+  }
+  return { subscription, payment };
+}
 
 export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrder> {
   return razorpayApi<RazorpayOrder>(`/orders/${encodeURIComponent(orderId)}`);

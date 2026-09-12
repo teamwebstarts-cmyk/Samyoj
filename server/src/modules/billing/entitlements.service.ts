@@ -8,7 +8,7 @@ import {
 import { AppError } from '../../utils/response';
 
 function unlockLocalTesting(): boolean {
-  return config.nodeEnv === 'development' && !process.env.VITEST;
+  return config.nodeEnv === 'development' && config.billing.allowTestBypass && !process.env.VITEST;
 }
 
 export type QuotaType =
@@ -46,6 +46,7 @@ export interface OrgEntitlements {
   planName: string;
   subscriptionStatus: string;
   isLocked: boolean;
+  softLocked: boolean;
   planExpiresAt: Date | null;
   planPeriodId: string | null;
   periodStartsAt: Date | null;
@@ -109,6 +110,11 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
       } | null>;
     };
   }).planPeriod;
+  const subscriptionModel = (prisma as typeof prisma & {
+    billingSubscription?: {
+      findFirst: (args: unknown) => Promise<{ status: string; graceEndsAt: Date | null } | null>;
+    };
+  }).billingSubscription;
 
   // Keep unit tests and old databases readable while the additive migration is
   // rolling out. Once present, the ledger wins over the compatibility cache.
@@ -154,20 +160,31 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
         : Promise.resolve(0),
     ]);
 
+  const currentSubscription = subscriptionModel?.findFirst
+    ? await subscriptionModel.findFirst({
+        where: {
+          organizationId,
+          status: { in: ['PAST_DUE', 'GRACE', 'ACTIVE', 'HALTED', 'PAUSED'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : null;
   const ledgerPeriod = currentPeriod || latestPeriod;
   const planTier = ledgerPeriod
     ? legacyPlanToTier(ledgerPeriod.planTier)
     : legacyPlanToTier(org.plan);
   const tierDef = PLAN_TIERS[planTier] || PLAN_TIERS.launch;
   const isLedgerBacked = Boolean(latestPeriod);
-  const statusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
-    org.subscriptionStatus
-  );
+  const now = new Date();
+  const softLocked =
+    org.subscriptionStatus === 'grace' || currentSubscription?.status === 'GRACE';
+  const statusLocked =
+    ['trial_expired', 'locked', 'expired', 'cancelled'].includes(org.subscriptionStatus) ||
+    (org.subscriptionStatus === 'past_due' &&
+      (!currentSubscription?.graceEndsAt || currentSubscription.graceEndsAt <= now));
   const computedLocked = isLedgerBacked
     ? !currentPeriod || statusLocked
-    : ['trial_expired', 'locked', 'expired', 'cancelled', 'past_due'].includes(
-        org.subscriptionStatus
-      ) || Boolean(org.planExpiresAt && org.planExpiresAt <= new Date());
+    : statusLocked || Boolean(org.planExpiresAt && org.planExpiresAt <= now);
   const testing = unlockLocalTesting();
   const isLocked = testing ? false : computedLocked;
   const planExpiresAt = ledgerPeriod?.endsAt ?? org.planExpiresAt;
@@ -178,6 +195,7 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
     planName: tierDef.name,
     subscriptionStatus: org.subscriptionStatus,
     isLocked,
+    softLocked,
     planExpiresAt,
     planPeriodId: currentPeriod?.id ?? latestPeriod?.id ?? null,
     periodStartsAt: ledgerPeriod?.startsAt ?? null,
@@ -246,6 +264,14 @@ export async function checkFeature(
       reason: 'Your paid period has expired. Purchase a plan to continue.',
     };
   }
+  if (entitlements.softLocked && ['campaigns', 'ai', 'calling'].includes(feature)) {
+    return {
+      allowed: false,
+      requiredPlan,
+      code: 'SUBSCRIPTION_GRACE',
+      reason: 'This feature is paused during the payment grace period. Inbox sending remains available.',
+    };
+  }
 
   const allowed =
     feature === 'ai'
@@ -293,6 +319,16 @@ export async function checkQuota(
       upgradeCta: 'growth',
       code: 'SUBSCRIPTION_LOCKED',
       reason: 'Your subscription or trial has expired. Upgrade to continue using this feature.',
+    };
+  }
+  if (entitlements.softLocked && quotaType === 'waNumbers') {
+    return {
+      allowed: false,
+      used: entitlements.quotas.waNumbers.used,
+      limit: entitlements.quotas.waNumbers.limit,
+      upgradeCta: 'growth',
+      code: 'SUBSCRIPTION_GRACE',
+      reason: 'Connecting additional WhatsApp numbers is paused until billing is recovered.',
     };
   }
 

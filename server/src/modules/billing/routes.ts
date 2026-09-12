@@ -16,6 +16,7 @@ import {
   isRazorpayConfigured,
   verifyCapturedPayment,
   verifyPaymentSignature,
+  verifySubscriptionPaymentSignature,
   verifyWebhookSignature,
 } from './razorpay.service';
 import { config } from '../../config';
@@ -37,6 +38,17 @@ import {
 } from './fulfillment';
 import { TIER_ORDER, getOrgEntitlements } from './entitlements.service';
 import aiCreditsRoutes from './ai-credits/routes';
+import {
+  cancelSubscriptionAtPeriodEnd,
+  createSubscriptionCheckout,
+  handleSubscriptionWebhook,
+  verifySubscriptionCheckout,
+  reconcileBillingSubscriptions,
+  pauseSubscription,
+  resumeSubscription,
+  getSubscriptionPaymentMethodHandoff,
+} from './subscription.service';
+import { finalizePendingInvoices, renderInvoicePdf, validateGstin } from './invoice.service';
 
 const router = Router();
 
@@ -164,6 +176,10 @@ router.get(
         take: 10,
       }),
     ]);
+    const subscription = await prisma.billingSubscription.findFirst({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: 'desc' },
+    });
 
     if (!org) throw new AppError(404, 'Organization not found');
 
@@ -212,6 +228,7 @@ router.get(
       activePaidExpiresAt,
       isLocked: entitlements.isLocked,
       entitlements,
+      subscription,
       planPeriods: periods.map((period) => ({
         id: period.id,
         planTier: period.planTier,
@@ -264,6 +281,207 @@ router.post(
       })
       .parse(req.body);
     sendSuccess(res, estimateCampaignCost(recipientCount, category));
+  })
+);
+
+router.post(
+  '/subscription/checkout',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isRazorpayConfigured()) throw new AppError(503, 'Payment gateway is not configured');
+    const { skuId } = z.object({ skuId: z.string().min(1) }).parse(req.body);
+    const idempotencyKey = req.header('Idempotency-Key')?.trim();
+    if (!idempotencyKey || idempotencyKey.length < 8) {
+      throw new AppError(400, 'Idempotency-Key is required for subscription checkout', 'IDEMPOTENCY_REQUIRED');
+    }
+    const result = await createSubscriptionCheckout({
+      organizationId: req.user!.organizationId!,
+      skuId,
+      idempotencyKey,
+    });
+    sendSuccess(res, result);
+  })
+);
+
+router.post(
+  '/subscription/verify',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = z
+      .object({
+        sessionId: z.string().uuid(),
+        razorpay_subscription_id: z.string().min(1),
+        razorpay_payment_id: z.string().min(1),
+        razorpay_signature: z.string().min(1),
+      })
+      .parse(req.body);
+    if (
+      !verifySubscriptionPaymentSignature(
+        data.razorpay_subscription_id,
+        data.razorpay_payment_id,
+        data.razorpay_signature
+      )
+    ) {
+      throw new AppError(400, 'Invalid subscription payment signature');
+    }
+    const result = await verifySubscriptionCheckout({
+      organizationId: req.user!.organizationId!,
+      sessionId: data.sessionId,
+      subscriptionId: data.razorpay_subscription_id,
+      paymentId: data.razorpay_payment_id,
+    });
+    sendSuccess(res, {
+      subscriptionId: data.razorpay_subscription_id,
+      invoiceId: result.invoice?.id ?? null,
+      invoiceNumber: result.invoice?.invoiceNumber ?? null,
+      alreadyCaptured: result.alreadyCaptured,
+    });
+  })
+);
+
+router.get(
+  '/subscription',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const row = await prisma.billingSubscription.findFirst({
+      where: { organizationId: req.user!.organizationId! },
+      orderBy: { createdAt: 'desc' },
+    });
+    sendSuccess(res, row);
+  })
+);
+
+router.post(
+  '/subscription/cancel',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const row = await cancelSubscriptionAtPeriodEnd(req.user!.organizationId!);
+    sendSuccess(res, {
+      status: row.status,
+      cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+      currentPeriodEnd: row.currentPeriodEnd,
+    });
+  })
+);
+
+router.post(
+  '/subscription/pause',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    sendSuccess(res, await pauseSubscription(req.user!.organizationId!));
+  })
+);
+
+router.post(
+  '/subscription/resume',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    sendSuccess(res, await resumeSubscription(req.user!.organizationId!));
+  })
+);
+
+router.post(
+  '/subscription/payment-method',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    sendSuccess(res, await getSubscriptionPaymentMethodHandoff(req.user!.organizationId!));
+  })
+);
+
+router.get(
+  '/invoices',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const invoices = await prisma.invoice.findMany({
+      where: { organizationId: req.user!.organizationId! },
+      orderBy: { issuedAt: 'desc' },
+      take: 100,
+    });
+    sendSuccess(res, invoices);
+  })
+);
+
+router.get(
+  '/invoices/:id/download',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: req.params.id as string, organizationId: req.user!.organizationId! },
+      select: { id: true, invoiceNumber: true },
+    });
+    if (!invoice) throw new AppError(404, 'Invoice not found');
+    const pdf = await renderInvoicePdf(invoice.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${invoice.invoiceNumber}.pdf"`
+    );
+    res.send(pdf);
+  })
+);
+
+router.get(
+  '/profile',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const profile = await prisma.billingProfile.findUnique({
+      where: { organizationId: req.user!.organizationId! },
+    });
+    sendSuccess(res, profile);
+  })
+);
+
+router.patch(
+  '/profile',
+  authenticate,
+  requireOrg,
+  loadPermissions,
+  requirePermission('manageBilling'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const data = z
+      .object({
+        billingEmail: z.string().email().optional().nullable(),
+        legalName: z.string().trim().min(1).max(200).optional().nullable(),
+        gstin: z.string().trim().max(15).optional().nullable(),
+        address: z.string().trim().max(500).optional().nullable(),
+        stateCode: z.string().regex(/^[0-9]{2}$/).optional().nullable(),
+        stateName: z.string().trim().max(100).optional().nullable(),
+      })
+      .parse(req.body);
+    const gstin = validateGstin(data.gstin);
+    const profile = await prisma.billingProfile.upsert({
+      where: { organizationId: req.user!.organizationId! },
+      create: {
+        organizationId: req.user!.organizationId!,
+        ...data,
+        gstin,
+      },
+      update: { ...data, gstin },
+    });
+    await finalizePendingInvoices(req.user!.organizationId!);
+    sendSuccess(res, profile);
   })
 );
 
@@ -742,6 +960,7 @@ router.post(
         payment?: {
           entity?: {
             order_id?: string;
+            subscription_id?: string;
             id?: string;
             amount?: number;
             currency?: string;
@@ -750,10 +969,13 @@ router.post(
             error_description?: string;
           };
         };
+        order?: { entity?: { id?: string; status?: string } };
         subscription?: {
           entity?: {
             id?: string;
             status?: string;
+            plan_id?: string;
+            current_start?: number;
             current_end?: number;
             notes?: Record<string, string>;
           };
@@ -788,10 +1010,34 @@ router.post(
     let organizationId: string | undefined;
     try {
       const payment = event.payload?.payment?.entity;
-      const orderId = payment?.order_id;
+      const orderId = payment?.order_id || event.payload?.order?.entity?.id;
       const paymentId = payment?.id;
 
-      if (eventType === 'payment.captured') {
+      if (eventType.startsWith('subscription.')) {
+        await handleSubscriptionWebhook(event as unknown as Parameters<typeof handleSubscriptionWebhook>[0]);
+      } else if (eventType === 'order.paid' && orderId) {
+        const existing = await prisma.paymentOrder.findFirst({ where: { razorpayOrderId: orderId } });
+        if (existing) {
+          const captured = (await fetchRazorpayOrderPayments(orderId)).find(
+            (candidate) => candidate.status === 'captured'
+          );
+          if (captured) {
+            paymentOrderId = existing.id;
+            organizationId = existing.organizationId;
+            const provider = await verifyCapturedPayment({
+              orderId,
+              paymentId: captured.id,
+              amountPaise: existing.amountPaise,
+              currency: existing.currency,
+            });
+            await fulfillCapturedPayment({
+              paymentOrderId: existing.id,
+              paymentId: captured.id,
+              providerPayment: paymentEvidence(provider.order, provider.payment),
+            });
+          }
+        }
+      } else if (eventType === 'payment.captured') {
         if (!orderId || !paymentId) {
           throw new AppError(400, 'Captured webhook is missing payment identifiers');
         }
@@ -852,6 +1098,14 @@ router.post(
             });
           }
         }
+      } else if (eventType === 'payment.failed' && payment?.subscription_id) {
+        await handleSubscriptionWebhook({
+          event: 'subscription.pending',
+          payload: {
+            subscription: { entity: { id: payment.subscription_id } },
+            payment: { entity: payment },
+          },
+        });
       } else if (eventType === 'payment.failed') {
         if (orderId && paymentId) {
           const failedOrder = await prisma.paymentOrder.findFirst({

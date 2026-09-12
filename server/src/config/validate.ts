@@ -77,6 +77,9 @@ export function validateConfig(): void {
   }
 
   if (isProd) {
+    if (config.billing.allowTestBypass) {
+      errors.push('BILLING_TEST_BYPASS must be disabled in production');
+    }
     if (!process.env.PLATFORM_ADMIN_URL) {
       errors.push('PLATFORM_ADMIN_URL is required in production');
     }
@@ -90,6 +93,11 @@ export function validateConfig(): void {
     }
     if (!config.encryptionKey || !isValidEncryptionKey(config.encryptionKey)) {
       errors.push('ENCRYPTION_KEY must be a 64-character hex string in production');
+    }
+    if (!config.billing.supplierGstin || !config.billing.supplierAddress || !config.billing.supplierStateCode) {
+      warnings.push(
+        'BILLING_SUPPLIER_GSTIN, BILLING_SUPPLIER_ADDRESS, and BILLING_SUPPLIER_STATE_CODE must be set for issued GST invoices'
+      );
     }
     if (!config.meta.appSecret) {
       logger.warn(

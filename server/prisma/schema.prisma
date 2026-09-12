@@ -377,6 +377,12 @@ model Organization {
   planPeriods                    PlanPeriod[]
   billingEvents                  BillingEvent[]
   inboundContactOverflows        InboundContactOverflow[]
+  billingProfile                 BillingProfile?
+  billingSubscriptions           BillingSubscription[]
+  billingCheckoutSessions        BillingCheckoutSession[]
+  billingCharges                 BillingCharge[]
+  invoices                       Invoice[]
+  creditNotes                    CreditNote[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -585,6 +591,7 @@ model PaymentOrder {
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   planPeriods   PlanPeriod[]
   billingEvents BillingEvent[]
+  invoices      Invoice[]
 
   @@unique([organizationId, skuId, cadence, checkoutIntentKey])
   @@index([organizationId, createdAt])
@@ -651,6 +658,166 @@ model BillingEvent {
   @@index([paymentOrderId, createdAt])
   @@index([status, createdAt])
   @@map("billing_events")
+}
+
+model BillingProfile {
+  id             String   @id @default(uuid())
+  organizationId String   @unique @map("organization_id")
+  billingEmail   String?  @map("billing_email")
+  legalName      String?  @map("legal_name")
+  gstin          String?
+  address        String?
+  stateCode      String?  @map("state_code")
+  stateName      String?  @map("state_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("billing_profiles")
+}
+
+model BillingSubscription {
+  id                     String    @id @default(uuid())
+  organizationId         String    @map("organization_id")
+  razorpaySubscriptionId String    @unique @map("razorpay_subscription_id")
+  razorpayPlanId         String    @map("razorpay_plan_id")
+  skuId                  String    @map("sku_id")
+  planTier               String    @map("plan_tier")
+  cadence                String
+  status                 String    @default("CREATED")
+  currentPeriodStart     DateTime? @map("current_period_start")
+  currentPeriodEnd       DateTime? @map("current_period_end")
+  cancelAtPeriodEnd      Boolean   @default(false) @map("cancel_at_period_end")
+  pendingSkuId           String?   @map("pending_sku_id")
+  pendingPlanTier        String?   @map("pending_plan_tier")
+  pendingCadence         String?   @map("pending_cadence")
+  pastDueAt              DateTime? @map("past_due_at")
+  graceEndsAt            DateTime? @map("grace_ends_at")
+  cancelledAt            DateTime? @map("cancelled_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checkoutSessions BillingCheckoutSession[]
+  charges          BillingCharge[]
+
+  @@index([organizationId, status])
+  @@index([status, graceEndsAt])
+  @@map("billing_subscriptions")
+}
+
+model BillingCheckoutSession {
+  id                    String    @id @default(uuid())
+  organizationId        String    @map("organization_id")
+  billingSubscriptionId String?   @map("billing_subscription_id")
+  idempotencyKey        String    @unique @map("idempotency_key")
+  skuId                 String    @map("sku_id")
+  planTier              String    @map("plan_tier")
+  cadence               String
+  amountPaise           Int       @map("amount_paise")
+  currency              String    @default("INR")
+  status                String    @default("CREATED")
+  providerPaymentId     String?   @map("provider_payment_id")
+  signatureVerifiedAt   DateTime? @map("signature_verified_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  completedAt           DateTime? @map("completed_at")
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billingSubscription BillingSubscription? @relation(fields: [billingSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, skuId, cadence])
+  @@map("billing_checkout_sessions")
+}
+
+model BillingCharge {
+  id                    String    @id @default(uuid())
+  organizationId        String    @map("organization_id")
+  billingSubscriptionId String    @map("billing_subscription_id")
+  providerPaymentId     String    @unique @map("provider_payment_id")
+  providerEventId       String?   @unique @map("provider_event_id")
+  amountPaise           Int       @map("amount_paise")
+  currency              String    @default("INR")
+  status                String    @default("CAPTURED")
+  periodStart           DateTime? @map("period_start")
+  periodEnd             DateTime? @map("period_end")
+  failureCode           String?   @map("failure_code")
+  failureMessage        String?   @map("failure_message")
+  capturedAt            DateTime? @map("captured_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billingSubscription BillingSubscription @relation(fields: [billingSubscriptionId], references: [id], onDelete: Cascade)
+  invoice             Invoice?
+
+  @@index([organizationId, createdAt])
+  @@index([billingSubscriptionId, periodEnd])
+  @@map("billing_charges")
+}
+
+model Invoice {
+  id                     String   @id @default(uuid())
+  organizationId         String   @map("organization_id")
+  invoiceNumber          String   @unique @map("invoice_number")
+  financialYear          String   @map("financial_year")
+  kind                   String   @default("TAX_INVOICE")
+  status                 String   @default("ISSUED")
+  billingChargeId        String?  @unique @map("billing_charge_id")
+  paymentOrderId         String?  @unique @map("payment_order_id")
+  recipientName          String   @map("recipient_name")
+  recipientEmail         String?  @map("recipient_email")
+  recipientGstin         String?  @map("recipient_gstin")
+  recipientAddress       String?  @map("recipient_address")
+  placeOfSupplyStateCode String?  @map("place_of_supply_state_code")
+  supplierName           String   @map("supplier_name")
+  supplierGstin          String?  @map("supplier_gstin")
+  supplierAddress        String?  @map("supplier_address")
+  supplierStateCode      String?  @map("supplier_state_code")
+  sacCode                String   @map("sac_code")
+  description            String
+  taxablePaise           Int      @map("taxable_paise")
+  cgstPaise              Int      @default(0) @map("cgst_paise")
+  sgstPaise              Int      @default(0) @map("sgst_paise")
+  igstPaise              Int      @default(0) @map("igst_paise")
+  totalPaise             Int      @map("total_paise")
+  currency               String   @default("INR")
+  providerPaymentId      String?  @map("provider_payment_id")
+  issuedAt               DateTime @default(now()) @map("issued_at")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billingCharge BillingCharge? @relation(fields: [billingChargeId], references: [id], onDelete: SetNull)
+  paymentOrder  PaymentOrder?  @relation(fields: [paymentOrderId], references: [id], onDelete: SetNull)
+  creditNotes   CreditNote[]
+
+  @@index([organizationId, issuedAt])
+  @@index([organizationId, status])
+  @@map("billing_invoices")
+}
+
+model CreditNote {
+  id               String   @id @default(uuid())
+  organizationId   String   @map("organization_id")
+  invoiceId        String   @map("invoice_id")
+  creditNoteNumber String   @unique @map("credit_note_number")
+  reason           String
+  amountPaise      Int      @map("amount_paise")
+  issuedAt         DateTime @default(now()) @map("issued_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, issuedAt])
+  @@map("billing_credit_notes")
+}
+
+model BillingInvoiceSequence {
+  financialYear String   @id @map("financial_year")
+  nextNumber    Int      @default(1) @map("next_number")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("billing_invoice_sequences")
 }
 
 model ApiKey {
@@ -830,32 +997,44 @@ model TeamAuditLog {
 }
 
 model WhatsappNumber {
-  id                    String   @id @default(uuid())
-  organizationId        String   @map("organization_id")
-  phoneNumber           String   @map("phone_number")
-  normalizedPhoneNumber String   @map("normalized_phone_number")
-  phoneNumberId         String   @map("phone_number_id")
-  wabaId                String   @map("waba_id")
-  businessId            String?  @map("business_id")
-  accessToken           String   @map("access_token")
-  webhookSecret         String?  @map("webhook_secret")
-  qualityRating         String?  @map("quality_rating")
-  /** Graph official_business_account on the phone number, when Meta returns it. */
-  officialBusinessAccount Boolean? @map("official_business_account")
-  /** Graph whatsapp_business_manager_messaging_limit enum (TIER_250…), not remaining count. */
-  messagingLimitTier    String?  @map("messaging_limit_tier")
-  /** Long-lived token expiry from debug_token (monitoring). */
-  tokenExpiresAt        DateTime? @map("token_expires_at")
-  /** Coexistence: number also active on WhatsApp Business app. */
-  isOnBizApp            Boolean  @default(false) @map("is_on_biz_app")
-  /** Coexistence lifecycle: active | pending | offboarded */
-  coexistenceStatus     String?  @map("coexistence_status")
-  /** History sync progress 0–100 from history webhook chunks. */
-  historySyncProgress   Int?     @map("history_sync_progress")
+  id                      String    @id @default(uuid())
+  organizationId          String    @map("organization_id")
+  phoneNumber             String    @map("phone_number")
+  normalizedPhoneNumber   String    @map("normalized_phone_number")
+  phoneNumberId           String    @map("phone_number_id")
+  wabaId                  String    @map("waba_id")
+  businessId              String?   @map("business_id")
+  accessToken             String    @map("access_token")
+  webhookSecret           String?   @map("webhook_secret")
+  qualityRating           String?   @map("quality_rating")
+  /**
+   * Graph official_business_account on the phone number, when Meta returns it.
+   */
+  officialBusinessAccount Boolean?  @map("official_business_account")
+  /**
+   * Graph whatsapp_business_manager_messaging_limit enum (TIER_250…), not remaining count.
+   */
+  messagingLimitTier      String?   @map("messaging_limit_tier")
+  /**
+   * Long-lived token expiry from debug_token (monitoring).
+   */
+  tokenExpiresAt          DateTime? @map("token_expires_at")
+  /**
+   * Coexistence: number also active on WhatsApp Business app.
+   */
+  isOnBizApp              Boolean   @default(false) @map("is_on_biz_app")
+  /**
+   * Coexistence lifecycle: active | pending | offboarded
+   */
+  coexistenceStatus       String?   @map("coexistence_status")
+  /**
+   * History sync progress 0–100 from history webhook chunks.
+   */
+  historySyncProgress     Int?      @map("history_sync_progress")
   coexistenceOffboardedAt DateTime? @map("coexistence_offboarded_at")
-  isActive              Boolean  @default(true) @map("is_active")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  isActive                Boolean   @default(true) @map("is_active")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   organization              Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations             Conversation[]
@@ -1127,20 +1306,24 @@ model Call {
 }
 
 model Message {
-  id             String           @id @default(uuid())
-  conversationId String           @map("conversation_id")
-  metaMessageId  String?          @unique @map("meta_message_id")
-  direction      MessageDirection
-  type           MessageType      @default(TEXT)
-  content        String
-  status         MessageStatus    @default(PENDING)
-  metadata       Json?
-  /** Set immediately before the Meta HTTP call. Retry must not send again. */
-  providerCallStartedAt DateTime? @map("provider_call_started_at")
-  /** Client click key. Same conversation + key = replay, second Meta POST nahi. */
-  idempotencyKey String? @map("idempotency_key")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  id                    String           @id @default(uuid())
+  conversationId        String           @map("conversation_id")
+  metaMessageId         String?          @unique @map("meta_message_id")
+  direction             MessageDirection
+  type                  MessageType      @default(TEXT)
+  content               String
+  status                MessageStatus    @default(PENDING)
+  metadata              Json?
+  /**
+   * Set immediately before the Meta HTTP call. Retry must not send again.
+   */
+  providerCallStartedAt DateTime?        @map("provider_call_started_at")
+  /**
+   * Client click key. Same conversation + key = replay, second Meta POST nahi.
+   */
+  idempotencyKey        String?          @map("idempotency_key")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

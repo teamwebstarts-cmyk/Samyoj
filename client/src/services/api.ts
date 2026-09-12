@@ -746,6 +746,28 @@ export const billingApi = {
   usage: () => api.get('/billing/usage'),
   current: () => api.get('/billing/current'),
   updatePlan: (plan: string) => api.patch('/billing/plan', { plan }),
+  subscription: () => api.get('/billing/subscription'),
+  subscriptionCheckout: (skuId: string, idempotencyKey: string) =>
+    api.post(
+      '/billing/subscription/checkout',
+      { skuId },
+      idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+    ),
+  verifySubscription: (data: {
+    sessionId: string;
+    razorpay_subscription_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => api.post('/billing/subscription/verify', data),
+  cancelSubscription: () => api.post('/billing/subscription/cancel'),
+  pauseSubscription: () => api.post('/billing/subscription/pause'),
+  resumeSubscription: () => api.post('/billing/subscription/resume'),
+  paymentMethodHandoff: () => api.post('/billing/subscription/payment-method'),
+  invoices: () => api.get<{ data: import('../types').BillingInvoice[] }>('/billing/invoices'),
+  invoiceDownloadUrl: (id: string) => `${api.defaults.baseURL || ''}/billing/invoices/${id}/download`,
+  billingProfile: () => api.get('/billing/profile'),
+  updateBillingProfile: (data: Partial<import('../types').BillingProfile>) =>
+    api.patch('/billing/profile', data),
   createOrder: (planId: string, cadence: 'monthly' | 'quarterly' | 'yearly' = 'monthly') =>
     api.post('/billing/create-order', { planId, cadence }),
   verifyPayment: (data: {
