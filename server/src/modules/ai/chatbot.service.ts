@@ -845,7 +845,7 @@ export async function performHandoff(
 ): Promise<{ assignedAgent?: { id: string; name: string } | null }> {
   const existing = await prisma.conversation.findFirst({
     where: { id: conversationId, organizationId },
-    select: { assignedAgentId: true },
+    select: { assignedAgentId: true, whatsappNumberId: true },
   });
 
   let assignedAgent: { id: string; name: string } | null = null;
@@ -907,6 +907,7 @@ export async function performHandoff(
     botActive: false,
     activeFlow: null,
     summary,
+    ...(existing?.whatsappNumberId ? { whatsappNumberId: existing.whatsappNumberId } : {}),
   });
 
   return { assignedAgent };

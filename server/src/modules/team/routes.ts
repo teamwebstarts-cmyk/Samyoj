@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../config/database';
-import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { authenticate, optionalAuthenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { withPermission } from '../../middleware/permissions';
 import { passwordSchema } from '../auth/password-policy';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
@@ -624,12 +624,13 @@ router.get(
 
 router.post(
   '/invites/accept',
+  optionalAuthenticate,
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
       .object({
         token: z.string().uuid(),
         name: z.string().min(2).optional(),
-        password: z.string().min(8),
+        password: z.string().min(8).optional(),
       })
       .parse(req.body);
 
@@ -646,11 +647,7 @@ router.post(
       throw new AppError(410, 'Invite has expired');
     }
 
-    const passwordHash = await bcrypt.hash(data.password, 12);
     const displayName = data.name || invite.name || invite.email.split('@')[0];
-
-    // If an account already exists for this email, the invite must be accepted
-    // by signing in — never overwrite an existing password from a public link.
     const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
     if (existingUser) {
       const alreadyMember = await prisma.organizationUser.findUnique({
@@ -664,12 +661,18 @@ router.post(
       if (alreadyMember) {
         throw new AppError(409, 'This user is already a member of the workspace');
       }
-      throw new AppError(
-        409,
-        'An account with this email already exists. Sign in first, then open the invite link to join this workspace.'
-      );
+      if (!req.user || req.user.userId !== existingUser.id) {
+        throw new AppError(
+          409,
+          'An account with this email already exists. Sign in first, then open the invite link to join this workspace.',
+          'EXISTING_ACCOUNT'
+        );
+      }
+    } else if (!data.password) {
+      throw new AppError(400, 'Password is required to create your account');
     }
 
+    const passwordHash = existingUser ? null : await bcrypt.hash(data.password!, 12);
     const result = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
         SELECT id FROM organizations WHERE id = ${invite.organizationId} FOR UPDATE
@@ -683,14 +686,16 @@ router.post(
           seatQuota.code || 'PLAN_LIMIT_SEATS'
         );
       }
-      const user = await tx.user.create({
-        data: {
-          name: displayName,
-          email: invite.email,
-          passwordHash,
-          role: invite.orgRole === 'ADMIN' ? 'ADMIN' : 'AGENT',
-        },
-      });
+      const user = existingUser
+        ? existingUser
+        : await tx.user.create({
+            data: {
+              name: displayName,
+              email: invite.email,
+              passwordHash: passwordHash!,
+              role: invite.orgRole === 'ADMIN' ? 'ADMIN' : 'AGENT',
+            },
+          });
 
       const membership = await tx.organizationUser.create({
         data: {

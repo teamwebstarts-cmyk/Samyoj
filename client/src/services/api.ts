@@ -894,7 +894,7 @@ export const teamApi = {
     create: (data: Record<string, unknown>) => api.post('/team/invites', data),
     revoke: (id: string) => api.delete(`/team/invites/${id}`),
     getByToken: (token: string) => api.get(`/team/invites/token/${token}`),
-    accept: (data: { token: string; name?: string; password: string }) =>
+    accept: (data: { token: string; name?: string; password?: string }) =>
       api.post('/team/invites/accept', data),
   },
   departments: {

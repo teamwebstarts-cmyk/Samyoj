@@ -42,13 +42,15 @@ export async function createChatCompletion(
     throw new AppError(503, 'Organization context required for AI requests');
   }
 
-  const { assertAiCreditsAvailable } = await import('../billing/ai-credits/service');
-  await assertAiCreditsAvailable(
-    options.organizationId,
-    options.usageAction === 'calling_llm' ? 'calling' : 'chat',
-    1
-  );
-  await checkOrgTokenQuota(options.organizationId);
+  if (!options.skipCreditCheck) {
+    const { assertAiCreditsAvailable } = await import('../billing/ai-credits/service');
+    await assertAiCreditsAvailable(
+      options.organizationId,
+      options.usageAction === 'calling_llm' ? 'calling' : 'chat',
+      1
+    );
+    await checkOrgTokenQuota(options.organizationId);
+  }
 
   const cfg = await resolveAiConfig(options.organizationId);
   if (!cfg) {
@@ -91,13 +93,15 @@ export async function* streamChatCompletion(
     throw new AppError(503, 'Organization context required for AI requests');
   }
 
-  const { assertAiCreditsAvailable } = await import('../billing/ai-credits/service');
-  await assertAiCreditsAvailable(
-    options.organizationId,
-    options.usageAction === 'calling_llm' ? 'calling' : 'chat',
-    1
-  );
-  await checkOrgTokenQuota(options.organizationId);
+  if (!options.skipCreditCheck) {
+    const { assertAiCreditsAvailable } = await import('../billing/ai-credits/service');
+    await assertAiCreditsAvailable(
+      options.organizationId,
+      options.usageAction === 'calling_llm' ? 'calling' : 'chat',
+      1
+    );
+    await checkOrgTokenQuota(options.organizationId);
+  }
 
   const cfg = await resolveAiConfig(options.organizationId);
   if (!cfg || cfg.provider !== 'sarvam') {

@@ -1,7 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+const tx = {
+  $queryRaw: vi.fn(),
+  message: {
+    update: vi.fn(),
+  },
+};
+
 vi.mock('../../config/database', () => ({
   default: {
+    $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)),
     message: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -14,11 +22,14 @@ import {
   getInboundPipeline,
   isInboundStageComplete,
   markInboundPipelineStage,
+  claimInboundPipelineStage,
 } from './inbound-pipeline';
 
 describe('inbound-pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tx.$queryRaw.mockResolvedValue([{ metadata: { inboundPipeline: { flow: true } } }]);
+    tx.message.update.mockResolvedValue({});
   });
 
   it('reads pipeline stages from message metadata', async () => {
@@ -50,5 +61,17 @@ describe('inbound-pipeline', () => {
         }),
       })
     );
+  });
+
+  it('claims a free inbound stage once', async () => {
+    tx.$queryRaw.mockResolvedValue([{ metadata: { inboundPipeline: { flow: true } } }]);
+    await expect(claimInboundPipelineStage('msg-1', 'static')).resolves.toBe(true);
+    expect(tx.message.update).toHaveBeenCalled();
+  });
+
+  it('refuses a stage that is already complete', async () => {
+    tx.$queryRaw.mockResolvedValue([{ metadata: { inboundPipeline: { static: true } } }]);
+    await expect(claimInboundPipelineStage('msg-1', 'static')).resolves.toBe(false);
+    expect(tx.message.update).not.toHaveBeenCalled();
   });
 });

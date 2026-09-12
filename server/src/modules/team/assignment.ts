@@ -55,7 +55,7 @@ export interface EligibleAgent {
 
 export async function getEligibleAgents(
   organizationId: string,
-  options?: { departmentId?: string | null }
+  options?: { departmentId?: string | null; whatsappNumberId?: string | null }
 ): Promise<EligibleAgent[]> {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -88,6 +88,7 @@ export async function getEligibleAgents(
         organizationId,
         assignedAgentId: member.userId,
         status: { in: ['OPEN', 'PENDING'] },
+        ...(options?.whatsappNumberId ? { whatsappNumberId: options.whatsappNumberId } : {}),
       },
     });
 
@@ -104,14 +105,15 @@ export async function getEligibleAgents(
 
 export async function pickAgentForHandoff(
   organizationId: string,
-  departmentId?: string | null
+  departmentId?: string | null,
+  whatsappNumberId?: string | null
 ): Promise<string | null> {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { settings: true },
   });
   const teamSettings = getTeamSettings(org?.settings);
-  const eligible = await getEligibleAgents(organizationId, { departmentId });
+  const eligible = await getEligibleAgents(organizationId, { departmentId, whatsappNumberId });
 
   if (eligible.length === 0) return null;
 

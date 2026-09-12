@@ -495,6 +495,24 @@ export async function syncRunningCampaignStatuses(organizationId?: string) {
     await recoverStuckCampaign(campaign.id, campaign.updatedAt);
     await finalizeCampaignIfDone(campaign.id);
   }
+
+  await recoverCompletedRepeats(organizationId);
+}
+
+export async function recoverCompletedRepeats(organizationId?: string) {
+  const stuck = await prisma.campaign.findMany({
+    where: {
+      ...(organizationId ? { organizationId } : {}),
+      status: 'COMPLETED',
+      cancelledAt: null,
+      repeatIntervalDays: { gte: 1 },
+    },
+    select: { id: true },
+    take: 50,
+  });
+  for (const campaign of stuck) {
+    await scheduleNextRepeatIfNeeded(campaign.id);
+  }
 }
 
 async function recoverStuckCampaign(campaignId: string, updatedAt: Date) {

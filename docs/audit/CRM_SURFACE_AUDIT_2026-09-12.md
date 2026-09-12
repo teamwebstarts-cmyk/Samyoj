@@ -231,7 +231,7 @@ The following verified defects were corrected and covered by the final build/tes
 
 ## Remaining open after this pass
 
-The remaining code-level findings are not silently treated as fixed: complete realtime coverage, Content Draft number binding, webhook delivery idempotency, AI usage outbox/unit ledger, call admission/recording lifecycle/billing reconciliation, immutable in-flight flow version pinning, campaign repeat recovery, multi-organization selection, existing-account invite acceptance, temporary-password enforcement UX, Forms backend consolidation, and the other P2 items listed above.
+The remaining code-level findings are not silently treated as fixed: complete realtime coverage for every org event, AI usage outbox/unit ledger, call admission/recording lifecycle/billing reconciliation, immutable in-flight flow version pinning, multi-organization selection, Forms backend consolidation, and the other P2 items listed above.
 
 ## Implementation update from this audit
 
@@ -244,17 +244,35 @@ The first hardening batch has been applied and rechecked in source:
 - Media retention attempts to delete stored message media before deleting old message rows.
 - Lead assignment/from-contact creation, team departments, Settings/Automation permission toggles, analytics AI-number filters, flow analytics/version scope, automation conflict checks, ticket transitions/deletion, commerce transitions/guards, template consent test-sends, template variable language/index validation, HTTPS media URLs, Settings load failures, and deterministic catalog-order replay were hardened.
 
-Remaining P1 findings are intentionally open where they require a schema/outbox migration, a product decision, or live provider evidence: multi-organization selection, Content Draft number binding, complete realtime coverage, webhook/order delivery idempotency, AI usage ledger/outbox, call admission/recording lifecycle/billing reconciliation, flow execution version pinning, campaign repeat recovery, existing-account invites, temporary-password UX, and Forms backend consolidation.
+Remaining P1 findings that still need a product decision, schema/outbox, or live evidence: multi-organization selection, complete realtime coverage for every org event, AI usage ledger/outbox, call admission/recording lifecycle/billing reconciliation, immutable in-flight flow version pinning, and Forms backend consolidation.
+
+## Leftover recheck 2026-09-13
+
+A second pass rechecked every leftover from this audit and implemented the remaining production-risk fixes that did not require TARGET billing, live WebRTC transfer, or Phase C:
+
+- Calling LLM turns honor `skipCreditCheck` instead of charging chat credits per turn.
+- Inbound automation stages are claimed with a row lock before send/queue; automation outbound retries reuse the inbound-keyed message.
+- Webhook health refresh queues the newly selected number instead of dropping it while a request is in flight.
+- Contact CSV import no longer wipes tags/name/notes when those columns are blank.
+- Provider status updates lock the message row before merging metadata.
+- Organization webhook deliveries for the same message event use a deterministic id and skip duplicate enqueue.
+- Completed repeating campaigns are recovered on the existing campaign sync scan.
+- Content Studio drafts bind to the WhatsApp number they were created on; submit/status/autofix reject a mismatch.
+- Inbox conversation realtime events carry the active number id; the Inbox drops numberless/mismatched conversation events.
+- Team handoff load counts by number and claims assignment with `updateMany`.
+- Existing-account invites can be accepted after signing in as that email; temporary-password users are blocked from mutations until they change the password, and login opens Settings → Security.
+
+Still not claimed fixed, by design: multi-org picker, AI usage outbox/unit ledger, call recording lifecycle, atomic max-concurrent-call admission, immutable in-flight flow versions, dual WA Forms backends, and all live-only Meta/phone/customer-host gates.
 
 ## Final verification evidence
 
-- Server: `174` test files, `1,114` tests passed; TypeScript build passed.
-- Client: `40` test files, `183` tests passed; production build passed.
-- Platform Admin: `9` test files, `19` tests passed; production build passed.
-- Production dependency audits for server/client/admin: `0` high-severity vulnerabilities reported.
-- WhatsApp-number isolation preflight: zero invalid identities, duplicate identities, invalid contacts, duplicate scoped contacts, cross-organization relationships, or cross-number relationships.
-- Migration validation correctly refused raw deployment because the historical destructive migration `20260808120000_unique_whatsapp_phone_number_id` exists; this is the expected fail-closed safety behavior.
-- Local testing deployment was already running and responded successfully: API health/database/Redis `ok`, embedded workers `true`, client HTTP `200`, admin HTTP `200`, public webhook challenge `200:ping`. The local receive counter is `8`, but its last event is old; this is not fresh customer-host proof.
-- Unlazy CRM gate ledger: `8/8` gates met. The live-only items above remain open by design.
+Leftover recheck (2026-09-13), newly measured:
+
+- Server: `175` test files, `1,120` tests passed; TypeScript `--noEmit` passed.
+- Client: `40` test files, `183` tests passed; TypeScript `--noEmit` passed.
+- Leftover unlazy ledger: `3/3` gates met (`crm-leftover-recheck-ok`).
+- Additive migration `20260913010000_content_draft_whatsapp_number` applied on the local database.
+
+Inherited from the first CRM pass, not re-run in this leftover pass: Platform Admin `9/19`, production `npm audit` high=0, number-isolation preflight, migration-chain fail-closed, and local deploy health. Live inbound/send/isolation/restore gates remain open.
 
 No customer-production GO claim is made by this document. The manual gates remain authoritative.

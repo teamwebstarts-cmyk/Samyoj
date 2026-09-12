@@ -24,6 +24,18 @@ import {
 
 const router = Router();
 
+function assertDraftNumber(
+  draft: { whatsappNumberId: string | null },
+  numberId: string
+): void {
+  if (draft.whatsappNumberId && draft.whatsappNumberId !== numberId) {
+    throw new AppError(
+      409,
+      'This draft is bound to another WhatsApp number. Switch to that number to continue.'
+    );
+  }
+}
+
 const generateSchema = z.object({
   prompt: z.string().min(1).max(4000),
   kind: z.nativeEnum(ContentDraftKind).default('TEMPLATE_BODY'),
@@ -95,6 +107,7 @@ router.post(
           templateCategory: data.templateCategory,
           brandKitId: brandKit?.id,
           createdById: req.user!.userId,
+          whatsappNumberId: numberId,
         },
       });
 
@@ -297,6 +310,7 @@ router.post(
             brandKitId: brandKit?.id,
             parentDraftId: data.parentDraftId,
             createdById: req.user!.userId,
+            whatsappNumberId: numberId,
           },
         });
         drafts.push(draft);
@@ -371,6 +385,7 @@ router.post(
     if (existing.status === 'BLOCKED') {
       throw new AppError(400, 'Blocked drafts cannot be submitted to Meta. Rewrite the copy first.');
     }
+    assertDraftNumber(existing, numberId);
     if (existing.body.length > 1024) {
       throw new AppError(400, 'Template body must be 1024 characters or fewer. Shorten the draft first.');
     }
@@ -418,6 +433,7 @@ router.post(
           metaTemplateName: name,
           metaTemplateStatus: result.status || 'PENDING',
           metaRejectionReason: null,
+          whatsappNumberId: existing.whatsappNumberId ?? numberId,
         },
       });
 
@@ -450,6 +466,7 @@ router.get(
       where: { id: paramId(req), organizationId: orgId },
     });
     if (!existing) throw new AppError(404, 'Draft not found');
+    assertDraftNumber(existing, numberId);
     if (!existing.metaTemplateName) {
       throw new AppError(400, 'This draft has not been submitted to Meta yet.');
     }
@@ -509,6 +526,7 @@ router.post(
       where: { id: paramId(req), organizationId: orgId },
     });
     if (!existing) throw new AppError(404, 'Draft not found');
+    if (numberId) assertDraftNumber(existing, numberId);
 
     const reason = data.reason || existing.metaRejectionReason;
     if (!reason) {
@@ -572,6 +590,7 @@ router.post(
           parentDraftId: existing.id,
           version: existing.version + 1,
           createdById: req.user!.userId,
+          whatsappNumberId: existing.whatsappNumberId ?? numberId,
         },
       });
 

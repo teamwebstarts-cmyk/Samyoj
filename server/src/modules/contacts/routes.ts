@@ -222,7 +222,12 @@ router.post(
             ...NEW_CONTACT_CALLING_DEFAULTS,
             ...contactCreateConsentFields(undefined, 'IMPORT'),
           },
-          update: { name: c.name, tags: c.tags, notes: c.notes, customAttributes },
+          update: {
+            ...(c.name ? { name: c.name } : {}),
+            ...(Array.isArray(c.tags) && c.tags.length ? { tags: c.tags } : {}),
+            ...(c.notes ? { notes: c.notes } : {}),
+            customAttributes,
+          },
         });
         count++;
       }

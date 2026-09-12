@@ -87,7 +87,7 @@ export default function LoginPage() {
       }
       if (result.mustResetPassword) {
         toastError('Your account needs a new password. Set one to continue.');
-        navigate('/settings?resetPassword=1', { replace: true });
+        navigate('/settings?tab=security&resetPassword=1', { replace: true });
         return;
       }
       navigate(safeReturnTo(searchParams.get('returnTo')) || '/');

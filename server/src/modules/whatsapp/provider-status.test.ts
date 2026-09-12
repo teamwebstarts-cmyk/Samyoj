@@ -10,14 +10,17 @@ import {
 import { recordWebhookStatusMetaError } from '../platform/meta-errors';
 import { emitToOrg } from '../../realtime';
 
-vi.mock('../../config/database', () => ({
-  default: {
+vi.mock('../../config/database', () => {
+  const db = {
+    $transaction: async (fn: (client: typeof db) => unknown) => fn(db),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 'msg-1' }]),
     unmatchedProviderStatus: { create: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
-    message: { findFirst: vi.fn(), updateMany: vi.fn() },
+    message: { findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     whatsappNumber: { findFirst: vi.fn() },
     campaignRecipient: { findUnique: vi.fn() },
-  },
-}));
+  };
+  return { default: db };
+});
 
 vi.mock('../../realtime', () => ({
   emitToOrg: vi.fn(),
@@ -153,6 +156,12 @@ describe('handleOutboundStatusWebhook', () => {
       metadata: {},
       conversationId: 'conv-1',
     } as never);
+    messageMock.findUnique.mockResolvedValue({
+      id: 'msg-1',
+      status: 'SENT',
+      metadata: {},
+      conversationId: 'conv-1',
+    } as never);
     messageMock.updateMany.mockResolvedValue({ count: 1 } as never);
 
     const status = {
@@ -179,6 +188,12 @@ describe('handleOutboundStatusWebhook', () => {
 
   it('emits a user-facing lock explanation when Graph fails a template with 131031', async () => {
     messageMock.findFirst.mockResolvedValue({
+      id: 'msg-lock',
+      status: 'SENT',
+      metadata: { templateName: 'order_update' },
+      conversationId: 'conv-1',
+    } as never);
+    messageMock.findUnique.mockResolvedValue({
       id: 'msg-lock',
       status: 'SENT',
       metadata: { templateName: 'order_update' },

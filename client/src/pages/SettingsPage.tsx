@@ -186,6 +186,9 @@ export default function SettingsPage() {
       (SETTINGS_TAB_IDS.includes((raw || '') as SettingsTab) ? (raw as SettingsTab) : null)
     ) as SettingsTab | null;
     if (candidate && tabs.some((t) => t.id === candidate)) return candidate;
+    if (searchParams.get('resetPassword') === '1' && tabs.some((t) => t.id === 'security')) {
+      return 'security';
+    }
     return (tabs[0]?.id ?? 'profile') as SettingsTab;
   }, [searchParams, tabs]);
 

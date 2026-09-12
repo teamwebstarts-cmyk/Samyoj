@@ -82,7 +82,8 @@ export function useInboxRealtime({
         event === 'message:status' ||
         event === 'message:reaction' ||
         event === 'messages:deleted' ||
-        event === 'messages:cleared';
+        event === 'messages:cleared' ||
+        event.startsWith('conversation:');
       if (
         (requiresNumberId && !eventNumberId) ||
         (eventNumberId &&

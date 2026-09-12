@@ -25,6 +25,13 @@ export async function getInboundPipeline(messageId: string): Promise<InboundPipe
   return readPipeline(message?.metadata);
 }
 
+function nextMetadata(metadata: unknown, pipeline: InboundPipelineState): Prisma.InputJsonValue {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return { ...(metadata as Record<string, unknown>), inboundPipeline: pipeline } as unknown as Prisma.InputJsonValue;
+  }
+  return { inboundPipeline: pipeline } as unknown as Prisma.InputJsonValue;
+}
+
 export async function markInboundPipelineStage(
   messageId: string,
   patch: InboundPipelineState
@@ -35,14 +42,49 @@ export async function markInboundPipelineStage(
   });
   if (!message) return;
   const current = readPipeline(message.metadata);
-  const next = { ...current, ...patch };
-  const metadata =
-    message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
-      ? { ...(message.metadata as Record<string, unknown>), inboundPipeline: next }
-      : { inboundPipeline: next };
   await prisma.message.update({
     where: { id: messageId },
-    data: { metadata: metadata as Prisma.InputJsonValue },
+    data: { metadata: nextMetadata(message.metadata, { ...current, ...patch }) },
+  });
+}
+
+/** Returns true only for the first caller. Crash after claim can skip a retry — duplicate Meta sends are worse. */
+export async function claimInboundPipelineStage(
+  messageId: string,
+  stage: InboundPipelineStage
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ metadata: Prisma.JsonValue | null }>>`
+      SELECT metadata FROM messages WHERE id = ${messageId} FOR UPDATE
+    `;
+    if (!rows[0]) return false;
+    const current = readPipeline(rows[0].metadata);
+    if (current[stage] === true) return false;
+    const next = { ...current, [stage]: true };
+    await tx.message.update({
+      where: { id: messageId },
+      data: { metadata: nextMetadata(rows[0].metadata, next) },
+    });
+    return true;
+  });
+}
+
+export async function releaseInboundPipelineStage(
+  messageId: string,
+  stage: InboundPipelineStage
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ metadata: Prisma.JsonValue | null }>>`
+      SELECT metadata FROM messages WHERE id = ${messageId} FOR UPDATE
+    `;
+    if (!rows[0]) return;
+    const current = readPipeline(rows[0].metadata);
+    if (current[stage] !== true) return;
+    const next = { ...current, [stage]: false };
+    await tx.message.update({
+      where: { id: messageId },
+      data: { metadata: nextMetadata(rows[0].metadata, next) },
+    });
   });
 }
 

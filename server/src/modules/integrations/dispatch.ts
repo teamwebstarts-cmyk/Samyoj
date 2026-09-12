@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { webhookDispatchQueue } from '../../config/queues';
 import { createModuleLogger } from '../../utils/logger';
@@ -6,6 +7,13 @@ import { fetchPinnedWebhook } from '../../utils/safe-webhook-url';
 
 const log = createModuleLogger('integrations');
 const MAX_FAILURES_BEFORE_DISABLE = 10;
+
+function deliveryIdFor(endpointId: string, event: string, payload: Record<string, unknown>): string {
+  const source = typeof payload.messageId === 'string' ? payload.messageId : null;
+  if (!source) return crypto.randomUUID();
+  const digest = crypto.createHash('sha256').update(`${endpointId}:${event}:${source}`).digest('hex');
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`;
+}
 
 export async function dispatchOrgWebhook(
   organizationId: string,
@@ -25,19 +33,30 @@ export async function dispatchOrgWebhook(
   const body = { event, data: payload, timestamp: new Date().toISOString() };
 
   for (const endpoint of endpoints) {
-    const delivery = await prisma.webhookDelivery.create({
-      data: {
-        endpointId: endpoint.id,
-        organizationId,
-        event,
-        status: 'PENDING',
-        requestBody: body as object,
-      },
-    });
+    const id = deliveryIdFor(endpoint.id, event, payload);
+    let created = false;
+    try {
+      await prisma.webhookDelivery.create({
+        data: {
+          id,
+          endpointId: endpoint.id,
+          organizationId,
+          event,
+          status: 'PENDING',
+          requestBody: body as object,
+        },
+      });
+      created = true;
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+        throw error;
+      }
+    }
+    if (!created) continue;
 
     await webhookDispatchQueue.add(
       'dispatch',
-      { deliveryId: delivery.id },
+      { deliveryId: id },
       { attempts: 4, backoff: { type: 'custom' } }
     );
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Building2, Lock, Mail, UserPlus } from 'lucide-react';
 import AuthButton from '../components/auth/AuthButton';
@@ -20,10 +20,19 @@ interface InvitePreview {
   expiresAt: string;
 }
 
+function inviteError(err: unknown): { message: string; code?: string } {
+  const error = (err as { response?: { data?: { error?: { message?: string; code?: string } } } })
+    ?.response?.data?.error;
+  return {
+    message: error?.message || 'Failed to accept invite',
+    code: error?.code,
+  };
+}
+
 export default function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { refreshSession } = useAuth();
+  const { user, loading: authLoading, refreshSession } = useAuth();
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +40,7 @@ export default function AcceptInvitePage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [existingAccount, setExistingAccount] = useState(false);
+  const joiningRef = useRef(false);
 
   useEffect(() => {
     if (!token) return;
@@ -44,40 +54,51 @@ export default function AcceptInvitePage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-    if (password !== confirmPassword) {
-      toastError('Passwords do not match');
-      return;
-    }
+  const join = async (withPassword?: string) => {
+    if (!token || joiningRef.current) return;
+    joiningRef.current = true;
     setSubmitting(true);
     try {
       const { data } = await teamApi.invites.accept({
         token,
         name: name.trim() || undefined,
-        password,
+        password: withPassword,
       });
       await refreshSession();
       toastSuccess(`Welcome to ${data.data.organization.companyName}!`);
       navigate('/', { replace: true });
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message || 'Failed to accept invite';
-      // Existing account for this email — server refuses to overwrite it.
-      if (message.includes('already exists') || message.includes('already a member')) {
+      joiningRef.current = false;
+      const { message, code } = inviteError(err);
+      if (code === 'EXISTING_ACCOUNT' || message.includes('already exists')) {
         setExistingAccount(true);
-        toastError(message);
-      } else {
-        toastError(message);
       }
+      toastError(message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    if (authLoading || !invite || !user || !token || existingAccount) return;
+    if (user.email.toLowerCase() !== invite.email.toLowerCase()) return;
+    void join();
+  }, [authLoading, invite, user, token, existingAccount]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      toastError('Passwords do not match');
+      return;
+    }
+    await join(password);
+  };
+
+  const signInHref = token
+    ? `/login?returnTo=${encodeURIComponent(`/invite/${token}`)}`
+    : '/login';
+
+  if (loading || authLoading) {
     return (
       <AuthLayout title="Loading invite..." subtitle="Please wait">
         <div className="py-12 text-center text-theme-secondary">Verifying your invite...</div>
@@ -88,31 +109,16 @@ export default function AcceptInvitePage() {
   if (!invite) {
     return (
       <AuthLayout title="Invite not found" subtitle="This link may have expired or been revoked">
-      <p className="text-center text-[13px] text-theme-secondary">
-        Ask your admin to send a new invite, or{' '}
-        <Link to="/login" className="font-semibold text-whatsapp-700 underline">
-          sign in
-        </Link>{' '}
-        if you already have an account.
-      </p>
-
-      {existingAccount && (
-        <div className="mt-4 rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
-          <p className="font-semibold">This email already has an account.</p>
-          <p className="mt-1">
-            Sign in instead — your admin can re-invite you to this team after you sign in.
-          </p>
-          <Link
-            to="/login"
-            className="mt-2 inline-block font-semibold text-whatsapp-700 underline"
-          >
-            Go to sign in →
-          </Link>
-        </div>
-      )}
-    </AuthLayout>
-  );
-}
+        <p className="text-center text-[13px] text-theme-secondary">
+          Ask your admin to send a new invite, or{' '}
+          <Link to="/login" className="font-semibold text-whatsapp-700 underline">
+            sign in
+          </Link>{' '}
+          if you already have an account.
+        </p>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -140,41 +146,56 @@ export default function AcceptInvitePage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <AuthInput
-          id="invite-name"
-          label="Your name"
-          icon={Mail}
-          value={name}
-          onChange={setName}
-          placeholder="Full name"
-          required
-        />
-        <AuthInput
-          id="invite-password"
-          label="Create password"
-          type="password"
-          icon={Lock}
-          value={password}
-          onChange={setPassword}
-          placeholder="Minimum 8 characters"
-          required
-          minLength={8}
-        />
-        <AuthInput
-          id="invite-confirm"
-          label="Confirm password"
-          type="password"
-          icon={Lock}
-          value={confirmPassword}
-          onChange={setConfirmPassword}
-          placeholder="Repeat password"
-          required
-        />
-        <AuthButton loading={submitting} loadingText="Joining...">
-          Accept invite & join
-        </AuthButton>
-      </form>
+      {existingAccount || (user && user.email.toLowerCase() !== invite.email.toLowerCase()) ? (
+        <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-[12px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+          <p className="font-semibold">This email already has an account.</p>
+          <p className="mt-1">
+            Sign in as {invite.email}, then return to this invite link to join the workspace.
+          </p>
+          <Link
+            to={signInHref}
+            className="mt-2 inline-block font-semibold text-whatsapp-700 underline"
+          >
+            Go to sign in →
+          </Link>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <AuthInput
+            id="invite-name"
+            label="Your name"
+            icon={Mail}
+            value={name}
+            onChange={setName}
+            placeholder="Full name"
+            required
+          />
+          <AuthInput
+            id="invite-password"
+            label="Create password"
+            type="password"
+            icon={Lock}
+            value={password}
+            onChange={setPassword}
+            placeholder="Minimum 8 characters"
+            required
+            minLength={8}
+          />
+          <AuthInput
+            id="invite-confirm"
+            label="Confirm password"
+            type="password"
+            icon={Lock}
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            placeholder="Repeat password"
+            required
+          />
+          <AuthButton loading={submitting} loadingText="Joining...">
+            Accept invite & join
+          </AuthButton>
+        </form>
+      )}
     </AuthLayout>
   );
 }

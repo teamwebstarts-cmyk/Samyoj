@@ -44,6 +44,7 @@ vi.mock('../../utils/logger', () => ({
 
 /* ── Imports (after mocks) ───────────────────────────────────────────── */
 
+import { assertAiCreditsAvailable } from '../billing/ai-credits/service';
 import { isAiConfigured, createChatCompletion } from './chat-completion.service';
 import { isAiConfiguredForOrg, resolveAiConfig, checkOrgTokenQuota } from './org-ai.service';
 import { createSarvamChatCompletion } from './sarvam-chat.service';
@@ -226,6 +227,36 @@ describe('createChatCompletion', () => {
     });
 
     expect(checkOrgTokenQuota).toHaveBeenCalledWith('org-1');
+  });
+
+  it('skips credit and token preflight when skipCreditCheck is set', async () => {
+    (resolveAiConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
+      provider: 'sarvam' as const,
+      endpoint: 'https://api.sarvam.ai/v1',
+      apiKey: 'sk-test',
+      deployment: 'sarvam-105b',
+      embeddingEndpoint: '',
+      embeddingApiKey: '',
+      embeddingDeployment: 'text-embedding-ada-002',
+      apiVersion: '2024-12-01-preview',
+      source: 'global' as const,
+    });
+    (createSarvamChatCompletion as ReturnType<typeof vi.fn>).mockResolvedValue({
+      content: 'ok',
+      finishReason: 'stop',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      provider: 'sarvam',
+    });
+
+    await createChatCompletion({
+      messages: [{ role: 'user', content: 'hi' }],
+      organizationId: 'org-1',
+      skipCreditCheck: true,
+      usageAction: 'calling_llm',
+    });
+
+    expect(assertAiCreditsAvailable).not.toHaveBeenCalled();
+    expect(checkOrgTokenQuota).not.toHaveBeenCalled();
   });
 
   it('propagates quota exceeded error', async () => {

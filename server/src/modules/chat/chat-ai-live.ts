@@ -83,9 +83,11 @@ export async function syncConversationChatAiFromGlobal(
     botActive: updated.botActive,
     botHandoffAt: updated.botHandoffAt,
     activeBot: updated.activeBot,
+    whatsappNumberId: updated.whatsappNumberId,
   });
   emitToOrg(organizationId, 'conversation:updated', {
     conversationId: updated.id,
+    whatsappNumberId: updated.whatsappNumberId,
     patch: {
       botActive: updated.botActive,
       botHandoffAt: updated.botHandoffAt,

@@ -16,6 +16,8 @@ import {
   getInboundPipeline,
   isInboundStageComplete,
   markInboundPipelineStage,
+  claimInboundPipelineStage,
+  releaseInboundPipelineStage,
 } from './inbound-pipeline';
 import { keywordMatches } from '../flows/trigger-match';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
@@ -228,22 +230,37 @@ export async function sendAutomationReply(
   if (!conversation?.contact) {
     throw new Error('Automation message context does not belong to the active WhatsApp number');
   }
-  const autoMsg = await prisma.message.create({
-    data: {
+  const automationInboundMessageId = `${payload.messageId}:${triggerType}`;
+  const existingOutbound = await prisma.message.findFirst({
+    where: {
       conversationId: payload.conversationId,
       direction: 'OUTBOUND',
-      type: hasButtons ? 'INTERACTIVE' : 'TEXT',
-      content,
-      status: 'PENDING',
-      metadata: {
-        source: 'automation',
-        triggerType,
-        ...(options?.automationId ? { automationId: options.automationId } : {}),
-        ...(options?.automationName ? { automationName: options.automationName } : {}),
-        ...(hasButtons ? { buttons: options!.buttons } : {}),
-      },
+      metadata: { path: ['automationInboundMessageId'], equals: automationInboundMessageId },
     },
+    select: { id: true, status: true },
   });
+  if (existingOutbound && ['SENT', 'DELIVERED', 'READ'].includes(existingOutbound.status)) {
+    return;
+  }
+  const autoMsg =
+    existingOutbound ??
+    (await prisma.message.create({
+      data: {
+        conversationId: payload.conversationId,
+        direction: 'OUTBOUND',
+        type: hasButtons ? 'INTERACTIVE' : 'TEXT',
+        content,
+        status: 'PENDING',
+        metadata: {
+          source: 'automation',
+          triggerType,
+          automationInboundMessageId,
+          ...(options?.automationId ? { automationId: options.automationId } : {}),
+          ...(options?.automationName ? { automationName: options.automationName } : {}),
+          ...(hasButtons ? { buttons: options!.buttons } : {}),
+        },
+      },
+    }));
 
   try {
     await deliverOutboundMessage({
@@ -497,22 +514,27 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
 
   let flowHandled: HandleInboundFlowResult = pipeline.flowHandled ?? false;
   if (!isInboundStageComplete(pipeline, 'flow')) {
-    flowHandled = await handleInboundFlow({
-      organizationId: payload.organizationId,
-      conversationId: payload.conversationId,
-      contactId: payload.contactId,
-      messageId: payload.messageId,
-      contactPhone: payload.contactPhone,
-      whatsappNumberId: payload.whatsappNumberId,
-      content: payload.content,
-      buttonReplyId: payload.buttonReplyId,
-      isNewConversation: payload.isNewConversation,
-      messageType: payload.messageType,
-      hasMedia: payload.hasMedia,
-      waFlowResponse: payload.waFlowResponse,
-    });
-    if (flowHandled !== FLOW_LOCK_BUSY) {
-      await markInboundPipelineStage(payload.messageId, { flow: true, flowHandled });
+    const claimedFlow = await claimInboundPipelineStage(payload.messageId, 'flow');
+    if (claimedFlow) {
+      flowHandled = await handleInboundFlow({
+        organizationId: payload.organizationId,
+        conversationId: payload.conversationId,
+        contactId: payload.contactId,
+        messageId: payload.messageId,
+        contactPhone: payload.contactPhone,
+        whatsappNumberId: payload.whatsappNumberId,
+        content: payload.content,
+        buttonReplyId: payload.buttonReplyId,
+        isNewConversation: payload.isNewConversation,
+        messageType: payload.messageType,
+        hasMedia: payload.hasMedia,
+        waFlowResponse: payload.waFlowResponse,
+      });
+      if (flowHandled === FLOW_LOCK_BUSY) {
+        await releaseInboundPipelineStage(payload.messageId, 'flow');
+      } else {
+        await markInboundPipelineStage(payload.messageId, { flow: true, flowHandled });
+      }
     }
   }
 
@@ -652,13 +674,12 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
         conversationId: payload.conversationId,
         automationId: staticReply.id,
       });
-    } else {
+    } else if (await claimInboundPipelineStage(payload.messageId, 'static')) {
       await sendAutomationReply(payload, staticReply.message, staticReply.triggerType, {
         buttons: staticReply.buttons,
         automationId: staticReply.id,
         automationName: staticReply.name,
       });
-      await markInboundPipelineStage(payload.messageId, { static: true });
 
       if (staticReply.tag) {
         const contact = await prisma.contact.findFirst({
@@ -679,12 +700,13 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
         await performHandoff(payload.organizationId, payload.conversationId, 'LEAD_CAPTURE');
       }
       return;
+    } else {
+      return;
     }
   }
 
-  if (!isInboundStageComplete(pipeline, 'ai')) {
+  if (await claimInboundPipelineStage(payload.messageId, 'ai')) {
     await queueAiBotProcessing(payload);
-    await markInboundPipelineStage(payload.messageId, { ai: true });
   }
 }
 

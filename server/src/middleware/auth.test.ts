@@ -328,7 +328,7 @@ describe('requireOrg middleware', () => {
     expect(err).toBeUndefined();
     expect(findUnique).toHaveBeenCalledWith({
       where: { organizationId_userId: { organizationId: 'org-1', userId: 'u1' } },
-      select: { id: true },
+      select: { id: true, mustResetPassword: true },
     });
   });
 });

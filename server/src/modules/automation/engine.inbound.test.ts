@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../config/database', () => ({
-  default: {
+vi.mock('../../config/database', () => {
+  const db = {
+    $transaction: async (fn: (client: typeof db) => unknown) => fn(db),
+    $queryRaw: vi.fn().mockResolvedValue([{ metadata: {} }]),
     conversation: { findFirst: vi.fn() },
     contact: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     automation: { findMany: vi.fn() },
     message: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     automationLog: { findFirst: vi.fn(), create: vi.fn() },
-  },
-}));
+  };
+  return { default: db };
+});
 
 vi.mock('../flows/engine', () => ({
   handleInboundFlow: vi.fn(),

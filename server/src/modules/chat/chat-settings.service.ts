@@ -155,9 +155,11 @@ async function restoreManualChatSnapshot(
       botActive: conversation.botActive,
       botHandoffAt: conversation.botHandoffAt,
       activeBot: conversation.activeBot,
+      whatsappNumberId,
     });
     emitToOrg(organizationId, 'conversation:updated', {
       conversationId: conversation.id,
+      whatsappNumberId,
       patch: {
         botActive: conversation.botActive,
         botHandoffAt: conversation.botHandoffAt,
@@ -211,9 +213,11 @@ export async function applyGlobalChatToConversation(
     botActive: updated.botActive,
     botHandoffAt: updated.botHandoffAt,
     activeBot: updated.activeBot,
+    whatsappNumberId,
   });
   emitToOrg(organizationId, 'conversation:updated', {
     conversationId: updated.id,
+    whatsappNumberId,
     patch: {
       botActive: updated.botActive,
       botHandoffAt: updated.botHandoffAt,

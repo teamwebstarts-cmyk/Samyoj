@@ -27,12 +27,16 @@ export function useWebhookHealth(enabled = true): UseWebhookHealthResult {
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [health, setHealth] = useState<InboundHealth>({ state: 'unknown' });
   const inFlightRef = useRef(false);
+  const queuedRef = useRef(false);
   const mountedRef = useRef(true);
   const numberIdRef = useRef<string | null>(null);
   numberIdRef.current = activeNumber?.id ?? null;
 
   const refresh = async () => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current) {
+      queuedRef.current = true;
+      return;
+    }
     if (!enabled || !resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     inFlightRef.current = true;
@@ -70,6 +74,10 @@ export function useWebhookHealth(enabled = true): UseWebhookHealthResult {
       });
     } finally {
       inFlightRef.current = false;
+      if (queuedRef.current && mountedRef.current) {
+        queuedRef.current = false;
+        void refresh();
+      }
     }
   };
 

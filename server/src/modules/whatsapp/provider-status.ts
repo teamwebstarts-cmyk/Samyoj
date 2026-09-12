@@ -97,68 +97,71 @@ export async function applyProviderMessageStatus(input: {
   });
   if (!existingMsg) return false;
 
-  const existingMeta = (existingMsg.metadata as Record<string, unknown>) || {};
-  const existingStatusAt = parseExistingStatusAt(existingMeta);
-  const hasValidEventTime = Boolean(
-    input.statusTimestamp && !Number.isNaN(input.statusTimestamp.getTime())
-  );
-  const eventAt = hasValidEventTime ? input.statusTimestamp! : null;
-  const isOlderOrDuplicate = Boolean(
-    eventAt && existingStatusAt && eventAt.getTime() <= existingStatusAt.getTime()
-  );
-  const shouldUpdateStatus = shouldApplyProviderStatus({
-    currentStatus: existingMsg.status,
-    nextStatus: input.statusValue,
-    existingStatusAt,
-    eventAt,
-  });
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM messages WHERE id = ${existingMsg.id} FOR UPDATE`;
+    const locked = await tx.message.findUnique({
+      where: { id: existingMsg.id },
+      select: { id: true, status: true, metadata: true, conversationId: true },
+    });
+    if (!locked) return false;
 
-  const statusMeta: Record<string, unknown> = { ...existingMeta };
-  if (!isOlderOrDuplicate && input.status.pricing) statusMeta.pricing = input.status.pricing;
-  const failure =
-    !isOlderOrDuplicate && input.statusValue === 'FAILED'
-      ? whatsappSendFailurePatches({ errors: input.status.errors })
-      : null;
-  if (!isOlderOrDuplicate && input.status.errors) statusMeta.errors = input.status.errors;
-  if (failure) Object.assign(statusMeta, failure.metadataPatch);
-  if (!isOlderOrDuplicate && input.status.conversation) {
-    statusMeta.conversationId = (input.status.conversation as { id?: string })?.id;
-  }
-  if (hasValidEventTime && !isOlderOrDuplicate) {
-    statusMeta.providerStatusAt = eventAt!.toISOString();
-    statusMeta.providerEventKey = `${input.metaMessageId}:${input.statusValue}:${eventAt!.toISOString()}`;
-  }
+    const existingMeta = (locked.metadata as Record<string, unknown>) || {};
+    const existingStatusAt = parseExistingStatusAt(existingMeta);
+    const hasValidEventTime = Boolean(
+      input.statusTimestamp && !Number.isNaN(input.statusTimestamp.getTime())
+    );
+    const eventAt = hasValidEventTime ? input.statusTimestamp! : null;
+    const isOlderOrDuplicate = Boolean(
+      eventAt && existingStatusAt && eventAt.getTime() <= existingStatusAt.getTime()
+    );
+    const shouldUpdateStatus = shouldApplyProviderStatus({
+      currentStatus: locked.status,
+      nextStatus: input.statusValue,
+      existingStatusAt,
+      eventAt,
+    });
 
-  await prisma.message.updateMany({
-    where: {
-      metaMessageId: input.metaMessageId,
-      conversation: {
-        organizationId: input.organizationId,
-        whatsappNumber: { phoneNumberId: input.phoneNumberId },
+    const statusMeta: Record<string, unknown> = { ...existingMeta };
+    if (!isOlderOrDuplicate && input.status.pricing) statusMeta.pricing = input.status.pricing;
+    const failure =
+      !isOlderOrDuplicate && input.statusValue === 'FAILED'
+        ? whatsappSendFailurePatches({ errors: input.status.errors })
+        : null;
+    if (!isOlderOrDuplicate && input.status.errors) statusMeta.errors = input.status.errors;
+    if (failure) Object.assign(statusMeta, failure.metadataPatch);
+    if (!isOlderOrDuplicate && input.status.conversation) {
+      statusMeta.conversationId = (input.status.conversation as { id?: string })?.id;
+    }
+    if (hasValidEventTime && !isOlderOrDuplicate) {
+      statusMeta.providerStatusAt = eventAt!.toISOString();
+      statusMeta.providerEventKey = `${input.metaMessageId}:${input.statusValue}:${eventAt!.toISOString()}`;
+    }
+
+    await tx.message.updateMany({
+      where: { id: locked.id },
+      data: {
+        ...(shouldUpdateStatus ? { status: input.statusValue as never } : {}),
+        metadata: statusMeta as Prisma.InputJsonValue,
       },
-    },
-    data: {
-      ...(shouldUpdateStatus ? { status: input.statusValue as never } : {}),
-      metadata: statusMeta as Prisma.InputJsonValue,
-    },
-  });
+    });
 
-  if (shouldUpdateStatus) {
-    log.info('Message status updated', {
-      messageId: existingMsg.id,
-      metaMessageId: input.metaMessageId,
-      status: input.statusValue,
-      organizationId: input.organizationId,
-    });
-    emitToOrg(input.organizationId, 'message:status', {
-      messageId: existingMsg.id,
-      status: input.statusValue,
-      conversationId: existingMsg.conversationId,
-      ...(input.whatsappNumberId ? { whatsappNumberId: input.whatsappNumberId } : {}),
-      ...(failure?.socketPatch || {}),
-    });
-  }
-  return true;
+    if (shouldUpdateStatus) {
+      log.info('Message status updated', {
+        messageId: locked.id,
+        metaMessageId: input.metaMessageId,
+        status: input.statusValue,
+        organizationId: input.organizationId,
+      });
+      emitToOrg(input.organizationId, 'message:status', {
+        messageId: locked.id,
+        status: input.statusValue,
+        conversationId: locked.conversationId,
+        ...(input.whatsappNumberId ? { whatsappNumberId: input.whatsappNumberId } : {}),
+        ...(failure?.socketPatch || {}),
+      });
+    }
+    return true;
+  });
 }
 
 export async function handleOutboundStatusWebhook(input: {

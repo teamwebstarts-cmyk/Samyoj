@@ -47,6 +47,13 @@ import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service'
 
 const router = Router();
 
+function emitInbox(req: Request, event: string, data: Record<string, unknown>): void {
+  emitToOrg(req.user!.organizationId!, event, {
+    ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+    ...data,
+  });
+}
+
 async function streamMessageMedia(
   res: Response,
   organizationId: string,
@@ -583,7 +590,7 @@ router.post(
         metadata: sendMetadata as Prisma.InputJsonValue,
       },
     });
-    emitToOrg(orgId, 'message:status', {
+    emitInbox(req, 'message:status', {
       messageId: message.id,
       status: 'PENDING',
       conversationId: conversation.id,
@@ -974,12 +981,12 @@ router.post(
     await syncConversationPreview(id);
 
     const deletedIds = rows.map((r) => r.id);
-    emitToOrg(orgId, 'messages:deleted', {
+    emitInbox(req, 'messages:deleted', {
       conversationId: id,
       messageIds: deletedIds,
       whatsappNumberId: req.activeWhatsappNumberId,
     });
-    emitToOrg(orgId, 'conversation:updated', { conversationId: id });
+    emitInbox(req, 'conversation:updated', { conversationId: id });
     sendSuccess(res, { deleted: deletedIds.length, messageIds: deletedIds });
   })
 );
@@ -1009,17 +1016,17 @@ router.delete(
       data: { lastMessageAt: null, unreadCount: 0 },
     });
 
-    emitToOrg(orgId, 'messages:cleared', {
+    emitInbox(req, 'messages:cleared', {
       conversationId: id,
       deleted: result.count,
       whatsappNumberId: req.activeWhatsappNumberId,
     });
-    emitToOrg(orgId, 'conversation:updated', {
+    emitInbox(req, 'conversation:updated', {
       conversationId: id,
       unreadCount: 0,
       lastMessageAt: null,
     });
-    emitToOrg(orgId, 'conversation:read', { conversationId: id, unreadCount: 0 });
+    emitInbox(req, 'conversation:read', { conversationId: id, unreadCount: 0 });
     sendSuccess(res, { deleted: result.count });
   })
 );
@@ -1048,7 +1055,7 @@ router.delete(
     await purgeStoredMedia(rows);
     await deleteConversationKeepingHistory(id, orgId);
 
-    emitToOrg(orgId, 'conversation:deleted', { conversationId: id });
+    emitInbox(req, 'conversation:deleted', { conversationId: id });
     sendSuccess(res, { deleted: true, conversationId: id });
   })
 );
@@ -1073,12 +1080,12 @@ router.delete(
     await prisma.message.delete({ where: { id: message.id } });
     await syncConversationPreview(message.conversationId);
 
-    emitToOrg(orgId, 'messages:deleted', {
+    emitInbox(req, 'messages:deleted', {
       conversationId: message.conversationId,
       messageIds: [message.id],
       whatsappNumberId: req.activeWhatsappNumberId,
     });
-    emitToOrg(orgId, 'conversation:updated', { conversationId: message.conversationId });
+    emitInbox(req, 'conversation:updated', { conversationId: message.conversationId });
     sendSuccess(res, { deleted: 1, messageIds: [message.id] });
   })
 );
@@ -1100,7 +1107,7 @@ router.post(
       data: { unreadCount: 0 },
     });
 
-    emitToOrg(orgId, 'conversation:read', { conversationId: id, unreadCount: 0 });
+    emitInbox(req, 'conversation:read', { conversationId: id, unreadCount: 0 });
 
     // Fire-and-forget: mark recent inbound messages as read on Meta so the
     // customer sees blue ticks. A Meta failure must never fail this endpoint.
@@ -1175,7 +1182,7 @@ router.post(
       data: { unreadCount },
     });
 
-    emitToOrg(orgId, 'conversation:updated', {
+    emitInbox(req, 'conversation:updated', {
       conversationId: id,
       patch: { unreadCount: conversation.unreadCount },
     });
@@ -1416,7 +1423,7 @@ router.post(
           } as Prisma.InputJsonValue,
         },
       });
-      emitToOrg(orgId, 'message:reaction', {
+      emitInbox(req, 'message:reaction', {
         conversationId: conversation.id,
         messageId: updated.id,
         whatsappNumberId: conversation.whatsappNumberId,
@@ -1702,12 +1709,12 @@ router.post(
           botHandoffReason: 'AGENT_REPLY',
         },
       });
-      emitToOrg(orgId, 'conversation:bot', {
+      emitInbox(req, 'conversation:bot', {
         conversationId: conversation.id,
         botActive: false,
         botHandoffAt: handoffAt,
       });
-      emitToOrg(orgId, 'conversation:updated', {
+      emitInbox(req, 'conversation:updated', {
         conversationId: conversation.id,
         patch: { botActive: false, botHandoffAt: handoffAt },
       });
@@ -1758,11 +1765,11 @@ router.patch(
       },
     });
 
-    emitToOrg(orgId, 'conversation:assigned', {
+    emitInbox(req, 'conversation:assigned', {
       conversationId: conversation.id,
       assignedAgent: conversation.assignedAgent,
     });
-    emitToOrg(orgId, 'conversation:updated', {
+    emitInbox(req, 'conversation:updated', {
       conversationId: conversation.id,
       patch: {
         assignedAgentId: conversation.assignedAgentId,
@@ -1869,13 +1876,13 @@ router.patch(
       },
     });
 
-    emitToOrg(orgId, 'conversation:bot', {
+    emitInbox(req, 'conversation:bot', {
       conversationId: conversation.id,
       botActive: conversation.botActive,
       botHandoffAt: conversation.botHandoffAt,
       activeBot: conversation.activeBot,
     });
-    emitToOrg(orgId, 'conversation:updated', {
+    emitInbox(req, 'conversation:updated', {
       conversationId: conversation.id,
       patch: {
         botActive: conversation.botActive,
@@ -1929,7 +1936,7 @@ router.patch(
       },
     });
 
-    emitToOrg(orgId, 'conversation:snooze', {
+    emitInbox(req, 'conversation:snooze', {
       conversationId: conversation.id,
       snoozedUntil: conversation.snoozedUntil,
     });
@@ -1959,7 +1966,7 @@ router.delete(
       },
     });
 
-    emitToOrg(orgId, 'conversation:snooze', {
+    emitInbox(req, 'conversation:snooze', {
       conversationId: conversation.id,
       snoozedUntil: null,
     });
@@ -2033,8 +2040,8 @@ router.post(
               where: { id: conversationId },
               data: { assignedAgentId: data.agentId! },
             });
-            emitToOrg(orgId, 'conversation:assigned', { conversationId, assignedAgent });
-            emitToOrg(orgId, 'conversation:updated', {
+            emitInbox(req, 'conversation:assigned', { conversationId, assignedAgent });
+            emitInbox(req, 'conversation:updated', {
               conversationId,
               patch: { assignedAgentId: data.agentId, assignedAgent },
             });
@@ -2045,7 +2052,7 @@ router.post(
               where: { id: conversationId },
               data: { status: data.status! },
             });
-            emitToOrg(orgId, 'conversation:status', {
+            emitInbox(req, 'conversation:status', {
               conversationId,
               status: conversation.status,
             });
@@ -2065,7 +2072,7 @@ router.post(
               where: { id: conversationId },
               data: { snoozedUntil },
             });
-            emitToOrg(orgId, 'conversation:snooze', { conversationId, snoozedUntil });
+            emitInbox(req, 'conversation:snooze', { conversationId, snoozedUntil });
             break;
           }
           case 'unsnooze': {
@@ -2073,7 +2080,7 @@ router.post(
               where: { id: conversationId },
               data: { snoozedUntil: null },
             });
-            emitToOrg(orgId, 'conversation:snooze', { conversationId, snoozedUntil: null });
+            emitInbox(req, 'conversation:snooze', { conversationId, snoozedUntil: null });
             break;
           }
           case 'delete': {
@@ -2083,7 +2090,7 @@ router.post(
             });
             await purgeStoredMedia(msgs);
             await deleteConversationKeepingHistory(conversationId, orgId);
-            emitToOrg(orgId, 'conversation:deleted', { conversationId });
+            emitInbox(req, 'conversation:deleted', { conversationId });
             break;
           }
         }
@@ -2130,7 +2137,7 @@ router.patch(
       data: { isFavorite },
     });
 
-    emitToOrg(orgId, 'conversation:updated', {
+    emitInbox(req, 'conversation:updated', {
       conversationId: conversation.id,
       patch: { isFavorite: conversation.isFavorite },
     });
@@ -2164,7 +2171,7 @@ router.patch(
       data: { status },
     });
 
-    emitToOrg(orgId, 'conversation:status', {
+    emitInbox(req, 'conversation:status', {
       conversationId: conversation.id,
       status: conversation.status,
     });

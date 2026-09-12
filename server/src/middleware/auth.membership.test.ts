@@ -52,14 +52,37 @@ describe('requireOrg membership check', () => {
   });
 
   it('allows active OrganizationUser membership', async () => {
-    findUnique.mockResolvedValue({ id: 'mem-1' } as never);
+    findUnique.mockResolvedValue({ id: 'mem-1', mustResetPassword: false } as never);
     const err = await invoke({
       user: { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' },
     });
     expect(err).toBeUndefined();
     expect(findUnique).toHaveBeenCalledWith({
       where: { organizationId_userId: { organizationId: 'org-1', userId: 'u1' } },
-      select: { id: true },
+      select: { id: true, mustResetPassword: true },
     });
+  });
+
+  it('blocks mutations when the member must reset their password', async () => {
+    findUnique.mockResolvedValue({ id: 'mem-1', mustResetPassword: true } as never);
+    const err = await invoke({
+      method: 'POST',
+      baseUrl: '/api/inbox',
+      path: '/start',
+      user: { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' },
+    });
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).code).toBe('MUST_RESET_PASSWORD');
+  });
+
+  it('allows password change when the member must reset', async () => {
+    findUnique.mockResolvedValue({ id: 'mem-1', mustResetPassword: true } as never);
+    const err = await invoke({
+      method: 'POST',
+      baseUrl: '/api/team',
+      path: '/me/password',
+      user: { userId: 'u1', email: 'a@b.c', organizationId: 'org-1' },
+    });
+    expect(err).toBeUndefined();
   });
 });
