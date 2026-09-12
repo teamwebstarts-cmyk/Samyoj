@@ -42,6 +42,7 @@ import Pagination from '../components/ui/Pagination';
 import RowActions from '../components/ui/RowActions';
 import { TableTextButton } from '../components/ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
+import WhatsAppConnectionEmptyState from '../components/ui/WhatsAppConnectionEmptyState';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -192,7 +193,7 @@ const heroCopy: Record<AutomationTab, { title: string; description: string }> = 
 };
 
 export default function AutomationsPage() {
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -487,6 +488,18 @@ export default function AutomationsPage() {
           { label: 'On', value: summary.active, hint: 'Active now', tone: 'live', icon: PlayCircle },
           { label: 'Off', value: summary.paused, hint: 'Turned off', tone: 'paused', icon: PauseCircle },
         ];
+
+  if (resolved && !hasConnectedNumber) {
+    return (
+      <PageShell>
+        <WhatsAppConnectionEmptyState
+          disconnectedNumbers={disconnectedNumbers}
+          task="create automations"
+          returnTask="Come back here to create an automation"
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>

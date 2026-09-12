@@ -304,22 +304,7 @@ router.post(
       entitlements.planExpiresAt > new Date() &&
       currentTier !== 'launch';
 
-    if (currentPaidActive && TIER_ORDER[requestedTier] === TIER_ORDER[currentTier]) {
-      return sendSuccess(res, {
-        alreadyActive: true,
-        code: 'PLAN_ALREADY_ACTIVE',
-        orderId: null,
-        amount: 0,
-        currency: 'INR',
-        keyId: config.razorpay.keyId,
-        planName: sku.name,
-        skuId: sku.id,
-        cadence: sku.cadence,
-        amountLabel: sku.effectiveMonthlyLabel,
-        planExpiresAt: entitlements.planExpiresAt,
-        message: `Your ${sku.name} plan is already active.`,
-      });
-    }
+
     if (currentPaidActive && TIER_ORDER[requestedTier] < TIER_ORDER[currentTier]) {
       throw new AppError(
         409,

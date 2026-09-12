@@ -51,6 +51,7 @@ import PageShell from '../components/ui/PageShell';
 import Pagination from '../components/ui/Pagination';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
+import WhatsAppConnectionEmptyState from '../components/ui/WhatsAppConnectionEmptyState';
 import { WhatsAppTemplatePreview } from '../components/inbox/WhatsAppPreview';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
@@ -228,7 +229,7 @@ function buildPayload(
 export default function CampaignsPage() {
   const { canManageTeam } = useAuth();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -863,6 +864,18 @@ export default function CampaignsPage() {
     setSortBy(key);
     setSortDir(key === 'name' || key === 'status' ? 'asc' : 'desc');
   };
+
+  if (resolved && !hasConnectedNumber) {
+    return (
+      <PageShell>
+        <WhatsAppConnectionEmptyState
+          disconnectedNumbers={disconnectedNumbers}
+          task="create and send campaigns"
+          returnTask="Come back here to create a campaign"
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <InboxGlassTipProvider>

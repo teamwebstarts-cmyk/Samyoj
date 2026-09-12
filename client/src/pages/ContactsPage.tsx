@@ -37,6 +37,7 @@ import ContactHero, { type ContactHeroStat } from '../components/contacts/Contac
 import PageShell from '../components/ui/PageShell';
 import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
+import WhatsAppConnectionEmptyState from '../components/ui/WhatsAppConnectionEmptyState';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
@@ -69,7 +70,7 @@ type ContactsNumberCache = {
 
 export default function ContactsPage() {
   const phoneId = useId();
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -542,6 +543,18 @@ export default function ContactsPage() {
           { label: 'Active (7d)', value: summary.active7d, tone: 'active', icon: Activity },
           { label: 'Tagged', value: summary.tagged, tone: 'tagged', icon: Tag },
         ];
+
+  if (resolved && !hasConnectedNumber) {
+    return (
+      <PageShell>
+        <WhatsAppConnectionEmptyState
+          disconnectedNumbers={disconnectedNumbers}
+          task="manage WhatsApp contacts"
+          returnTask="Come back here to add your contacts"
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell className={selectedIds.length > 0 ? 'pb-28' : undefined}>

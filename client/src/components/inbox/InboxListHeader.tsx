@@ -201,20 +201,23 @@ export default function InboxListHeader({
         <div
           role="status"
           data-testid="whatsapp-disconnected-banner"
-          className="mb-2 flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/95 px-2.5 py-1.5 text-amber-950 md:mb-3 md:items-start md:gap-2.5 md:rounded-xl md:px-3 md:py-2.5 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
+          className="mb-2 flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/95 px-2.5 py-2 text-amber-950 md:mb-3 md:rounded-xl md:px-3 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
         >
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 md:mt-0.5 md:h-4 md:w-4 dark:text-amber-400" />
-          <div className="min-w-0 flex-1 text-[11.5px] leading-snug md:text-[12px]">
-            <p className="font-bold">{disconnectedCopy.title}</p>
-            <p className="mt-0.5 hidden text-amber-900/85 md:block dark:text-amber-200/85">
-              {disconnectedCopy.description}
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-[11.5px] font-bold">{disconnectedCopy.title}</p>
+            <p
+              className="mt-0.5 truncate text-[10.5px] font-medium text-amber-900/75 dark:text-amber-200/75"
+              title={disconnectedCopy.description}
+            >
+              Reconnect to receive replies
             </p>
           </div>
           <Link
             to="/settings?tab=whatsapp"
-            className={`shrink-0 rounded-md border border-amber-300/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 md:text-[10.5px] dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-900/40 ${FOCUS_RING_CLASS}`}
+            className={`shrink-0 rounded-md border border-amber-300/80 px-2.5 py-1.5 text-[10px] font-bold text-amber-800 transition hover:bg-amber-100 dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-900/40 ${FOCUS_RING_CLASS}`}
           >
-            {disconnectedCopy.cta}
+            Reconnect
           </Link>
         </div>
       )}

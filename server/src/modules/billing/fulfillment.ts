@@ -265,16 +265,12 @@ export async function fulfillCapturedPayment(params: {
 
     if (
       (currentPeriod || cachedPeriodActive) &&
-      TIER_ORDER[requestedTier] <= TIER_ORDER[currentTier]
+      TIER_ORDER[requestedTier] < TIER_ORDER[currentTier]
     ) {
       throw new AppError(
         409,
-        TIER_ORDER[requestedTier] === TIER_ORDER[currentTier]
-          ? 'The selected plan is already active'
-          : 'A lower plan cannot be purchased while the current paid period is active',
-        TIER_ORDER[requestedTier] === TIER_ORDER[currentTier]
-          ? 'PLAN_ALREADY_ACTIVE'
-          : 'PLAN_DOWNGRADE_NOT_ALLOWED_ACTIVE'
+        'A lower plan cannot be purchased while the current paid period is active',
+        'PLAN_DOWNGRADE_NOT_ALLOWED_ACTIVE'
       );
     }
 
@@ -285,7 +281,8 @@ export async function fulfillCapturedPayment(params: {
       });
     }
 
-    const endsAt = new Date(now.getTime() + sku.periodDays * 24 * 60 * 60 * 1000);
+    const baseDate = (currentPeriod && currentPeriod.endsAt > now) ? currentPeriod.endsAt : now;
+    const endsAt = new Date(baseDate.getTime() + sku.periodDays * 24 * 60 * 60 * 1000);
 
     await tx.paymentOrder.update({
       where: { id: locked.id },

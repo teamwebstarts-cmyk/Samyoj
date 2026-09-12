@@ -4,7 +4,6 @@ import { legacyPlanToTier, type PlanTier } from './plans';
 
 type TransitionResult =
   | 'ALLOW'
-  | 'PLAN_ALREADY_ACTIVE'
   | 'PLAN_DOWNGRADE_NOT_ALLOWED_ACTIVE';
 
 function evaluatePaidPlanPurchase(params: {
@@ -13,9 +12,6 @@ function evaluatePaidPlanPurchase(params: {
   hasActivePaidPeriod: boolean;
 }): TransitionResult {
   if (!params.hasActivePaidPeriod) return 'ALLOW';
-  if (TIER_ORDER[params.requestedTier] === TIER_ORDER[params.currentTier]) {
-    return 'PLAN_ALREADY_ACTIVE';
-  }
   if (TIER_ORDER[params.requestedTier] < TIER_ORDER[params.currentTier]) {
     return 'PLAN_DOWNGRADE_NOT_ALLOWED_ACTIVE';
   }
@@ -23,14 +19,14 @@ function evaluatePaidPlanPurchase(params: {
 }
 
 describe('manual billing plan transitions', () => {
-  it('plan-transitions-ok: active same-plan purchase is a no-op', () => {
+  it('plan-transitions-ok: active same-plan purchase is allowed', () => {
     expect(
       evaluatePaidPlanPurchase({
         currentTier: 'pro',
         requestedTier: 'pro',
         hasActivePaidPeriod: true,
       })
-    ).toBe('PLAN_ALREADY_ACTIVE');
+    ).toBe('ALLOW');
   });
 
   it('plan-transitions-ok: active downgrade is rejected', () => {

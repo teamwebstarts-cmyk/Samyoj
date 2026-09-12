@@ -13,7 +13,7 @@
 |---|---|
 | Internal test | **Haan** — `bash start.sh` |
 | Customer live | **Nahi** |
-| Packets | **A + E + B + D + C + F done.** Next **Manual** (naya phone reply, off-host restore, GO/NO-GO) |
+| Packets | **A + E + B + D + C + F code done.** Next **live:** [.unlazy/existing-harden-manual/LIVE_CHECKLIST.md](../.unlazy/existing-harden-manual/LIVE_CHECKLIST.md) |
 | 15 din ka kaam | Jo **already bana hai**, error-free + crash-safe |
 | Baad (15 ke baad) | Billing, Ads, Embedded Signup, Content Studio real |
 

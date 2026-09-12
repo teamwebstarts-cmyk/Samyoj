@@ -45,6 +45,7 @@ import RowActions from '../components/ui/RowActions';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { TableTextButton } from '../components/ui/TableActions';
+import WhatsAppConnectionEmptyState from '../components/ui/WhatsAppConnectionEmptyState';
 import {
   CALLING_BOT_SPEAKERS,
   DEFAULT_GREETING,
@@ -177,7 +178,7 @@ function buildPersonalityIntent(input: {
 
 export default function AiBotPage() {
   const { organization } = useAuth();
-  const { activeNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const [bots, setBots] = useState<AiBot[]>([]);
   const [answeringCallBotId, setAnsweringCallBotId] = useState<string | null>(null);
@@ -927,6 +928,18 @@ export default function AiBotPage() {
       },
     ];
   }, [channelFilter, callingBots, chatBots, aggregateAnalytics]);
+
+  if (resolved && !hasConnectedNumber) {
+    return (
+      <PageShell>
+        <WhatsAppConnectionEmptyState
+          disconnectedNumbers={disconnectedNumbers}
+          task="create AI assistants"
+          returnTask="Come back here to create an AI assistant"
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <>
