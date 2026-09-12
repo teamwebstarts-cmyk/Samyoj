@@ -14,25 +14,25 @@ Scope: recurring SaaS subscriptions, lifecycle enforcement, GST invoices, billin
   CHECK: node scripts/verify-billing-gates.mjs provider
   EXPECT: billing-provider-safety-ok
   CWD: .
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=Duration  5.85s (transform 778ms, setup 0ms, import 2.92s, tests 214ms, environment 2ms) | billing-provider-safety-ok
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=- ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json | Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
 - [x] G3: subscription lifecycle, proration, dunning, cancellation, and recovery state transitions are covered
   CHECK: node scripts/verify-billing-gates.mjs lifecycle
   EXPECT: billing-lifecycle-ok
   CWD: .
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=Duration  582ms (transform 188ms, setup 0ms, import 433ms, tests 6ms, environment 0ms) | billing-lifecycle-ok
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=- ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json | Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
 - [x] G4: quotas, feature gates, stale-order reconciliation, and overflow replay are enforced and idempotent
   CHECK: node scripts/verify-billing-gates.mjs entitlements
   EXPECT: billing-entitlements-ok
   CWD: .
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=Duration  505ms (transform 167ms, setup 0ms, import 311ms, tests 14ms, environment 0ms) | billing-entitlements-ok
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=- ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json | Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
 - [x] G5: GST calculations, invoice numbering, PDF/download contracts, and credit-note linkage are valid
   CHECK: node scripts/verify-billing-gates.mjs invoices
   EXPECT: billing-invoices-ok
   CWD: .
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=Duration  603ms (transform 182ms, setup 0ms, import 416ms, tests 6ms, environment 0ms) | billing-invoices-ok
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=- ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json | Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
 - [x] G6: customer/admin billing API and UI contracts compile and expose honest subscription states
   CHECK: node scripts/verify-billing-gates.mjs surfaces
@@ -45,6 +45,12 @@ Scope: recurring SaaS subscriptions, lifecycle enforcement, GST invoices, billin
   EXPECT: billing-regression-ok
   CWD: .
   EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=e3a870e24ba1/42 entries; output=- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks | - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+- [x] G9: production dependency audit has no high-severity findings
+  CHECK: npm audit --omit=dev --audit-level=high
+  EXPECT: found 0 vulnerabilities
+  CWD: server
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj/server; path=e3a870e24ba1/42 entries; output=found 0 vulnerabilities
 
 - [ ] G8: tax/legal operating assumptions receive explicit human review
   EVIDENCE: pending

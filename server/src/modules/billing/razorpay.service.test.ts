@@ -31,6 +31,9 @@ import {
   verifyWebhookSignature,
   verifyCapturedPayment,
   createRazorpayOrder,
+  createRazorpayPlan,
+  createRazorpaySubscription,
+  fetchRazorpaySubscription,
   activatePlan,
 } from './razorpay.service';
 import prisma from '../../config/database';
@@ -206,6 +209,66 @@ describe('createRazorpayOrder', () => {
 
     const parsed = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
     expect(parsed.notes).toBeUndefined();
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('subscription provider contract', () => {
+  it('creates a GST-inclusive plan and binds the subscription notes', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.endsWith('/plans')) {
+        return { ok: true, json: () => Promise.resolve({ id: 'plan_growth_monthly' }) } as Response;
+      }
+      if (href.endsWith('/subscriptions')) {
+        return {
+          ok: true,
+          json: () => Promise.resolve({ id: 'sub_123', status: 'created', short_url: 'https://rzp.test/sub' }),
+        } as Response;
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    await createRazorpayPlan({
+      name: 'Growth monthly',
+      amountPaise: 294882,
+      description: 'Growth subscription',
+      notes: { skuId: 'growth_monthly' },
+    });
+    await createRazorpaySubscription({
+      planId: 'plan_growth_monthly',
+      notes: { organizationId: 'org-1', skuId: 'growth_monthly' },
+    });
+
+    const planPayload = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    const subscriptionPayload = JSON.parse(fetchSpy.mock.calls[1][1]?.body as string);
+    expect(planPayload.item.amount).toBe(294882);
+    expect(planPayload.item.currency).toBe('INR');
+    expect(subscriptionPayload.plan_id).toBe('plan_growth_monthly');
+    expect(subscriptionPayload.notes.skuId).toBe('growth_monthly');
+    fetchSpy.mockRestore();
+  });
+
+  it('fetches provider subscription state without trusting client status', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: 'sub_123',
+          plan_id: 'plan_growth_monthly',
+          status: 'active',
+          current_start: 1_700_000_000,
+          current_end: 1_702_592_000,
+        }),
+    } as Response);
+    await expect(fetchRazorpaySubscription('sub_123')).resolves.toMatchObject({
+      id: 'sub_123',
+      status: 'active',
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.razorpay.com/v1/subscriptions/sub_123',
+      expect.objectContaining({ headers: expect.anything() })
+    );
     fetchSpy.mockRestore();
   });
 });

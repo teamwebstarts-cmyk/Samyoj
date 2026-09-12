@@ -408,6 +408,22 @@ export async function verifySubscriptionCheckout(params: {
   });
 }
 
+export function mapSubscriptionEventStatus(event: string): string | null {
+  if (event === 'subscription.halted') return 'HALTED';
+  if (event === 'subscription.pending') return 'PAST_DUE';
+  if (event === 'subscription.paused') return 'PAUSED';
+  if (event === 'subscription.cancelled') return 'CANCELLED';
+  if (event === 'subscription.completed') return 'COMPLETED';
+  if (
+    event === 'subscription.resumed' ||
+    event === 'subscription.activated' ||
+    event === 'subscription.authenticated'
+  ) {
+    return 'ACTIVE';
+  }
+  return null;
+}
+
 export async function handleSubscriptionWebhook(event: {
   event: string;
   payload?: {
@@ -460,22 +476,7 @@ export async function handleSubscriptionWebhook(event: {
     return;
   }
 
-  const mappedStatus =
-    event.event === 'subscription.halted'
-      ? 'HALTED'
-      : event.event === 'subscription.pending'
-        ? 'PAST_DUE'
-        : event.event === 'subscription.paused'
-          ? 'PAUSED'
-          : event.event === 'subscription.cancelled'
-            ? 'CANCELLED'
-            : event.event === 'subscription.completed'
-              ? 'COMPLETED'
-              : event.event === 'subscription.resumed' ||
-                  event.event === 'subscription.activated' ||
-                  event.event === 'subscription.authenticated'
-                ? 'ACTIVE'
-                : null;
+  const mappedStatus = mapSubscriptionEventStatus(event.event);
   if (!mappedStatus) return;
   const graceEndsAt =
     mappedStatus === 'PAST_DUE'

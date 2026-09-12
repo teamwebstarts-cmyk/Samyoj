@@ -41,9 +41,12 @@ switch (gate) {
     console.log('billing-provider-safety-ok');
     break;
   case 'lifecycle':
+    run('npm', ['test', '--', 'src/modules/billing/subscription.service.test.ts'], server);
+    console.log('billing-lifecycle-ok');
+    break;
   case 'invoices':
     run('npm', ['test', '--', 'src/modules/billing/production-billing.test.ts'], server);
-    console.log(`billing-${gate}-ok`);
+    console.log('billing-invoices-ok');
     break;
   case 'entitlements':
     run('npm', ['test', '--', 'src/modules/billing/entitlements.service.test.ts'], server);
