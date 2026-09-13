@@ -6,6 +6,7 @@ import {
   startWhatsAppOAuth,
 } from '../utils/whatsappOAuth';
 import { toastError, toastSuccess } from '../utils/toast';
+import { sanitizeUserErrorMessage } from '../utils/errors';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
 
@@ -53,7 +54,7 @@ export function useWhatsAppConnectOAuth(options?: {
         toastSuccess(data.message || 'Connection cancelled — you are still signed in.');
         return;
       }
-      toastError(data.message || 'WhatsApp connection failed');
+      toastError(sanitizeUserErrorMessage(data.message || 'WhatsApp connection failed'));
     },
     [clearPopupPoll, refreshNumbers]
   );

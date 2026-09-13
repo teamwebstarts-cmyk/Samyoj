@@ -43,4 +43,12 @@ describe('sanitizeUserErrorMessage', () => {
       /isn’t ready yet/,
     );
   });
+
+  it('maps the production-webhook guard to a short user message', () => {
+    expect(
+      sanitizeUserErrorMessage(
+        'Refusing to replace a live production webhook URL with an ngrok/localhost tunnel. That stops inbound.',
+      ),
+    ).toMatch(/Inbound stays on the live server/);
+  });
 });

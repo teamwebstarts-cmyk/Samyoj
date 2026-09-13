@@ -12,8 +12,16 @@ export function useWaOAuthPopupListener(handler: WaOAuthResultHandler) {
   handlerRef.current = handler;
 
   useEffect(() => {
+    // ponytail: popup publishes via 3 channels; dedupe identical results or one failure shows 3 toasts.
+    let lastKey = '';
+    let lastAt = 0;
     const wrapped: WaOAuthResultHandler = (message: WaOAuthMessage) => {
       clearWaOAuthResult();
+      const key = `${message.status}|${message.message || ''}|${message.phoneNumber || ''}`;
+      const now = Date.now();
+      if (key === lastKey && now - lastAt < 3000) return;
+      lastKey = key;
+      lastAt = now;
       handlerRef.current(message);
     };
     return subscribeWaOAuthResult(wrapped);

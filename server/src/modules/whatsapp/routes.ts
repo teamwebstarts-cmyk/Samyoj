@@ -105,12 +105,21 @@ async function saveWhatsappConnection(
       webhookConfigured = true;
       log.info('Webhook auto-configured after connect', { organizationId: orgId });
     } catch (err) {
-      logError(err, {
-        source: 'webhook',
-        action: 'Webhook auto-config failed',
-        organizationId: orgId,
-      });
-      throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      if (/live production webhook/i.test(message)) {
+        // Local ngrok must not steal the VPS callback. WABA subscribe above
+        // already pinned the durable override, so save the number anyway.
+        log.warn('Keeping production Meta webhook; number connected without stealing callback', {
+          organizationId: orgId,
+        });
+      } else {
+        logError(err, {
+          source: 'webhook',
+          action: 'Webhook auto-config failed',
+          organizationId: orgId,
+        });
+        throw err;
+      }
     }
   }
 

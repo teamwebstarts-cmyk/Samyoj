@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappApi, type WhatsappPhoneOption, type WhatsappConnectResult } from '../services/api';
 import { clearAuthBackup, restoreAuthBackupIfNeeded } from '../utils/authStorage';
-import { logError, normalizeError } from '../utils/errors';
+import { getErrorMessage, logError } from '../utils/errors';
 import {
   defaultPhoneSelectionKey,
   isWhatsAppOAuthCodeConsumed,
@@ -270,12 +270,12 @@ export default function WhatsappCallbackPage() {
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        const normalized = logError(err, {
+        logError(err, {
           source: 'auth',
           action: 'WhatsApp OAuth completeConnect failed',
           component: 'WhatsappCallbackPage',
         });
-        const msg = normalized.message || 'Failed to complete WhatsApp connection.';
+        const msg = getErrorMessage(err, 'Failed to complete WhatsApp connection.');
         const pending = readStashedPhoneSelection();
 
         if (isWhatsAppOAuthCodeConsumed(msg) && pending) {
@@ -348,14 +348,14 @@ export default function WhatsappCallbackPage() {
       setStatus('success');
       setMessage('WhatsApp connected. Close this window to return to Samyoj.');
     } catch (err: unknown) {
-      const normalized = logError(err, {
+      logError(err, {
         source: 'auth',
         action: 'WhatsApp selectConnect failed',
         component: 'WhatsappCallbackPage',
       });
-      const msg = normalizeError(err).message || 'Failed to connect selected number.';
+      const msg = getErrorMessage(err, 'Failed to connect selected number.');
       setStatus('select');
-      setMessage(normalized.message || msg);
+      setMessage(msg);
     }
   };
 

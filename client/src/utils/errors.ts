@@ -106,6 +106,10 @@ export function sanitizeUserErrorMessage(message: string, code?: string): string
   ) {
     return CONNECT_NOT_READY;
   }
+  // ponytail: production webhook guard is operator detail; user only needs the outcome.
+  if (/live production webhook|ngrok\/localhost tunnel/i.test(message)) {
+    return 'WhatsApp connected. Inbound stays on the live server — for local testing use a dedicated test number.';
+  }
   return message;
 }
 
