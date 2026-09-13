@@ -33,14 +33,13 @@ describe('webhook URL guards', () => {
     expect(decision.reason).toMatch(/production webhook/i);
   });
 
-  it('still refuses replacing production with ngrok even when opted in', () => {
+  it('allows replacing production with ngrok when local tunnel override is on', () => {
     const decision = shouldReplaceAppWebhookCallback(
       'https://app.samyoj.com/api/whatsapp/webhook',
       'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook',
       { allowTunnelOverride: true }
     );
-    expect(decision.replace).toBe(false);
-    expect(decision.reason).toMatch(/production webhook/i);
+    expect(decision.replace).toBe(true);
   });
 
   it('pins WABA delivery to production when local URL is ngrok', () => {

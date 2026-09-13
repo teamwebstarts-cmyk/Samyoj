@@ -67,19 +67,24 @@ export function resolveDurableWebhookPinUrl(
 }
 
 /**
- * Local `setup-webhook` must not steal a live production callback with ngrok.
- * `META_ALLOW_TUNNEL_WEBHOOK` does not override this — that flag previously
- * took inbound off the VPS. Re-registering the same durable URL is allowed.
+ * Default: never replace a live production callback with ngrok.
+ * Local opt-in: `META_ALLOW_TUNNEL_WEBHOOK=true` (dev only). VPS must not set that flag.
  */
 export function shouldReplaceAppWebhookCallback(
   currentUrl: string | null | undefined,
   nextUrl: string,
-  _options?: { allowTunnelOverride?: boolean }
+  options?: { allowTunnelOverride?: boolean }
 ): { replace: boolean; reason: string } {
   if (!nextUrl) {
     return { replace: false, reason: 'next webhook URL is empty' };
   }
   if (isEphemeralWebhookUrl(nextUrl) && isDurablePublicWebhookUrl(currentUrl)) {
+    if (options?.allowTunnelOverride) {
+      return {
+        replace: true,
+        reason: 'local META_ALLOW_TUNNEL_WEBHOOK override',
+      };
+    }
     return {
       replace: false,
       reason:

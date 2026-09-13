@@ -1335,10 +1335,14 @@ export class MetaWhatsAppService {
     token: string,
     credentials?: MetaCredentials
   ): Promise<void> {
-    const callbackUrl = resolveDurableWebhookPinUrl(
-      config.meta.webhookUrl,
-      config.meta.productionWebhookUrl
-    );
+    const stealLocal =
+      config.nodeEnv !== 'production' &&
+      Boolean(config.meta.allowTunnelWebhook) &&
+      isEphemeralWebhookUrl(config.meta.webhookUrl) &&
+      /^https:/i.test(config.meta.webhookUrl || '');
+    const callbackUrl = stealLocal
+      ? config.meta.webhookUrl
+      : resolveDurableWebhookPinUrl(config.meta.webhookUrl, config.meta.productionWebhookUrl);
     if (!callbackUrl) return;
 
     try {
