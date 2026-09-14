@@ -55,6 +55,39 @@ describe('campaign consent', () => {
     expect(() => createCampaignSchema.parse({ ...base, scheduledAt: null })).not.toThrow();
   });
 
+  it('validates drip campaign follow-up configuration in audienceConfig', () => {
+    const base = { name: 'Launch', templateName: 'approved_template' };
+    const valid = createCampaignSchema.parse({
+      ...base,
+      audienceConfig: {
+        drip: {
+          enabled: true,
+          delayHours: 48,
+          condition: 'no_reply',
+          templateName: 'follow_up_step2',
+          templateLanguage: 'en',
+        },
+      },
+    });
+    expect(valid.audienceConfig?.drip?.enabled).toBe(true);
+    expect(valid.audienceConfig?.drip?.delayHours).toBe(48);
+    expect(valid.audienceConfig?.drip?.condition).toBe('no_reply');
+
+    // Rejects invalid delay (must be at least 1 hour and at most 168 hours)
+    expect(() =>
+      createCampaignSchema.parse({
+        ...base,
+        audienceConfig: {
+          drip: {
+            enabled: true,
+            delayHours: 0,
+            templateName: 'follow_up',
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it('rejects malformed provider timestamps instead of persisting them', () => {
     expect(parseMetaTimestamp('not-a-timestamp')).toBeUndefined();
     expect(parseMetaTimestamp('1700000000.5')).toBeUndefined();

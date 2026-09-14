@@ -160,6 +160,8 @@ export interface OrgBusinessHours {
   endHour: number;
   days: number[];
   timezone?: string;
+  awayMessageEnabled?: boolean;
+  awayMessage?: string;
 }
 
 export const DEFAULT_BUSINESS_HOURS: OrgBusinessHours = {

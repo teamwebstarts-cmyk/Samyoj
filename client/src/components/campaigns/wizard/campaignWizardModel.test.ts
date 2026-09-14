@@ -188,4 +188,44 @@ describe('campaignWizardModel', () => {
       body: ['{{name}}', '20% off'],
     });
   });
+
+  it('serializes drip follow-up step into audienceConfig', () => {
+    const form = {
+      ...createEmptyCampaignWizardForm(),
+      name: 'Flash Sale',
+      templateName: template.name,
+      dripEnabled: true,
+      dripDelayHours: 48,
+      dripCondition: 'unread' as const,
+      dripTemplateName: 'reminder_offer',
+      dripTemplateLanguage: 'en',
+    };
+
+    const payload = buildCampaignPayload(form);
+    expect((payload.audienceConfig as any)?.drip).toEqual({
+      enabled: true,
+      delayHours: 48,
+      condition: 'unread',
+      templateName: 'reminder_offer',
+      templateLanguage: 'en',
+    });
+  });
+
+  it('validates drip template selection when drip is enabled in stage 2', () => {
+    const formWithoutTemplate = {
+      ...createEmptyCampaignWizardForm(),
+      dripEnabled: true,
+      dripTemplateName: '',
+    };
+    expect(validateCampaignWizardStage(2, formWithoutTemplate, template)).toBe(
+      'Choose a template for the automated follow-up step.'
+    );
+
+    const formWithTemplate = {
+      ...createEmptyCampaignWizardForm(),
+      dripEnabled: true,
+      dripTemplateName: 'reminder_offer',
+    };
+    expect(validateCampaignWizardStage(2, formWithTemplate, template)).toBeNull();
+  });
 });

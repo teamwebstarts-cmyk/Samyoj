@@ -143,6 +143,8 @@ interface ChatComposerProps {
   inputRef?: RefObject<HTMLTextAreaElement>;
   replyToPreview?: string | null;
   onClearReply?: () => void;
+  contactName?: string | null;
+  agentName?: string | null;
 }
 
 function formatFileSize(bytes: number) {
@@ -187,6 +189,8 @@ export default function ChatComposer({
   inputRef,
   replyToPreview,
   onClearReply,
+  contactName,
+  agentName,
 }: ChatComposerProps) {
   // `sending` intentionally unused for locking — optimistic send clears draft and
   // shows PENDING on the bubble; keeping the Send spinner made WhatsApp UX feel broken.
@@ -483,7 +487,14 @@ export default function ChatComposer({
   };
 
   const applyCanned = (reply: CannedReply) => {
-    onChange(reply.content);
+    let content = reply.content;
+    if (contactName) {
+      content = content.replace(/\{\{\s*(name|contact\.name)\s*\}\}/gi, contactName);
+    }
+    if (agentName) {
+      content = content.replace(/\{\{\s*(agent|agent\.name|my\.name)\s*\}\}/gi, agentName);
+    }
+    onChange(content);
     setShortcutIndex(0);
     textareaRef.current?.focus();
   };
@@ -504,7 +515,7 @@ export default function ChatComposer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (filteredReplies.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter')) {
+    if (filteredReplies.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab')) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setShortcutIndex((i) => (i + 1) % filteredReplies.length);
@@ -515,7 +526,7 @@ export default function ChatComposer({
         setShortcutIndex((i) => (i - 1 + filteredReplies.length) % filteredReplies.length);
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
         e.preventDefault();
         applyCanned(filteredReplies[shortcutIndex] ?? filteredReplies[0]);
         return;
@@ -676,23 +687,36 @@ export default function ChatComposer({
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
 
       {slashMenuOpen && (
-        <div className="absolute bottom-full left-3 right-3 z-40 mb-2 max-h-48 overflow-y-auto rounded-xl border border-theme-border bg-theme-surface py-1 shadow-panel sm:left-4 sm:right-4">
-          {filteredReplies.map((reply, i) => (
-            <button
-              key={reply.id}
-              type="button"
-              onClick={() => applyCanned(reply)}
-              className={`flex w-full items-start gap-2 px-3 py-2 text-left transition ${
-                i === shortcutIndex ? 'bg-theme-subtle' : 'hover:bg-theme-subtle'
-              }`}
-            >
-              <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-600" />
-              <span className="min-w-0">
-                <span className="block text-[12px] font-bold text-theme-fg">/{reply.shortcut}</span>
-                <span className="block truncate text-[11px] text-theme-muted">{reply.title}</span>
-              </span>
-            </button>
-          ))}
+        <div className="absolute bottom-full left-3 right-3 z-40 mb-2 max-h-60 overflow-hidden rounded-xl border border-theme-border bg-theme-surface/98 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md sm:left-4 sm:right-4">
+          <div className="flex items-center justify-between border-b border-theme-border/60 bg-theme-subtle/50 px-3 py-1.5 text-[11px] font-semibold text-theme-muted">
+            <span className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+              Quick Replies ({filteredReplies.length})
+            </span>
+            <span className="text-[10px] opacity-75">↑↓ navigate · ↵ / Tab select · Esc close</span>
+          </div>
+          <div className="max-h-52 overflow-y-auto py-1">
+            {filteredReplies.map((reply, i) => (
+              <button
+                key={reply.id}
+                type="button"
+                onClick={() => applyCanned(reply)}
+                className={`flex w-full items-start gap-2.5 px-3 py-2 text-left transition ${
+                  i === shortcutIndex
+                    ? 'bg-whatsapp-50 text-whatsapp-900 dark:bg-whatsapp-950/50 dark:text-whatsapp-100'
+                    : 'hover:bg-theme-subtle text-theme-fg'
+                }`}
+              >
+                <span className="mt-0.5 inline-flex items-center justify-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                  /{reply.shortcut}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-semibold truncate">{reply.title}</span>
+                  <span className="block truncate text-[11px] text-theme-muted">{reply.content}</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

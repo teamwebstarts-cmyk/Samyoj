@@ -13,6 +13,17 @@ export interface TemplateParams {
   buttonUrlSuffixes?: string[];
 }
 
+export interface DripConfig {
+  enabled: boolean;
+  delayHours: number;
+  condition: 'no_reply' | 'unread';
+  templateName: string;
+  templateLanguage?: string;
+  templateParams?: TemplateParams;
+  parentCampaignId?: string;
+  isStep2?: boolean;
+}
+
 export interface AudienceConfig {
   tags?: string[];
   contactIds?: string[];
@@ -23,6 +34,7 @@ export interface AudienceConfig {
     tags?: string[];
     contactIds?: string[];
   }>;
+  drip?: DripConfig;
 }
 
 export const recipientSchema = z.object({
@@ -79,6 +91,17 @@ export const templateParamsSchema = z
   })
   .optional();
 
+export const dripConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  delayHours: z.number().int().min(1).max(168).default(24),
+  condition: z.enum(['no_reply', 'unread']).default('no_reply'),
+  templateName: z.string().min(1),
+  templateLanguage: z.string().default('en').optional(),
+  templateParams: templateParamsSchema.optional(),
+  parentCampaignId: z.string().optional(),
+  isStep2: z.boolean().optional(),
+});
+
 export const audienceConfigSchema = z
   .object({
     tags: z.array(z.string()).optional(),
@@ -95,6 +118,7 @@ export const audienceConfigSchema = z
       )
       .min(1)
       .optional(),
+    drip: dripConfigSchema.optional(),
   })
   .optional();
 

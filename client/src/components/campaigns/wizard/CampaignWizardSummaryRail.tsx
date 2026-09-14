@@ -134,6 +134,15 @@ export default function CampaignWizardSummaryRail({
               </span>
             </div>
           )}
+
+          {form.dripEnabled && (
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] dark:border-slate-800">
+              <span className="font-semibold text-slate-500">Follow-up Step 2</span>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-extrabold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                +{form.dripDelayHours}h ({form.dripCondition === 'unread' ? 'Unread' : 'No reply'})
+              </span>
+            </div>
+          )}
         </div>
       </section>
     </aside>

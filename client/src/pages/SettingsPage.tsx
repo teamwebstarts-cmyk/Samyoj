@@ -65,6 +65,8 @@ const DEFAULT_BUSINESS_HOURS: BusinessHoursSettings = {
   endHour: 18,
   days: [1, 2, 3, 4, 5],
   timezone: 'Asia/Kolkata',
+  awayMessageEnabled: false,
+  awayMessage: 'Thanks for reaching out! We are currently closed. Our team will get back to you during business hours.',
 };
 
 const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
@@ -283,6 +285,8 @@ export default function SettingsPage() {
     endHour: number;
     days: number[];
     timezone?: string;
+    awayMessageEnabled?: boolean;
+    awayMessage?: string;
   }) => {
     setSavingHours(true);
     try {

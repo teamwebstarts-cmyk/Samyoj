@@ -55,6 +55,7 @@ import {
 import { emitProductEvent } from '../platform/events';
 import { assertApprovedCampaignTemplate, assertCampaignRecipientTemplates } from './template-validation';
 import { whatsappSendFailurePatches } from '../whatsapp/send-failure-explain';
+import { getCampaignCohortAudience, type CohortKind } from './cohorts';
 
 const EDITABLE_STATUSES: CampaignStatus[] = ['DRAFT', 'SCHEDULED'];
 const STUCK_RUNNING_MS = 6 * 60 * 60 * 1000;
@@ -316,6 +317,39 @@ export async function resolveAudienceRecipients(
   manualRecipients: ResolvedRecipient[] = [],
   whatsappNumberId: string
 ): Promise<ResolvedRecipient[]> {
+  const audienceConfigDrip = audienceConfig?.drip;
+  if (audienceConfigDrip?.isStep2 && audienceConfigDrip?.parentCampaignId) {
+    const kind: CohortKind = audienceConfigDrip.condition === 'unread' ? 'delivered_unread' : 'no_reply';
+    const cohortAudience = await getCampaignCohortAudience(
+      audienceConfigDrip.parentCampaignId,
+      organizationId,
+      kind,
+      whatsappNumberId
+    );
+    if (!cohortAudience || !cohortAudience.contactIds.length) {
+      return [];
+    }
+    const contacts = await prisma.contact.findMany({
+      where: {
+        id: { in: cohortAudience.contactIds },
+        organizationId,
+        whatsappNumberId,
+        optedIn: true,
+        consentSource: { not: null },
+        consentAt: { not: null },
+        optOutAt: null,
+      },
+      select: { phone: true, name: true },
+    });
+    return dedupeRecipients(
+      contacts.map((c) => ({
+        phone: c.phone,
+        name: c.name ?? undefined,
+        variables: undefined,
+      }))
+    );
+  }
+
   const groups = audienceConfig?.groups;
   if (groups?.length) {
     const contactWhere = addConsentFilter(
@@ -636,6 +670,7 @@ export async function finalizeCampaignIfDone(campaignId: string, expectedRunVers
       data: { repeatOccurrenceCount: { increment: 1 } },
     });
     await scheduleNextRepeatIfNeeded(campaignId);
+    await scheduleDripFollowUpIfNeeded(campaignId);
   }
   await releaseCampaignQuota(campaignId, runVersion);
 }
@@ -815,6 +850,18 @@ export async function queueCampaignSend(
       campaign.whatsappNumberId
     );
     if (!resolved.length) {
+      const audienceConfig = campaign.audienceConfig as AudienceConfig | null;
+      if (audienceConfig?.drip?.isStep2) {
+        await prisma.campaign.updateMany({
+          where: { id: campaign.id, status: 'RUNNING', runVersion: claimedRunVersion ?? campaign.runVersion },
+          data: { status: 'COMPLETED' },
+        });
+        emitToOrg(campaign.organizationId, 'campaign:status', { campaignId: campaign.id, status: 'COMPLETED' });
+        await logCampaignAudit(campaign.organizationId, undefined, 'campaign.drip_completed_empty_cohort', {
+          campaignId: campaign.id,
+        });
+        return { recipientCount: 0, stale: false };
+      }
       throw new AppError(400, 'No recipients match the selected audience');
     }
     const materializedRunVersion = materializedCampaignRunVersion(
@@ -1787,6 +1834,64 @@ export async function scheduleNextRepeatIfNeeded(campaignId: string) {
     scheduledAt: nextAt.toISOString(),
     intervalDays: campaign.repeatIntervalDays,
   });
+  return true;
+}
+
+export async function scheduleDripFollowUpIfNeeded(campaignId: string): Promise<boolean> {
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign || campaign.status !== 'COMPLETED' || campaign.cancelledAt) return false;
+
+  const audienceConfig = (campaign.audienceConfig as AudienceConfig | null) || {};
+  const drip = audienceConfig?.drip;
+  if (!drip?.enabled || !drip.templateName?.trim() || drip.isStep2) return false;
+  if (!campaign.whatsappNumberId) return false;
+
+  const existing = await prisma.campaign.findFirst({
+    where: {
+      organizationId: campaign.organizationId,
+      name: `${campaign.name} (Follow-Up Step 2)`,
+    },
+    select: { id: true },
+  });
+  if (existing) return false;
+
+  const delayHours = Math.max(1, Math.min(168, Number(drip.delayHours) || 24));
+  const scheduledAt = new Date(Date.now() + delayHours * 60 * 60 * 1000);
+
+  const followUp = await prisma.campaign.create({
+    data: {
+      organizationId: campaign.organizationId,
+      name: `${campaign.name} (Follow-Up Step 2)`,
+      templateName: drip.templateName.trim(),
+      templateLanguage: drip.templateLanguage || campaign.templateLanguage || 'en',
+      templateParams: drip.templateParams ? (drip.templateParams as object) : undefined,
+      audienceType: 'CONTACTS',
+      audienceConfig: {
+        ...audienceConfig,
+        drip: {
+          ...drip,
+          parentCampaignId: campaignId,
+          isStep2: true,
+        },
+      } as object,
+      whatsappNumberId: campaign.whatsappNumberId,
+      status: 'SCHEDULED',
+      scheduledAt,
+      timezone: campaign.timezone,
+      totalContacts: 0,
+      createdById: campaign.createdById,
+    },
+  });
+
+  emitToOrg(campaign.organizationId, 'campaign:status', { campaignId: followUp.id, status: 'SCHEDULED' });
+  await logCampaignAudit(campaign.organizationId, campaign.createdById ?? undefined, 'campaign.drip_scheduled', {
+    parentCampaignId: campaignId,
+    dripCampaignId: followUp.id,
+    scheduledAt: scheduledAt.toISOString(),
+    delayHours,
+    condition: drip.condition || 'no_reply',
+  });
+
   return true;
 }
 

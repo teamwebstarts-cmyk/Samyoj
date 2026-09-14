@@ -423,10 +423,29 @@ export default function ContactsPage() {
       delete params.page;
       delete params.limit;
       const { data } = await contactApi.export(params);
-      downloadBlob(data as Blob, 'contacts.csv');
+      const today = new Date().toISOString().slice(0, 10);
+      downloadBlob(data as Blob, `contacts_${today}.csv`);
       toastSuccess('Contacts exported');
     } catch {
       toastError('Failed to export contacts');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportSelected = async () => {
+    if (!selectedIds.length) return;
+    setExporting(true);
+    try {
+      const { data } = await contactApi.export({
+        ids: selectedIds.join(','),
+        format: 'csv',
+      });
+      const today = new Date().toISOString().slice(0, 10);
+      downloadBlob(data as Blob, `selected_contacts_${selectedIds.length}_${today}.csv`);
+      toastSuccess(`Exported ${selectedIds.length} contact${selectedIds.length > 1 ? 's' : ''}`);
+    } catch {
+      toastError('Failed to export selected contacts');
     } finally {
       setExporting(false);
     }
@@ -836,7 +855,8 @@ export default function ContactsPage() {
         onOptOut={() => runBulk('setOptedIn', { optedIn: false })}
         onDelete={() => runBulk('delete')}
         onAddToCampaign={() => navigate(`/campaigns?contacts=${selectedIds.join(',')}`)}
-        busy={bulkBusy}
+        onExport={handleExportSelected}
+        busy={bulkBusy || exporting}
       />
 
       <ContactBulkTagModal

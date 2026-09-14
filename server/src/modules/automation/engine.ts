@@ -180,12 +180,14 @@ export async function processRuleAutomations(
 export async function resolveStaticAutoReply(
   organizationId: string,
   whatsappNumberId: string,
-  context: AutomationContext
+  context: AutomationContext,
+  conversationId?: string
 ): Promise<MatchedAutomation | null> {
-  const withinHours = await checkBusinessHours(organizationId);
+  const hours = await getOrgBusinessHours(organizationId);
+  const withinHours = isWithinBusinessHours(hours);
   const hoursContext = { ...context, isBusinessHours: withinHours };
 
-  return (
+  const matched = (
     (context.message
       ? await processRuleAutomations(organizationId, whatsappNumberId, 'KEYWORD', { message: context.message })
       : null) ||
@@ -200,6 +202,35 @@ export async function resolveStaticAutoReply(
       : null) ||
     (await processRuleAutomations(organizationId, whatsappNumberId, 'BUSINESS_HOURS', hoursContext))
   );
+
+  if (matched) return matched;
+
+  // Fallback: If outside business hours and organization has configured away auto-reply in Business Hours settings
+  if (!withinHours && hours.awayMessageEnabled && hours.awayMessage?.trim()) {
+    if (conversationId) {
+      const recentAway = await prisma.message.findFirst({
+        where: {
+          conversationId,
+          direction: 'OUTBOUND',
+          metadata: { path: ['triggerType'], equals: 'AWAY' },
+          createdAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
+        },
+        select: { id: true },
+      });
+      if (recentAway) {
+        return null;
+      }
+    }
+
+    return {
+      id: 'settings_away',
+      name: 'Business Hours Away Reply',
+      triggerType: 'AWAY',
+      message: hours.awayMessage.trim(),
+    };
+  }
+
+  return null;
 }
 
 export async function sendAutomationReply(
@@ -645,11 +676,16 @@ export async function handleInboundAutomations(payload: InboundAutomationPayload
     return;
   }
 
-  const staticReply = await resolveStaticAutoReply(payload.organizationId, payload.whatsappNumberId, {
-    message: payload.content,
-    isNewConversation: payload.isNewConversation,
-    isBusinessHours: await checkBusinessHours(payload.organizationId),
-  });
+  const staticReply = await resolveStaticAutoReply(
+    payload.organizationId,
+    payload.whatsappNumberId,
+    {
+      message: payload.content,
+      isNewConversation: payload.isNewConversation,
+      isBusinessHours: await checkBusinessHours(payload.organizationId),
+    },
+    payload.conversationId
+  );
 
   if (staticReply) {
     if (isInboundStageComplete(pipeline, 'static')) {

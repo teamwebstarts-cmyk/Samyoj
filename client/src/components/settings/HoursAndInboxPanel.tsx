@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Moon } from 'lucide-react';
 import SettingsPanel from './SettingsPanel';
 import AppButton from '../ui/AppButton';
 import AppSelect from '../ui/AppSelect';
@@ -12,16 +12,13 @@ interface BusinessHoursShape {
   endHour: number;
   days: number[];
   timezone?: string;
+  awayMessageEnabled?: boolean;
+  awayMessage?: string;
 }
 
 interface HoursAndInboxPanelProps {
   businessHours: BusinessHoursShape;
-  onSaveBusinessHours: (hours: {
-    startHour: number;
-    endHour: number;
-    days: number[];
-    timezone?: string;
-  }) => Promise<void>;
+  onSaveBusinessHours: (hours: BusinessHoursShape) => Promise<void>;
   savingHours: boolean;
   canEdit: boolean;
 }
@@ -131,7 +128,9 @@ export default function HoursAndInboxPanel({
     localHours.startHour !== businessHours.startHour ||
     localHours.endHour !== businessHours.endHour ||
     !sameDays(localHours.days, businessHours.days) ||
-    resolveTimezone(localHours.timezone) !== resolveTimezone(businessHours.timezone);
+    resolveTimezone(localHours.timezone) !== resolveTimezone(businessHours.timezone) ||
+    Boolean(localHours.awayMessageEnabled) !== Boolean(businessHours.awayMessageEnabled) ||
+    (localHours.awayMessage ?? '') !== (businessHours.awayMessage ?? '');
 
   const presetId = detectPresetId(localHours);
   const isAlwaysOpen = localHours.startHour === 0 && localHours.endHour === 24 && localHours.days.length === 7;
@@ -185,6 +184,8 @@ export default function HoursAndInboxPanel({
       endHour: localHours.endHour,
       days: localHours.days,
       timezone: localHours.timezone,
+      awayMessageEnabled: localHours.awayMessageEnabled,
+      awayMessage: localHours.awayMessage,
     });
   };
 
@@ -326,6 +327,73 @@ export default function HoursAndInboxPanel({
             </div>
           </div>
         )}
+
+        {/* Out-of-office away auto-reply */}
+        <div className="rounded-xl border border-theme-border/80 bg-theme-subtle/25 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-whatsapp-500/10 text-whatsapp-600 dark:text-whatsapp-400">
+                <Moon className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[13px] font-bold text-theme-fg">Out-of-office away auto-reply</p>
+                <p className="text-[11px] text-theme-muted">
+                  Automatically respond to customers when messages arrive outside operating hours
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(localHours.awayMessageEnabled)}
+              disabled={!canEdit}
+              onClick={() =>
+                setLocalHours((prev) => ({
+                  ...prev,
+                  awayMessageEnabled: !prev.awayMessageEnabled,
+                  awayMessage:
+                    prev.awayMessage ||
+                    'Thanks for reaching out! We are currently closed. Our team will get back to you during business hours.',
+                }))
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-whatsapp-500 focus:ring-offset-2 ${
+                localHours.awayMessageEnabled ? 'bg-whatsapp-500' : 'bg-theme-border'
+              } ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  localHours.awayMessageEnabled ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {localHours.awayMessageEnabled && (
+            <div className="pt-2 border-t border-theme-border/50 space-y-1.5">
+              <label htmlFor="away-reply-text" className="block text-[11px] font-semibold text-theme-fg">
+                Auto-reply message
+              </label>
+              <textarea
+                id="away-reply-text"
+                rows={3}
+                maxLength={1000}
+                disabled={!canEdit}
+                value={localHours.awayMessage ?? ''}
+                onChange={(e) => setLocalHours((prev) => ({ ...prev, awayMessage: e.target.value }))}
+                placeholder="Thanks for reaching out! We are currently closed. Our team will get back to you during business hours."
+                className="w-full rounded-xl border border-theme-border bg-theme-surface px-3 py-2 text-[12px] text-theme-fg shadow-sm placeholder:text-theme-muted focus:border-whatsapp-500 focus:outline-none focus:ring-1 focus:ring-whatsapp-500 disabled:opacity-60 disabled:cursor-not-allowed resize-none transition"
+              />
+              <div className="flex items-center justify-between text-[11px] text-theme-muted">
+                <span className="flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                  Anti-spam rate limit: Max 1 away reply per 12 hours per chat.
+                </span>
+                <span>{(localHours.awayMessage ?? '').length}/1000</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </SettingsPanel>
   );

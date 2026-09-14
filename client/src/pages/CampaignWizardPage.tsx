@@ -592,6 +592,7 @@ export default function CampaignWizardPage() {
         form={form}
         setForm={setForm}
         selectedTemplate={selectedTemplate}
+        templates={templates}
         includedCount={sendReadyCount}
         audienceMetrics={audienceMetrics}
         excludedCount={excludedSelectedContacts}

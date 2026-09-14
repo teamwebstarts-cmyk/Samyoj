@@ -1,4 +1,4 @@
-import { CheckSquare, Send, Tag, Trash2, UserCheck, UserX, X } from 'lucide-react';
+import { CheckSquare, Download, Send, Tag, Trash2, UserCheck, UserX, X } from 'lucide-react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed';
 import AppButton from '../ui/AppButton';
@@ -12,6 +12,7 @@ interface ContactBulkBarProps {
   onOptOut: () => void;
   onDelete: () => void;
   onAddToCampaign: () => void;
+  onExport?: () => void;
   busy?: boolean;
 }
 
@@ -23,6 +24,7 @@ export default function ContactBulkBar({
   onOptOut,
   onDelete,
   onAddToCampaign,
+  onExport,
   busy,
 }: ContactBulkBarProps) {
   const { collapsed } = useSidebarCollapsed();
@@ -64,6 +66,17 @@ export default function ContactBulkBar({
             >
               Campaign
             </AppButton>
+            {onExport && (
+              <AppButton
+                size="sm"
+                variant="secondary"
+                icon={<Download size={14} />}
+                onClick={onExport}
+                disabled={busy}
+              >
+                Export ({selectedCount})
+              </AppButton>
+            )}
             <AppButton
               size="sm"
               variant="secondary"

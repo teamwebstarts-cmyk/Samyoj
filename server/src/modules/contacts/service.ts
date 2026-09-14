@@ -494,6 +494,7 @@ export async function exportContacts(
     optedIn?: string;
     source?: string;
     format?: string;
+    ids?: string;
   },
   whatsappNumberId?: string
 ) {
@@ -504,6 +505,16 @@ export async function exportContacts(
     optedIn: filters.optedIn,
     source: filters.source,
   }, whatsappNumberId);
+
+  if (filters.ids) {
+    const idList = filters.ids.split(',').map((s) => s.trim()).filter(Boolean);
+    if (idList.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { id: { in: idList } },
+      ];
+    }
+  }
 
   const contacts = await prisma.contact.findMany({
     where,

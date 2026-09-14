@@ -438,6 +438,8 @@ export const settingsApi = {
     endHour: number;
     days: number[];
     timezone?: string;
+    awayMessageEnabled?: boolean;
+    awayMessage?: string;
   }) => api.patch('/settings/business-hours', data),
   getAi: () => api.get('/settings/ai'),
   updateAi: (data: Record<string, unknown>) => api.patch('/settings/ai', data),

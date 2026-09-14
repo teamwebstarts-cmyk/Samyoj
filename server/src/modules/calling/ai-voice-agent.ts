@@ -112,9 +112,6 @@ export class AiVoiceCallSession {
   private sttLatenciesMs: number[] = [];
   private ttsLatenciesMs: number[] = [];
   private lastSpeechTimestamp: number | null = null;
-  // Call recording buffer
-  private recordingBuffer: Buffer[] = [];
-  private recordingSampleRate = 48000;
   /** Locale at call start — used when mid-call STT language breaks Bulbul. */
   private readonly defaultTtsLanguage: string;
   /** True once playPcm delivers audio for the current caller turn. */
@@ -248,13 +245,6 @@ export class AiVoiceCallSession {
 
     this.bridge.setAudioHandler((samples, sampleRate) => {
       if (this.ended || !this.transcriber) return;
-      // Only buffer PCM when recording is explicitly consent-enabled.
-      // Skip while we are playing TTS so the recording is the caller, not echo.
-      if (this.ctx.recordingEnabled && !this.speaking) {
-        const buf = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
-        this.recordingBuffer.push(buf);
-        this.recordingSampleRate = sampleRate;
-      }
 
       if (this.speaking) {
         const rms = pcmRms(samples);
@@ -1084,28 +1074,6 @@ export class AiVoiceCallSession {
     this.transcriber = null;
     this.bridge = null;
 
-    // Persist call recording only when consent-gated recording was enabled.
-    if (this.ctx.recordingEnabled && this.recordingBuffer.length > 0) {
-      try {
-        const rawPcm = Buffer.concat(this.recordingBuffer);
-        const { default: fs } = await import('fs/promises');
-        const { default: path } = await import('path');
-        const uploadsDir = path.resolve(process.cwd(), 'uploads', 'calls');
-        await fs.mkdir(uploadsDir, { recursive: true });
-        await fs.writeFile(path.join(uploadsDir, `${this.ctx.callId}.pcm`), rawPcm);
-        log.info('Call recording saved', {
-          callId: this.ctx.callId,
-          sizeBytes: rawPcm.length,
-          durationSec: Math.round(rawPcm.length / (this.recordingSampleRate * 2)),
-        });
-      } catch (err) {
-        log.warn('Failed to save call recording', {
-          callId: this.ctx.callId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
     await unregisterActiveCall(this.ctx.metaCallId, this.ctx.organizationId);
 
     const priorCall = await prisma.call.findUnique({ where: { id: this.ctx.callId } });
@@ -1114,10 +1082,8 @@ export class AiVoiceCallSession {
       unknown
     >;
     const durationSeconds =
-      this.recordingBuffer.length > 0
-        ? Math.round(
-            Buffer.concat(this.recordingBuffer).length / (this.recordingSampleRate * 2)
-          )
+      priorCall?.startedAt
+        ? Math.max(0, Math.round((Date.now() - priorCall.startedAt.getTime()) / 1000))
         : priorCall?.durationSeconds ?? undefined;
 
     const voiceMetadata = {

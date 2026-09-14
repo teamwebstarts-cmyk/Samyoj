@@ -50,6 +50,8 @@ const businessHoursSchema = z.object({
   endHour: z.number().min(1).max(24),
   days: z.array(z.number().min(0).max(6)),
   timezone: z.string().optional(),
+  awayMessageEnabled: z.boolean().optional(),
+  awayMessage: z.string().max(1000).optional(),
 });
 
 const aiSettingsSchema = z.object({

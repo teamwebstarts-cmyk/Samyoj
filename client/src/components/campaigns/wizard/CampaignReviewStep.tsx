@@ -8,6 +8,7 @@ import {
   Gift,
   MessageCircle,
   Users,
+  Workflow,
 } from 'lucide-react';
 import AppButton from '../../ui/AppButton';
 import { Link } from 'react-router-dom';
@@ -25,6 +26,7 @@ interface CampaignReviewStepProps {
   form: CampaignWizardForm;
   setForm: Dispatch<SetStateAction<CampaignWizardForm>>;
   selectedTemplate?: MessageTemplate;
+  templates?: MessageTemplate[];
   includedCount: number | null;
   audienceMetrics?: AudiencePreviewMetrics | null;
   excludedCount: number;
@@ -37,6 +39,7 @@ export default function CampaignReviewStep({
   form,
   setForm,
   selectedTemplate,
+  templates = [],
   includedCount,
   audienceMetrics,
   excludedCount,
@@ -45,6 +48,7 @@ export default function CampaignReviewStep({
   onEditAudience,
 }: CampaignReviewStepProps) {
   const [audienceOpen, setAudienceOpen] = useState(false);
+  const approvedTemplates = (templates || []).filter((t) => t.status === 'APPROVED');
   const filledPreview = selectedTemplate
     ? {
         ...getFilledTemplatePreview(selectedTemplate, {
@@ -329,6 +333,144 @@ export default function CampaignReviewStep({
                       minUntil={minScheduleDateTime}
                     />
                   </div>
+              </div>
+            </section>
+
+            <section className="campaign-review-section campaign-review-drip-card">
+              <div className="campaign-review-section-header">
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <span className="campaign-review-icon campaign-review-icon--emerald">
+                      <Workflow className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    </span>
+                    <div>
+                      <h3 className="flex items-center gap-1.5">
+                        Automated Follow-Up (Drip Step 2)
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                          Optional
+                        </span>
+                      </h3>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.dripEnabled}
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        dripEnabled: !prev.dripEnabled,
+                        dripTemplateName: prev.dripTemplateName || (approvedTemplates[0]?.name ?? ''),
+                        dripTemplateLanguage: prev.dripTemplateLanguage || (approvedTemplates[0]?.language ?? 'en'),
+                      }))
+                    }
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                      form.dripEnabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        form.dripEnabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Automatically schedule a follow-up WhatsApp message to recipients who do not respond or read after a delay.
+                </p>
+
+                {form.dripEnabled && (
+                  <div className="space-y-3 rounded-lg border border-slate-200/80 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-900/40">
+                    {/* Cohort Condition */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Target cohort
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, dripCondition: 'no_reply' }))}
+                          className={`rounded-lg border px-2.5 py-2 text-left transition ${
+                            form.dripCondition === 'no_reply'
+                              ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 font-bold text-emerald-900 dark:text-emerald-200 shadow-sm'
+                              : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <p className="text-[10px] font-extrabold">No Reply Received</p>
+                          <p className="text-[9px] text-slate-500 mt-0.5">Sent or read, but customer hasn't messaged back</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, dripCondition: 'unread' }))}
+                          className={`rounded-lg border px-2.5 py-2 text-left transition ${
+                            form.dripCondition === 'unread'
+                              ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 font-bold text-emerald-900 dark:text-emerald-200 shadow-sm'
+                              : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <p className="text-[10px] font-extrabold">Unread Only</p>
+                          <p className="text-[9px] text-slate-500 mt-0.5">Delivered to phone, but never opened or read</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Delay Hours */}
+                    <div>
+                      <label htmlFor="drip-delay-select" className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Wait before sending follow-up
+                      </label>
+                      <select
+                        id="drip-delay-select"
+                        value={form.dripDelayHours}
+                        onChange={(e) => setForm((prev) => ({ ...prev, dripDelayHours: Number(e.target.value) }))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                      >
+                        <option value={24}>After 24 hours (1 day) — Recommended</option>
+                        <option value={48}>After 48 hours (2 days)</option>
+                        <option value={72}>After 72 hours (3 days)</option>
+                        <option value={120}>After 5 days</option>
+                        <option value={168}>After 7 days (1 week)</option>
+                      </select>
+                    </div>
+
+                    {/* Follow-up Template */}
+                    <div>
+                      <label htmlFor="drip-template-select" className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Follow-up WhatsApp template
+                      </label>
+                      <select
+                        id="drip-template-select"
+                        value={form.dripTemplateName}
+                        onChange={(e) => {
+                          const found = approvedTemplates.find((t) => t.name === e.target.value);
+                          setForm((prev) => ({
+                            ...prev,
+                            dripTemplateName: e.target.value,
+                            dripTemplateLanguage: found?.language || 'en',
+                          }));
+                        }}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                      >
+                        {approvedTemplates.length === 0 ? (
+                          <option value="">No approved templates available</option>
+                        ) : (
+                          approvedTemplates.map((t) => (
+                            <option key={t.id || t.name} value={t.name}>
+                              {t.name} ({t.language}) {t.category ? `· ${t.category}` : ''}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <p className="mt-1 text-[9px] text-slate-500">
+                        When the main campaign finishes, Step 2 will be scheduled to trigger after {form.dripDelayHours}h targeting eligible {form.dripCondition === 'unread' ? 'unread' : 'unreplied'} contacts.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
             </div>

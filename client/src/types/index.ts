@@ -639,6 +639,8 @@ export interface BusinessHoursSettings {
   endHour: number;
   days: number[];
   timezone?: string;
+  awayMessageEnabled?: boolean;
+  awayMessage?: string;
 }
 
 export interface ApiKeyItem {

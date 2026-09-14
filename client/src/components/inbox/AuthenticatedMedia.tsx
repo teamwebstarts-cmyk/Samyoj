@@ -516,6 +516,7 @@ export function AuthenticatedAudio({
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [speed, setSpeed] = useState<1 | 1.5 | 2>(1);
   const playbackSrc = url ? withPlaybackMp3(url) : null;
 
   useEffect(() => {
@@ -523,6 +524,15 @@ export function AuthenticatedAudio({
     setCurrent(0);
     setDuration(0);
   }, [playbackSrc]);
+
+  const cycleSpeed = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next: 1 | 1.5 | 2 = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
+    setSpeed(next);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = next;
+    }
+  };
 
   if (loading && !url) {
     return (
@@ -547,6 +557,7 @@ export function AuthenticatedAudio({
   const toggle = () => {
     const el = audioRef.current;
     if (!el) return;
+    el.playbackRate = speed;
     if (el.paused) {
       void el.play().catch(() => failSoft());
     } else {
@@ -575,10 +586,16 @@ export function AuthenticatedAudio({
         ref={audioRef}
         src={playbackSrc}
         preload="metadata"
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration || 0);
+          e.currentTarget.playbackRate = speed;
+        }}
         onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime || 0)}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          if (audioRef.current) audioRef.current.playbackRate = speed;
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => {
           setPlaying(false);
@@ -623,8 +640,24 @@ export function AuthenticatedAudio({
             style={{ left: `calc(${progress}% - 6px)` }}
           />
         </button>
-        <div className="mt-1 flex items-end justify-between gap-2 pr-0.5">
-          <span className="text-[11px] tabular-nums leading-none text-chat-timestamp">{clock}</span>
+        <div className="mt-1 flex items-center justify-between gap-2 pr-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] tabular-nums leading-none text-chat-timestamp">{clock}</span>
+            <button
+              type="button"
+              onClick={cycleSpeed}
+              title={`Playback speed: ${speed}x (click to change)`}
+              className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10.5px] font-extrabold tracking-tight transition active:scale-95 ${
+                speed > 1
+                  ? outbound
+                    ? 'bg-[#008069] text-white shadow-xs'
+                    : 'bg-whatsapp-600 text-white shadow-xs'
+                  : 'bg-black/6 text-chat-timestamp hover:bg-black/12 dark:bg-white/10 dark:text-chat-timestamp dark:hover:bg-white/18'
+              }`}
+            >
+              {speed}x
+            </button>
+          </div>
           {endMeta ? <span className="shrink-0 -mb-px">{endMeta}</span> : null}
         </div>
       </div>

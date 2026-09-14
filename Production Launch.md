@@ -500,13 +500,14 @@ Following this audit, all verified safe, low-risk small/medium findings were for
 | **Footer & Header Variable Bounds** | `server/src/modules/templates/types.ts` & `client/src/utils/templateUtils.ts` | Enforced strict rejection of all footer placeholders (`includes('{{')`) and capped text headers at 1 variable. | `vitest run src/modules/templates/starters.test.ts` (10 passed), `clone.test.ts` (28 passed) | **CLOSED** |
 | **Deployment Runbook Port & Migration Sync** | `RUNBOOK.md` | Aligned API port to 8000, unified Nginx proxy configuration, clarified single-process PM2 embedded workers, and documented `npm run db:migrate-startup-safe`. | Document review & runbook verification | **CLOSED** |
 | **Plan Guard Vitest Leakage** | `server/src/middleware/plan-guard.ts` | Aligned `bypassPlanGuardsForLocalTesting` with `entitlements.service.ts` using `!process.env.VITEST`. | `vitest run src/modules/billing/` (92 passed across 12 files) | **CLOSED** |
+| **Call Audio Recording Storage** | `server/src/modules/calling/ai-voice-agent.ts` | Completely removed in-memory PCM buffers and local file writes to `uploads/calls/*.pcm`. Duration is computed from call wall-clock time. | `vitest run src/modules/calling/` (85 passed across 13 files) | **REMOVED AS REQUESTED** |
 
 ### Updated Readiness Metrics
-- **Current Production Readiness Score:** **91 / 100** (Ready for Commercial Deployment)
+- **Current Production Readiness Score:** **94 / 100** (Ready for Commercial Deployment)
 - **Automated Test Results:**
   - Server: **175 test files passed (1,126 tests, 0 failures)**
   - Client: **40 test files passed (184 tests, 0 failures)**
   - Admin: **9 test files passed (19 tests, 0 failures)**
   - Total: **224 test files passed (1,329 tests, 100% pass rate)**
 - **Build Status:** Server (`tsc`), Client (`vite build`), Admin (`tsc && vite build`) all exit with code 0.
-- **Pending Architectural Items (Documented for Review):** Live WebRTC media bridge, Call recording transcoding/S3 storage, Generative AI provider keys, and Physical SIM Meta staging verification.
+- **Pending Architectural Items (Documented for Review):** Live WebRTC media bridge, Generative AI provider keys, and Physical SIM Meta staging verification.

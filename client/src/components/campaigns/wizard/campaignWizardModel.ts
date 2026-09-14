@@ -36,6 +36,11 @@ export interface CampaignWizardForm {
   repeatUntil: string;
   repeatMaxOccurrences: string;
   testPhone: string;
+  dripEnabled: boolean;
+  dripDelayHours: number;
+  dripCondition: 'no_reply' | 'unread';
+  dripTemplateName: string;
+  dripTemplateLanguage: string;
 }
 
 export type CampaignWizardDetail = Campaign & { recipients?: CampaignRecipient[] };
@@ -91,6 +96,11 @@ export function createEmptyCampaignWizardForm(): CampaignWizardForm {
     repeatUntil: '',
     repeatMaxOccurrences: '',
     testPhone: '',
+    dripEnabled: false,
+    dripDelayHours: 24,
+    dripCondition: 'no_reply',
+    dripTemplateName: '',
+    dripTemplateLanguage: 'en',
   };
 }
 
@@ -184,6 +194,11 @@ export function campaignToWizardForm(
     repeatUntil: toDateTimeLocalValue(campaign.repeatUntil),
     repeatMaxOccurrences: campaign.repeatMaxOccurrences ? String(campaign.repeatMaxOccurrences) : '',
     testPhone: '',
+    dripEnabled: Boolean((campaign.audienceConfig as any)?.drip?.enabled),
+    dripDelayHours: (campaign.audienceConfig as any)?.drip?.delayHours ?? 24,
+    dripCondition: (campaign.audienceConfig as any)?.drip?.condition ?? 'no_reply',
+    dripTemplateName: (campaign.audienceConfig as any)?.drip?.templateName ?? '',
+    dripTemplateLanguage: (campaign.audienceConfig as any)?.drip?.templateLanguage ?? 'en',
   };
 }
 
@@ -271,6 +286,19 @@ export function buildCampaignPayload(
     payload.audienceConfig = { requireOptIn: true };
   }
 
+  if (form.dripEnabled && form.dripTemplateName.trim()) {
+    payload.audienceConfig = {
+      ...((payload.audienceConfig as Record<string, unknown>) || {}),
+      drip: {
+        enabled: true,
+        delayHours: Number(form.dripDelayHours) || 24,
+        condition: form.dripCondition || 'no_reply',
+        templateName: form.dripTemplateName.trim(),
+        templateLanguage: form.dripTemplateLanguage || 'en',
+      },
+    };
+  }
+
   if (form.scheduleEnabled && form.scheduledAt) {
     payload.scheduledAt = new Date(form.scheduledAt).toISOString();
   } else if (options?.clearSchedule && options?.isUpdate) {
@@ -341,6 +369,12 @@ export function validateCampaignWizardStage(
   if (stage === 2 && form.repeatEnabled) {
     const interval = Number.parseInt(form.repeatIntervalDays, 10);
     if (!Number.isFinite(interval) || interval < 1) return 'Repeat interval must be at least 1 day.';
+  }
+
+  if (stage === 2 && form.dripEnabled) {
+    if (!form.dripTemplateName.trim()) {
+      return 'Choose a template for the automated follow-up step.';
+    }
   }
 
   return null;

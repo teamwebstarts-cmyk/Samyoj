@@ -15,6 +15,8 @@ export async function getOrgBusinessHours(organizationId: string): Promise<OrgBu
     endHour: bh.endHour ?? DEFAULT_BUSINESS_HOURS.endHour,
     days: bh.days ?? DEFAULT_BUSINESS_HOURS.days,
     timezone: bh.timezone ?? DEFAULT_BUSINESS_HOURS.timezone,
+    awayMessageEnabled: bh.awayMessageEnabled ?? false,
+    awayMessage: typeof bh.awayMessage === 'string' ? bh.awayMessage : undefined,
   };
 }
 
