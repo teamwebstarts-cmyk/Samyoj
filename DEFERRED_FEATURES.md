@@ -83,3 +83,44 @@ This document records architectural, product, and feature decisions where specif
 - **Date Decided:** September 2026
 - **Context:** Useful when scaling to a high volume of Shopify/WooCommerce merchants, but deferred for the future when customer demand materializes.
 - **Instruction:** Keep in long-term future roadmap. Do not implement now.
+
+---
+
+## 11. Inbound Welcome Auto-Responder (First Message Greeting)
+- **Status:** ❌ **REJECTED (DO NOT IMPLEMENT — NOW OR FUTURE)**
+- **Date Decided:** September 2026
+- **Context:** Product owner explicitly rejected this. The existing automation flows engine already handles first-message routing and greeting. A separate welcome auto-responder creates duplicate logic and user confusion.
+- **Instruction:** Do not build a standalone "welcome message" feature. Flows handle this entirely.
+
+---
+
+## 12. Delivery / Read Receipt Informational UI
+- **Status:** ❌ **REJECTED (DO NOT IMPLEMENT)**
+- **Date Decided:** September 2026
+- **Context:** WhatsApp blue double-tick (read receipt) is already rendered natively in the inbox message thread. Adding a dedicated "delivered to device / read by" info panel duplicates what WhatsApp already surfaces and adds visual clutter.
+- **Instruction:** Do not build a separate delivery/read-receipt status overlay or info panel. The blue tick in the chat thread is sufficient.
+
+---
+
+## 13. Team Round-Robin Assignment
+- **Status:** ❌ **REJECTED (DO NOT IMPLEMENT — NOW OR FUTURE)**
+- **Date Decided:** September 2026
+- **Context:** Automatic round-robin distribution of conversations to team members is not a required workflow for the current customer base.
+- **Instruction:** Do not implement round-robin auto-assignment. Manual agent assignment and existing automation rules cover the use case.
+
+---
+
+## 14. Campaign Delivery Analytics / Export Dashboard
+- **Status:** ❌ **REJECTED (DO NOT IMPLEMENT — NOW OR FUTURE)**
+- **Date Decided:** September 2026
+- **Context:** Explicit per-campaign delivery analytics export (beyond the existing campaign recipient list and status view) was evaluated and rejected for now and the future.
+- **Instruction:** Do not build a dedicated campaign analytics export dashboard or per-campaign delivery funnel report.
+
+---
+
+## 15. One-Click SVG Flowchart Export
+- **Status:** ⏸️ **DEFERRED — RE-IMPLEMENT WHEN READY**
+- **Date Decided:** September 2026
+- **Context:** A one-click SVG/PNG export of the automation flow canvas was previously removed or broken. Product owner flagged it should be re-implemented properly in a dedicated pass.
+- **Instruction:** Do not partially implement. When scheduling, do this as a focused task with proper canvas-to-SVG serialization.
+

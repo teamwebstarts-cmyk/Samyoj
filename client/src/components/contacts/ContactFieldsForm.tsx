@@ -195,6 +195,19 @@ export default function ContactFieldsForm({
     );
   }, [storedCustomRows]);
 
+  // Detect duplicate keys for inline warning
+  const duplicateKeys = useMemo(() => {
+    const seen = new Set<string>();
+    const dupes = new Set<string>();
+    for (const row of storedCustomRows) {
+      const k = row.key.trim().toLowerCase();
+      if (!k) continue;
+      if (seen.has(k)) dupes.add(k);
+      else seen.add(k);
+    }
+    return dupes;
+  }, [storedCustomRows]);
+
   const phoneField =
     phoneMode === 'plain' ? (
       <AppInput
@@ -412,48 +425,61 @@ export default function ContactFieldsForm({
         <div className="space-y-1.5">
           {customFieldRows.map((row, idx) => {
             const hasContent = Boolean(row.key.trim() || row.value.trim());
+            const isDuplicate = row.key.trim() && duplicateKeys.has(row.key.trim().toLowerCase());
+            const hasKeyNoValue = row.key.trim() && !row.value.trim();
             const inputClass = isCompact ? compactFieldInputClass : fullFieldInputClass;
             const removeBtnClass = isCompact
               ? 'flex h-9 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40'
               : 'flex h-11 w-9 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-white text-neutral-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:bg-neutral-800 dark:hover:bg-red-950/40';
 
             return (
-              <div
-                key={`custom-field-${idx}`}
-                className={`grid items-center gap-2 ${
-                  isCompact
-                    ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_1.75rem]'
-                    : 'grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_2.25rem]'
-                }`}
-              >
-                <input
-                  type="text"
-                  aria-label="Field name"
-                  placeholder={isCompact ? 'order_id' : 'e.g. order_id'}
-                  value={row.key}
-                  onChange={(e) => handleCustomFieldChange(idx, 'key', e.target.value)}
-                  onBlur={(e) => handleCustomKeyBlur(idx, e.target.value)}
-                  className={inputClass}
-                />
-                <input
-                  type="text"
-                  aria-label="Value"
-                  placeholder="Value"
-                  value={row.value}
-                  onChange={(e) => handleCustomFieldChange(idx, 'value', e.target.value)}
-                  className={inputClass}
-                />
-                {hasContent ? (
-                  <button
-                    type="button"
-                    onClick={() => removeCustomField(idx)}
-                    className={removeBtnClass}
-                    aria-label="Remove field"
-                  >
-                    <Trash2 className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-                  </button>
-                ) : (
-                  <span aria-hidden className="w-7 shrink-0" />
+              <div key={`custom-field-${idx}`} className="space-y-0.5">
+                <div
+                  className={`grid items-center gap-2 ${
+                    isCompact
+                      ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_1.75rem]'
+                      : 'grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_2.25rem]'
+                  }`}
+                >
+                  <input
+                    type="text"
+                    aria-label="Field name"
+                    placeholder={isCompact ? 'order_id' : 'e.g. order_id'}
+                    value={row.key}
+                    onChange={(e) => handleCustomFieldChange(idx, 'key', e.target.value)}
+                    onBlur={(e) => handleCustomKeyBlur(idx, e.target.value)}
+                    className={`${inputClass} ${isDuplicate ? 'border-amber-400 focus:border-amber-500 dark:border-amber-600/60' : ''}`}
+                  />
+                  <input
+                    type="text"
+                    aria-label="Value"
+                    placeholder="Value"
+                    value={row.value}
+                    onChange={(e) => handleCustomFieldChange(idx, 'value', e.target.value)}
+                    className={inputClass}
+                  />
+                  {hasContent ? (
+                    <button
+                      type="button"
+                      onClick={() => removeCustomField(idx)}
+                      className={removeBtnClass}
+                      aria-label="Remove field"
+                    >
+                      <Trash2 className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+                    </button>
+                  ) : (
+                    <span aria-hidden className="w-7 shrink-0" />
+                  )}
+                </div>
+                {isDuplicate && (
+                  <p className="px-0.5 text-[10.5px] font-semibold text-amber-600 dark:text-amber-400">
+                    ⚠ Duplicate key — only the last value will be saved.
+                  </p>
+                )}
+                {!isDuplicate && hasKeyNoValue && (
+                  <p className="px-0.5 text-[10.5px] text-theme-muted">
+                    Empty value — this field won't be saved until you add a value.
+                  </p>
                 )}
               </div>
             );

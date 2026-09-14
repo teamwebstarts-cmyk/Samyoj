@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ContactAvatar from '../inbox/ContactAvatar';
 import AppButton from '../ui/AppButton';
+import { listCustomAttributeEntries } from '../../utils/customAttributes';
 import LoadingState from '../ui/LoadingState';
 import SegmentedControl from '../ui/SegmentedControl';
 import SlideOver from '../ui/SlideOver';
@@ -411,6 +412,48 @@ export default function ContactDetailPanel({
                   ))}
                 </dl>
               </div>
+
+              {/* Custom fields (template variables) */}
+              {(() => {
+                const customEntries = listCustomAttributeEntries(current.customAttributes);
+                if (!customEntries.length) return null;
+                return (
+                  <div className="rounded-2xl border border-sky-200/60 bg-sky-50/30 p-4 dark:border-sky-800/40 dark:bg-sky-950/15">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-bold uppercase tracking-[0.08em] text-sky-700 dark:text-sky-400">
+                        Custom fields
+                      </h4>
+                      <span className="text-[10px] font-semibold text-theme-muted">
+                        Used as{' '}
+                        <code className="font-mono text-sky-600 dark:text-sky-400">{'{{'+'variable}}'}</code>
+                        {' '}in templates
+                      </span>
+                    </div>
+                    <dl className="mt-3 grid gap-2">
+                      {customEntries.map((entry) => (
+                        <div
+                          key={entry.key}
+                          className="flex items-start justify-between gap-3 rounded-xl border border-sky-200/70 bg-white/70 px-3 py-2 dark:border-sky-800/40 dark:bg-sky-950/25"
+                        >
+                          <dt className="text-[11px] font-bold uppercase tracking-wide text-theme-muted shrink-0">
+                            {entry.label}
+                          </dt>
+                          <dd className="text-right text-[12px] font-semibold text-theme-fg break-all">
+                            {entry.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(current)}
+                      className="mt-3 text-[11px] font-bold text-sky-600 hover:text-sky-700 dark:text-sky-400"
+                    >
+                      Edit fields →
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
