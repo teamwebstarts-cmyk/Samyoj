@@ -152,7 +152,14 @@ export default function TemplateWizardPage() {
         }
         setRejectionReason(getTemplateRejectedReason(template.rejected_reason));
         setResubmitStatus(template.status || null);
-        setForm(syncFormExamples(formFromMessageTemplate(template)));
+        const hydrated = syncFormExamples(formFromMessageTemplate(template));
+        if (resubmitNameParam && hydrated.name.toLowerCase() === resubmitNameParam.toLowerCase()) {
+          const nextName = hydrated.name.endsWith('_v2')
+            ? hydrated.name.replace(/_v2$/, '_v3')
+            : `${hydrated.name}_v2`;
+          hydrated.name = nextName.slice(0, 512);
+        }
+        setForm(hydrated);
       })
       .catch(() => {
         toastError('Template not found');
@@ -304,6 +311,22 @@ export default function TemplateWizardPage() {
         requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
         return false;
       }
+      if (mode === 'resubmit' && form.name && resubmitNameParam && form.name.toLowerCase() === resubmitNameParam.toLowerCase()) {
+        setStageError(`Meta enforces a 30-day quarantine on deleted template names. Provide a new versioned name (e.g. ${form.name}_v2).`);
+        requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+        return false;
+      }
+      if (
+        mode === 'resubmit' &&
+        form.name &&
+        resubmitNameParam &&
+        form.name.toLowerCase() !== resubmitNameParam.toLowerCase() &&
+        existingNames.has(form.name)
+      ) {
+        setStageError('A template with this name already exists. Choose a different name.');
+        requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+        return false;
+      }
       if (step === 1 && !wizardChecklistReady(form)) {
         setStageError('Complete all required approval checks before submitting.');
         requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
@@ -312,7 +335,7 @@ export default function TemplateWizardPage() {
       setStageError(null);
       return true;
     },
-    [form, mode, existingNames],
+    [form, mode, existingNames, resubmitNameParam],
   );
 
   const goToStep = (step: number) => {

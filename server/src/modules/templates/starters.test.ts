@@ -60,6 +60,50 @@ describe('Samyoj catalog templates', () => {
       true,
     );
   });
+
+  it('rejects footers containing variables', () => {
+    const payload = {
+      name: 'footer_var_test',
+      language: 'en_US',
+      category: 'UTILITY' as const,
+      body: 'Hello {{1}} welcome to our service.',
+      bodyExamples: ['Rahul'],
+      footer: 'Reply STOP {{1}}',
+    };
+    expect(() => createTemplateSchema.parse(payload)).toThrow(/Footer cannot contain variables or placeholders/i);
+
+    const namedPayload = {
+      ...payload,
+      footer: 'Reply STOP {{name}}',
+    };
+    expect(() => createTemplateSchema.parse(namedPayload)).toThrow(/Footer cannot contain variables or placeholders/i);
+  });
+
+  it('rejects headers with more than 1 variable', () => {
+    const payload = {
+      name: 'header_var_test',
+      language: 'en_US',
+      category: 'UTILITY' as const,
+      header: 'Order {{1}} from {{2}}',
+      headerExamples: ['123', 'Store'],
+      body: 'Hello {{1}} your order is ready.',
+      bodyExamples: ['Rahul'],
+    };
+    expect(() => createTemplateSchema.parse(payload)).toThrow(/Header can contain at most 1 variable/i);
+  });
+
+  it('accepts headers with 1 variable when headerExamples are supplied', () => {
+    const payload = {
+      name: 'header_single_var',
+      language: 'en_US',
+      category: 'UTILITY' as const,
+      header: 'Order {{1}} update',
+      headerExamples: ['123'],
+      body: 'Hello {{1}} your order is ready.',
+      bodyExamples: ['Rahul'],
+    };
+    expect(() => createTemplateSchema.parse(payload)).not.toThrow();
+  });
 });
 
 describe('unusableTemplateButtonUrl', () => {

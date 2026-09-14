@@ -3,6 +3,11 @@ import { ContentDraftKind, ContentDraftStatus, GenerationJobKind } from '@prisma
 import { z } from 'zod';
 import prisma from '../../../config/database';
 import { authenticate, requireOrg } from '../../../middleware/auth';
+import { withPermission } from '../../../middleware/permissions';
+import {
+  requireActiveCommercialOnMutation,
+  requireFeatureOnMutation,
+} from '../../../middleware/plan-guard';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../../utils/response';
 import { createChatCompletion, isAiConfigured } from '../../ai/chat-completion.service';
 import { resolveActiveWhatsappNumberId } from '../../whatsapp/active-number';
@@ -367,6 +372,9 @@ router.post(
   '/drafts/:id/submit-meta',
   authenticate,
   requireOrg,
+  requireActiveCommercialOnMutation(),
+  requireFeatureOnMutation('templates'),
+  ...withPermission('manageTemplates'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = submitMetaSchema.parse(req.body || {});

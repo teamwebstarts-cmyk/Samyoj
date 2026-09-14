@@ -58,6 +58,63 @@ describe('buildTemplateComponents', () => {
   it('returns [] for null params', () => {
     expect(buildTemplateComponents(null, templateWith('Hello {{1}}'))).toEqual([]);
   });
+
+  it('serializes copy_code button with stringified index and coupon_code parameter', () => {
+    const template: MessageTemplate = {
+      ...templateWith('Use code below'),
+      components: [
+        { type: 'BODY', text: 'Use code below' },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            { type: 'QUICK_REPLY', text: 'Stop' },
+            { type: 'COPY_CODE', text: 'Copy Code' },
+          ],
+        },
+      ],
+    };
+
+    const result = buildTemplateComponents(
+      { couponCode: 'SAVE50' },
+      template
+    ) as Array<{ type: string; sub_type: string; index: string; parameters: Array<{ type: string; coupon_code: string }> }>;
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      type: 'button',
+      sub_type: 'copy_code',
+      index: '1',
+      parameters: [{ type: 'coupon_code', coupon_code: 'SAVE50' }],
+    });
+  });
+
+  it('serializes OTP button as copy_code with stringified index', () => {
+    const template: MessageTemplate = {
+      ...templateWith('Your verification code'),
+      components: [
+        { type: 'BODY', text: 'Your verification code' },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            { type: 'OTP', text: 'Copy Code' },
+          ],
+        },
+      ],
+    };
+
+    const result = buildTemplateComponents(
+      { couponCode: '123456' },
+      template
+    ) as Array<{ type: string; sub_type: string; index: string; parameters: Array<{ type: string; coupon_code: string }> }>;
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      type: 'button',
+      sub_type: 'copy_code',
+      index: '0',
+      parameters: [{ type: 'coupon_code', coupon_code: '123456' }],
+    });
+  });
 });
 
 describe('mergeTemplateParams', () => {

@@ -102,7 +102,13 @@ export const createTemplateSchema = z
     }
 
     const headerVarCount = data.header ? (data.header.match(/\{\{\d+\}\}/g) || []).length : 0;
-    if (headerVarCount > 0) {
+    if (headerVarCount > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Header can contain at most 1 variable ({{1}})',
+        path: ['header'],
+      });
+    } else if (headerVarCount > 0) {
       if (!data.headerExamples?.length || data.headerExamples.length < headerVarCount) {
         ctx.addIssue({
           code: 'custom',
@@ -110,6 +116,14 @@ export const createTemplateSchema = z
           path: ['headerExamples'],
         });
       }
+    }
+
+    if (data.footer && data.footer.includes('{{')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Footer cannot contain variables or placeholders',
+        path: ['footer'],
+      });
     }
 
     if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(data.headerFormat) && !data.headerMediaHandle) {

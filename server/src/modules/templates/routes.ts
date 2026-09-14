@@ -459,6 +459,13 @@ router.post(
       throw new AppError(400, 'Only rejected, paused, or disabled templates can be resubmitted');
     }
 
+    if (data.name.toLowerCase() === name.toLowerCase()) {
+      throw new AppError(
+        400,
+        `Meta enforces a 30-day quarantine on deleted template names. Provide a new versioned name (e.g. ${name}_v2) to resubmit.`
+      );
+    }
+
     await MetaWhatsAppService.deleteMessageTemplate(wabaId, accessToken, name);
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, name);
 

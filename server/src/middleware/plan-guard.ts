@@ -13,7 +13,11 @@ import { config } from '../config';
 
 /** Local test-deploy: do not block product flows on expired demo plans. */
 function bypassPlanGuardsForLocalTesting(): boolean {
-  return config.nodeEnv === 'development' && config.billing.allowTestBypass;
+  return (
+    config.nodeEnv === 'development' &&
+    config.billing.allowTestBypass &&
+    !process.env.VITEST
+  );
 }
 
 /**

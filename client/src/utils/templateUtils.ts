@@ -253,11 +253,25 @@ export function validateTemplateForm(form: {
   if (form.header && form.header.length > 60) {
     issues.push({ field: 'header', message: 'Header must be 60 characters or fewer', severity: 'error' });
   } else if (form.header) {
+    const headerVars = countTemplateVars(form.header);
+    if (headerVars > 1) {
+      issues.push({
+        field: 'header',
+        message: 'Header can contain at most 1 variable ({{1}})',
+        severity: 'error',
+      });
+    }
     validateVariableText('header', form.header, issues);
   }
 
   if (form.footer && form.footer.length > 60) {
     issues.push({ field: 'footer', message: 'Footer must be 60 characters or fewer', severity: 'error' });
+  } else if (form.footer && form.footer.includes('{{')) {
+    issues.push({
+      field: 'footer',
+      message: 'Footer cannot contain variables or placeholders',
+      severity: 'error',
+    });
   }
 
   const bodyVars = countTemplateVars(form.body);

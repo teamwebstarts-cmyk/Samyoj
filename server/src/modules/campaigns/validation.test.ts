@@ -218,7 +218,7 @@ describe('buildTemplateComponents', () => {
         {
           type: 'button',
           sub_type: 'copy_code',
-          index: 1,
+          index: '1',
           parameters: [{ type: 'coupon_code', coupon_code: 'SAVE20' }],
         },
         {

@@ -107,7 +107,10 @@ function findCopyCodeButtonIndex(template?: MessageTemplate | null): number | nu
   const buttons = buttonsComponent?.buttons;
   if (!buttons?.length) return null;
 
-  const index = buttons.findIndex((btn) => btn.type?.toUpperCase() === 'COPY_CODE');
+  const index = buttons.findIndex((btn) => {
+    const t = btn.type?.toUpperCase();
+    return t === 'COPY_CODE' || t === 'OTP';
+  });
   return index >= 0 ? index : null;
 }
 
@@ -193,7 +196,7 @@ export function buildTemplateComponents(
       components.push({
         type: 'button',
         sub_type: 'copy_code',
-        index: copyCodeIndex,
+        index: String(copyCodeIndex),
         parameters: [{ type: 'coupon_code', coupon_code: couponCode }],
       });
     }

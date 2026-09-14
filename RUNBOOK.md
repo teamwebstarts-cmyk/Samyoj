@@ -4,8 +4,8 @@
 
 ## Architecture
 
-- **API**: Express on port 5000 (PM2: `whatsapp-api`)
-- **Workers**: BullMQ processors (PM2: `whatsapp-worker`)
+- **API**: Express on port 8000 (PM2: `whatsapp-api`)
+- **Workers**: Embedded in `whatsapp-api` via BullMQ (`startWorkers()` in `server/src/index.ts`)
 - **Database**: PostgreSQL 16
 - **Cache/Queue**: Redis 7
 - **Frontend**: React static build served by Nginx
@@ -19,15 +19,15 @@ git pull origin main
 # 2. Install dependencies
 npm run install:all
 
-# 3. Run migrations
-cd server && npx prisma migrate deploy && npx prisma generate
+# 3. Run migrations with preflight isolation and safety checks
+cd server && npm run db:migrate-startup-safe && npm run db:generate
 
 # 4. Build
 cd ../client && npm run build
 cd ../server && npm run build
 
-# 5. Restart services (workers are embedded in the API)
-pm2 restart whatsapp-api
+# 5. Restart services (workers are embedded in the API via single-instance fork)
+pm2 restart config/ecosystem.config.js
 ```
 
 ## Environment Variables (Production)
@@ -76,22 +76,19 @@ server {
     listen 443 ssl http2;
     server_name your-domain.com;
 
+    # API & WebSocket (Socket.IO mounts under /api/socket.io)
     location /api/ {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /socket.io/ {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
+    # Static Frontend
     location / {
         root /var/www/whatsapp/client/dist;
         try_files $uri $uri/ /index.html;
