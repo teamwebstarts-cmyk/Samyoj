@@ -124,3 +124,43 @@ This document records architectural, product, and feature decisions where specif
 - **Context:** A one-click SVG/PNG export of the automation flow canvas was previously removed or broken. Product owner flagged it should be re-implemented properly in a dedicated pass.
 - **Instruction:** Do not partially implement. When scheduling, do this as a focused task with proper canvas-to-SVG serialization.
 
+---
+
+## 16. In-App Notification Centre (Agent Activity Bell)
+- **Status:** ⏸️ **DEFERRED — NOT NOW**
+- **Date Decided:** September 2026
+- **Context:** Suggested and evaluated but deferred by product owner. Socket events like `campaign:status` and `conversation:assigned` already exist, but a bell/dropdown notification UI is not a current priority.
+- **Instruction:** Do not build an in-app notification bell or dropdown feed. Re-evaluate when agent team size grows.
+
+---
+
+## 17. Missed Call Auto-Callback WhatsApp Message
+- **Status:** ⏸️ **DEFERRED — NOT NOW**
+- **Date Decided:** September 2026
+- **Context:** Suggested and deferred. Sending an automatic WhatsApp message when an inbound call is missed (`MISSED` status) is a useful future hook but not currently prioritized.
+- **Instruction:** Do not add missed-call auto-message hooks. Keep in future backlog.
+
+---
+
+## 18. Contact Tag Manager Page (Bulk Rename / Merge UI)
+- **Status:** ⏸️ **DEFERRED — NOT NOW**
+- **Date Decided:** September 2026
+- **Context:** Backend `renameTag` and `deleteTag` functions already exist. A dedicated Tag Manager page UI was suggested but deferred.
+- **Instruction:** Do not build a standalone Tag Manager page. The existing per-contact rename/delete UI is sufficient for now.
+
+---
+
+## 19. Org-Level Shared Canned Responses Library
+- **Status:** ⏸️ **DEFERRED — NOT NOW**
+- **Date Decided:** September 2026
+- **Context:** A shared team-level canned response library (admin creates, all agents use) was suggested but deferred. The current `/` slash command with locally typed quick replies is sufficient.
+- **Instruction:** Do not build an org-level canned response CRUD system now. Re-evaluate when team size and onboarding pain increases.
+
+---
+
+## 20. Contacts Activity Dashboard Card
+- **Status:** ⏸️ **DEFERRED — NOT NOW**
+- **Date Decided:** September 2026
+- **Context:** A summary dashboard card showing new contacts this week, opted-in %, top tags was suggested but not prioritized.
+- **Instruction:** Do not add a standalone contacts analytics widget to the dashboard now.
+
