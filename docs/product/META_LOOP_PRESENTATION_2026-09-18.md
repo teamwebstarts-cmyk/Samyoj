@@ -1,275 +1,280 @@
-# Samyoj Meta Loop — phase charts for seniors
+# Samyoj Meta Loop — visual for design seniors
 
-**Name:** **Samyoj Meta Loop**  
-**One line:** WhatsApp is already live. We add Ads → CRM, then Facebook and Instagram into the **same Inbox**. We do not rebuild WhatsApp. We do not clone Ads Manager.
+**Name:** Samyoj Meta Loop  
+**One line:** WhatsApp stays. Ads / Instagram / Messenger land in the **same Inbox + CRM**. We do not rebuild WhatsApp. We do not clone Ads Manager.
 
-**How to present:** one chart, one sentence, stop. Paste Mermaid into Notion / GitHub / slides.
+**How to show:** GitHub / Notion / [mermaid.live](https://mermaid.live) — one chart, one sentence, next.
 
-These charts are **our build**, not the customer’s day. Grey boxes stay in Meta. Green boxes are Samyoj tickets.
-
-Plan: [`META_ECOSYSTEM_V2_PLAN_2026-09-18.md`](META_ECOSYSTEM_V2_PLAN_2026-09-18.md)  
-Do / Don’t: [`META_ECOSYSTEM_DOS_AND_DONTS_2026-09-18.md`](META_ECOSYSTEM_DOS_AND_DONTS_2026-09-18.md)
+Deep: [V2 plan](META_ECOSYSTEM_V2_PLAN_2026-09-18.md) · [Do / Don’t](META_ECOSYSTEM_DOS_AND_DONTS_2026-09-18.md)
 
 ---
 
-## Chart 0 — Name and split
+## 1. Super flow — the whole product
 
-**Say:** Left is shipped. Right is the Loop. Same product.
+**Say:** Meta brings the person. Samyoj owns chat + deal. Ads Manager stays in Meta.
+
+```mermaid
+flowchart TB
+  META["META<br/>Ads Manager · Instant Form · Click-to-chat<br/>Instagram · Messenger · WhatsApp Cloud"]
+
+  SAM["SAMYOJ — one product<br/>Inbox · Contacts · Leads · Flows · AI"]
+
+  META -->|"leadgen / click / DM / comment"| SAM
+  SAM -->|"optional CAPI: our stages"| META
+
+  SAM --> WON[Won lives here — we store deal value]
+  SAM --> DASH[Dashboard shows Meta spend + our Won]
+```
+
+---
+
+## 2. Today vs Loop
+
+**Say:** Left is shipped. Right is what we add. Same CRM.
 
 ```mermaid
 flowchart LR
-  subgraph SHIPPED["Already in Samyoj"]
+  subgraph TODAY["Already built"]
     WA[WhatsApp Inbox]
     CRM[Contacts + Leads]
     FLOW[Flows + Campaigns]
     AI[AI chat + calling]
+    WA --> CRM --> FLOW --> AI
   end
 
-  subgraph LOOP["Meta Loop — we build"]
-    P1[Lead form → CRM]
-    P2[Ad chip on WhatsApp]
-    P3[Messenger in Inbox]
-    P4[Instagram DM + comment]
-    P5[Ads numbers — read only]
+  subgraph LOOP["We add"]
+    ADS[Lead form + CTWA chip]
+    FB[Messenger]
+    IG[IG DMs + comments]
+    ADS --> CRM2[Same CRM]
+    FB --> INBOX[Same Inbox]
+    IG --> INBOX --> CRM2
   end
 
-  SHIPPED -->|"Phase 0 Channel"| LOOP
+  TODAY -->|"0 Channel first"| LOOP
 ```
 
 ---
 
-## Chart 1 — Phase order (how they unlock each other)
+## 3. Two ads — never one CPL
 
-**Say:** Each phase needs the one before it. Skip Channel → Inbox tenancy breaks. Skip Lead Ads → we connect the Page twice.
+**Say:** Form and click-to-chat are different. Design two entry chips, not one “Ads” blob.
 
 ```mermaid
 flowchart TD
-  P0["Phase 0 — Foundation<br/>Channel + identities + webhook router"]
-  P1["Phase 1 — Lead Ads<br/>Form → Contact + Lead"]
-  P2["Phase 2 — CTWA chip<br/>Ad name on existing WhatsApp chat"]
-  P3["Phase 3 — Messenger<br/>Page DMs in same Inbox"]
-  P4["Phase 4 — Instagram<br/>DMs + one comment reply"]
-  P5["Phase 5 — Ads read<br/>Spend / clicks / Meta leads"]
-  P6["Phase 6 — Analytics join<br/>Ad numbers next to Won"]
-  P7["Phase 7 — Connected assets<br/>Settings list"]
-  LATER["Later<br/>Merge UI · publish in Suite · Email"]
+  AD[Customer sees Meta ad] --> SPLIT{Which?}
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> LATER
+  SPLIT -->|Fills Instant Form| F[Phase 1 Lead Ads]
+  F --> C1[Contact + Lead in CRM]
+  C1 --> WA1[Optional WhatsApp template]
+
+  SPLIT -->|Clicks WhatsApp| T[Phase 2 CTWA]
+  T --> CHAT[Existing WA Inbox + ad-source chip]
+
+  SPLIT -->|Clicks IG / Messenger| M[Phase 3–4]
+  M --> INBOX[Same Inbox · channel badge]
 ```
 
 ---
 
-## Chart 2 — Phase 0 (we build this first)
+## 4. Inbox they will design
 
-**Purpose:** WhatsApp keeps working. Later channels can share Inbox without stealing the WhatsApp number.
-
-**In:** today’s Contact / Conversation / Lead (all tied to WhatsApp number).  
-**Out:** a Channel row per WhatsApp number; room for Page and Instagram later.
+**Say:** One list. Filter by channel. Badge on every thread. Not three inboxes.
 
 ```mermaid
 flowchart LR
-  IN[Existing WhatsApp tables] --> BUILD["We build<br/>Channel table<br/>Identity table<br/>Webhook router"]
-  BUILD --> OUT[WhatsApp still works]
-  BUILD --> LATER[IG / FB can attach later]
-```
+  subgraph INBOX["Inbox — one screen"]
+    FILT["Filter: All · WhatsApp · Instagram · Messenger"]
+    LIST["Thread list<br/>badge WA / IG / FB"]
+    THREAD["Thread<br/>assign · notes · tags · Open/Pending/Closed"]
+    FILT --> LIST --> THREAD
+  end
 
-**Points in this phase**
-- One Channel = one connected asset (this WhatsApp number, later this Page, later this IG)
-- Webhook: WhatsApp stays; other Meta objects are no longer dropped
-- **Not in this phase:** any Instagram screen
+  THREAD --> CRM[Same Contact / Lead]
+  THREAD --> BOT[Existing AI + human handoff]
+```
 
 ---
 
-## Chart 3 — Phase 1 Lead Ads
+## 5. Phase 0 — Channel (unlocks everything)
 
-**Purpose:** First new money loop. Smallest Ads work. Same Page is reused for Messenger.
-
-**In:** Customer creates the Instant Form **in Ads Manager** (not us).  
-**Out:** Contact + Lead in Samyoj. Optional WhatsApp template (that message is WhatsApp-billed).
+**Say:** If we skip this, IG/FB will break WhatsApp number isolation. Designers wait; this is schema + router.
 
 ```mermaid
 flowchart LR
-  META["Meta — customer creates<br/>Lead Form ad"] --> WH[leadgen webhook]
-  WH --> US["We build<br/>Save Page<br/>Create Contact + Lead"]
-  US --> CRM[Existing CRM pipeline]
-  US -.-> WA["Optional: WhatsApp template<br/>uses existing send"]
-```
+  WH[WhatsApp number today] --> CH[Channel row]
+  PAGE[Facebook Page] --> CH
+  IG[Instagram professional] --> CH
 
-**Points**
-- We ingest. We do not draw the ad.
-- Need phone or email on the form or the lead is incomplete
-- **Not in this phase:** Ads Manager UI, spend dashboard
+  PERSON[One human] --> ID1[WA phone]
+  PERSON --> ID2[IGSID]
+  PERSON --> ID3[PSID]
+  ID1 --> CPI[ContactPlatformIdentity]
+  ID2 --> CPI
+  ID3 --> CPI
+  CPI --> CONTACT[One Contact — only after phone/email/agent merge]
+```
 
 ---
 
-## Chart 4 — Phase 2 CTWA chip
+## 6. Phase 1 subflow — Lead Ads
 
-**Purpose:** Agent already gets WhatsApp from ads. Show which ad. Almost no new Meta API.
+**Say:** Customer still creates the form in Ads Manager. We catch the lead.
 
-**In:** existing WhatsApp inbound (referral already on the message).  
-**Out:** chip on the thread.
+```mermaid
+sequenceDiagram
+  participant User
+  participant Meta as Ads Manager
+  participant Hook as Samyoj webhook
+  participant CRM as Contact + Lead
+  participant WA as WhatsApp
+
+  User->>Meta: Submit Instant Form
+  Meta->>Hook: leadgen
+  Hook->>CRM: upsert person
+  opt Phone + consent
+    CRM->>WA: optional template
+  end
+```
+
+---
+
+## 7. Phase 2 subflow — CTWA chip
+
+**Say:** No new Graph product. Chip on the chat we already have.
 
 ```mermaid
 flowchart LR
-  IN[WhatsApp chat from ad click] --> US["We build<br/>Read referral<br/>Show chip in Inbox"]
-  US --> OUT[Agent sees ad source]
+  CLICK[Click WhatsApp on ad] --> WH[WhatsApp webhook referral]
+  WH --> CHIP["Inbox chip: campaign / ad"]
+  CHIP --> AGENT[Agent replies in 72h window copy]
 ```
-
-**Points**
-- Uses Inbox we already have
-- **Not in this phase:** creating Click-to-WhatsApp ads inside Samyoj
 
 ---
 
-## Chart 5 — Phase 3 Messenger
+## 8. Phase 3–4 subflow — Messenger then Instagram
 
-**Purpose:** Same Page as Lead Ads. Facebook chat in the same Inbox.
+**Say:** Same Page token. Messenger first. Instagram DMs + one comment DM. Human always available on IG.
 
-**In:** Page token from Phase 1.  
-**Out:** channel filter = Facebook.
+```mermaid
+flowchart TD
+  PAGE[Page connected in Phase 1] --> MSG[Phase 3 Messenger 24h]
+  PAGE --> IGD[Phase 4 IG DMs 24h]
+  PAGE --> CMT[Comment PRICE]
+
+  CMT --> PR["1 private reply / 7 days"]
+  PR --> WAIT{User taps or replies?}
+  WAIT -->|No| STOP[Stop — do not blast]
+  WAIT -->|Yes| WIN[24h window]
+
+  IGD --> HUMAN[Human inbox required]
+  MSG --> HUMAN
+```
+
+---
+
+## 9. Build order — each box unlocks the next
+
+**Say:** Do not design IG screens before Channel. Do not design Ads Manager.
+
+```mermaid
+flowchart TD
+  P0["0 Foundation<br/>Channel · identities · webhook router"]
+  P1["1 Lead Ads<br/>Form → CRM"]
+  P2["2 CTWA chip<br/>Ad source on WA chat"]
+  P3["3 Messenger<br/>Page DMs in Inbox"]
+  P4["4 Instagram<br/>DMs + comment → 1 reply"]
+  P5["5 Ads read<br/>Spend / clicks / Meta leads"]
+  P6["6 Analytics join<br/>Meta numbers next to Won"]
+  P7["7 Portfolio<br/>What is connected"]
+  L["Later<br/>Merge UI · publish in Suite · Email/SMS"]
+
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> L
+  P1 -.-> AR["App Review in parallel — not a screen"]
+```
+
+---
+
+## 10. Screens by phase (design queue)
 
 ```mermaid
 flowchart LR
-  IN[Page already connected] --> US["We build<br/>Messenger receive + send<br/>Inbox filter"]
-  US --> OUT[FB thread in Samyoj Inbox]
-```
+  S0["0 — no new UI<br/>WhatsApp looks the same"]
+  S1["1 — Lead source on Contact<br/>Pipeline card"]
+  S2["2 — Ad chip on WA thread"]
+  S3["3 — Channel filter + FB badge"]
+  S4["4 — IG badge + Comments tool"]
+  S5["5 — Ads tiles read-only"]
+  S6["6 — One analytics page<br/>two columns: spend vs Won"]
+  S7["7 — Settings: linked assets"]
 
-**Points**
-- Reply window ~24 hours (not WhatsApp templates)
-- **Not in this phase:** Facebook post composer, WA-style broadcasts on Messenger
+  S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+```
 
 ---
 
-## Chart 6 — Phase 4 Instagram
+## 11. Doing vs not doing
 
-**Purpose:** Table-stakes vs Wati / Respond.io. DMs + comment “PRICE” → one private reply.
-
-**In:** Instagram Professional linked to the same Page.  
-**Out:** channel filter = Instagram.
+**Say:** Green is Samyoj. Grey stays in Meta.
 
 ```mermaid
 flowchart LR
-  IN[Linked Instagram] --> US["We build<br/>IG DMs in Inbox<br/>Comment → 1 private reply"]
-  US --> OUT[IG thread + comment tool]
-```
+  subgraph DO["We design / build"]
+    D1[Channel badges]
+    D2[Lead form → CRM]
+    D3[Ad chip]
+    D4[One Inbox filters]
+    D5[Comment → 1 DM]
+    D6[Ads numbers read-only]
+    D7[Merge by phone / email]
+  end
 
-**Points**
-- One private reply per person / 7 days; then they must reply
-- Human inbox required if AI answers
-- **Not in this phase:** Reels publisher, Story stickers, blasting everyone who comments
+  subgraph DONT["We do not"]
+    N1[Rebuild WhatsApp]
+    N2[Ads Manager]
+    N3[One Meta customer ID]
+    N4[IG broadcast like WA]
+    N5[Fake ₹ ROI]
+    N6[Content studio]
+    N7[App ID in Settings]
+  end
+```
 
 ---
 
-## Chart 7 — Phase 5–6 Ads read + join
+## 12. Three ledgers
 
-**Purpose:** Show performance. Ads still live in Ads Manager.
-
-**In:** Ad Account the customer already has.  
-**Out:** numbers on a Samyoj page. Won rupees only if we stored deal value.
-
-```mermaid
-flowchart LR
-  META[Ads Manager — customer runs ads] --> POLL["We build<br/>Read spend / clicks / Meta leads"]
-  POLL --> PAGE[Dashboard tiles]
-  CRM[Our Won / deal value] --> PAGE
-```
-
-**Points**
-- CPL on this page = Meta’s “lead” action, not “qualified”
-- Two columns: Meta numbers | our deals. Not one fake ROI
-- **Not in this phase:** campaign editor
-
----
-
-## Chart 8 — Doing vs not doing
-
-**Say:** Green is tickets. Grey stays in Meta.
+**Say:** One dashboard may show all three. One price tag may not.
 
 ```mermaid
 flowchart TB
-  subgraph DO["We build"]
-    A[Channel]
-    B[Lead form → CRM]
-    C[Ad chip on WhatsApp]
-    D[Messenger + IG in Inbox]
-    E[Comment → 1 DM]
-    F[Read ads numbers]
-  end
-
-  subgraph DONT["We do not build"]
-    X1[Rebuild WhatsApp]
-    X2[Ads Manager clone]
-    X3[IG / FB content studio]
-    X4[One Meta customer ID]
-    X5[WA blasts on IG]
-    X6[Fake ₹ from Meta]
-  end
+  DASH[Analytics page]
+  L1[Samyoj SaaS — Razorpay]
+  L2[WhatsApp Cloud — Meta → WABA]
+  L3[Ad spend — Meta → Ad Account]
+  L1 --> DASH
+  L2 --> DASH
+  L3 --> DASH
 ```
-
----
-
-## Chart 9 — Three bills (real, not invented rupees)
-
-**Say:** Three invoices. Dashboard may *show* all three. Samyoj plan price never includes the other two.
-
-WhatsApp rates move; **do not quote a ₹/message in this slide.** Point to WhatsApp Manager. Ads auction has **no list price**. Instagram/Messenger **24h service DMs are not billed like WhatsApp templates** — Meta has no per-IG-DM rate card. Paid Messenger marketing is a **different product**; we are not building it in this wave.
-
-```mermaid
-flowchart TB
-  subgraph BILL1["Bill 1 — Samyoj SaaS"]
-    S1[Who pays: customer → us]
-    S2[What: inbox, CRM, AI, seats]
-    S3[How: Razorpay]
-  end
-
-  subgraph BILL2["Bill 2 — WhatsApp Cloud"]
-    W1[Who pays: customer → Meta]
-    W2[What: delivered templates now]
-    W3[From 1 Oct 2026: service msgs too]
-    W4[Where: WhatsApp Manager rate card]
-  end
-
-  subgraph BILL3["Bill 3 — Meta Ads"]
-    A1[Who pays: customer → Meta]
-    A2[What: auction spend]
-    A3[Where: Ads Manager]
-    A4[No Samyoj cut. No list CPL]
-  end
-
-  subgraph NOTBILL["Instagram + Messenger DMs in Loop"]
-    I1[24h replies: no WhatsApp-style per-message bill]
-    I2[Limits: 24h window, App Review — not a third message invoice]
-    I3[Paid Messenger marketing: out of this wave]
-  end
-```
-
-| Channel | Customer pays Meta for messages? | Customer pays Meta for ads? | Pays Samyoj? |
-|---------|----------------------------------|-----------------------------|--------------|
-| WhatsApp | **Yes** — templates when delivered. Service messages billed from **1 Oct 2026** (Meta: 1,000 free service/month/number). Utility in-session also changes that date. | Only if they run Click-to-WhatsApp ads | Software |
-| Instagram DMs / comments | **No per-DM rate card** on Graph Messaging. Rate *limits*, not a message invoice | If they run IG ads | Software |
-| Messenger DMs | Same as IG for **24h service**. Paid Marketing Messages API = extra product, **not Phase 3** | If they run Messenger ads | Software |
-| Lead Forms / other ads | n/a | **Yes — auction spend** on the Ad Account | Software |
-
-**Sources (do not invent India ₹ here):**  
-[WhatsApp pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing) · [Marketing Messages on Messenger](https://developers.facebook.com/documentation/business-messaging/messenger-platform/marketing-messages-on-messenger) · Ads: customer’s Ads Manager, not Samyoj.
 
 ---
 
 ## Speaker crib
 
-| Chart | Say this |
-|-------|----------|
-| 0 | WhatsApp stays. Loop is Ads + IG + Facebook into the same CRM. |
-| 1 | 0 unlocks everything. 1’s Page unlocks Messenger. Inbox then gets Instagram. Then we only read ads. |
-| 2 | Phase 0 is plumbing. No Instagram screen yet. |
-| 3 | They make the form in Meta. We catch the lead. |
-| 4 | Tiny WhatsApp UI. Agent sees the ad. |
-| 5 | Facebook chat, same Inbox, 24h window. |
-| 6 | Instagram chat + one comment reply. Not a publisher. |
-| 7 | Show Meta’s numbers next to our Won. Two columns. |
-| 8 | We are the destination. Meta keeps Ads Manager and Suite. |
-| 9 | Three bills. IG/FB DMs are not a fourth WhatsApp-style invoice. |
+| # | Sentence |
+|---|---------|
+| 1 | Meta sends people. We close them. |
+| 2 | WhatsApp stays. Loop wraps it. |
+| 3 | Form and click-to-chat are two products. |
+| 4 | One Inbox, channel filter, one Contact. |
+| 5 | Channel first or IG breaks WhatsApp. |
+| 6 | Ads Manager creates the form. We catch the lead. |
+| 7 | Chip only — chat already exists. |
+| 8 | Messenger then IG. One comment DM, then wait. |
+| 9 | 0→1→2→3→4 then we only *read* ads. |
+| 10 | Design queue matches build order. |
+| 11 | CRM destination. Meta keeps ads + posts. |
+| 12 | Three bills. |
 
-**If asked “when Instagram?”** Phase 4 — after Channel, Lead Ads, chip, Messenger.  
-**If asked “IG message cost?”** Not billed like WhatsApp templates. Ads on Instagram still cost ad spend.  
-**If asked “ROI slide?”** Spend vs Meta leads after Phase 5. Rupee sales only after we store deal value.
+**If asked “when IG?”** Phase 4 — after Channel, Lead Ads, CTWA chip, Messenger.  
+**If asked “Diwali ₹ ROI?”** Spend vs Meta leads after Phase 5. Rupee sales only after we store deal value.

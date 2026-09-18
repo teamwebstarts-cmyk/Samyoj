@@ -165,7 +165,7 @@ Senior order assumed greenfield WA. **Skip their Phase 1 as a build.** Keep thei
 | Need | Doc |
 |------|-----|
 | Share with seniors | **This V2 plan** |
-| Slide charts | `META_LOOP_PRESENTATION_2026-09-18.md` |
+| Design / slides (diagrams only) | `META_LOOP_PRESENTATION_2026-09-18.md` |
 | Vendor facts | `META_ECOSYSTEM_VENDOR_BENCHMARK_2026-09-18.md` |
 | Do / Don’t (daily) | `META_ECOSYSTEM_DOS_AND_DONTS_2026-09-18.md` |
 | Meta CAN/CANNOT depth | `META_ECOSYSTEM_PHASE_2026-09-17.md` |
