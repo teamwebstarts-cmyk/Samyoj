@@ -139,6 +139,8 @@ app.use(
     // SPA is on another origin (Vite :3000 → API :8000). Default CORP
     // "same-origin" blocks those embeds → broken stickers/images in the thread.
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    // FB.login popup must keep window.opener; default same-origin kills it.
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
     contentSecurityPolicy: {
       useDefaults: true,
       directives: helmetContentSecurityPolicyDirectives(useHttps),

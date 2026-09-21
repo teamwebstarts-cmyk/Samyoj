@@ -103,9 +103,8 @@ function loadSdkFromSrc(src: string, appId: string, apiVersion: string): Promise
 }
 
 function srcOrderForPage(): string[] {
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    return [SDK_PROXIED, SDK_OFFICIAL];
-  }
+  // Vite-only proxy. Production has no /__fb-sdk (404) and CSP must allow the official SDK.
+  if (import.meta.env.DEV) return [SDK_PROXIED, SDK_OFFICIAL];
   return [SDK_OFFICIAL];
 }
 
