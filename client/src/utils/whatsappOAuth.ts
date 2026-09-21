@@ -22,13 +22,23 @@ export function isWhatsAppPopupCallbackPath(pathname: string): boolean {
   return pathname === WA_OAUTH_POPUP_CALLBACK_PATH || pathname === WA_OAUTH_CALLBACK_PATH;
 }
 
-/** True when this window was opened as the Meta OAuth popup (opener may be null after Facebook redirect). */
+function hasLegacyPopupMarker(): boolean {
+  try {
+    return Boolean(localStorage.getItem(WA_OAUTH_POPUP_MARKER_KEY));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True only for a window script-opened as the OAuth popup.
+ * The Embedded Signup callback can load in the main tab; that tab must not call window.close().
+ */
 export function isOAuthPopupWindow(): boolean {
   if (typeof window === 'undefined') return false;
-  return (
-    window.name === WA_OAUTH_POPUP_NAME ||
-    isWhatsAppPopupCallbackPath(window.location.pathname)
-  );
+  if (window.name === WA_OAUTH_POPUP_NAME) return true;
+  if (window.opener && !window.opener.closed) return true;
+  return isWhatsAppPopupCallbackPath(window.location.pathname) && hasLegacyPopupMarker();
 }
 
 export function isOAuthPopupContext(): boolean {

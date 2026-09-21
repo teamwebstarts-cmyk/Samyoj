@@ -16,6 +16,7 @@ This is **session memory**, not a second feature matrix. Short, path-backed, hon
 | [SESSION_2026-08-15.md](./SESSION_2026-08-15.md) | Number isolation, workers embedded, campaign wizard UX, templates/Connect leftovers; **test-deploy vs production** |
 | [SESSION_2026-08-14.md](./SESSION_2026-08-14.md) | Calls/Train/automations Phase B + earlier WhatsApp lock-down |
 | [STATUS_AND_FUTURE.md](./STATUS_AND_FUTURE.md) | Test-deploy vs production, leftovers, do-not-redo |
+| [ES_OWN_NUMBER_2026-09-21.md](./ES_OWN_NUMBER_2026-09-21.md) | Own number already Registered on the developer WABA cannot be picked in Embedded Signup. Finish 400 was redirect_uri mismatch. |
 | [RESEARCH_MAP.md](./RESEARCH_MAP.md) | Where the long audits live, what’s stale, Phase A/B/C + billing docs |
 
 Cursor always-apply pointer: `.cursor/rules/session-memory.mdc`.

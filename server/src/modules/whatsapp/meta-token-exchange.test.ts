@@ -39,6 +39,22 @@ describe('MetaWhatsAppService token exchange', () => {
     );
   });
 
+  it('omits redirect_uri for an FB.login JS SDK code', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: 'tok-short' }),
+    });
+
+    const { MetaWhatsAppService } = await import('./meta.service');
+    await MetaWhatsAppService.exchangeCodeForToken('auth-code', {
+      appId: 'app-1',
+      appSecret: 'secret-1',
+    });
+
+    const body = String(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toContain('redirect_uri');
+  });
+
   it('POSTs long-lived exchange without putting the secret on the URL', async () => {
     fetchMock.mockResolvedValue({
       ok: true,

@@ -12,6 +12,11 @@ export interface WhatsappConnectOAuthState {
   connectMode?: 'standard' | 'coexistence';
   /** Optional WABA id from WA_EMBEDDED_SIGNUP postMessage (coexistence). */
   wabaIdHint?: string;
+  /**
+   * FB.login returns the code in JS. That code is not bound to redirect_uri.
+   * The legacy dialog code is.
+   */
+  codeVia?: 'js_sdk' | 'redirect';
 }
 
 const CALLBACK_PATHS = new Set([

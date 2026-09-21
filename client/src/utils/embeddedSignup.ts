@@ -15,6 +15,7 @@ export interface EmbeddedSignupClientConfig {
 export interface EmbeddedSignupResult {
   code: string;
   wabaId?: string;
+  phoneNumberId?: string;
   event?: string;
 }
 
@@ -41,14 +42,10 @@ const SDK_OFFICIAL = 'https://connect.facebook.net/en_US/sdk.js';
 /** Same-origin Vite proxy — Brave/ad-block often block connect.facebook.net. */
 const SDK_PROXIED = '/__fb-sdk/en_US/sdk.js';
 const SDK_LOAD_MS = 8_000;
-const FB_LOGIN_MS = 25_000;
 const POSTMESSAGE_AFTER_CODE_MS = 3_000;
 
 export const FACEBOOK_SDK_BLOCKED_MESSAGE =
   'Facebook was blocked in this browser (often Brave Shields). Allow Facebook on this site or use Chrome, then click Connect WhatsApp again.';
-
-export const FACEBOOK_POPUP_BLOCKED_MESSAGE =
-  'Facebook popup did not open. In Brave, allow popups for this site (address bar), then click Connect WhatsApp again.';
 
 let sdkLoadPromise: Promise<void> | null = null;
 
@@ -141,7 +138,17 @@ export function isFacebookSdkReady(): boolean {
   return typeof window !== 'undefined' && typeof window.FB?.login === 'function';
 }
 
-function listenForEmbeddedSignup(timeoutMs = 120_000): Promise<{ wabaId?: string; event?: string }> {
+const EMBEDDED_FINISH_EVENTS = new Set([
+  'FINISH',
+  'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING',
+  'FINISH_ONLY_WABA',
+]);
+
+function listenForEmbeddedSignup(timeoutMs = 120_000): Promise<{
+  wabaId?: string;
+  phoneNumberId?: string;
+  event?: string;
+}> {
   return new Promise((resolve) => {
     const allowedOrigins = new Set([
       window.location.origin,
@@ -151,9 +158,10 @@ function listenForEmbeddedSignup(timeoutMs = 120_000): Promise<{ wabaId?: string
       'https://m.facebook.com',
     ]);
 
+    const latest: { wabaId?: string; phoneNumberId?: string; event?: string } = {};
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', onMessage);
-      resolve({});
+      resolve(latest);
     }, timeoutMs);
 
     const onMessage = (event: MessageEvent) => {
@@ -167,13 +175,18 @@ function listenForEmbeddedSignup(timeoutMs = 120_000): Promise<{ wabaId?: string
         event?: string;
         data?: { waba_id?: string; phone_number_id?: string };
       };
+      if (payload.data?.waba_id) latest.wabaId = payload.data.waba_id;
+      if (payload.data?.phone_number_id) latest.phoneNumberId = payload.data.phone_number_id;
+      if (payload.event) latest.event = payload.event;
+
+      const finished =
+        (payload.event && EMBEDDED_FINISH_EVENTS.has(payload.event)) ||
+        /cancel/i.test(payload.event || '');
+      if (!finished) return;
 
       window.removeEventListener('message', onMessage);
       window.clearTimeout(timer);
-      resolve({
-        wabaId: payload.data?.waba_id,
-        event: payload.event,
-      });
+      resolve(latest);
     };
 
     window.addEventListener('message', onMessage);
@@ -200,13 +213,10 @@ function runFbLogin(config: EmbeddedSignupClientConfig): Promise<EmbeddedSignupR
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      reject(new Error(FACEBOOK_POPUP_BLOCKED_MESSAGE));
-    }, FB_LOGIN_MS);
-
+    // FB.login's callback fires when the customer finishes or cancels.
+    // Embedded Signup often takes many minutes; a short timer rejects a live popup.
     window.FB.login(
       (response) => {
-        window.clearTimeout(timer);
         if (response.status === 'connected' && response.authResponse?.code) {
           resolve(response.authResponse.code);
           return;
@@ -221,7 +231,6 @@ function runFbLogin(config: EmbeddedSignupClientConfig): Promise<EmbeddedSignupR
         config_id: config.configId,
         response_type: 'code',
         override_default_response_type: true,
-        redirect_uri: config.redirectUri,
         state: config.state,
         extras: buildLoginExtras(config.connectMode),
       }
@@ -231,13 +240,14 @@ function runFbLogin(config: EmbeddedSignupClientConfig): Promise<EmbeddedSignupR
   return codePromise.then(async (code) => {
     const postMessage = await Promise.race([
       postMessagePromise,
-      new Promise<{ wabaId?: string; event?: string }>((resolve) => {
+      new Promise<{ wabaId?: string; phoneNumberId?: string; event?: string }>((resolve) => {
         window.setTimeout(() => resolve({}), POSTMESSAGE_AFTER_CODE_MS);
       }),
     ]);
     return {
       code,
       wabaId: postMessage.wabaId,
+      phoneNumberId: postMessage.phoneNumberId,
       event: postMessage.event,
     };
   });

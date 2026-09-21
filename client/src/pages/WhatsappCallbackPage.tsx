@@ -210,6 +210,10 @@ export default function WhatsappCallbackPage() {
     const state = stateFromUrl || stashed.state;
 
     if (!code || !state) {
+      if (!isOAuthPopupContext()) {
+        navigate('/', { replace: true });
+        return;
+      }
       const msg = 'WhatsApp connection was cancelled. Your dashboard session is still active.';
       logError(msg, {
         source: 'auth',
@@ -265,8 +269,7 @@ export default function WhatsappCallbackPage() {
           setMessage('WhatsApp connected. This window should close — if not, close it to return to Samyoj.');
           return;
         }
-        setStatus('success');
-        setMessage('WhatsApp connected. Close this window to return to Samyoj.');
+        navigate('/', { replace: true });
       })
       .catch((err: unknown) => {
         if (!alive) return;
@@ -345,8 +348,7 @@ export default function WhatsappCallbackPage() {
         setMessage('WhatsApp connected. This window should close — if not, close it to return to Samyoj.');
         return;
       }
-      setStatus('success');
-      setMessage('WhatsApp connected. Close this window to return to Samyoj.');
+      navigate('/', { replace: true });
     } catch (err: unknown) {
       logError(err, {
         source: 'auth',

@@ -416,10 +416,10 @@ export class MetaWhatsAppService {
     const body = new URLSearchParams({
       client_id: creds.appId,
       client_secret: creds.appSecret,
-      // Must be identical to the redirect_uri used when Meta issued this code.
-      redirect_uri: redirectUri || config.meta.redirectUri,
       code,
     });
+    // Legacy dialog codes are bound to redirect_uri. FB.login JS SDK codes are not.
+    if (redirectUri) body.set('redirect_uri', redirectUri);
 
     const res = await fetch(`${META_BASE}/oauth/access_token`, {
       method: 'POST',

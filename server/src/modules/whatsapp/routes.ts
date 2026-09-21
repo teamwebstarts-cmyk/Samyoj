@@ -243,6 +243,7 @@ router.get(
       userId,
       redirectUri,
       connectMode,
+      codeVia: config.meta.connectFlow === 'oauth' && connectMode === 'standard' ? 'redirect' : 'js_sdk',
     });
     if (config.meta.connectFlow === 'oauth' && connectMode === 'standard') {
       const signupConfig = buildLegacyOAuthConnectUrl({
@@ -349,7 +350,7 @@ router.post(
       accessToken = await MetaWhatsAppService.exchangeCodeForAccessToken(
         code,
         metaCredentials,
-        oauthState.redirectUri
+        oauthState.codeVia === 'js_sdk' ? undefined : oauthState.redirectUri
       );
     } catch (err) {
       logError(err, {

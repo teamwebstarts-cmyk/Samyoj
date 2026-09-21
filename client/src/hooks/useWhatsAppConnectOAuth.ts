@@ -186,6 +186,23 @@ export function useWhatsAppConnectOAuth(options?: {
         const { data } = await whatsappApi.completeConnect(result.code, cfg.state, result.wabaId);
         const payload = data.data;
         if (payload.requiresSelection && payload.phones?.length && payload.pendingToken) {
+          const digits = new Set(payload.phones.map((phone) => phone.phoneNumber.replace(/\D/g, '')));
+          if (payload.phones.length === 1 || digits.size === 1) {
+            const chosen =
+              payload.phones.find((phone) => phone.phoneNumberId === result.phoneNumberId) ||
+              payload.phones.find((phone) => phone.wabaId === result.wabaId) ||
+              payload.phones[0];
+            const selected = await whatsappApi.selectConnect(
+              payload.pendingToken,
+              chosen.phoneNumberId,
+              chosen.wabaId
+            );
+            handleOAuthResult({
+              status: 'success',
+              phoneNumber: selected.data.data.phoneNumber || chosen.phoneNumber,
+            });
+            return;
+          }
           sessionStorage.setItem('wa_oauth_code', result.code);
           sessionStorage.setItem('wa_oauth_state', cfg.state);
           sessionStorage.setItem('wa_oauth_phones', JSON.stringify(payload.phones));
