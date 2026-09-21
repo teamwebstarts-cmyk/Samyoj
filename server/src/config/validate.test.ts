@@ -4,6 +4,7 @@ import {
   jwtSecretErrors,
   looksWeakSecret,
   platformAdminUrlErrors,
+  productionMetaConnectErrors,
 } from './validate';
 
 describe('JWT secret fail-fast', () => {
@@ -28,6 +29,48 @@ describe('JWT secret fail-fast', () => {
     ]);
     expect(jwtSecretErrors('test', '', 'dev-refresh-secret')).toHaveLength(2);
     expect(jwtSecretErrors('development', 'dev-secret', 'dev-refresh-secret')).toEqual([]);
+  });
+});
+
+const okMeta = {
+  appId: '1766674304665017',
+  appSecret: 'secret',
+  esConfigId: '1304098751592068',
+  connectFlow: 'es_v4',
+  allowTunnelWebhook: false,
+  webhookUrl: 'https://app.samyoj.com/api/whatsapp/webhook',
+  productionWebhookUrl: '',
+  redirectUri: 'https://app.samyoj.com/settings/whatsapp/callback/popup',
+};
+
+describe('production Meta Connect fail-closed', () => {
+  it('accepts a Tech Provider VPS snapshot', () => {
+    expect(productionMetaConnectErrors(okMeta)).toEqual([]);
+  });
+
+  it('rejects missing ES config, legacy oauth, tunnel webhook, and localhost redirect', () => {
+    expect(productionMetaConnectErrors({ ...okMeta, esConfigId: '' })).toEqual([
+      'META_ES_CONFIG_ID is required in production (Facebook Login for Business configuration ID)',
+    ]);
+    expect(productionMetaConnectErrors({ ...okMeta, connectFlow: 'oauth' })[0]).toMatch(
+      /META_CONNECT_FLOW=oauth/
+    );
+    expect(productionMetaConnectErrors({ ...okMeta, allowTunnelWebhook: true })[0]).toMatch(
+      /META_ALLOW_TUNNEL_WEBHOOK/
+    );
+    expect(
+      productionMetaConnectErrors({
+        ...okMeta,
+        webhookUrl: 'https://abc.ngrok-free.dev/api/whatsapp/webhook',
+        productionWebhookUrl: '',
+      })[0]
+    ).toMatch(/META_WEBHOOK_URL/);
+    expect(
+      productionMetaConnectErrors({
+        ...okMeta,
+        redirectUri: 'http://localhost:3000/settings/whatsapp/callback/popup',
+      })[0]
+    ).toMatch(/META_REDIRECT_URI/);
   });
 });
 

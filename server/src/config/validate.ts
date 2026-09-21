@@ -33,6 +33,74 @@ export function jwtSecretErrors(
   return errors;
 }
 
+const META_CALLBACK_PATHS = new Set([
+  '/settings/whatsapp/callback',
+  '/settings/whatsapp/callback/popup',
+]);
+
+function isDurableMetaWebhookUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname || '';
+    if (!host || /localhost|127\.0\.0\.1|ngrok/i.test(host)) return false;
+    return parsed.pathname.includes('/api/whatsapp/webhook');
+  } catch {
+    return false;
+  }
+}
+
+function isProductionMetaRedirectUri(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname || '';
+    if (!host || /localhost|127\.0\.0\.1|ngrok|\.app\.github\.dev$/i.test(host)) return false;
+    const path = parsed.pathname.replace(/\/$/, '');
+    return META_CALLBACK_PATHS.has(path) && !parsed.search && !parsed.hash;
+  } catch {
+    return false;
+  }
+}
+
+export type ProductionMetaConnectSnapshot = {
+  appId: string;
+  appSecret: string;
+  esConfigId: string;
+  connectFlow: string;
+  allowTunnelWebhook: boolean;
+  webhookUrl: string;
+  productionWebhookUrl: string;
+  redirectUri: string;
+};
+
+/** Fail-closed Tech Provider Connect on VPS. Dev still warns instead of exiting. */
+export function productionMetaConnectErrors(snap: ProductionMetaConnectSnapshot): string[] {
+  const errors: string[] = [];
+  if (!snap.appId) errors.push('META_APP_ID is required in production');
+  if (!snap.appSecret) errors.push('META_APP_SECRET is required in production');
+  if (!snap.esConfigId) {
+    errors.push('META_ES_CONFIG_ID is required in production (Facebook Login for Business configuration ID)');
+  }
+  if (/^(oauth|legacy_oauth)$/i.test(snap.connectFlow)) {
+    errors.push('META_CONNECT_FLOW=oauth is not allowed in production — use Embedded Signup v4 (omit META_CONNECT_FLOW or set es_v4)');
+  }
+  if (snap.allowTunnelWebhook) {
+    errors.push('META_ALLOW_TUNNEL_WEBHOOK must not be set on the VPS');
+  }
+  if (!isDurableMetaWebhookUrl(snap.webhookUrl) && !isDurableMetaWebhookUrl(snap.productionWebhookUrl)) {
+    errors.push(
+      'META_WEBHOOK_URL or META_PRODUCTION_WEBHOOK_URL must be a durable https callback (e.g. https://app.samyoj.com/api/whatsapp/webhook)'
+    );
+  }
+  if (snap.redirectUri && !isProductionMetaRedirectUri(snap.redirectUri)) {
+    errors.push(
+      'META_REDIRECT_URI must be https://app.samyoj.com/settings/whatsapp/callback or .../callback/popup in production'
+    );
+  }
+  return errors;
+}
+
 export function platformAdminUrlErrors(
   nodeEnv: string | undefined,
   value: string
@@ -99,12 +167,18 @@ export function validateConfig(): void {
         'BILLING_SUPPLIER_GSTIN, BILLING_SUPPLIER_ADDRESS, and BILLING_SUPPLIER_STATE_CODE must be set for issued GST invoices'
       );
     }
-    if (!config.meta.appSecret) {
-      logger.warn(
-        'META_APP_SECRET is not set — put META_APP_ID / META_APP_SECRET in server/.env (platform credentials only; Settings UI never collects them)',
-        { source: 'startup' }
-      );
-    }
+    errors.push(
+      ...productionMetaConnectErrors({
+        appId: config.meta.appId,
+        appSecret: config.meta.appSecret,
+        esConfigId: config.meta.esConfigId,
+        connectFlow: config.meta.connectFlow,
+        allowTunnelWebhook: config.meta.allowTunnelWebhook,
+        webhookUrl: config.meta.webhookUrl,
+        productionWebhookUrl: config.meta.productionWebhookUrl,
+        redirectUri: config.meta.redirectUri,
+      })
+    );
     if (!config.meta.verifyToken || config.meta.verifyToken === DEFAULT_VERIFY_TOKEN) {
       errors.push('META_VERIFY_TOKEN must be set to a non-default value in production');
     }

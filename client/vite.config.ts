@@ -57,6 +57,12 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      // Brave/ad-block often block connect.facebook.net; load the JS SDK same-origin.
+      '/__fb-sdk': {
+        target: 'https://connect.facebook.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__fb-sdk/, ''),
+      },
     },
   },
 });

@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { billingApi, whatsappApi } from '../../services/api';
-import { useWhatsAppConnectOAuth } from '../../hooks/useWhatsAppConnectOAuth';
+import { useWhatsAppConnectPicker } from '../../hooks/useWhatsAppConnectPicker';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
 import type { BillingUsage } from '../../types';
@@ -19,6 +19,7 @@ import WhatsAppGlyph from './icons/WhatsAppGlyph';
 import IconWell from './icons/IconWell';
 import { parseWhatsappNumbersPayload } from '../../utils/whatsappWorkspace';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
+import WhatsAppConnectModeModal from '../whatsapp/WhatsAppConnectModeModal';
 
 interface WhatsappNumberRow {
   id: string;
@@ -174,9 +175,15 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
       });
   }, [activeNumber?.id, emitStatus]);
 
-  const { connect, connecting } = useWhatsAppConnectOAuth({
+  const {
+    pickerOpen,
+    openPicker,
+    closePicker,
+    connectStandard,
+    connectCoexistence,
+    connecting,
+  } = useWhatsAppConnectPicker({
     returnPath: '/',
-    prefetch: false,
     onConnected: () => {
       load();
     },
@@ -468,7 +475,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
           <AppButton
             className="shrink-0"
             icon={<Link2 className="h-4 w-4" />}
-            onClick={connect}
+            onClick={openPicker}
             disabled={connecting}
             loading={connecting}
           >
@@ -476,6 +483,13 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
           </AppButton>
         </div>
       </div>
+      <WhatsAppConnectModeModal
+        open={pickerOpen}
+        onClose={closePicker}
+        onConnectStandard={connectStandard}
+        onConnectCoexistence={connectCoexistence}
+        connecting={connecting}
+      />
     </section>
   );
 }

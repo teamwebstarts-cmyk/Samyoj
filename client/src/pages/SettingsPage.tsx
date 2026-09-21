@@ -25,7 +25,7 @@ import type {
 } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
-import { useWhatsAppConnectOAuth } from '../hooks/useWhatsAppConnectOAuth';
+import { useWhatsAppConnectPicker } from '../hooks/useWhatsAppConnectPicker';
 
 // Subcomponents
 import SettingsHero from '../components/settings/SettingsHero';
@@ -38,6 +38,7 @@ import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
 import WhatsAppButtonBuilder from '../components/settings/WhatsAppButtonBuilder';
 import OfficialCheckCard from '../components/settings/OfficialCheckCard';
+import WhatsAppConnectModeModal from '../components/whatsapp/WhatsAppConnectModeModal';
 import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 import { useEntitlements } from '../hooks/useEntitlements';
 
@@ -249,7 +250,14 @@ export default function SettingsPage() {
     loadData();
   }, [organization?.id]);
 
-  const { connect, connecting } = useWhatsAppConnectOAuth({
+  const {
+    pickerOpen,
+    openPicker,
+    closePicker,
+    connectStandard,
+    connectCoexistence,
+    connecting,
+  } = useWhatsAppConnectPicker({
     returnPath: '/settings?tab=whatsapp',
     onConnected: () => {
       void refreshNumbers();
@@ -259,7 +267,7 @@ export default function SettingsPage() {
 
   const handleConnect = () => {
     if (!isOwnerOrAdmin || !canConnectWhatsApp) return;
-    connect();
+    openPicker();
   };
 
   // Handle WhatsApp Disconnect
@@ -449,6 +457,14 @@ export default function SettingsPage() {
         variant="danger"
         icon={PhoneOff}
         loading={Boolean(disconnectingId)}
+      />
+
+      <WhatsAppConnectModeModal
+        open={pickerOpen}
+        onClose={closePicker}
+        onConnectStandard={connectStandard}
+        onConnectCoexistence={connectCoexistence}
+        connecting={connecting}
       />
     </PageShell>
   );
