@@ -56,7 +56,7 @@ interface TemplateRejectionAlert {
 }
 
 export default function TemplatesPage() {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
   const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
@@ -254,7 +254,7 @@ export default function TemplatesPage() {
     [templates],
   );
 
-  const rejectionBannerKey = `samyoj_template_rejection_banner_${user?.organizationId || 'org'}`;
+  const rejectionBannerKey = `samyoj_template_rejection_banner_${organization?.id || user?.id || 'org'}`;
 
   const openCreate = () => {
     if (!canManageTemplates) return;
