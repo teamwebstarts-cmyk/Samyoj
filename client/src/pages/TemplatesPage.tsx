@@ -34,6 +34,7 @@ import {
 } from '../utils/templateForm';
 import type { MessageTemplate } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
+import { getErrorMessage, sanitizeUserErrorMessage } from '../utils/errors';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
@@ -110,9 +111,7 @@ export default function TemplatesPage() {
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        const msg =
-          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message || 'Failed to load templates.';
+        const msg = getErrorMessage(err, 'Couldn’t load templates. Try again.');
         toastError(msg);
         setLoadError(msg);
       })
@@ -414,7 +413,7 @@ export default function TemplatesPage() {
                     <li key={`${alert.templateName}-${i}`}>
                       <span className="font-mono font-semibold">{alert.templateName || 'Template'}</span>
                       {alert.status ? ` · ${alert.status}` : ''}
-                      {alert.reason ? ` — ${alert.reason}` : ''}
+                      {alert.reason ? ` — ${sanitizeUserErrorMessage(alert.reason)}` : ''}
                     </li>
                   ))}
                 </ul>
@@ -428,8 +427,7 @@ export default function TemplatesPage() {
                 icon={AlertCircle}
                 variant="error"
                 title="Couldn’t load templates"
-                description="This is not an empty account — WhatsApp didn’t return your template list. Try again."
-                hint={loadError}
+                description={loadError}
                 action={<AppButton onClick={load}>Try again</AppButton>}
               />
             </div>

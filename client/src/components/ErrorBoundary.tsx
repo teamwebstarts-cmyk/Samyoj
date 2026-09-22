@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { logError } from '../utils/errors';
+import { logError, sanitizeUserErrorMessage } from '../utils/errors';
 
 interface Props {
   children: ReactNode;
@@ -19,7 +19,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   static getDerivedStateFromError(error: Error): State {
     return {
       hasError: true,
-      message: error.message || 'Something went wrong',
+      message: sanitizeUserErrorMessage(error.message || 'Something went wrong'),
     };
   }
 

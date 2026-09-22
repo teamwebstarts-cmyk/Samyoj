@@ -152,11 +152,9 @@ export default function CampaignTemplatePicker({
         ) : templatesLoadError && templates.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center dark:border-slate-800">
             <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-              Couldn’t load approved templates
+              Couldn’t load templates
             </p>
-            <p className="mt-1 text-[10px] text-slate-400">
-              This is not an empty list — WhatsApp didn’t return templates. Try again.
-            </p>
+            <p className="mt-1 text-[10px] text-slate-400">{templatesLoadError}</p>
             {onRetryTemplates ? (
               <AppButton className="mt-3" variant="secondary" size="sm" onClick={onRetryTemplates}>
                 Try again

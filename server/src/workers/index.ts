@@ -13,7 +13,11 @@ import { processWebhookPayload } from './webhook.processor';
 import { processAiChatbotJob } from '../modules/automation/engine';
 import { executeWebhookDelivery } from '../modules/integrations/dispatch';
 import { processCompliancePurge } from './compliance-purge.processor';
-import { pollConversationAnalytics, pollQualityRatings } from '../modules/billing/usage.service';
+import {
+  pollConversationAnalytics,
+  pollQualityRatings,
+  pollTemplateRejections,
+} from '../modules/billing/usage.service';
 import { attachWorkerErrorHandlers, logError } from '../errors';
 import { createModuleLogger } from '../utils/logger';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
@@ -938,6 +942,9 @@ setInterval(() => {
   );
   pollQualityRatings().catch((err) =>
     logError(err, { source: 'worker', action: 'pollQualityRatings' })
+  );
+  pollTemplateRejections().catch((err) =>
+    logError(err, { source: 'worker', action: 'pollTemplateRejections' })
   );
 }, 24 * 60 * 60 * 1000);
 

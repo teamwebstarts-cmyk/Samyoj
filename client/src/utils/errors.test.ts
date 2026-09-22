@@ -44,6 +44,19 @@ describe('sanitizeUserErrorMessage', () => {
     );
   });
 
+  it('maps WhatsApp rate limits to a plain wait message', () => {
+    const raw =
+      '(#80008) There have been too many calls to this WhatsApp Business account. Wait a bit and try again. For more info, please refer to https://developers.facebook.com/docs/graph-api/overview/rate-limiting.';
+    expect(sanitizeUserErrorMessage(raw)).toBe(
+      'WhatsApp is busy right now. Wait a minute, then try again.',
+    );
+    expect(sanitizeUserErrorMessage(raw)).not.toMatch(/80008|developers\.facebook|localhost|webhook/i);
+    expect(
+      sanitizeUserErrorMessage('(#190) Error validating access token. fbtrace_id=ABC'),
+    ).toBe('WhatsApp couldn’t complete that. Wait a minute, then try again.');
+    expect(sanitizeUserErrorMessage('Add a coupon code.')).toBe('Add a coupon code.');
+  });
+
   it('maps the production-webhook guard to a short user message', () => {
     expect(
       sanitizeUserErrorMessage(

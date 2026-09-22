@@ -4,7 +4,7 @@ import prisma from '../../config/database';
 import { config } from '../../config';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
-import { MetaWhatsAppService } from './meta.service';
+import { isWhatsAppRateLimit, MetaWhatsAppService } from './meta.service';
 import { consumeConnectPending, createConnectPending } from './connect-pending';
 import {
   resolveOAuthRedirectUri,
@@ -67,6 +67,10 @@ function narrowPhonesForWabaHint<T extends { wabaId: string }>(
 const log = createModuleLogger('whatsapp');
 
 const router = Router();
+
+/** ponytail: one clock per WABA. Per-process is enough; a second API process would still call Meta. */
+const webhookStatusQuietUntil = new Map<string, number>();
+const WEBHOOK_STATUS_QUIET_MS = 10 * 60 * 1000;
 
 async function saveWhatsappConnection(
   orgId: string,
@@ -607,6 +611,19 @@ router.get(
     const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
     let subscribed: boolean | null = null;
     let statusCheckFailed = false;
+    const quietUntil = webhookStatusQuietUntil.get(number.wabaId) ?? 0;
+    if (Date.now() < quietUntil) {
+      return sendSuccess(res, {
+        connected: true,
+        phoneNumber: number.phoneNumber,
+        wabaId: number.wabaId,
+        webhookUrl: config.meta.webhookUrl || null,
+        subscribed: null,
+        statusCheckFailed: false,
+        tokenExpiresAt: number.tokenExpiresAt?.toISOString() ?? null,
+        tokenExpiringSoon: false,
+      });
+    }
     let tokenExpiresAt: string | null = number.tokenExpiresAt?.toISOString() ?? null;
     let tokenExpiringSoon = false;
 
@@ -632,6 +649,8 @@ router.get(
 
     if (hookResult.status === 'fulfilled') {
       subscribed = hookResult.value.subscribed;
+    } else if (isWhatsAppRateLimit(hookResult.reason)) {
+      webhookStatusQuietUntil.set(number.wabaId, Date.now() + WEBHOOK_STATUS_QUIET_MS);
     } else {
       statusCheckFailed = true;
       logError(hookResult.reason, {

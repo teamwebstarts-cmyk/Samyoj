@@ -6,8 +6,25 @@ import type { WhatsappNumber } from '@prisma/client';
 
 const log = createModuleLogger('whatsapp');
 
+/** Live Meta reconcile is for connect and the background poll, not every Inbox read. */
+export function hasStoredWhatsappIds(number: {
+  wabaId?: string | null;
+  phoneNumberId?: string | null;
+}): boolean {
+  return Boolean(number.wabaId && number.phoneNumberId);
+}
+
 async function resolveWhatsappContext(whatsappNumber: WhatsappNumber) {
   const accessToken = MetaWhatsAppService.decryptToken(whatsappNumber.accessToken);
+
+  // ponytail: syncing on every read is what tripped Meta #80008. Re-sync if a number id is actually missing.
+  if (hasStoredWhatsappIds(whatsappNumber)) {
+    return {
+      whatsappNumber,
+      wabaId: whatsappNumber.wabaId,
+      accessToken,
+    };
+  }
 
   let synced;
   try {

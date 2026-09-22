@@ -65,6 +65,7 @@ import EntitlementNotice from '../components/billing/EntitlementNotice';
 import { useSocket } from '../hooks/useSocket';
 import { campaignApi, contactApi, templateApi, whatsappApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
+import { getErrorMessage } from '../utils/errors';
 import { validatePhoneLines } from '../utils/phone';
 import { messagingConsent } from '../utils/plainLanguage';
 import type {
@@ -330,9 +331,9 @@ export default function CampaignsPage() {
         setTemplates(list as MessageTemplate[]);
         setTemplatesLoadError(null);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        setTemplatesLoadError('Couldn’t load approved templates. Try again.');
+        setTemplatesLoadError(getErrorMessage(error, 'Couldn’t load templates. Try again.'));
       });
   }, [activeNumber, resolved]);
 
@@ -1504,8 +1505,8 @@ export default function CampaignsPage() {
             {templatesLoadError && templates.length === 0 ? (
               <ModalCallout
                 icon={LayoutTemplate}
-                title="Couldn’t load approved templates"
-                description="This is not an empty list — WhatsApp didn’t return templates. Close this and try again."
+                title="Couldn’t load templates"
+                description={templatesLoadError}
                 accent="amber"
               />
             ) : templates.length === 0 ? (

@@ -1,8 +1,12 @@
 import prisma from '../../config/database';
-import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { isWhatsAppRateLimit, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('billing-usage');
+
+/** Pause Graph template polls after Meta #80008 so retries do not keep the limit open. */
+let templatePollQuietUntil = 0;
+const TEMPLATE_POLL_QUIET_MS = 10 * 60 * 1000;
 
 const USD_TO_INR = 83;
 
@@ -23,7 +27,25 @@ export const META_CATEGORY_RATES_INR: Record<string, number> = {
 // Kept as an alias for existing imports.
 const CATEGORY_RATES_INR = META_CATEGORY_RATES_INR;
 
+function graphToken(encrypted: string): string | null {
+  try {
+    const token = MetaWhatsAppService.decryptToken(encrypted).trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
+function pauseGraphPolls(wabaId: string) {
+  templatePollQuietUntil = Date.now() + TEMPLATE_POLL_QUIET_MS;
+  log.warn('WhatsApp rate limit; pausing Meta polls', {
+    wabaId,
+    quietUntil: new Date(templatePollQuietUntil).toISOString(),
+  });
+}
+
 export async function pollConversationAnalytics(): Promise<void> {
+  if (Date.now() < templatePollQuietUntil) return;
   const numbers = await prisma.whatsappNumber.findMany({
     where: { isActive: true },
     select: {
@@ -46,7 +68,8 @@ export async function pollConversationAnalytics(): Promise<void> {
 
     for (const number of numbers) {
       try {
-        const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+        const accessToken = graphToken(number.accessToken);
+        if (!accessToken) continue;
         const analytics = await MetaWhatsAppService.getConversationAnalytics(
           number.wabaId,
           accessToken,
@@ -90,6 +113,10 @@ export async function pollConversationAnalytics(): Promise<void> {
           });
         }
       } catch (err) {
+        if (isWhatsAppRateLimit(err)) {
+          pauseGraphPolls(number.wabaId);
+          return;
+        }
         log.warn('Failed to poll conversation analytics', {
           wabaId: number.wabaId,
           daysAgo,
@@ -101,6 +128,7 @@ export async function pollConversationAnalytics(): Promise<void> {
 }
 
 export async function pollQualityRatings(): Promise<void> {
+  if (Date.now() < templatePollQuietUntil) return;
   const numbers = await prisma.whatsappNumber.findMany({
     where: { isActive: true },
     select: { id: true, phoneNumberId: true, accessToken: true },
@@ -108,7 +136,8 @@ export async function pollQualityRatings(): Promise<void> {
 
   for (const number of numbers) {
     try {
-      const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+      const accessToken = graphToken(number.accessToken);
+      if (!accessToken) continue;
       const health = await MetaWhatsAppService.getPhoneNumberHealth(
         number.phoneNumberId,
         accessToken
@@ -130,6 +159,10 @@ export async function pollQualityRatings(): Promise<void> {
         });
       }
     } catch (err) {
+      if (isWhatsAppRateLimit(err)) {
+        pauseGraphPolls(number.phoneNumberId);
+        return;
+      }
       log.warn('Failed to poll quality rating', {
         phoneNumberId: number.phoneNumberId,
         error: String(err),
@@ -139,6 +172,7 @@ export async function pollQualityRatings(): Promise<void> {
 }
 
 export async function pollTemplateRejections(): Promise<void> {
+  if (Date.now() < templatePollQuietUntil) return;
   const numbers = await prisma.whatsappNumber.findMany({
     where: { isActive: true },
     select: {
@@ -153,7 +187,8 @@ export async function pollTemplateRejections(): Promise<void> {
 
   for (const number of numbers) {
     try {
-      const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+      const accessToken = graphToken(number.accessToken);
+      if (!accessToken) continue;
       const synced = await MetaWhatsAppService.syncWhatsappConnection(number, accessToken);
       if (synced.updated) {
         await prisma.whatsappNumber.update({
@@ -213,6 +248,10 @@ export async function pollTemplateRejections(): Promise<void> {
         },
       });
     } catch (err) {
+      if (isWhatsAppRateLimit(err)) {
+        pauseGraphPolls(number.wabaId);
+        return;
+      }
       log.warn('Failed to poll template rejections', {
         wabaId: number.wabaId,
         error: String(err),

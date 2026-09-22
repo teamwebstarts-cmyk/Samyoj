@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import toast, { Toaster, type ToastOptions } from 'react-hot-toast';
 import { Bot, Star } from 'lucide-react';
+import { sanitizeUserErrorMessage } from './errors';
 
 function isDark() {
   return typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
@@ -60,7 +61,7 @@ export function toastSuccess(message: string, options?: Partial<ToastOptions>) {
 
 export function toastError(message: string, options?: Partial<ToastOptions>) {
   const dark = isDark();
-  return toast.error(message, {
+  return toast.error(sanitizeUserErrorMessage(message), {
     ...sharedOptions,
     position: getToastPosition(),
     duration: 4500,
@@ -96,7 +97,7 @@ export function toastInfo(message: string) {
 
 export function toastWarning(message: string) {
   const dark = isDark();
-  return toast(message, {
+  return toast(sanitizeUserErrorMessage(message), {
     ...sharedOptions,
     position: getToastPosition(),
     duration: 4500,

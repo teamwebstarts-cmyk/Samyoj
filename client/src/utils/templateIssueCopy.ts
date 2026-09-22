@@ -7,6 +7,13 @@ export interface FriendlyIssue {
 
 const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
   {
+    match: /too many calls|#?80008|\brate limit\b/i,
+    issue: {
+      title: 'WhatsApp is busy',
+      detail: 'Wait a minute, then try again. The message text does not need a change.',
+    },
+  },
+  {
     match: /localhost|samyoj (screen|page)|your computer|live website, not this/i,
     issue: {
       title: 'This link only works on your computer',

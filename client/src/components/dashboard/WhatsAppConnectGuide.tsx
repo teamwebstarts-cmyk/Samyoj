@@ -299,7 +299,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     if (incomingOff) {
       statusLine = 'Connected · Customer replies are not reaching Inbox yet';
     } else if (incomingUnknown) {
-      statusLine = "Connected · Couldn't verify incoming status — try Enable incoming or refresh";
+      statusLine = 'Connected · WhatsApp is busy. Wait a minute, then refresh.';
     } else if (incomingOn && qMeta?.hint) {
       statusLine = `Live · ${qMeta.hint}`;
     } else if (incomingOn) {
@@ -353,7 +353,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
                 )}
                 {incomingUnknown && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
-                    Check inbound
+                    Please wait
                   </span>
                 )}
                 {qMeta && quality !== 'GREEN' && (
@@ -410,7 +410,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
           </div>
 
           <div className="relative z-20 flex w-full shrink-0 items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2">
-            {(incomingOff || incomingUnknown) && (
+            {incomingOff && (
               <AppButton
                 type="button"
                 size="sm"

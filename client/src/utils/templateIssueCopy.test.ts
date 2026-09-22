@@ -144,4 +144,12 @@ describe('mapTemplateApiError', () => {
   it('keeps a name-collision message actionable', () => {
     expect(mapTemplateApiError('Template Name Already Exists')).toMatch(/order_shipped_3|already exists/i);
   });
+
+  it('does not blame the website link when Meta rate-limits the account', () => {
+    const mapped = mapTemplateApiError(
+      '(#80008) There have been too many calls to this WhatsApp Business account.',
+    );
+    expect(mapped).toMatch(/busy/i);
+    expect(mapped.toLowerCase()).not.toMatch(/website/);
+  });
 });

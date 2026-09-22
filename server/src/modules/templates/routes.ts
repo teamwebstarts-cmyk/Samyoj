@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
-import { MetaApiError, MetaWhatsAppService } from '../whatsapp/meta.service';
+import { isWhatsAppRateLimit, MetaApiError, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
@@ -11,7 +11,7 @@ import { mergeTemplateParams } from '../campaigns/template-params';
 import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { buildTemplateComponents as buildCreateComponents } from './builder';
 import { getTemplateUsage } from './analytics';
-import { invalidateTemplateCache } from './cache';
+import { invalidateTemplateCache, recallTemplateList, rememberTemplateList } from './cache';
 import {
   createTemplateSchema,
   createFromLibrarySchema,
@@ -38,6 +38,20 @@ const router = Router();
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageTemplates'));
 router.use(requireActiveCommercialOnMutation(), requireFeatureOnMutation('templates'));
+
+function throwTemplateSaveError(error: unknown): never {
+  if (isWhatsAppRateLimit(error)) {
+    throw new AppError(
+      429,
+      'Too many calls to this WhatsApp Business account. Wait a minute, then try again.',
+      'WHATSAPP_RATE_LIMIT',
+    );
+  }
+  if (error instanceof MetaApiError) {
+    throw new AppError(400, error.message, 'META_TEMPLATE_REJECTED');
+  }
+  throw error;
+}
 
 function emitTemplateSyncTelemetry(
   organizationId: string,
@@ -70,22 +84,34 @@ router.get(
       req.activeWhatsappNumberId
     );
 
-    if (all === 'true') {
-      const templates = await MetaWhatsAppService.listAllMessageTemplates(wabaId, accessToken, {
+    const orgId = req.user!.organizationId!;
+    const statusKey = typeof status === 'string' ? status : '';
+
+    try {
+      if (all === 'true') {
+        const templates = await MetaWhatsAppService.listAllMessageTemplates(wabaId, accessToken, {
+          status: status as string | undefined,
+        });
+        emitTemplateSyncTelemetry(orgId, templates);
+        await rememberTemplateList(orgId, wabaId, statusKey, templates);
+        sendSuccess(res, { templates, paging: null });
+        return;
+      }
+
+      const result = await MetaWhatsAppService.listMessageTemplates(wabaId, accessToken, {
         status: status as string | undefined,
+        after: after as string | undefined,
       });
-      emitTemplateSyncTelemetry(req.user!.organizationId!, templates);
-      sendSuccess(res, { templates, paging: null });
-      return;
+
+      emitTemplateSyncTelemetry(orgId, result.templates);
+      if (!after) await rememberTemplateList(orgId, wabaId, statusKey, result.templates);
+      sendSuccess(res, result);
+    } catch (err) {
+      if (!isWhatsAppRateLimit(err) || after) throwTemplateSaveError(err);
+      const cached = await recallTemplateList<unknown>(orgId, wabaId, statusKey);
+      if (!cached) throwTemplateSaveError(err);
+      sendSuccess(res, { templates: cached, paging: null });
     }
-
-    const result = await MetaWhatsAppService.listMessageTemplates(wabaId, accessToken, {
-      status: status as string | undefined,
-      after: after as string | undefined,
-    });
-
-    emitTemplateSyncTelemetry(req.user!.organizationId!, result.templates);
-    sendSuccess(res, result);
   })
 );
 
@@ -182,10 +208,7 @@ router.post(
         allow_category_change: true,
       });
     } catch (error) {
-      if (error instanceof MetaApiError) {
-        throw new AppError(400, `Meta rejected this template: ${error.message}`, 'META_TEMPLATE_REJECTED');
-      }
-      throw error;
+      throwTemplateSaveError(error);
     }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
@@ -319,13 +342,18 @@ router.post(
       req.activeWhatsappNumberId
     );
 
-    const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
-      name: data.name,
-      language: data.language,
-      category: data.category,
-      components: buildCreateComponents(data),
-      allow_category_change: true,
-    });
+    let result;
+    try {
+      result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
+        name: data.name,
+        language: data.language,
+        category: data.category,
+        components: buildCreateComponents(data),
+        allow_category_change: true,
+      });
+    } catch (error) {
+      throwTemplateSaveError(error);
+    }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 
@@ -344,14 +372,19 @@ router.post(
       req.activeWhatsappNumberId
     );
 
-    const result = await MetaWhatsAppService.createMessageTemplateFromLibrary(wabaId, accessToken, {
-      name: data.name,
-      language: data.language,
-      libraryTemplateName: data.libraryTemplateName,
-      libraryTemplateButtonInputs: data.libraryTemplateButtonInputs,
-      category: data.category,
-      allow_category_change: true,
-    });
+    let result;
+    try {
+      result = await MetaWhatsAppService.createMessageTemplateFromLibrary(wabaId, accessToken, {
+        name: data.name,
+        language: data.language,
+        libraryTemplateName: data.libraryTemplateName,
+        libraryTemplateButtonInputs: data.libraryTemplateButtonInputs,
+        category: data.category,
+        allow_category_change: true,
+      });
+    } catch (error) {
+      throwTemplateSaveError(error);
+    }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 
@@ -469,13 +502,18 @@ router.post(
     await MetaWhatsAppService.deleteMessageTemplate(wabaId, accessToken, name);
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, name);
 
-    const result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
-      name: data.name,
-      language: data.language,
-      category: data.category,
-      components: buildCreateComponents(data),
-      allow_category_change: true,
-    });
+    let result;
+    try {
+      result = await MetaWhatsAppService.createMessageTemplate(wabaId, accessToken, {
+        name: data.name,
+        language: data.language,
+        category: data.category,
+        components: buildCreateComponents(data),
+        allow_category_change: true,
+      });
+    } catch (error) {
+      throwTemplateSaveError(error);
+    }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 

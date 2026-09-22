@@ -8,7 +8,7 @@ export type InboundHealth =
   | { state: 'unknown' }
   | { state: 'loading' }
   | { state: 'ok'; totalReceived: number; lastReceivedAt: string | null }
-  | { state: 'unhealthy'; reason: string };
+  | { state: 'unhealthy'; kind: 'busy' | 'off' };
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -50,21 +50,15 @@ export function useWebhookHealth(enabled = true): UseWebhookHealthResult {
       const proc = (healthRes?.data?.data ?? null) as WebhookHealth | null;
 
       if (status && !status.connected) {
-        setHealth({ state: 'unhealthy', reason: 'WhatsApp is not connected' });
+        setHealth({ state: 'unhealthy', kind: 'off' });
         return;
       }
       if (status?.statusCheckFailed) {
-        setHealth({
-          state: 'unhealthy',
-          reason: "Couldn't reach Meta to verify webhook status",
-        });
+        setHealth({ state: 'unhealthy', kind: 'busy' });
         return;
       }
       if (status && status.subscribed === false) {
-        setHealth({
-          state: 'unhealthy',
-          reason: 'Webhook is not subscribed in Meta — replies will not arrive',
-        });
+        setHealth({ state: 'unhealthy', kind: 'off' });
         return;
       }
       setHealth({

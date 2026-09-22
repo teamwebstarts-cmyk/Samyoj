@@ -48,6 +48,9 @@ function isExpectedApiNoise(error: unknown): boolean {
   if (status === 401 && /\/auth\/(?:me|refresh|login)(?:\?|$)/.test(url)) return true;
   if (status === 429 && /\/auth\/(?:refresh|login)(?:\?|$)/.test(url)) return true;
   if (status === 402) return true;
+  if (status === 429 && /too many calls|80008|rate limit/i.test(JSON.stringify(error.response?.data ?? ''))) {
+    return true;
+  }
   if (status === 503 && /\/whatsapp\/connect-url(?:\?|$)/.test(url)) return true;
   return false;
 }

@@ -34,6 +34,36 @@ export async function getCachedMessageTemplate(
   return template;
 }
 
+function listCacheKey(orgId: string, wabaId: string, status: string) {
+  return `tpllist:${orgId}:${wabaId}:${status || 'any'}`;
+}
+
+export async function rememberTemplateList(
+  orgId: string,
+  wabaId: string,
+  status: string,
+  templates: unknown[]
+) {
+  try {
+    const redis = getRedis();
+    await redis.set(listCacheKey(orgId, wabaId, status), JSON.stringify(templates), 'EX', 86_400);
+  } catch {
+    /* cache optional */
+  }
+}
+
+export async function recallTemplateList<T>(orgId: string, wabaId: string, status: string): Promise<T[] | null> {
+  try {
+    const redis = getRedis();
+    const cached = await redis.get(listCacheKey(orgId, wabaId, status));
+    if (!cached) return null;
+    const parsed = JSON.parse(cached) as T[];
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function invalidateTemplateCache(orgId: string, wabaId: string, name?: string) {
   try {
     const redis = getRedis();

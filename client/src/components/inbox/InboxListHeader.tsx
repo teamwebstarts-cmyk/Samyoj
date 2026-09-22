@@ -225,26 +225,51 @@ export default function InboxListHeader({
         <div
           role="alert"
           data-testid="inbound-health-banner"
-          className="mb-2 flex items-center gap-2 rounded-lg border border-red-300/80 bg-red-50/95 px-2.5 py-1.5 text-red-900 md:mb-3 md:items-start md:gap-2.5 md:rounded-xl md:px-3 md:py-2.5 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-100"
+          className={
+            inboundHealth.kind === 'off'
+              ? 'mb-2 flex items-center gap-2 rounded-lg border border-red-300/80 bg-red-50/95 px-2.5 py-1.5 text-red-900 md:mb-3 md:items-start md:gap-2.5 md:rounded-xl md:px-3 md:py-2.5 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-100'
+              : 'mb-2 flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/95 px-2.5 py-1.5 text-amber-950 md:mb-3 md:items-start md:gap-2.5 md:rounded-xl md:px-3 md:py-2.5 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100'
+          }
         >
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600 md:mt-0.5 md:h-4 md:w-4 dark:text-red-400" />
+          <AlertTriangle
+            className={
+              inboundHealth.kind === 'off'
+                ? 'h-3.5 w-3.5 shrink-0 text-red-600 md:mt-0.5 md:h-4 md:w-4 dark:text-red-400'
+                : 'h-3.5 w-3.5 shrink-0 text-amber-600 md:mt-0.5 md:h-4 md:w-4 dark:text-amber-400'
+            }
+          />
           <div className="min-w-0 flex-1 text-[11.5px] leading-snug md:text-[12px]">
-            <p className="font-bold">Inbound not arriving</p>
-            <p className="mt-0.5 hidden text-red-800/85 md:block dark:text-red-200/85">
-              {inboundHealth?.reason}
+            <p className="font-bold">
+              {inboundHealth.kind === 'off' ? 'Replies aren’t arriving' : 'WhatsApp is busy'}
             </p>
-            <p className="mt-1 hidden text-[11px] font-medium text-red-700/85 md:block dark:text-red-300/80">
-              Outbound still works on localhost; the public tunnel or Meta webhook subscription is
-              the usual cause.
+            <p
+              className={
+                inboundHealth.kind === 'off'
+                  ? 'mt-0.5 text-red-800/85 dark:text-red-200/85'
+                  : 'mt-0.5 text-amber-900/80 dark:text-amber-200/80'
+              }
+            >
+              {inboundHealth.kind === 'off'
+                ? 'Incoming messages aren’t turned on for this number. Open Settings and turn them on.'
+                : 'Your number is still connected. Wait a minute, then try again.'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onRetryHealth}
-            className={`shrink-0 rounded-md border border-red-300/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 transition hover:bg-red-100 md:text-[10.5px] dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-900/40 ${FOCUS_RING_CLASS}`}
-          >
-            Retry
-          </button>
+          {inboundHealth.kind === 'off' ? (
+            <Link
+              to="/settings?tab=whatsapp"
+              className={`shrink-0 rounded-md border border-red-300/80 px-2 py-1 text-[10px] font-bold text-red-700 transition hover:bg-red-100 md:text-[10.5px] dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-900/40 ${FOCUS_RING_CLASS}`}
+            >
+              Settings
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={onRetryHealth}
+              className={`shrink-0 rounded-md border border-amber-300/80 px-2 py-1 text-[10px] font-bold text-amber-800 transition hover:bg-amber-100 md:text-[10.5px] dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-900/40 ${FOCUS_RING_CLASS}`}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -454,22 +479,22 @@ function InboundStatusDot({
   inboundHealth: InboundHealth;
 }) {
   const tipFor = useGlassTipProps();
-  type Tone = 'green' | 'pending' | 'red';
+  type Tone = 'green' | 'pending' | 'amber' | 'red';
   let tone: Tone = 'pending';
-  let label = 'WhatsApp inbound status unknown';
+  let label = 'WhatsApp status unknown';
 
   if (numberLoading || inboundHealth.state === 'loading' || inboundHealth.state === 'unknown') {
     tone = 'pending';
     label =
       numberLoading || inboundHealth.state === 'loading'
-        ? 'Checking WhatsApp inbound…'
-        : 'WhatsApp inbound status unknown';
+        ? 'Checking WhatsApp…'
+        : 'WhatsApp status unknown';
+  } else if (inboundHealth.state === 'unhealthy' && inboundHealth.kind === 'busy') {
+    tone = 'amber';
+    label = 'WhatsApp is busy';
   } else if (!isConnected || inboundHealth.state === 'unhealthy') {
     tone = 'red';
-    label =
-      inboundHealth.state === 'unhealthy'
-        ? inboundHealth.reason || 'WhatsApp inbound disconnected'
-        : 'WhatsApp not connected';
+    label = isConnected ? 'Replies aren’t arriving' : 'WhatsApp not connected';
   } else if (inboundHealth.state === 'ok') {
     tone = 'green';
     label = 'WhatsApp inbound connected';
@@ -480,7 +505,9 @@ function InboundStatusDot({
       ? 'bg-emerald-500'
       : tone === 'red'
         ? 'bg-red-500'
-        : 'bg-neutral-300 dark:bg-neutral-600';
+        : tone === 'amber'
+          ? 'bg-amber-500'
+          : 'bg-neutral-300 dark:bg-neutral-600';
 
   return (
     <span

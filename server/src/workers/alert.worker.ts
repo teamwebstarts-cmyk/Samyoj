@@ -1,5 +1,4 @@
 import { config } from '../config';
-import { pollTemplateRejections } from '../modules/billing/usage.service';
 import { createModuleLogger } from '../utils/logger';
 import { emitToOrg } from '../realtime';
 import prisma from '../config/database';
@@ -107,7 +106,6 @@ export function startAlertWorker() {
         });
       }
 
-      await pollTemplateRejections();
     } catch (err) {
       log.error('Alert check failed', { error: String(err) });
     }

@@ -157,6 +157,9 @@ export function getPreviewSampleParams(form: TemplateFormState) {
 export function mapTemplateApiError(message: string): string {
   const stripped = message.replace(/^(body|header|footer|buttons)(\.\d+)?[:\s]+/i, '').trim();
   const lower = stripped.toLowerCase();
+  if (/too many calls|#?80008|\brate limit\b/i.test(lower)) {
+    return 'WhatsApp is busy right now. Wait a minute, then try again.';
+  }
   if (lower.includes('duplicate') || lower.includes('already exists') || lower.includes('same name')) {
     return 'A template with this name already exists. Rejected or pending templates still use that name — try a name like order_shipped_3.';
   }

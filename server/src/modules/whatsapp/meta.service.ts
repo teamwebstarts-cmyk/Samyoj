@@ -204,6 +204,11 @@ export function formatGraphErrorMessage(
 }
 
 /** Structured Meta Graph failures — preserve code + fbtrace for Inbox/server logs. */
+export function isWhatsAppRateLimit(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  return text.includes('80008') || /too many calls/i.test(text);
+}
+
 export class MetaApiError extends Error {
   readonly metaCode?: number;
   readonly metaSubcode?: number;

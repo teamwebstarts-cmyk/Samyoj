@@ -110,6 +110,16 @@ export function sanitizeUserErrorMessage(message: string, code?: string): string
   if (/live production webhook|ngrok\/localhost tunnel/i.test(message)) {
     return 'WhatsApp connected. Inbound stays on the live server — for local testing use a dedicated test number.';
   }
+  if (/too many calls|#?80008|\brate limit\b/i.test(message)) {
+    return 'WhatsApp is busy right now. Wait a minute, then try again.';
+  }
+  if (
+    /developers\.facebook\.com|fbtrace|\(#\d{3,}\)|OAuthException|Graph API|node_modules|\bprisma\b|ECONNREFUSED|server\/\.env/i.test(
+      message,
+    )
+  ) {
+    return 'WhatsApp couldn’t complete that. Wait a minute, then try again.';
+  }
   return message;
 }
 

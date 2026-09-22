@@ -237,10 +237,8 @@ export default function TemplateComposer({
   if (loadError && templates.length === 0) {
     return (
       <div className="bg-theme-surface px-4 py-4">
-        <p className="text-[13px] font-bold text-theme-fg">Couldn’t load approved templates</p>
-        <p className="mt-1 text-[12px] text-theme-secondary">
-          This is not an empty list — WhatsApp didn’t return templates. Try again.
-        </p>
+        <p className="text-[13px] font-bold text-theme-fg">Couldn’t load templates</p>
+        <p className="mt-1 text-[12px] text-theme-secondary">{loadError}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <AppButton type="button" size="sm" onClick={() => loadApprovedTemplates()}>
             Try again
