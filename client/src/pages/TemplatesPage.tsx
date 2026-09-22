@@ -34,7 +34,10 @@ import {
 } from '../utils/templateForm';
 import type { MessageTemplate } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
-import { getErrorMessage, sanitizeUserErrorMessage } from '../utils/errors';
+import { getErrorMessage } from '../utils/errors';
+import { formatCustomerTemplateRejectionBrief } from '../utils/templateRejectionGuide';
+import TemplateRejectionBanner from '../components/templates/TemplateRejectionBanner';
+import { useAuth } from '../contexts/AuthContext';
 import { invalidateFlowReferenceData } from '../components/flows/flowReferenceData';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { whatsappNotConnectedCopy } from '../utils/whatsappConnectionCopy';
@@ -53,6 +56,7 @@ interface TemplateRejectionAlert {
 }
 
 export default function TemplatesPage() {
+  const { user } = useAuth();
   const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
@@ -164,7 +168,9 @@ export default function TemplatesPage() {
           if (statusEvent === 'APPROVED') {
             toastSuccess(`Template "${name}" approved`);
           } else if (['REJECTED', 'PAUSED', 'DISABLED', 'FLAGGED'].includes(statusEvent)) {
-            const reason = payload.reason ? ` — ${payload.reason}` : '';
+            const reason = payload.reason
+              ? ` — ${formatCustomerTemplateRejectionBrief(payload.reason)}`
+              : '';
             toastError(`Template "${name}" ${statusEvent.toLowerCase()}${reason}`);
           }
         }
@@ -239,6 +245,16 @@ export default function TemplatesPage() {
     }),
     [templates],
   );
+
+  const activeRejectedNames = useMemo(
+    () =>
+      new Set(
+        templates.filter((t) => t.status === 'REJECTED').map((t) => t.name),
+      ),
+    [templates],
+  );
+
+  const rejectionBannerKey = `samyoj_template_rejection_banner_${user?.organizationId || 'org'}`;
 
   const openCreate = () => {
     if (!canManageTemplates) return;
@@ -402,24 +418,28 @@ export default function TemplatesPage() {
             </div>
           )}
 
-          {rejectionAlerts.length > 0 && (
-            <div className="border-b border-theme-border px-4 py-2.5 sm:px-5">
-              <AppAlert variant="error">
-                <p className="font-semibold">
-                  {rejectionAlerts.length} recent template issue{rejectionAlerts.length > 1 ? 's' : ''}
-                </p>
-                <ul className="mt-1.5 space-y-1 text-[12px]">
-                  {rejectionAlerts.slice(0, 3).map((alert, i) => (
-                    <li key={`${alert.templateName}-${i}`}>
-                      <span className="font-mono font-semibold">{alert.templateName || 'Template'}</span>
-                      {alert.status ? ` · ${alert.status}` : ''}
-                      {alert.reason ? ` — ${sanitizeUserErrorMessage(alert.reason)}` : ''}
-                    </li>
-                  ))}
-                </ul>
-              </AppAlert>
-            </div>
-          )}
+          <TemplateRejectionBanner
+            alerts={rejectionAlerts}
+            activeRejectedNames={activeRejectedNames}
+            storageKey={rejectionBannerKey}
+            onClearStoredAlerts={() => {
+              void settingsApi
+                .clearTemplateRejectionAlerts()
+                .then(() => setRejectionAlerts([]))
+                .catch(() => {
+                  /* dismiss still hides banner for this session */
+                });
+            }}
+            onShowRejected={() => setStatusFilter('REJECTED')}
+            onOpenTemplate={(name) => {
+              const match = templates.find((t) => t.name === name);
+              if (match) openView(match);
+              else {
+                setStatusFilter('REJECTED');
+                setSearch(name);
+              }
+            }}
+          />
 
           {loadError && templates.length === 0 ? (
             <div className="p-4 sm:p-6">

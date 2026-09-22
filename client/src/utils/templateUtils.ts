@@ -1,6 +1,7 @@
 import type { MessageTemplate } from '../types';
 import { getTemplateParts } from '../components/inbox/WhatsAppPreview';
 import { messagingConsent } from './plainLanguage';
+import { formatCustomerTemplateRejectionBrief } from './templateRejectionGuide';
 
 export function getTemplateRejectedReason(reason?: string): string | null {
   if (!reason) return null;
@@ -8,7 +9,7 @@ export function getTemplateRejectedReason(reason?: string): string | null {
   if (!trimmed) return null;
   const lower = trimmed.toLowerCase();
   if (['none', 'n/a', 'na', '-', 'null'].includes(lower)) return null;
-  return trimmed;
+  return formatCustomerTemplateRejectionBrief(trimmed);
 }
 
 export function countTemplateVars(text?: string): number {

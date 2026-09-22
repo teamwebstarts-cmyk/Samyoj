@@ -333,11 +333,41 @@ router.get(
     });
     const settings = (org?.settings as Record<string, unknown>) || {};
     const alerts = (settings.alerts as Record<string, unknown[]>) || {};
+    const { sanitizeTemplateRejectionAlert } = await import('../templates/customer-rejection-reason');
+    const templateRejections = (alerts.templateRejections || []).map((row) =>
+      sanitizeTemplateRejectionAlert(row as Record<string, unknown>)
+    );
     sendSuccess(res, {
-      templateRejections: alerts.templateRejections || [],
+      templateRejections,
       qualityRating: alerts.qualityRating || [],
       accountAlerts: alerts.accountAlerts || [],
     });
+  })
+);
+
+router.delete(
+  '/alerts/template-rejections',
+  authenticate,
+  requireOrg,
+  requireOrgRole('ADMIN', 'OWNER'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { settings: true },
+    });
+    const current = (org?.settings as Record<string, unknown>) || {};
+    const alerts = (current.alerts as Record<string, unknown>) || {};
+    await prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        settings: {
+          ...current,
+          alerts: { ...alerts, templateRejections: [] },
+        } as object,
+      },
+    });
+    sendSuccess(res, { cleared: true });
   })
 );
 

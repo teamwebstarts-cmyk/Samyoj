@@ -10,6 +10,7 @@ import {
   validateTemplateForm,
   type TemplateValidationIssue,
 } from '../../../utils/templateUtils';
+import { formatCustomerTemplateRejectionBrief } from '../../../utils/templateRejectionGuide';
 
 export const templateWizardStages = [
   { id: 'create', label: 'Create', description: 'Write and connect fields' },
@@ -172,13 +173,18 @@ export function mapTemplateApiError(message: string): string {
   if (/\b(header media|header_handle|sample file for media headers)\b/.test(lower)) {
     return 'Header media was rejected or invalid. Upload a different sample file and try again.';
   }
+  if (lower.includes('leading or trailing') || lower.includes('start or end of the template')) {
+    return "Placeholders can't be at the very start or end of the message. Add a greeting before {{1}} or words after the last placeholder.";
+  }
   if (
     lower.includes('meta rejected this template:') ||
-    lower.includes('leading or trailing') ||
     lower.includes('resubmit') ||
-    lower.includes('paused')
+    lower.includes('paused') ||
+    /^\s*scam\s*$/i.test(stripped) ||
+    /\bscam\b/.test(lower)
   ) {
-    return stripped.startsWith('Meta rejected') ? stripped : `Meta rejected this template: ${stripped}`;
+    const inner = stripped.replace(/^Meta rejected this template:\s*/i, '').trim() || stripped;
+    return formatCustomerTemplateRejectionBrief(inner);
   }
   if (/#\d{3,}|error code|oauth|graph\.facebook|invalid parameter|permission denied/i.test(lower)) {
     return 'WhatsApp couldn’t save this template. Check the website link and message text, then try again.';

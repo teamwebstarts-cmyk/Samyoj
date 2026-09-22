@@ -46,6 +46,10 @@ describe('explainTemplateIssue', () => {
   it('explains Meta template rejection instead of hiding Invalid parameter', () => {
     const issue = explainTemplateIssue('Meta rejected this template: Invalid parameter');
     expect(issue.title).toMatch(/rejected/i);
+
+    const scam = explainTemplateIssue('SCAM');
+    expect(scam.detail).not.toMatch(/scam/i);
+    expect(scam.title).toBe('Policy review');
     expect(issue.detail.toLowerCase()).toMatch(/github|tracking|unique name/);
   });
 

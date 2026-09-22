@@ -17,7 +17,7 @@ interface WhatsAppChannelsPanelProps {
   loading?: boolean;
   connecting: boolean;
   onConnect: () => void;
-  onDisconnect: (id: string, phone: string) => void;
+  onDisconnect: (number: WhatsappNumberOption) => void;
   disconnectingId: string | null;
   canEdit: boolean;
   canConnect?: boolean;
@@ -177,7 +177,7 @@ export default function WhatsAppChannelsPanel({
                   variant="danger"
                   size="sm"
                   icon={<LogOut className="h-3.5 w-3.5" />}
-                  onClick={() => onDisconnect(number.id, number.phoneNumber)}
+                  onClick={() => onDisconnect(number)}
                   loading={disconnectingId === number.id}
                   disabled={disconnectingId !== null || !canEdit}
                   className="shrink-0"

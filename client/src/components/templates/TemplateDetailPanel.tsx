@@ -57,7 +57,7 @@ export default function TemplateDetailPanel({
   const parts = getTemplateParts(template);
   const quality = getQualityLabel(template.quality_score?.score);
   const rejectedReason = getTemplateRejectedReason(template.rejected_reason);
-  const rejectionGuide = getTemplateRejectionGuide(rejectedReason);
+  const rejectionGuide = getTemplateRejectionGuide(template.rejected_reason);
   const statusHelp = getTemplateStatusHelp(template.status);
   const needsMedia = templateNeedsHeaderMedia(template);
 
@@ -164,22 +164,21 @@ export default function TemplateDetailPanel({
         </AppAlert>
       )}
 
-      {rejectedReason && (
-        <AppAlert variant="error">
-          <p className="font-semibold">Rejected by WhatsApp</p>
-          <p className="mt-1 text-[12px]">{rejectedReason}</p>
-        </AppAlert>
-      )}
-
-      {rejectionGuide && (
+      {(rejectedReason || rejectionGuide) && (
         <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-          <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">{rejectionGuide.title}</p>
-          <p className="mt-1 text-[12px] text-amber-800 dark:text-amber-300">{rejectionGuide.summary}</p>
-          <ul className="mt-3 list-disc space-y-1.5 pl-4 text-[12px] text-amber-900 dark:text-amber-200">
-            {rejectionGuide.fixes.map((fix) => (
-              <li key={fix}>{fix}</li>
-            ))}
-          </ul>
+          <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">
+            {rejectionGuide?.title ?? 'Needs changes before sending'}
+          </p>
+          <p className="mt-1 text-[12px] text-amber-800 dark:text-amber-300">
+            {rejectionGuide?.summary ?? rejectedReason}
+          </p>
+          {rejectionGuide?.fixes?.length ? (
+            <ul className="mt-3 list-disc space-y-1.5 pl-4 text-[12px] text-amber-900 dark:text-amber-200">
+              {rejectionGuide.fixes.map((fix) => (
+                <li key={fix}>{fix}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       )}
 

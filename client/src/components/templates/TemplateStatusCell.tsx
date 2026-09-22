@@ -1,4 +1,4 @@
-import { TEMPLATE_REVIEW_ETA } from '../../utils/templateRejectionGuide';
+import { TEMPLATE_REVIEW_ETA, formatTemplateStatusForCustomer } from '../../utils/templateRejectionGuide';
 import { getQualityLabel } from '../../utils/templateUtils';
 
 const statusTextClass: Record<string, string> = {
@@ -45,7 +45,7 @@ export default function TemplateStatusCell({
         <span
           className={`text-[12px] font-extrabold uppercase tracking-[0.04em] ${statusTextClass[upper] ?? 'text-theme-fg'}`}
         >
-          {upper}
+          {formatTemplateStatusForCustomer(upper)}
         </span>
       ) : (
         <span className="text-[13px] text-theme-muted">—</span>

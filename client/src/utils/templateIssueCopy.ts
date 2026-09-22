@@ -198,6 +198,12 @@ const KNOWN_ISSUES: Array<{ match: RegExp; issue: FriendlyIssue }> = [
 
 const TECHNICAL_NOISE = /#\d{3,}|error code|oauth|graph\.facebook|invalid parameter|status code|e\d{4}/i;
 
+import {
+  formatCustomerTemplateRejectionBrief,
+  formatCustomerTemplateRejectionTitle,
+  getTemplateRejectionGuide,
+} from './templateRejectionGuide';
+
 /** Turn a raw wizard / API message into something a shop owner can act on. */
 export function explainTemplateIssue(message: string): FriendlyIssue {
   const trimmed = message.trim().replace(/^(body|header|footer|buttons)(\.\d+)?[:\s]+/i, '');
@@ -224,14 +230,24 @@ export function explainTemplateIssue(message: string): FriendlyIssue {
     };
   }
   if (/^Meta rejected this template:/i.test(message.trim()) && inner) {
+    const guide = getTemplateRejectionGuide(inner);
     return {
-      title: 'WhatsApp rejected this template',
-      detail: inner,
-      nextStep: 'Fix that item on this Review screen, then submit once. Do not keep resubmitting the same copy.',
+      title: guide?.title ?? formatCustomerTemplateRejectionTitle(inner),
+      detail: formatCustomerTemplateRejectionBrief(inner),
+      nextStep:
+        guide?.fixes[0] ??
+        'Fix the item on this Review screen, then submit once. Do not keep resubmitting the same copy.',
+    };
+  }
+  if (/^\s*scam\s*$/i.test(trimmed) || /\bscam\b/i.test(trimmed)) {
+    return {
+      title: formatCustomerTemplateRejectionTitle(trimmed),
+      detail: formatCustomerTemplateRejectionBrief(trimmed),
+      nextStep: 'Edit the message for honest, clear wording or delete this template and start from the library.',
     };
   }
   return {
-    title: trimmed,
-    detail: '',
+    title: trimmed.length > 60 ? 'Check this field' : trimmed,
+    detail: trimmed.length > 60 ? trimmed : '',
   };
 }

@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
+import { whatsappDisconnectDialogCopy } from '../utils/whatsappDisconnectCopy';
 import { useWhatsAppConnectPicker } from '../hooks/useWhatsAppConnectPicker';
 
 // Subcomponents
@@ -200,7 +201,12 @@ export default function SettingsPage() {
   };
 
   // WhatsApp State
-  const [disconnectTarget, setDisconnectTarget] = useState<{ id: string; phone: string } | null>(null);
+  const [disconnectTarget, setDisconnectTarget] = useState<{
+    id: string;
+    phone: string;
+    isOnBizApp?: boolean;
+    coexistenceStatus?: string | null;
+  } | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
 
@@ -310,6 +316,11 @@ export default function SettingsPage() {
 
   const syncActive = Boolean(webhookStatus?.subscribed);
 
+  const disconnectDialogCopy = useMemo(
+    () => whatsappDisconnectDialogCopy(disconnectTarget),
+    [disconnectTarget]
+  );
+
   const heroStats = useMemo(
     () => [
       {
@@ -402,7 +413,14 @@ export default function SettingsPage() {
                         loading={!numbersResolved || numbersLoading}
                         connecting={connecting}
                         onConnect={handleConnect}
-                        onDisconnect={(id, phone) => setDisconnectTarget({ id, phone })}
+                        onDisconnect={(number) =>
+                          setDisconnectTarget({
+                            id: number.id,
+                            phone: number.phoneNumber,
+                            isOnBizApp: number.isOnBizApp,
+                            coexistenceStatus: number.coexistenceStatus,
+                          })
+                        }
                         disconnectingId={disconnectingId}
                         canEdit={isOwnerOrAdmin}
                         canConnect={canConnectWhatsApp}
@@ -446,12 +464,9 @@ export default function SettingsPage() {
         onClose={() => setDisconnectTarget(null)}
         onConfirm={confirmDisconnect}
         title="Disconnect WhatsApp number?"
-        description="You're about to disconnect this phone line from your workspace."
+        description={disconnectDialogCopy.description}
         highlight={disconnectTarget ? formatPhoneDisplay(disconnectTarget.phone) : undefined}
-        details={[
-          'Incoming messages on this number will stop until reconnected',
-          'All existing chats, contacts, and customer history remain saved',
-        ]}
+        details={disconnectDialogCopy.details}
         confirmLabel="Disconnect number"
         cancelLabel="Keep connected"
         variant="danger"

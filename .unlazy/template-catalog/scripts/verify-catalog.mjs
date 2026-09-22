@@ -82,20 +82,30 @@ if (mode === 'unit') {
 }
 
 const src = read('server/src/modules/templates/catalog.ts');
-const ids = [...src.matchAll(/id:\s*'([a-z0-9_]+)'/g)].map((m) => m[1]);
-const unique = new Set(ids);
-if (unique.size < 30) {
-  throw new Error(`expected at least 30 unique catalog ids, found ${unique.size}`);
+const curatedIds = [
+  'hello_reply',
+  'hello_welcome',
+  'party_invitation',
+  'marketing_update',
+  'modern_status',
+];
+for (const id of curatedIds) {
+  if (!src.includes(`id: '${id}'`)) {
+    throw new Error(`expected curated catalog id ${id}`);
+  }
 }
-const filterCount = (src.match(/id:\s*'[a-z_]+',\s*label:/g) || []).length;
-if (filterCount < 20) {
-  throw new Error(`expected at least 20 catalog filters, found ${filterCount}`);
+const catalogSection = src.split('export const SAMYOJ_CATALOG')[1]?.split('];')[0] || '';
+const templateCount = (catalogSection.match(/^\s*id:/gm) || []).length;
+if (templateCount !== 5) {
+  throw new Error(`expected exactly 5 catalog templates, found ${templateCount}`);
 }
-if (!src.includes("bodyHi:")) {
-  throw new Error('catalog entries must include Hindi bodies');
+const filterCount = (src.match(/export const CATALOG_FILTERS[\s\S]*?] as const;/)[0]?.match(/id:\s*'/g) || [])
+  .length;
+if (filterCount !== 5) {
+  throw new Error(`expected 5 catalog filters, found ${filterCount}`);
 }
-const hiCount = (src.match(/bodyHi:/g) || []).length;
-if (hiCount < 30) {
+const hiCount = (catalogSection.match(/bodyHi:/g) || []).length;
+if (hiCount !== 5) {
   throw new Error(`expected Hindi body on each template, found ${hiCount}`);
 }
-console.log(`catalog verification passed (${unique.size} templates, ${filterCount} filters)`);
+console.log(`catalog verification passed (${templateCount} templates, ${filterCount} filters)`);

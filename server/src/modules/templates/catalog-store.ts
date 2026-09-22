@@ -12,7 +12,7 @@ import {
 import { templateTextHasEdgeParams } from './types';
 
 export const CATALOG_HONESTY =
-  'These drafts live in Samyoj. Submitting still sends this copy to Meta for YOUR WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on your number.';
+  'Five curated Samyoj drafts (not Meta’s library). Submitting sends this copy to Meta for YOUR number. Use utility hello/status for service chat; marketing only with opt-in. Samyoj cannot pre-approve templates on your number.';
 
 const CATEGORIES = ['UTILITY', 'MARKETING', 'AUTHENTICATION'] as const;
 
@@ -112,6 +112,47 @@ export async function seedPlatformLibraryIfEmpty(): Promise<{ seeded: number }> 
   return { seeded };
 }
 
+const CURATED_SLUGS = SAMYOJ_CATALOG.map((entry) => entry.id);
+
+function updateFromCatalogEntry(
+  entry: SamyojCatalogEntry,
+  index: number
+): Prisma.PlatformLibraryTemplateUpdateInput {
+  return {
+    title: entry.title,
+    category: entry.category,
+    tags: entry.tags,
+    icon: entry.icon,
+    header: entry.header ?? null,
+    mediaFormat: entry.mediaFormat ?? null,
+    body: entry.body,
+    bodyHi: entry.bodyHi,
+    footer: entry.footer ?? null,
+    footerHi: entry.footerHi ?? null,
+    buttons: (entry.buttons || []) as Prisma.InputJsonValue,
+    bodyExamples: entry.bodyExamples as Prisma.InputJsonValue,
+    copy: entry.copy,
+    published: true,
+    sortOrder: index,
+  };
+}
+
+/** Keep tenant library aligned with code — only the five curated slugs stay published. */
+async function syncCuratedLibraryCatalog() {
+  for (let index = 0; index < SAMYOJ_CATALOG.length; index++) {
+    const entry = SAMYOJ_CATALOG[index]!;
+    await prisma.platformLibraryTemplate.upsert({
+      where: { slug: entry.id },
+      create: seedRow(entry, index),
+      update: updateFromCatalogEntry(entry, index),
+    });
+  }
+  await prisma.platformLibraryTemplate.updateMany({
+    where: { slug: { notIn: CURATED_SLUGS } },
+    data: { published: false },
+  });
+}
+
 async function patchSeededLibraryEdgeParams() {
   const bySlug = new Map(SAMYOJ_CATALOG.map((entry) => [entry.id, entry]));
   const rows = await prisma.platformLibraryTemplate.findMany({
@@ -139,6 +180,7 @@ async function patchSeededLibraryEdgeParams() {
 
 export async function listPublishedLibraryTemplates() {
   await seedPlatformLibraryIfEmpty();
+  await syncCuratedLibraryCatalog();
   await patchSeededLibraryEdgeParams();
   const rows = await prisma.platformLibraryTemplate.findMany({
     where: { published: true },
@@ -182,6 +224,7 @@ export function unusableTemplateButtonUrl(raw: string): string | null {
 
 export async function getPublishedLibraryTemplate(slug: string) {
   await seedPlatformLibraryIfEmpty();
+  await syncCuratedLibraryCatalog();
   await patchSeededLibraryEdgeParams();
   const row = await prisma.platformLibraryTemplate.findFirst({
     where: { slug, published: true },

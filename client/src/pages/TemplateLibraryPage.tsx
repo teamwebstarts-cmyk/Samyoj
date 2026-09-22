@@ -48,7 +48,7 @@ import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 const DEFAULT_HONESTY =
-  'These drafts live in Samyoj. Submitting still sends this copy to Meta for YOUR WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on your number.';
+  'Five curated Samyoj drafts (not Meta’s library). Submitting sends this copy to Meta for YOUR number. Use utility hello/status for service chat; marketing only with opt-in. Samyoj cannot pre-approve templates on your number.';
 
 function asCatalogItems(raw: unknown): CatalogListItem[] {
   if (!Array.isArray(raw)) return [];

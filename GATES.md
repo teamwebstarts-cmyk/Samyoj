@@ -1,11 +1,20 @@
-# Gates: stop WhatsApp busy stampede
+# Gates: fresh CRM data and VPS deploy
 
-OWNS: server/src/modules/whatsapp/context.ts, server/src/modules/whatsapp/context-sync.test.ts, server/src/modules/whatsapp/routes.ts, server/src/modules/whatsapp/meta.service.ts, server/src/modules/templates/routes.ts, server/src/modules/templates/cache.ts, server/src/modules/billing/usage.service.ts, GATES.md
+OWNS: GATES.md
 
-Scope: Inbox template load and the busy banner stop calling Meta on every read when the number is already stored, and a rate limit serves the last template list instead of a 400.
+Scope: Empty the local and VPS app databases, deploy origin/v8-esv4, and prove the API is healthy with no old WhatsApp numbers.
 
-- [x] G1: stored WhatsApp ids skip a live Meta sync
-  CHECK: npx vitest run src/modules/whatsapp/context-sync.test.ts --reporter=dot
-  EXPECT: Test Files  1 passed
-  CWD: server
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj/server; path=609b55c48eed/43 entries; output=- ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json | Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+- [ ] G1: Local database has no WhatsApp numbers after the wipe
+  CHECK: node -e "const {execSync}=require('child_process'); const n=execSync(\"docker exec samyoj-postgres-1 psql -U postgres -d whatsapp_platform -tAc \\\"SELECT count(*) FROM whatsapp_numbers\\\"\").toString().trim(); if(n!=='0'){console.error('numbers='+n); process.exit(1)} console.log('local numbers empty')"
+  EXPECT: local numbers empty
+  EVIDENCE: pending
+
+- [ ] G2: VPS database has no WhatsApp numbers after the wipe
+  CHECK: ssh -i /home/codespace/.ssh/google_compute_engine -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new codespace@34.47.220.76 "n=$(sudo -u postgres psql -d whatsapp_platform -tAc 'SELECT count(*) FROM whatsapp_numbers'); test \"$n\" = 0 && echo vps-numbers-empty"
+  EXPECT: vps-numbers-empty
+  EVIDENCE: pending
+
+- [ ] G3: VPS is on the pushed v8-esv4 commit and the API health check passes
+  CHECK: ssh -i /home/codespace/.ssh/google_compute_engine -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new codespace@34.47.220.76 "cd /home/samyoj/Samyoj && test $(git rev-parse --short HEAD) = 5a837b0 && curl -fsS --max-time 10 http://127.0.0.1:8000/health | grep -q '\"status\":\"ok\"' && echo vps-deploy-healthy"
+  EXPECT: vps-deploy-healthy
+  EVIDENCE: pending

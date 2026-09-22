@@ -436,6 +436,7 @@ export const flowApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
   alerts: () => api.get('/settings/alerts'),
+  clearTemplateRejectionAlerts: () => api.delete('/settings/alerts/template-rejections'),
   updateBusinessHours: (data: {
     startHour: number;
     endHour: number;

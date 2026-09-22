@@ -69,6 +69,19 @@ export function getTemplateRejectionGuide(reason?: string | null): TemplateRejec
     };
   }
 
+  if (matchAny(lower, [/^\s*scam\s*$/i, /\bscam\b/, /fraud/, /misleading/, /phishing/, /deceptive/])) {
+    return {
+      title: 'Policy review',
+      summary:
+        'WhatsApp flagged this template during review. Use clear, honest wording or delete it and submit a new draft.',
+      fixes: [
+        'Avoid urgency tricks, fake rewards, or messages that look like another brand.',
+        'Utility templates should be transactional only — move promotions to Marketing with opt-out.',
+        'Delete this template in the list below, then pick a starter from the Samyoj library.',
+      ],
+    };
+  }
+
   if (matchAny(lower, [/abusive/, /threat/, /hate/, /violence/, /adult/, /sexual/])) {
     return {
       title: 'Prohibited content',
@@ -127,6 +140,17 @@ export function getTemplateRejectionGuide(reason?: string | null): TemplateRejec
     };
   }
 
+  if (trimmed.length <= 48 && !/[.!?]/.test(trimmed)) {
+    return {
+      title: 'Review required',
+      summary: 'WhatsApp asked for changes before this template can be used.',
+      fixes: [
+        'Open the template, read the notes in the detail panel, and edit & resubmit.',
+        'If the name is stuck, delete the old version or use a new name like order_update_2.',
+      ],
+    };
+  }
+
   return {
     title: 'Review required',
     summary: trimmed,
@@ -139,6 +163,30 @@ export function getTemplateRejectionGuide(reason?: string | null): TemplateRejec
 }
 
 /** Meta does not publish a hard deadline. Typical Cloud API review window. */
+/** Customer-safe one-liner — never show raw labels like SCAM in the product UI. */
+export function formatCustomerTemplateRejectionBrief(reason?: string | null): string {
+  const guide = getTemplateRejectionGuide(reason);
+  if (guide) return guide.summary;
+  return 'WhatsApp asked for changes before this template can be used.';
+}
+
+export function formatCustomerTemplateRejectionTitle(reason?: string | null): string {
+  const guide = getTemplateRejectionGuide(reason);
+  return guide?.title ?? 'Needs changes';
+}
+
+/** User-facing status label (filters/API values stay uppercase). */
+export function formatTemplateStatusForCustomer(status?: string): string {
+  const upper = (status || '').toUpperCase();
+  if (upper === 'REJECTED') return 'Needs changes';
+  if (upper === 'PENDING') return 'In review';
+  if (upper === 'APPROVED') return 'Approved';
+  if (upper === 'PAUSED') return 'Paused';
+  if (upper === 'DISABLED') return 'Disabled';
+  if (upper === 'FLAGGED') return 'Flagged';
+  return upper || '—';
+}
+
 export const TEMPLATE_REVIEW_ETA = {
   short: 'Usually within 24h',
   typical: 'Usually a few minutes to 24 hours',
