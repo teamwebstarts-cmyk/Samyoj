@@ -67,7 +67,7 @@ export const LIBRARY_CATEGORIES = [
 ] as const;
 
 export const libraryWizardStages = [
-  { id: 'browse', label: 'Browse', description: 'Pick a Samyoj draft' },
+  { id: 'browse', label: 'Browse', description: 'Pick a Meta template' },
   { id: 'review', label: 'Review', description: 'Name, language, buttons' },
   { id: 'submit', label: 'Submit', description: 'Send to Meta for this number' },
 ] as const;
@@ -360,7 +360,13 @@ export type CatalogTemplate = {
   languages?: readonly string[];
 };
 
-export type CatalogListItem = CatalogTemplate & { source: 'catalog'; name: string };
+export type CatalogListItem = CatalogTemplate & {
+  source: 'catalog' | 'meta' | 'ready';
+  name: string;
+  libraryTemplateName?: string;
+  submitMode?: 'create' | 'clone' | 'ready';
+  ready?: boolean;
+};
 
 export function formFromCatalogEntry(entry: CatalogTemplate, language = 'en_US'): TemplateFormState {
   const hindi = language === 'hi_IN' || language === 'hi';

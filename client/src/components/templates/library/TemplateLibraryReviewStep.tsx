@@ -38,8 +38,8 @@ interface TemplateLibraryReviewStepProps {
 function reviewInfoContent(): ReactNode {
   return (
     <>
-      This copy is saved in Samyoj. Submit sends it to Meta for <span className="font-semibold">this WhatsApp number</span>.
-      Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on your number.
+      This copy comes from Meta’s Template Library. Submit clones it onto <span className="font-semibold">this WhatsApp number</span>.
+      Unmodified utility and authentication clones are usually faster. Samyoj cannot pre-approve Meta on your number.
     </>
   );
 }

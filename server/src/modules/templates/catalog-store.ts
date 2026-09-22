@@ -3,16 +3,11 @@ import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import { writePlatformAudit } from '../platform/audit';
 import {
-  CATALOG_FILTERS,
-  SAMYOJ_CATALOG,
   starterCreatePayload,
   type CatalogButton,
   type SamyojCatalogEntry,
 } from './catalog';
 import { templateTextHasEdgeParams } from './types';
-
-export const CATALOG_HONESTY =
-  'Five curated Samyoj drafts (not Meta’s library). Submitting sends this copy to Meta for YOUR number. Use utility hello/status for service chat; marketing only with opt-in. Samyoj cannot pre-approve templates on your number.';
 
 const CATEGORIES = ['UTILITY', 'MARKETING', 'AUTHENTICATION'] as const;
 
@@ -66,131 +61,28 @@ export function toTenantDto(row: PlatformLibraryTemplate) {
   };
 }
 
-function seedRow(entry: SamyojCatalogEntry, index: number): Prisma.PlatformLibraryTemplateCreateManyInput {
-  return {
-    slug: entry.id,
-    title: entry.title,
-    category: entry.category,
-    tags: entry.tags,
-    icon: entry.icon,
-    header: entry.header ?? null,
-    mediaFormat: entry.mediaFormat ?? null,
-    body: entry.body,
-    bodyHi: entry.bodyHi,
-    footer: entry.footer ?? null,
-    footerHi: entry.footerHi ?? null,
-    buttons: (entry.buttons || []) as Prisma.InputJsonValue,
-    bodyExamples: entry.bodyExamples as Prisma.InputJsonValue,
-    copy: entry.copy,
-    published: true,
-    sortOrder: index,
-  };
-}
-
 const SEED_SETTING_KEY = 'library_catalog_seeded';
 
 export async function seedPlatformLibraryIfEmpty(): Promise<{ seeded: number }> {
   const flag = await prisma.platformSetting.findUnique({ where: { key: SEED_SETTING_KEY } });
   if (flag) return { seeded: 0 };
   const count = await prisma.platformLibraryTemplate.count();
-  let seeded = 0;
-  if (count === 0) {
-    await prisma.platformLibraryTemplate.createMany({
-      data: SAMYOJ_CATALOG.map((entry, index) => seedRow(entry, index)),
-      skipDuplicates: true,
-    });
-    seeded = SAMYOJ_CATALOG.length;
-  }
   await prisma.platformSetting.upsert({
     where: { key: SEED_SETTING_KEY },
     create: {
       key: SEED_SETTING_KEY,
-      value: { at: new Date().toISOString(), count: seeded || count },
+      value: { at: new Date().toISOString(), count },
     },
     update: { value: { at: new Date().toISOString() } },
   });
-  return { seeded };
+  return { seeded: 0 };
 }
 
-const CURATED_SLUGS = SAMYOJ_CATALOG.map((entry) => entry.id);
-
-function updateFromCatalogEntry(
-  entry: SamyojCatalogEntry,
-  index: number
-): Prisma.PlatformLibraryTemplateUpdateInput {
-  return {
-    title: entry.title,
-    category: entry.category,
-    tags: entry.tags,
-    icon: entry.icon,
-    header: entry.header ?? null,
-    mediaFormat: entry.mediaFormat ?? null,
-    body: entry.body,
-    bodyHi: entry.bodyHi,
-    footer: entry.footer ?? null,
-    footerHi: entry.footerHi ?? null,
-    buttons: (entry.buttons || []) as Prisma.InputJsonValue,
-    bodyExamples: entry.bodyExamples as Prisma.InputJsonValue,
-    copy: entry.copy,
-    published: true,
-    sortOrder: index,
-  };
-}
-
-/** Keep tenant library aligned with code — only the five curated slugs stay published. */
-async function syncCuratedLibraryCatalog() {
-  for (let index = 0; index < SAMYOJ_CATALOG.length; index++) {
-    const entry = SAMYOJ_CATALOG[index]!;
-    await prisma.platformLibraryTemplate.upsert({
-      where: { slug: entry.id },
-      create: seedRow(entry, index),
-      update: updateFromCatalogEntry(entry, index),
-    });
-  }
+/** Hide Samyoj-authored drafts from tenants. Never deletes Meta WABA templates. */
+export async function hideSamyojHostedCatalogDrafts() {
   await prisma.platformLibraryTemplate.updateMany({
-    where: { slug: { notIn: CURATED_SLUGS } },
     data: { published: false },
   });
-}
-
-async function patchSeededLibraryEdgeParams() {
-  const bySlug = new Map(SAMYOJ_CATALOG.map((entry) => [entry.id, entry]));
-  const rows = await prisma.platformLibraryTemplate.findMany({
-    where: { slug: { in: [...bySlug.keys()] } },
-    select: { id: true, slug: true, body: true, bodyHi: true },
-  });
-  for (const row of rows) {
-    const entry = bySlug.get(row.slug);
-    if (!entry) continue;
-    const nextBody =
-      templateTextHasEdgeParams(row.body) && !templateTextHasEdgeParams(entry.body)
-        ? entry.body
-        : row.body;
-    const nextBodyHi =
-      templateTextHasEdgeParams(row.bodyHi) && !templateTextHasEdgeParams(entry.bodyHi)
-        ? entry.bodyHi
-        : row.bodyHi;
-    if (nextBody === row.body && nextBodyHi === row.bodyHi) continue;
-    await prisma.platformLibraryTemplate.update({
-      where: { id: row.id },
-      data: { body: nextBody, bodyHi: nextBodyHi },
-    });
-  }
-}
-
-export async function listPublishedLibraryTemplates() {
-  await seedPlatformLibraryIfEmpty();
-  await syncCuratedLibraryCatalog();
-  await patchSeededLibraryEdgeParams();
-  const rows = await prisma.platformLibraryTemplate.findMany({
-    where: { published: true },
-    orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
-  });
-  return {
-    templates: rows.map(toTenantDto),
-    filters: CATALOG_FILTERS,
-    honesty: CATALOG_HONESTY,
-  };
 }
 
 export function unusableTemplateButtonUrl(raw: string): string | null {
@@ -223,9 +115,7 @@ export function unusableTemplateButtonUrl(raw: string): string | null {
 }
 
 export async function getPublishedLibraryTemplate(slug: string) {
-  await seedPlatformLibraryIfEmpty();
-  await syncCuratedLibraryCatalog();
-  await patchSeededLibraryEdgeParams();
+  await hideSamyojHostedCatalogDrafts();
   const row = await prisma.platformLibraryTemplate.findFirst({
     where: { slug, published: true },
   });
@@ -259,7 +149,6 @@ export function buildCatalogSubmitPayload(
 
 export async function listAdminLibraryTemplates() {
   await seedPlatformLibraryIfEmpty();
-  await patchSeededLibraryEdgeParams();
   return prisma.platformLibraryTemplate.findMany({
     orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
   });

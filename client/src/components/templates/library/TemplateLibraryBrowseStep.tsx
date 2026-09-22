@@ -110,7 +110,7 @@ export default function TemplateLibraryBrowseStep({
       <div className="template-wizard-card p-3 sm:p-3.5">
         <div className="flex items-center gap-1.5">
           <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
-            Samyoj template library
+            Meta template library
           </p>
           <InfoTip
             label="How library templates work"
@@ -191,7 +191,7 @@ export default function TemplateLibraryBrowseStep({
         ) : loadError && items.length === 0 ? (
           <div className="px-3 py-8 text-center sm:px-3.5">
             <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">
-              Couldn’t load the Samyoj library
+              Couldn’t load Meta’s template library
             </p>
             <p className="mt-1 text-[12px] font-medium text-slate-500">Refresh and try again.</p>
             {onRetry ? (
@@ -208,7 +208,7 @@ export default function TemplateLibraryBrowseStep({
           <div
             className="grid max-h-[min(62vh,640px)] gap-2 overflow-y-auto p-3 sm:grid-cols-2 sm:p-3.5"
             role="list"
-            aria-label="Samyoj template library"
+            aria-label="Meta template library"
           >
             {items.map((entry) => {
               const key = entry.id;
@@ -241,6 +241,15 @@ export default function TemplateLibraryBrowseStep({
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1">
+                      {entry.ready ? (
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          Ready now
+                        </span>
+                      ) : entry.source === 'meta' ? (
+                        <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                          Meta library
+                        </span>
+                      ) : null}
                       <StatusBadge status={entry.category} />
                       {entry.mediaFormat ? (
                         <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">

@@ -34,6 +34,7 @@ import {
   statusFromTemplateCreate,
   uniqueLibraryTemplateName,
   usableLibraryButtonUrl,
+  buildLibraryButtonInputs,
   type CatalogListItem,
   type CatalogTemplate,
 } from '../utils/templateLibrary';
@@ -48,13 +49,32 @@ import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 const DEFAULT_HONESTY =
-  'Five curated Samyoj drafts (not Meta’s library). Submitting sends this copy to Meta for YOUR number. Use utility hello/status for service chat; marketing only with opt-in. Samyoj cannot pre-approve templates on your number.';
+  'These are Meta’s official Template Library skeletons (Utility and Authentication) plus hello_world if Meta already added it on this number. Cloning still creates the template on YOUR WhatsApp number. Unmodified library clones are usually faster. Samyoj cannot pre-approve Meta on your number.';
 
 function asCatalogItems(raw: unknown): CatalogListItem[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((row): row is CatalogTemplate => Boolean(row && typeof row === 'object' && 'id' in row && 'body' in row))
-    .map((row) => ({ ...row, source: 'catalog' as const, name: row.id, tags: row.tags || [] }));
+    .map((row) => {
+      const rec = row as CatalogTemplate & {
+        source?: CatalogListItem['source'];
+        libraryTemplateName?: string;
+        submitMode?: CatalogListItem['submitMode'];
+        ready?: boolean;
+        name?: string;
+        tags?: string[];
+      };
+      const source = rec.source === 'ready' || rec.source === 'meta' ? rec.source : 'catalog';
+      return {
+        ...rec,
+        source,
+        name: rec.name || rec.id,
+        tags: rec.tags || [],
+        libraryTemplateName: rec.libraryTemplateName,
+        submitMode: rec.submitMode || (source === 'ready' ? 'ready' : source === 'meta' ? 'clone' : 'create'),
+        ready: Boolean(rec.ready),
+      };
+    });
 }
 
 export default function TemplateLibraryPage() {
@@ -109,7 +129,7 @@ export default function TemplateLibraryPage() {
       })
       .catch((err: unknown) => {
         if (requestNumberId !== activeNumberIdRef.current) return;
-        const msg = getErrorMessage(err, 'Couldn’t load the Samyoj library. Refresh and try again.');
+        const msg = getErrorMessage(err, 'Couldn’t load Meta’s template library. Refresh and try again.');
         toastError(msg);
         setCatalogError(msg);
       })
@@ -280,6 +300,12 @@ export default function TemplateLibraryPage() {
 
   const validateReview = (): string | null => {
     if (!selected) return 'Select a template first.';
+    if (selected.submitMode === 'ready' || selected.source === 'ready') {
+      if (!selected.ready) {
+        return 'hello_world is not on this number yet. Pick Hello — account created from Meta’s library.';
+      }
+      return null;
+    }
     if (!/^[a-z0-9_]+$/.test(createName.trim())) {
       return 'Use a simple name like order_confirmed — only small letters, numbers, and _';
     }
@@ -309,7 +335,56 @@ export default function TemplateLibraryPage() {
         templateGateMessage || 'Template library additions are not included on your current plan.',
       );
     }
+    if (item.submitMode === 'ready' || item.source === 'ready') {
+      if (!item.ready) {
+        throw new Error(
+          'hello_world is Meta’s sample. It is not on this number yet. Pick Hello — account created from Meta’s library instead.',
+        );
+      }
+      setSubmitResult({
+        submissionId: buildSubmissionId(),
+        submittedAt: new Date().toISOString(),
+        templateName: item.name || 'hello_world',
+      });
+      setSubmittedStatus('APPROVED');
+      setActiveStep(2);
+      setMaxReachableStep(2);
+      toastSuccess('This Meta sample is already on your number. Send it from Templates.');
+      return;
+    }
     const name = uniqueLibraryTemplateName(nameOverride || createName || item.id, existingNames);
+    if (item.submitMode === 'clone' || item.source === 'meta') {
+      if (!item.libraryTemplateName) {
+        throw new Error('This Meta library template is not available right now. Try again in a minute.');
+      }
+      const inputs = buildLibraryButtonInputs(item, buttonUrl, buttonPhone);
+      const { data } = await templateApi.createFromLibrary({
+        name,
+        language,
+        libraryTemplateName: item.libraryTemplateName,
+        category: item.category === 'AUTHENTICATION' ? 'AUTHENTICATION' : 'UTILITY',
+        ...(inputs.length ? { libraryTemplateButtonInputs: inputs } : {}),
+      });
+      const status = statusFromTemplateCreate(data);
+      persistTemplateVariableMeta(name, form.variableMeta);
+      setAccountNames((prev) => (prev.includes(name) ? prev : [name, ...prev]));
+      invalidateFlowReferenceData();
+      invalidateApprovedTemplatesCache();
+      setSubmitResult({
+        submissionId: buildSubmissionId(),
+        submittedAt: new Date().toISOString(),
+        templateName: name,
+      });
+      setSubmittedStatus(status === 'APPROVED' ? 'APPROVED' : 'PENDING');
+      setActiveStep(2);
+      setMaxReachableStep(2);
+      toastSuccess(
+        status === 'APPROVED'
+          ? 'Template added and ready to use in campaigns and inbox.'
+          : 'Cloned from Meta’s library onto this number. Utility and authentication are usually faster.',
+      );
+      return;
+    }
     const { data } = await templateApi.submitCatalog(item.id, {
       name,
       language,
@@ -414,9 +489,9 @@ export default function TemplateLibraryPage() {
   const stepSubtitle = useMemo(
     () =>
       activeStep === 0
-        ? 'Pick a Samyoj draft, then submit it to this WhatsApp number'
+        ? 'Pick a Meta template, then add it to this WhatsApp number'
         : activeStep === 1
-          ? 'Confirm name, language, and buttons. Meta still reviews this number.'
+          ? 'Confirm name, language, and buttons. Meta still reviews clones on this number.'
           : submittedStatus === 'APPROVED'
             ? 'You can send this from Campaigns and Inbox now'
             : 'WhatsApp is reviewing this template on this number',
@@ -636,7 +711,13 @@ export default function TemplateLibraryPage() {
                 disabled={saving || !canManageTemplates || (activeStep === 0 && !selected)}
                 loading={saving}
               >
-                {activeStep === 0 ? 'Continue' : 'Submit to this number'}
+                {activeStep === 0
+                  ? 'Continue'
+                  : selected?.submitMode === 'ready'
+                    ? selected.ready
+                      ? 'Use this sample'
+                      : 'Need a Meta library hello'
+                    : 'Submit to this number'}
               </AppButton>
             </div>
           </div>

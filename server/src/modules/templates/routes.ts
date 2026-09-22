@@ -21,9 +21,10 @@ import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-me
 import {
   buildCatalogSubmitPayload,
   getPublishedLibraryTemplate,
-  listPublishedLibraryTemplates,
+  hideSamyojHostedCatalogDrafts,
   unusableTemplateButtonUrl,
 } from './catalog-store';
+import { listTenantTemplateLibrary } from './library-tenant';
 import prisma from '../../config/database';
 import { normalizePhoneIdentity } from '../../utils/phone';
 import { emitProductEvent } from '../platform/events';
@@ -144,8 +145,15 @@ router.get(
   '/starters',
   authenticate,
   requireOrg,
-  asyncHandler(async (_req: Request, res: Response) => {
-    sendSuccess(res, await listPublishedLibraryTemplates());
+  asyncHandler(async (req: Request, res: Response) => {
+    await hideSamyojHostedCatalogDrafts();
+    sendSuccess(
+      res,
+      await listTenantTemplateLibrary({
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: req.activeWhatsappNumberId,
+      })
+    );
   })
 );
 

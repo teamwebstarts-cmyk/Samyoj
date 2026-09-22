@@ -28,13 +28,13 @@ if (mode === 'ui') {
     throw new Error('Browse UI still shows Meta source tab');
   }
   if (!/templateApi\s*\.\s*starters/.test(page)) {
-    throw new Error('Library page no longer loads Samyoj catalog');
+    throw new Error('Library page no longer loads the tenant library');
   }
-  if (!/submitCatalog/.test(page)) {
-    throw new Error('Library page does not submit catalog drafts to this number');
+  if (!/createFromLibrary/.test(page)) {
+    throw new Error('Library page does not clone Meta library templates onto this number');
   }
   if (/templateApi\.library\(/.test(page)) {
-    throw new Error('Library page still fetches Meta template library');
+    throw new Error('Library page still dumps the full Meta template library');
   }
   if (!/cannot pre-approve/.test(page) && !/cannot pre-approve/.test(browse)) {
     throw new Error('Library UI missing honesty that Samyoj cannot pre-approve Meta');
@@ -81,31 +81,27 @@ if (mode === 'unit') {
   process.exit(0);
 }
 
-const src = read('server/src/modules/templates/catalog.ts');
+const src = read('server/src/modules/templates/meta-library-pack.ts');
 const curatedIds = [
-  'hello_reply',
-  'hello_welcome',
-  'party_invitation',
-  'marketing_update',
-  'modern_status',
+  'hello_world',
+  'hello_account',
+  'order_confirmation',
+  'shipment_confirmation',
+  'delivery_update',
+  'payment_confirmation',
+  'otp_login',
 ];
 for (const id of curatedIds) {
   if (!src.includes(`id: '${id}'`)) {
-    throw new Error(`expected curated catalog id ${id}`);
+    throw new Error(`expected Meta library pack id ${id}`);
   }
 }
-const catalogSection = src.split('export const SAMYOJ_CATALOG')[1]?.split('];')[0] || '';
-const templateCount = (catalogSection.match(/^\s*id:/gm) || []).length;
-if (templateCount !== 5) {
-  throw new Error(`expected exactly 5 catalog templates, found ${templateCount}`);
+if (/party_invitation|marketing_update|hello_reply/.test(src)) {
+  throw new Error('old Samyoj marketing drafts should not be in the Meta pack');
 }
-const filterCount = (src.match(/export const CATALOG_FILTERS[\s\S]*?] as const;/)[0]?.match(/id:\s*'/g) || [])
-  .length;
-if (filterCount !== 5) {
-  throw new Error(`expected 5 catalog filters, found ${filterCount}`);
+const packSection = src.split('export const META_LIBRARY_PACK')[1]?.split('];')[0] || '';
+const templateCount = (packSection.match(/^\s*id:/gm) || []).length;
+if (templateCount !== 7) {
+  throw new Error(`expected exactly 7 Meta library templates, found ${templateCount}`);
 }
-const hiCount = (catalogSection.match(/bodyHi:/g) || []).length;
-if (hiCount !== 5) {
-  throw new Error(`expected Hindi body on each template, found ${hiCount}`);
-}
-console.log(`catalog verification passed (${templateCount} templates, ${filterCount} filters)`);
+console.log(`catalog verification passed (${templateCount} Meta pack templates)`);

@@ -1,9 +1,8 @@
 export const CATALOG_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'UTILITY', label: 'Utility' },
-  { id: 'MARKETING', label: 'Marketing' },
+  { id: 'AUTHENTICATION', label: 'OTP' },
   { id: 'welcome', label: 'Hello' },
-  { id: 'events', label: 'Events' },
 ] as const;
 
 export type CatalogFilterId = (typeof CATALOG_FILTERS)[number]['id'];
@@ -33,91 +32,13 @@ export type SamyojCatalogEntry = {
   copy: string;
 };
 
-const MARKETING_FOOTER = 'Reply STOP to unsubscribe';
-const MARKETING_FOOTER_HI = 'Unsubscribe ke liye STOP likhein';
-const SAMPLE_URL = 'https://www.yourbrand.com/';
-
-/** Curated Samyoj library — five compliant starters only (not Meta’s pre-approved library). */
-export const SAMYOJ_CATALOG: SamyojCatalogEntry[] = [
-  {
-    id: 'hello_reply',
-    title: 'Hello — we got your message',
-    category: 'UTILITY',
-    tags: ['UTILITY', 'welcome'],
-    icon: 'message',
-    header: 'Thanks for reaching out',
-    body:
-      'Hi {{1}}, thanks for messaging {{2}}. Our team will reply soon. Share any details we should know here.',
-    bodyHi:
-      'Namaste {{1}}, {{2}} ko message karne ke liye dhanyavaad. Hamari team jaldi jawab degi. Zaroori details yahan likh sakte hain.',
-    bodyExamples: ['Rahul', 'Acme Store'],
-    copy: 'Service hello after a customer messages you (utility, not a promo blast).',
-  },
-  {
-    id: 'hello_welcome',
-    title: 'Hello — welcome',
-    category: 'UTILITY',
-    tags: ['UTILITY', 'welcome'],
-    icon: 'user',
-    header: 'Welcome',
-    body: 'Hi {{1}}, welcome to {{2}}. How can we help you today?',
-    bodyHi: 'Namaste {{1}}, {{2}} mein aapka swagat hai. Aaj hum kaise madad kar sakte hain?',
-    buttons: [{ type: 'URL', text: 'Visit website', url: SAMPLE_URL }],
-    bodyExamples: ['Rahul', 'Acme Store'],
-    copy: 'Simple welcome when someone new contacts your business.',
-  },
-  {
-    id: 'party_invitation',
-    title: 'Party or celebration invite',
-    category: 'MARKETING',
-    tags: ['MARKETING', 'events'],
-    icon: 'megaphone',
-    header: 'You are invited',
-    body:
-      'Hi {{1}}, you are invited to {{2}} on {{3}} at {{4}}. Reply YES or NO to RSVP.',
-    bodyHi:
-      'Namaste {{1}}, aap {{3}} ko {{4}} baje {{2}} par invite hain. RSVP ke liye YES ya NO likhein.',
-    footer: MARKETING_FOOTER,
-    footerHi: MARKETING_FOOTER_HI,
-    buttons: [
-      { type: 'QUICK_REPLY', text: 'YES' },
-      { type: 'QUICK_REPLY', text: 'NO' },
-    ],
-    bodyExamples: ['Rahul', 'our annual celebration', 'Saturday 7 Dec', '6:00 PM'],
-    copy: 'Event or party invite — use only with opted-in contacts.',
-  },
-  {
-    id: 'marketing_update',
-    title: 'Business update (marketing)',
-    category: 'MARKETING',
-    tags: ['MARKETING', 'offers'],
-    icon: 'sparkles',
-    header: 'News from us',
-    body:
-      'Hi {{1}}, a quick update from {{2}}: {{3}}. Promotional messages only for subscribers.',
-    bodyHi:
-      'Namaste {{1}}, {{2}} ka update: {{3}}. Yeh message sirf subscribers ke liye hai.',
-    footer: MARKETING_FOOTER,
-    footerHi: MARKETING_FOOTER_HI,
-    buttons: [{ type: 'QUICK_REPLY', text: 'Learn more' }],
-    bodyExamples: ['Rahul', 'Acme Store', 'weekend hours start Friday'],
-    copy: 'Light marketing announcement with opt-out footer — not for cold lists.',
-  },
-  {
-    id: 'modern_status',
-    title: 'Modern status update',
-    category: 'UTILITY',
-    tags: ['UTILITY', 'saas'],
-    icon: 'sparkles',
-    header: 'Quick update',
-    body: 'Hi {{1}}, your request {{2}} is now {{3}}. Reply if anything looks wrong.',
-    bodyHi:
-      'Namaste {{1}}, aapki request {{2}} ab {{3}} hai. Kuch galat lage to reply karein.',
-    buttons: [{ type: 'URL', text: 'View details', url: SAMPLE_URL }],
-    bodyExamples: ['Rahul', 'REQ-1024', 'in progress'],
-    copy: 'Clean transactional status line (utility).',
-  },
-];
+/**
+ * Tenant library no longer publishes Samyoj-authored drafts (the old 30+ pack
+ * plus the 5 custom hellos). Those rows stay in Postgres unpublished so we
+ * never delete a customer’s Meta WABA templates. Live cards come from
+ * meta-library-pack.ts (Meta Template Library + hello_world).
+ */
+export const SAMYOJ_CATALOG: SamyojCatalogEntry[] = [];
 
 function localized(entry: SamyojCatalogEntry, language: string) {
   const hindi = language === 'hi' || language === 'hi_IN';
