@@ -22,6 +22,8 @@ export interface WhatsappConnectOAuthState {
 const CALLBACK_PATHS = new Set([
   '/settings/whatsapp/callback',
   '/settings/whatsapp/callback/popup',
+  '/settings/facebook/callback',
+  '/settings/facebook/callback/popup',
 ]);
 
 function tryParseOrigin(value: string): URL | null {

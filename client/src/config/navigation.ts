@@ -10,6 +10,7 @@ import {
   Send,
   Settings2,
   Sparkles,
+  Target,
   Ticket,
   UsersRound,
   UserPlus,
@@ -34,6 +35,10 @@ export interface NavItem {
 export interface NavSection {
   label: string;
   items: NavItem[];
+  /** 3px platform color mark on the group label */
+  accent?: 'facebook' | 'whatsapp' | 'instagram';
+  /** Hide entire section until a Page is connected (checked at render) */
+  requireFacebookPage?: boolean;
 }
 
 const ADMIN_ROLES: OrgRole[] = ['OWNER', 'ADMIN'];
@@ -63,6 +68,18 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
       { to: '/contacts', icon: UserPlus, label: 'Contacts' },
+    ],
+  },
+  {
+    label: 'Facebook',
+    accent: 'facebook',
+    requireFacebookPage: true,
+    items: [
+      {
+        to: '/contacts?tab=pipeline&source=META_ADS',
+        icon: Target,
+        label: 'Leads',
+      },
     ],
   },
   {
@@ -124,12 +141,15 @@ export function isNavItemVisible(
 
 export function getVisibleNavSections(
   role: OrgRole | null,
-  hiddenModules?: string[]
+  hiddenModules?: string[],
+  options?: { facebookPageConnected?: boolean }
 ): NavSection[] {
   return NAV_SECTIONS.map((section) => ({
     ...section,
     items: section.items.filter((item) => isNavItemVisible(item, role, hiddenModules)),
-  })).filter((section) => section.items.length > 0);
+  }))
+    .filter((section) => section.items.length > 0)
+    .filter((section) => !section.requireFacebookPage || options?.facebookPageConnected);
 }
 
 export function getVisibleMobileMoreItems(

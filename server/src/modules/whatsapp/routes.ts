@@ -44,6 +44,7 @@ import {
   persistAndEnqueueInboundWebhook,
   replayInboundWebhookEnvelope,
 } from './webhook-accept';
+import { dispatchNonMessageWebhookFields } from './webhook-dispatcher';
 import { emitProductEvent } from '../platform/events';
 import { requireActiveCommercial, requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
@@ -889,13 +890,17 @@ router.post('/webhook', async (req: Request, res: Response) => {
   }
 
   const payload = req.body as Record<string, unknown>;
-  if (payload.object !== 'whatsapp_business_account') {
-    log.info('Webhook ignored — not a WhatsApp business account payload', {
+  // Phase 0 router: WABA unchanged; page (leadgen) signature + Channel claim; else ack without inventing an org.
+  if (
+    payload.object !== 'whatsapp_business_account' &&
+    payload.object !== 'page'
+  ) {
+    log.info('Webhook ignored — unsupported Meta object', {
       requestId,
       object: payload.object,
       source: 'webhook',
     });
-    // Always return 200 so Meta doesn't retry non-WABA payloads
+    // Always return 200 so Meta doesn't retry-storm unknown objects
     return res.status(200).send('OK');
   }
 
@@ -916,11 +921,13 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   log.info('Inbound webhook received', {
     requestId,
+    object: payload.object,
     field,
     messageCount,
     callCount,
     statusCount,
     phoneNumberId: metaPhoneNumberId,
+    pageId: payload.object === 'page' ? entry?.id : undefined,
     fbtraceId,
     source: 'webhook',
   });
@@ -970,7 +977,28 @@ router.post('/webhook', async (req: Request, res: Response) => {
     }
   }
 
-  // --- 4. Persist durable envelope, then queue, then ack ---
+  // --- 3b. Page objects: claim when Channel resolves; never enqueue WhatsApp message processor ---
+  if (payload.object === 'page') {
+    try {
+      await dispatchNonMessageWebhookFields(payload);
+      log.info('Page webhook handled', {
+        requestId,
+        field,
+        queueLatencyMs: Date.now() - startTime,
+        source: 'webhook',
+      });
+    } catch (err) {
+      logError(err, {
+        source: 'webhook',
+        action: 'Page webhook claim failed — Meta will retry',
+        requestId,
+      });
+      return res.status(500).send('Webhook persist failed');
+    }
+    return res.status(200).send('EVENT_RECEIVED');
+  }
+
+  // --- 4. Persist durable envelope, then queue, then ack (WhatsApp WABA only) ---
   const totalCount = messageCount + callCount + statusCount;
   try {
     const accepted = await persistAndEnqueueInboundWebhook({ payload, requestId });

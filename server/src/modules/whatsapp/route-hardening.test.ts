@@ -27,15 +27,32 @@ describe('WhatsApp route hardening', () => {
   it('acks Meta only after persistAndEnqueueInboundWebhook', () => {
     const postBlock = routesSrc.slice(routesSrc.indexOf("router.post('/webhook'"));
     const persistIdx = postBlock.indexOf('persistAndEnqueueInboundWebhook');
-    const ackIdx = postBlock.indexOf("EVENT_RECEIVED");
     const hmacIdx = postBlock.indexOf('inboundWebhookSignatureGate');
+    // WABA ack lives after persist; page branch has its own earlier EVENT_RECEIVED.
+    const wabaAckIdx = postBlock.lastIndexOf("EVENT_RECEIVED");
     expect(hmacIdx).toBeGreaterThan(-1);
     expect(persistIdx).toBeGreaterThan(-1);
-    expect(ackIdx).toBeGreaterThan(-1);
+    expect(wabaAckIdx).toBeGreaterThan(-1);
     expect(hmacIdx).toBeLessThan(persistIdx);
-    expect(persistIdx).toBeLessThan(ackIdx);
+    expect(persistIdx).toBeLessThan(wabaAckIdx);
     expect(postBlock).toContain("status(500).send('Webhook persist failed')");
     expect(routesSrc).toContain("'/webhook-replay'");
+  });
+
+  it('routes page objects through signature then Channel claim, not the early WABA drop', () => {
+    const postBlock = routesSrc.slice(routesSrc.indexOf("router.post('/webhook'"));
+    expect(postBlock).toContain("payload.object !== 'page'");
+    expect(postBlock).toContain('dispatchNonMessageWebhookFields');
+    const hmacIdx = postBlock.indexOf('inboundWebhookSignatureGate');
+    // Handler branch (not the log line) comes after signature validation.
+    const pageHandlerIdx = postBlock.indexOf(
+      "// --- 3b. Page objects: claim when Channel resolves; never enqueue WhatsApp message processor ---"
+    );
+    expect(hmacIdx).toBeGreaterThan(-1);
+    expect(pageHandlerIdx).toBeGreaterThan(hmacIdx);
+    expect(postBlock.slice(pageHandlerIdx)).toContain("payload.object === 'page'");
+    expect(postBlock.slice(pageHandlerIdx)).toContain('dispatchNonMessageWebhookFields');
+    expect(postBlock).not.toContain('Webhook ignored — not a WhatsApp business account payload');
   });
 
   it('GET /numbers does not expose tokenExpiresAt', () => {

@@ -64,6 +64,13 @@ enum ContactSource {
   OUTBOUND
 }
 
+/// Meta surface for Channel / ContactPlatformIdentity. WhatsApp rows stay on WhatsappNumber.
+enum ChannelPlatform {
+  WA
+  FB
+  IG
+}
+
 enum MessageDirection {
   INBOUND
   OUTBOUND
@@ -332,6 +339,8 @@ model Organization {
 
   users                          OrganizationUser[]
   whatsappNumbers                WhatsappNumber[]
+  channels                       Channel[]
+  contactPlatformIdentities      ContactPlatformIdentity[]
   contacts                       Contact[]
   conversations                  Conversation[]
   automations                    Automation[]
@@ -1085,18 +1094,59 @@ model Contact {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
-  conversations  Conversation[]
-  calls          Call[]
-  orders         Order[]
-  leads          Lead[]
-  tickets        Ticket[]
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber     WhatsappNumber?            @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  conversations      Conversation[]
+  calls              Call[]
+  orders             Order[]
+  leads              Lead[]
+  tickets            Ticket[]
+  platformIdentities ContactPlatformIdentity[]
 
   @@unique([organizationId, whatsappNumberId, normalizedPhone])
   @@unique([organizationId, id])
   @@index([organizationId, whatsappNumberId])
   @@map("contacts")
+}
+
+/// Org-owned Meta Page / IG / (future) WA asset. Not a WhatsappNumber replacement.
+model Channel {
+  id                String          @id @default(uuid())
+  organizationId    String          @map("organization_id")
+  platform          ChannelPlatform
+  platformAccountId String          @map("platform_account_id")
+  /// Display name from Graph (Page name). Not a secret.
+  name              String?
+  /// AES-GCM ciphertext via MetaWhatsAppService.encryptToken / decryptToken. Null until connect.
+  accessToken       String?         @map("access_token")
+  isActive          Boolean         @default(true) @map("is_active")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@unique([organizationId, platform, platformAccountId])
+  @@index([platform, platformAccountId])
+  @@map("channels")
+}
+
+/// Maps a Contact to Meta-side ids (PSID / IGSID / wa_id). Phase 0 schema only.
+model ContactPlatformIdentity {
+  id             String          @id @default(uuid())
+  organizationId String          @map("organization_id")
+  contactId      String          @map("contact_id")
+  platform       ChannelPlatform
+  externalId     String          @map("external_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, platform, externalId])
+  @@index([organizationId, contactId])
+  @@map("contact_platform_identities")
 }
 
 model Conversation {
@@ -1158,6 +1208,9 @@ model Lead {
   organizationId   String    @map("organization_id")
   contactId        String?   @map("contact_id")
   whatsappNumberId String?   @map("whatsapp_number_id")
+  channelId        String?   @map("channel_id")
+  /// Meta Instant Form leadgen id. Unique per org for idempotent ingest.
+  metaLeadId       String?   @map("meta_lead_id")
   title            String
   stage            LeadStage @default(NEW)
   source           String?
@@ -1169,9 +1222,12 @@ model Lead {
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contact        Contact?        @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
   whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  channel        Channel?        @relation(fields: [channelId], references: [id], onDelete: SetNull)
   assignedAgent  User?           @relation("AssignedLeads", fields: [assignedAgentId], references: [id])
 
+  @@unique([organizationId, metaLeadId])
   @@index([organizationId, stage])
+  @@index([organizationId, source])
   @@map("leads")
 }
 

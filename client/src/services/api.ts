@@ -392,6 +392,47 @@ export const whatsappApi = {
     }>('/whatsapp/payment-hint'),
 };
 
+export const facebookApi = {
+  page: () =>
+    api.get<{
+      data: {
+        connected: boolean;
+        page: { channelId: string; pageId: string; name: string; connectedAt?: string } | null;
+      };
+    }>('/facebook/page'),
+  connectUrl: (redirectUri?: string) =>
+    api.get('/facebook/connect-url', {
+      params: redirectUri ? { redirectUri } : undefined,
+    }),
+  completeConnect: (code: string, state: string) =>
+    api.post<{
+      data: {
+        requiresSelection?: boolean;
+        pendingToken?: string;
+        pages?: Array<{ id: string; name: string }>;
+        status?: string;
+        channelId?: string;
+        pageId?: string;
+        pageName?: string;
+        subscribed?: boolean;
+        subscribeError?: string;
+      };
+    }>('/facebook/connect/callback', { code, state }),
+  selectConnect: (pendingToken: string, pageId: string) =>
+    api.post<{
+      data: {
+        status?: string;
+        channelId?: string;
+        pageId?: string;
+        pageName?: string;
+        subscribed?: boolean;
+        subscribeError?: string;
+      };
+    }>('/facebook/connect/select', { pendingToken, pageId }),
+  disconnect: (channelId?: string) =>
+    api.post('/facebook/disconnect', channelId ? { channelId } : {}),
+};
+
 export const automationApi = {
   list: (params?: Record<string, string>) => api.get('/automations', { params }),
   create: (data: Record<string, unknown>) => api.post('/automations', data),

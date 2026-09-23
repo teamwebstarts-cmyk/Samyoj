@@ -5,12 +5,27 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { loadPermissions, requirePermission } from '../../middleware/permissions';
 import { sendSuccess, asyncHandler, AppError, paramId } from '../../utils/response';
 
-import { resolveActiveWhatsappNumber, leadsForNumberFilter } from '../whatsapp/active-number';
+import { resolveActiveWhatsappNumberId, leadsForNumberFilter } from '../whatsapp/active-number';
 import { Prisma } from '@prisma/client';
+import { META_ADS_SOURCE } from '../facebook/leadgen-ingest';
 
 const router = Router();
 
-router.use(authenticate, requireOrg, resolveActiveWhatsappNumber);
+/** Soft resolve: Page-only orgs can list META_ADS leads without a WhatsApp number. */
+async function resolveWhatsappNumberSoft(req: Request, _res: Response, next: (err?: unknown) => void) {
+  try {
+    if (!req.user?.organizationId) return next();
+    req.activeWhatsappNumberId = await resolveActiveWhatsappNumberId(
+      req.user.organizationId,
+      req.headers['x-whatsapp-number-id']
+    );
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+router.use(authenticate, requireOrg, resolveWhatsappNumberSoft);
 
 async function assertAgentInOrg(organizationId: string, userId: string) {
   const member = await prisma.organizationUser.findFirst({
@@ -29,6 +44,10 @@ const leadSchema = z.object({
   notes: z.string().optional(),
 });
 
+function isMetaAdsSource(value: unknown): boolean {
+  return typeof value === 'string' && value.toUpperCase() === META_ADS_SOURCE;
+}
+
 router.get(
   '/',
   loadPermissions,
@@ -38,11 +57,18 @@ router.get(
     const numberId = req.activeWhatsappNumberId;
     const stage = req.query.stage as string | undefined;
     const search = (req.query.search as string | undefined)?.trim();
+    const source = typeof req.query.source === 'string' ? req.query.source.trim() : undefined;
+    const metaAdsList = isMetaAdsSource(source);
 
     const where: Prisma.LeadWhereInput = {
       organizationId: orgId,
       ...(stage ? { stage: stage as never } : {}),
-      ...leadsForNumberFilter(numberId),
+      ...(metaAdsList
+        ? { source: META_ADS_SOURCE }
+        : {
+            ...leadsForNumberFilter(numberId),
+            ...(source ? { source } : {}),
+          }),
     };
 
     if (search) {
@@ -76,8 +102,19 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const data = leadSchema.parse(req.body);
+    const metaAdsCreate = isMetaAdsSource(data.source);
     const whatsappNumberId = req.activeWhatsappNumberId;
-    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before creating leads');
+
+    // Manual leads still require WhatsApp. META_ADS list/create path does not.
+    if (!metaAdsCreate && !whatsappNumberId) {
+      throw new AppError(400, 'Connect a WhatsApp number before creating leads');
+    }
+    if (metaAdsCreate) {
+      throw new AppError(
+        400,
+        'Meta Ads leads are created from Instant Form webhooks. Connect a Facebook Page in Settings.'
+      );
+    }
 
     if (data.contactId) {
       const contact = await prisma.contact.findFirst({
@@ -120,12 +157,25 @@ router.patch(
     const data = leadSchema.partial().parse(req.body);
 
     const existing = await prisma.lead.findFirst({
-      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+      where: {
+        id,
+        organizationId: orgId,
+        OR: [
+          { source: META_ADS_SOURCE },
+          { whatsappNumberId: req.activeWhatsappNumberId },
+        ],
+      },
     });
     if (!existing) throw new AppError(404, 'Lead not found');
     if (data.contactId) {
       const contact = await prisma.contact.findFirst({
-        where: { id: data.contactId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+        where: {
+          id: data.contactId,
+          organizationId: orgId,
+          ...(existing.source === META_ADS_SOURCE
+            ? {}
+            : { whatsappNumberId: req.activeWhatsappNumberId }),
+        },
       });
       if (!contact) throw new AppError(404, 'Contact not found for the active WhatsApp number');
     }
@@ -136,7 +186,9 @@ router.patch(
       data: {
         ...(data.title !== undefined ? { title: data.title } : {}),
         ...(data.contactId !== undefined ? { contactId: data.contactId } : {}),
-        ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
+        ...(existing.source !== META_ADS_SOURCE && req.activeWhatsappNumberId
+          ? { whatsappNumberId: req.activeWhatsappNumberId }
+          : {}),
         ...(data.stage !== undefined ? { stage: data.stage.toUpperCase() as never } : {}),
         ...(data.source !== undefined ? { source: data.source } : {}),
         ...(data.assignedAgentId !== undefined ? { assignedAgentId: data.assignedAgentId } : {}),
@@ -210,7 +262,6 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const whatsappNumberId = req.activeWhatsappNumberId;
-    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before updating leads');
 
     const { ids, stage } = z
       .object({
@@ -219,11 +270,15 @@ router.post(
       })
       .parse(req.body);
 
+    // Allow bulk stage for META_ADS without WhatsApp; otherwise keep number scope.
     const result = await prisma.lead.updateMany({
       where: {
         id: { in: ids },
         organizationId: orgId,
-        whatsappNumberId,
+        OR: [
+          { source: META_ADS_SOURCE },
+          ...(whatsappNumberId ? [{ whatsappNumberId }] : []),
+        ],
       },
       data: { stage: stage as never },
     });

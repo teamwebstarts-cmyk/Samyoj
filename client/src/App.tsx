@@ -28,6 +28,7 @@ import TeamPage from './pages/TeamPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import SettingsPage from './pages/SettingsPage';
 import WhatsappCallbackPage from './pages/WhatsappCallbackPage';
+import FacebookCallbackPage from './pages/FacebookCallbackPage';
 import CallsPage from './pages/CallsPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TemplateWizardPage from './pages/TemplateWizardPage';
@@ -68,6 +69,11 @@ export default function App() {
                 <Route
                   path="/settings/whatsapp/callback/popup"
                   element={<WhatsappCallbackPage />}
+                />
+                <Route path="/settings/facebook/callback" element={<FacebookCallbackPage />} />
+                <Route
+                  path="/settings/facebook/callback/popup"
+                  element={<FacebookCallbackPage />}
                 />
                 <Route element={<ProtectedRoute />}>
                   <Route path="/onboarding" element={<Navigate to="/" replace />} />

@@ -342,6 +342,7 @@ export async function processWebhookPayload(
 ) {
   const startTime = Date.now();
 
+  // Page / IG objects never create WhatsApp conversations. Page leadgen claim lives in dispatcher.
   if (payload.object !== 'whatsapp_business_account') return;
 
   for (const entry of (payload.entry as Array<Record<string, unknown>>) || []) {

@@ -12,13 +12,14 @@ import {
   Download,
   MessageCircle,
   BadgeCheck,
+  Facebook,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { TabTransition } from '../components/ui/TabTransition';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-import { settingsApi, whatsappApi, billingApi } from '../services/api';
+import { settingsApi, whatsappApi, billingApi, facebookApi } from '../services/api';
 import type {
   BusinessHoursSettings,
   WebhookStatus,
@@ -34,6 +35,7 @@ import SettingsSidebar, { type SettingsNavItem } from '../components/settings/Se
 import SettingsSkeleton from '../components/settings/SettingsSkeleton';
 import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel';
+import FacebookPagePanel, { type FacebookPageSummary } from '../components/settings/FacebookPagePanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
@@ -42,10 +44,12 @@ import OfficialCheckCard from '../components/settings/OfficialCheckCard';
 import WhatsAppConnectModeModal from '../components/whatsapp/WhatsAppConnectModeModal';
 import EntitlementNotice, { quotaUpgradeMessage } from '../components/billing/EntitlementNotice';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { getErrorMessage } from '../utils/errors';
 
 type SettingsTab =
   | 'profile'
   | 'whatsapp'
+  | 'facebook'
   | 'green-tick'
   | 'website-button'
   | 'inbox'
@@ -55,6 +59,7 @@ type SettingsTab =
 const SETTINGS_TAB_IDS: SettingsTab[] = [
   'profile',
   'whatsapp',
+  'facebook',
   'green-tick',
   'website-button',
   'inbox',
@@ -83,6 +88,12 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'WhatsApp',
     hint: 'Connect business numbers',
     icon: Smartphone,
+  },
+  {
+    id: 'facebook',
+    label: 'Facebook Page',
+    hint: 'Instant Forms → CRM',
+    icon: Facebook,
   },
   {
     id: 'green-tick',
@@ -210,6 +221,59 @@ export default function SettingsPage() {
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
 
+  // Facebook Page (Phase 1 Lead Ads)
+  const [facebookPage, setFacebookPage] = useState<FacebookPageSummary | null>(null);
+  const [facebookLoading, setFacebookLoading] = useState(false);
+  const [facebookConnecting, setFacebookConnecting] = useState(false);
+  const [facebookDisconnecting, setFacebookDisconnecting] = useState(false);
+
+  const refreshFacebookPage = () => {
+    setFacebookLoading(true);
+    return facebookApi
+      .page()
+      .then((res) => {
+        const page = res.data.data.page;
+        setFacebookPage(
+          page
+            ? { channelId: page.channelId, pageId: page.pageId, name: page.name }
+            : null
+        );
+      })
+      .catch(() => {
+        /* keep prior */
+      })
+      .finally(() => setFacebookLoading(false));
+  };
+
+  const connectFacebookPage = async () => {
+    if (!isOwnerOrAdmin) return;
+    setFacebookConnecting(true);
+    try {
+      const redirectUri = `${window.location.origin}/settings/facebook/callback`;
+      const { data } = await facebookApi.connectUrl(redirectUri);
+      const launch = data.data as { url?: string };
+      if (!launch?.url) throw new Error('Connect URL missing');
+      window.location.assign(launch.url);
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not start Facebook Page connect');
+      setFacebookConnecting(false);
+    }
+  };
+
+  const disconnectFacebookPage = async () => {
+    if (!facebookPage || !isOwnerOrAdmin) return;
+    setFacebookDisconnecting(true);
+    try {
+      await facebookApi.disconnect(facebookPage.channelId);
+      setFacebookPage(null);
+      toastSuccess('Facebook Page disconnected');
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not disconnect Page');
+    } finally {
+      setFacebookDisconnecting(false);
+    }
+  };
+
   // Business Hours
   const [businessHours, setBusinessHours] = useState<BusinessHoursSettings>(DEFAULT_BUSINESS_HOURS);
   const [savingHours, setSavingHours] = useState(false);
@@ -224,6 +288,7 @@ export default function SettingsPage() {
       billingApi.get(),
       whatsappApi.webhookStatus(),
       refreshNumbers({ silent: true }),
+      refreshFacebookPage(),
     ])
       .then(([settingsRes, billingRes, webhookRes, numbersRes]) => {
         if (
@@ -426,6 +491,18 @@ export default function SettingsPage() {
                         canConnect={canConnectWhatsApp}
                       />
                     </>
+                  )}
+
+                  {activeTab === 'facebook' && (
+                    <FacebookPagePanel
+                      page={facebookPage}
+                      loading={facebookLoading && !facebookPage}
+                      connecting={facebookConnecting}
+                      disconnecting={facebookDisconnecting}
+                      onConnect={() => void connectFacebookPage()}
+                      onDisconnect={() => void disconnectFacebookPage()}
+                      canEdit={isOwnerOrAdmin}
+                    />
                   )}
 
                   {activeTab === 'green-tick' && <OfficialCheckCard />}

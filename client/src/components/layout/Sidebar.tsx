@@ -1,8 +1,10 @@
 import { NavLink } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronsLeft, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { getVisibleNavSections } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
+import { facebookApi } from '../../services/api';
 import { PlatformBrand } from './PlatformBrand';
 import WhatsAppStatusCard from './WhatsAppStatusCard';
 import { SidebarFlyoutTip, tipProps, useSidebarFlyoutTip } from './SidebarFlyoutTip';
@@ -20,6 +22,7 @@ interface SidebarProps {
 /** Abbreviated section titles keep header height when collapsed so icons never jump up. */
 const SECTION_SHORT: Record<string, string> = {
   Main: 'MA',
+  Facebook: 'FB',
   Support: 'SUPP',
   Insights: 'INS',
   Account: 'ACC',
@@ -162,8 +165,20 @@ function CollapseButton({
   );
 }
 
-function SectionTitle({ label, collapsed }: { label: string; collapsed: boolean }) {
+function SectionTitle({
+  label,
+  collapsed,
+  accent,
+}: {
+  label: string;
+  collapsed: boolean;
+  accent?: 'facebook' | 'whatsapp' | 'instagram';
+}) {
   const short = SECTION_SHORT[label] ?? label.slice(0, 3).toUpperCase();
+  const accentBar =
+    accent === 'facebook'
+      ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-[#1877F2]'
+      : '';
 
   return (
     <p
@@ -171,6 +186,7 @@ function SectionTitle({ label, collapsed }: { label: string; collapsed: boolean 
         'relative mb-1.5 flex h-4 shrink-0 items-center overflow-hidden whitespace-nowrap',
         'text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 px-2.5',
         collapsed ? 'invisible tracking-[0.08em]' : 'tracking-[0.14em]',
+        accentBar,
       ].join(' ')}
       aria-hidden={collapsed}
     >
@@ -206,12 +222,30 @@ export default function Sidebar({
   inboxUnread = 0,
 }: SidebarProps) {
   const { orgRole, organization } = useAuth();
+  const [facebookPageConnected, setFacebookPageConnected] = useState(false);
   const uiToggles = (organization?.settings as Record<string, unknown>)?.uiToggles as
     | { hiddenModules?: string[] }
     | undefined;
-  const navSections = getVisibleNavSections(orgRole, uiToggles?.hiddenModules);
+  const navSections = getVisibleNavSections(orgRole, uiToggles?.hiddenModules, {
+    facebookPageConnected,
+  });
   // Tip enabled whenever collapsed (nav labels) or always for collapse button
   const { tip, onShowTip, onHideTip } = useSidebarFlyoutTip(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    facebookApi
+      .page()
+      .then((res) => {
+        if (!cancelled) setFacebookPageConnected(Boolean(res.data.data.connected));
+      })
+      .catch(() => {
+        if (!cancelled) setFacebookPageConnected(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [organization?.id]);
 
   return (
     <div
@@ -284,9 +318,9 @@ export default function Sidebar({
         aria-label="Primary"
       >
         <div className="flex flex-col gap-3.5">
-          {navSections.map(({ label, items }) => (
+          {navSections.map(({ label, items, accent }) => (
             <div key={label}>
-              <SectionTitle label={label} collapsed={collapsed} />
+              <SectionTitle label={label} collapsed={collapsed} accent={accent} />
               <div className="flex flex-col gap-1">
                 {items.map((item) => (
                   <NavItem

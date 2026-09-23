@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, RefreshCw, Target, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import ContactAvatar from '../inbox/ContactAvatar';
 import LeadCard, { type LeadItem } from '../leads/LeadCard';
 import LeadStageSelect from '../leads/LeadStageSelect';
@@ -47,6 +48,10 @@ export default function ContactPipelineTab({
   onBrowseContacts,
 }: ContactPipelineTabProps) {
   const { activeNumber, resolved } = useWhatsAppNumber();
+  const [searchParams] = useSearchParams();
+  const sourceFilter =
+    searchParams.get('source')?.toUpperCase() === 'META_ADS' ? 'META_ADS' : undefined;
+  const metaAdsOnly = sourceFilter === 'META_ADS';
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [stage, setStage] = useState<LeadStageFilter>('');
   const [search, setSearch] = useState('');
@@ -62,8 +67,10 @@ export default function ContactPipelineTab({
   const requestGenerationRef = useRef(0);
 
   const load = useCallback(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
+    // META_ADS list does not require an active WhatsApp number.
+    if (!metaAdsOnly && (!resolved || !activeNumber)) return;
+    if (metaAdsOnly && !resolved) return;
+    const requestNumberId = activeNumber?.id ?? null;
     const generation = ++requestGenerationRef.current;
     setLoading(true);
     leadApi
@@ -71,10 +78,11 @@ export default function ContactPipelineTab({
         _t: String(Date.now()),
         ...(search ? { search } : {}),
         ...(stage ? { stage } : {}),
+        ...(sourceFilter ? { source: sourceFilter } : {}),
       })
       .then((res) => {
         if (
-          requestNumberId === activeNumberIdRef.current &&
+          (metaAdsOnly || requestNumberId === activeNumberIdRef.current) &&
           generation === requestGenerationRef.current
         ) {
           setLeads(res.data.data.leads || []);
@@ -82,7 +90,7 @@ export default function ContactPipelineTab({
       })
       .catch(() => {
         if (
-          requestNumberId === activeNumberIdRef.current &&
+          (metaAdsOnly || requestNumberId === activeNumberIdRef.current) &&
           generation === requestGenerationRef.current
         ) {
           toastError('Failed to load pipeline');
@@ -90,13 +98,13 @@ export default function ContactPipelineTab({
       })
       .finally(() => {
         if (
-          requestNumberId === activeNumberIdRef.current &&
+          (metaAdsOnly || requestNumberId === activeNumberIdRef.current) &&
           generation === requestGenerationRef.current
         ) {
           setLoading(false);
         }
       });
-  }, [activeNumber, resolved, search, stage]);
+  }, [activeNumber, resolved, search, stage, metaAdsOnly, sourceFilter]);
 
   useEffect(() => {
     load();
@@ -222,9 +230,11 @@ export default function ContactPipelineTab({
                 Bulk stage
               </AppButton>
             )}
-            <AppButton variant="secondary" size="sm" icon={<Plus size={15} />} onClick={openCreate}>
-              New lead
-            </AppButton>
+            {!metaAdsOnly ? (
+              <AppButton variant="secondary" size="sm" icon={<Plus size={15} />} onClick={openCreate}>
+                New lead
+              </AppButton>
+            ) : null}
             <AppButton variant="secondary" size="sm" icon={<RefreshCw size={15} />} onClick={load}>
               Refresh
             </AppButton>
@@ -338,15 +348,23 @@ export default function ContactPipelineTab({
                         <p className="font-semibold text-theme-fg">{lead.title}</p>
                       </div>
                       {lead.source && (
-                        <p className="mt-0.5 text-[11px] capitalize text-theme-muted">{lead.source}</p>
+                        <p className="mt-0.5 text-[11px] text-theme-muted">
+                          {lead.source.toUpperCase() === 'META_ADS' ? 'Meta Ads' : lead.source}
+                        </p>
                       )}
+                      {lead.source?.toUpperCase() === 'META_ADS' &&
+                      (!lead.contact?.phone || (lead.notes || '').includes('No WhatsApp message')) ? (
+                        <p className="mt-0.5 text-[11px] text-theme-muted">
+                          No WhatsApp message — no phone or no consent.
+                        </p>
+                      ) : null}
                     </td>
                     <td className="min-w-[160px]">
                       {lead.contact && contactLabel ? (
                         <div className="flex items-center gap-2.5">
                           <ContactAvatar
                             name={lead.contact.name || undefined}
-                            phone={lead.contact.phone}
+                            phone={lead.contact.phone || ''}
                             size="sm"
                           />
                           <span className="truncate font-medium text-theme-fg">{contactLabel}</span>

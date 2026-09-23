@@ -22,6 +22,7 @@ import Redis from 'ioredis';
 
 import authRoutes from './modules/auth/routes';
 import whatsappRoutes from './modules/whatsapp/routes';
+import facebookRoutes from './modules/facebook/routes';
 import inboxRoutes from './modules/inbox/routes';
 import automationRoutes from './modules/automation/routes';
 import flowRoutes from './modules/flows/routes';
@@ -247,6 +248,7 @@ app.use('/api/media', mediaRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/facebook', facebookRoutes);
 app.use('/api/inbox', inboxRoutes);
 app.use('/api/automations', automationRoutes);
 app.use('/api/flows', flowRoutes);

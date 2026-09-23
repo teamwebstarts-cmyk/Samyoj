@@ -16,6 +16,9 @@ vi.mock('../../config/database', () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
     },
+    channel: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -52,6 +55,8 @@ describe('non-message webhook dispatch wiring', () => {
   it('uses provider event identity when supplied and stable payload identity otherwise', () => {
     expect(providerWebhookEventKey('waba-1', 'account_alerts', { event_id: 'evt-1' }))
       .toBe('account_alerts:evt-1');
+    expect(providerWebhookEventKey('page-1', 'leadgen', { leadgen_id: 'lead_9' }))
+      .toBe('leadgen:lead_9');
     expect(providerWebhookEventKey('waba-1', 'quality', { rating: 'RED' }))
       .toBe(providerWebhookEventKey('waba-1', 'quality', { rating: 'RED' }));
   });

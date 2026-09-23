@@ -11,7 +11,7 @@ export interface LeadItem {
   stage: string;
   source?: string | null;
   updatedAt: string;
-  contact?: { id: string; name?: string | null; phone: string } | null;
+  contact?: { id: string; name?: string | null; phone?: string | null } | null;
   assignedAgent?: { id: string; name: string } | null;
   notes?: string | null;
 }
@@ -21,6 +21,12 @@ const PIPELINE_STEPS = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATIO
 function stageProgressIndex(stage: string) {
   if (stage === 'LOST') return -1;
   return PIPELINE_STEPS.indexOf(stage);
+}
+
+function sourceLabel(source?: string | null): string | null {
+  if (!source) return null;
+  if (source.toUpperCase() === 'META_ADS') return 'Meta Ads';
+  return source;
 }
 
 interface LeadCardProps {
@@ -34,12 +40,16 @@ interface LeadCardProps {
 export default function LeadCard({ lead, onStageChange, formatDate, updating, onEdit }: LeadCardProps) {
   const contactLabel = lead.contact?.name || lead.contact?.phone;
   const progressIndex = stageProgressIndex(lead.stage);
+  const source = sourceLabel(lead.source);
+  const noWaHint =
+    lead.source?.toUpperCase() === 'META_ADS' &&
+    (!lead.contact?.phone || (lead.notes || '').includes('No WhatsApp message'));
 
   return (
     <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
       <div className="flex items-start gap-3 px-4 py-3.5">
         {lead.contact ? (
-          <ContactAvatar name={lead.contact.name || undefined} phone={lead.contact.phone} size="md" />
+          <ContactAvatar name={lead.contact.name || undefined} phone={lead.contact.phone || ''} size="md" />
         ) : (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
             <Target className="h-4 w-4" strokeWidth={2.25} />
@@ -55,6 +65,14 @@ export default function LeadCard({ lead, onStageChange, formatDate, updating, on
               {contactLabel}
             </Link>
           )}
+          {source ? (
+            <p className="mt-0.5 text-[11px] font-medium text-theme-secondary">{source}</p>
+          ) : null}
+          {noWaHint ? (
+            <p className="mt-0.5 text-[11px] text-theme-muted">
+              No WhatsApp message — no phone or no consent.
+            </p>
+          ) : null}
           <p className="mt-1 text-[11px] text-theme-muted">Updated {formatDate(lead.updatedAt)}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={lead.stage} label={leadStageLabel(lead.stage)} />
