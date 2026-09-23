@@ -12,9 +12,13 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Inbox',
     description: 'Reply to your customers',
   },
-  '/facebook/inbox': {
-    title: 'Messenger Inbox',
-    description: 'Facebook Page conversations',
+  '/instagram/inbox': {
+    title: 'Instagram Inbox',
+    description: 'Instagram Direct conversations',
+  },
+  '/instagram/comments': {
+    title: 'Instagram Comments',
+    description: 'One private reply per comment',
   },
   '/calls': {
     title: 'Calls',

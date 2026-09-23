@@ -390,6 +390,43 @@
     color: #64748b;
   }
 
+  /* Expanded dropdown: child --active wins. Parent must not look selected. */
+  .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item {
+    color: #475569;
+    font-weight: 500;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item::before {
+    content: none;
+  }
+
+  .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item .sidebar-nav-icon {
+    background: rgba(241, 245, 249, 0.9);
+    box-shadow: none;
+    color: #64748b;
+  }
+
+  .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item:hover {
+    background: transparent;
+    border-color: transparent;
+    color: #0f172a;
+  }
+
+  .dark .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item {
+    color: #94a3b8;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .dark .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item:hover {
+    background: transparent;
+    color: var(--color-text);
+  }
+
   .sidebar-nav-badge {
     background: #dcfce7;
     color: #0f7a45;
@@ -529,6 +566,14 @@
 
   .dark .sidebar-wa-card--setup {
     background: linear-gradient(180deg, rgba(26, 36, 54, 0.96) 0%, rgba(12, 40, 30, 0.94) 100%);
+  }
+
+  .inbox-shell--messenger {
+    box-shadow: inset 3px 0 0 #1877F2;
+  }
+
+  .inbox-shell--instagram {
+    box-shadow: inset 3px 0 0 #E4405F;
   }
 
   /* Collapsed-rail flyout tip (replaces native black title tooltips) */

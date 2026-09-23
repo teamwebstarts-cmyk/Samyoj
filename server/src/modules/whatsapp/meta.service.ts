@@ -1285,6 +1285,53 @@ export class MetaWhatsAppService {
       fields: META_WEBHOOK_FIELDS.join(','),
       previousHost: currentUrl ? webhookUrlHost(currentUrl) : undefined,
     });
+
+    await this.registerAppObjectWebhookBestEffort({
+      object: 'page',
+      callbackUrl,
+      fields: 'leadgen,messages',
+      credentials,
+    });
+    await this.registerAppObjectWebhookBestEffort({
+      object: 'instagram',
+      callbackUrl,
+      fields: 'messages,comments,live_comments',
+      credentials,
+    });
+  }
+
+  /** Page + Instagram app subscriptions. Failures are non-fatal — WhatsApp inbound must still register. */
+  private static async registerAppObjectWebhookBestEffort(opts: {
+    object: 'page' | 'instagram';
+    callbackUrl: string;
+    fields: string;
+    credentials?: MetaCredentials;
+  }): Promise<void> {
+    try {
+      const creds = requireMetaCredentials(opts.credentials);
+      const params = new URLSearchParams({
+        object: opts.object,
+        callback_url: opts.callbackUrl,
+        verify_token: config.meta.verifyToken,
+        fields: opts.fields,
+      });
+      params.set('access_token', this.getAppAccessToken(opts.credentials));
+      const res = await fetch(`${META_BASE}/${creds.appId}/subscriptions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+      const data = (await res.json()) as { success?: boolean } & GraphError;
+      if (!res.ok && !data.success) {
+        throw new Error(data.error?.message || `Failed to register ${opts.object} webhook`);
+      }
+      log.info('App object webhook registered', { object: opts.object, fields: opts.fields });
+    } catch (err) {
+      log.warn('App object webhook deferred', {
+        object: opts.object,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   private static async postSubscribeWaba(wabaId: string, token: string): Promise<void> {

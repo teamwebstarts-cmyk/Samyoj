@@ -9,7 +9,7 @@ interface ServiceWindowBannerProps {
   serviceWindow: ServiceWindowInfo;
   compact?: boolean;
   /** Messenger closed copy — no WhatsApp templates. */
-  variant?: 'whatsapp' | 'messenger';
+  variant?: 'whatsapp' | 'messenger' | 'instagram';
 }
 
 const COUNTDOWN_TICK_MS = 60_000;
@@ -80,7 +80,7 @@ export default function ServiceWindowBanner({
   useCountdownTick(true);
   if (serviceWindow.open) return null;
 
-  if (variant === 'messenger') {
+  if (variant === 'messenger' || variant === 'instagram') {
     return (
       <div className="border-t border-rose-200/80 bg-rose-50/95 px-3 py-2 dark:border-rose-900/50 dark:bg-rose-950/30">
         <p className="text-center text-caption font-semibold text-rose-900 dark:text-rose-200">
@@ -135,11 +135,12 @@ export function ServiceWindowBadge({
   const tipFor = useGlassTipProps();
   const tone = getWindowTone(serviceWindow);
 
+  const isMeta = variant === 'messenger' || variant === 'instagram';
   if (tone === 'closed') {
     const closedLabel =
-      variant === 'messenger' ? 'Closed — wait' : 'Closed — template';
+      isMeta ? 'Closed — wait' : 'Closed — template';
     const closedTip =
-      variant === 'messenger'
+      isMeta
         ? 'Wait for the customer to message again.'
         : 'Reply window closed — template required';
     return (
@@ -159,7 +160,11 @@ export function ServiceWindowBadge({
   const expiry = formatWindowExpiry(serviceWindow.expiresAt);
   const label = expiry || 'Open';
   const openTip =
-    variant === 'messenger' ? '24-hour Messenger reply window' : '24-hour WhatsApp reply window';
+    variant === 'instagram'
+      ? '24-hour Instagram reply window'
+      : variant === 'messenger'
+        ? '24-hour Messenger reply window'
+        : '24-hour WhatsApp reply window';
 
   return (
     <div

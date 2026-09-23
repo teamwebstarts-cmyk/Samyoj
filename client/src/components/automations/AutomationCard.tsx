@@ -79,6 +79,15 @@ export default function AutomationCard({
                 {config.keyword}
               </span>
             )}
+            <span
+              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+                config.platform === 'IG'
+                  ? 'bg-[#E4405F]/10 text-[#C13584] ring-[#E4405F]/20'
+                  : 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20'
+              }`}
+            >
+              {config.platform === 'IG' ? 'Instagram' : 'WhatsApp'}
+            </span>
           </div>
         </div>
       </button>

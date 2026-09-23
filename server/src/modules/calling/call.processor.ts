@@ -937,7 +937,7 @@ export const NON_MESSAGE_WEBHOOK_FIELDS = [
 ] as const;
 
 export async function processWebhookFields(payload: Record<string, unknown>): Promise<void> {
-  if (payload.object === 'page') {
+  if (payload.object === 'page' || payload.object === 'instagram') {
     const { dispatchNonMessageWebhookFields } = await import('../whatsapp/webhook-dispatcher');
     await dispatchNonMessageWebhookFields(payload);
     return;

@@ -77,7 +77,14 @@ router.get(
 
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const unreadOnly = req.query.unread === 'true';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const assignedTo =
+      typeof req.query.assignedTo === 'string' && req.query.assignedTo
+        ? req.query.assignedTo
+        : undefined;
     const take = Math.min(Math.max(parseInt(String(req.query.limit || '30'), 10) || 30, 1), 100);
+    const page = Math.max(parseInt(String(req.query.page || '1'), 10) || 1, 1);
+    const skip = (page - 1) * take;
 
     const where = {
       organizationId: orgId,
@@ -87,9 +94,26 @@ router.get(
         ? { status: status as 'OPEN' | 'PENDING' | 'CLOSED' }
         : {}),
       ...(unreadOnly ? { unreadCount: { gt: 0 } } : {}),
+      ...(assignedTo ? { assignedAgentId: assignedTo } : {}),
+      ...(q
+        ? {
+            OR: [
+              { contact: { name: { contains: q, mode: 'insensitive' as const } } },
+              { contact: { phone: { contains: q } } },
+              { messages: { some: { content: { contains: q, mode: 'insensitive' as const } } } },
+            ],
+          }
+        : {}),
     };
 
-    const [rows, total] = await Promise.all([
+    const unreadWhere = {
+      organizationId: orgId,
+      channelId: channel.id,
+      whatsappNumberId: null,
+      unreadCount: { gt: 0 as const },
+    };
+
+    const [rows, total, unreadTotal] = await Promise.all([
       prisma.conversation.findMany({
         where,
         include: {
@@ -99,8 +123,10 @@ router.get(
         },
         orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
         take,
+        skip,
       }),
       prisma.conversation.count({ where }),
+      prisma.conversation.count({ where: unreadWhere }),
     ]);
 
     sendSuccess(res, {
@@ -115,6 +141,7 @@ router.get(
         serviceWindow: serviceWindowDto(c.cs24hWindowOpensAt),
       })),
       total,
+      unreadTotal,
     });
   })
 );

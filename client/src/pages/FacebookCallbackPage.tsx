@@ -5,6 +5,7 @@ import AppButton from '../components/ui/AppButton';
 import { useAuth } from '../contexts/AuthContext';
 import { facebookApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
+import { safeFbConnectReturn } from '../components/layout/MetaChannelChips';
 
 type PageStatus = 'loading' | 'select' | 'success' | 'error';
 
@@ -81,11 +82,17 @@ export default function FacebookCallbackPage() {
             ? `${connectedName}. Leadgen subscribe failed — reconnect or check App Review permissions.`
             : connectedName
         );
-        window.setTimeout(() => navigate('/settings?tab=facebook', { replace: true }), 1200);
+        window.setTimeout(() => {
+          const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
+          sessionStorage.removeItem('fb_connect_return');
+          navigate(back, { replace: true });
+        }, 1200);
       })
       .catch((err) => {
         setStatus('error');
-        setMessage(getErrorMessage(err) || 'Could not connect Facebook Page');
+        setMessage(
+          (getErrorMessage(err) || 'Could not connect Facebook Page').replace(/\bWhatsApp\b/g, 'Facebook')
+        );
       });
   }, [authLoading, user, searchParams, navigate]);
 
@@ -106,10 +113,16 @@ export default function FacebookCallbackPage() {
           ? `${connectedName}. Leadgen subscribe failed — reconnect or check App Review permissions.`
           : connectedName
       );
-      window.setTimeout(() => navigate('/settings?tab=facebook', { replace: true }), 1200);
+        window.setTimeout(() => {
+          const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
+          sessionStorage.removeItem('fb_connect_return');
+          navigate(back, { replace: true });
+        }, 1200);
     } catch (err) {
       setStatus('error');
-      setMessage(getErrorMessage(err) || 'Could not connect selected Page');
+      setMessage(
+        (getErrorMessage(err) || 'Could not connect selected Page').replace(/\bWhatsApp\b/g, 'Facebook')
+      );
     } finally {
       setSelecting(false);
     }
@@ -155,9 +168,13 @@ export default function FacebookCallbackPage() {
           <AppButton
             className="mt-4"
             variant="secondary"
-            onClick={() => navigate('/settings?tab=facebook', { replace: true })}
+            onClick={() =>
+              navigate(safeFbConnectReturn(sessionStorage.getItem('fb_connect_return')), {
+                replace: true,
+              })
+            }
           >
-            Back to Settings
+            Back
           </AppButton>
         ) : null}
       </div>

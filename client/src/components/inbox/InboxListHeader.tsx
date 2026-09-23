@@ -41,6 +41,13 @@ const FILTER_CHIPS: Array<{ chip: ListChip; label: string; title?: string }> = [
   { chip: 'botActive', label: 'AI Bot' },
 ];
 
+const MESSENGER_FILTER_CHIPS: Array<{ chip: ListChip; label: string; title?: string }> = [
+  { chip: 'all', label: 'All' },
+  { chip: 'unread', label: 'Unread' },
+  { chip: 'open', label: 'Open' },
+  { chip: 'pending', label: 'Pending' },
+];
+
 interface InboxListHeaderProps {
   search: string;
   onSearchChange: (value: string) => void;
@@ -58,6 +65,7 @@ interface InboxListHeaderProps {
   onRefresh: () => void;
   inboundHealth?: InboundHealth;
   onRetryHealth: () => void;
+  variant?: 'whatsapp' | 'messenger' | 'instagram';
 }
 
 const squareBtn = (active = false) =>
@@ -132,6 +140,7 @@ export default function InboxListHeader({
   onRefresh,
   inboundHealth = { state: 'unknown' as const },
   onRetryHealth,
+  variant = 'whatsapp',
 }: InboxListHeaderProps) {
   const tipFor = useGlassTipProps();
   const [agentsMenuOpen, setAgentsMenuOpen] = useState(false);
@@ -141,10 +150,15 @@ export default function InboxListHeader({
   const chipRowRef = useHorizontalWheelScroll();
   const { hasConnectedNumber, loading: numberLoading, disconnectedNumbers } = useWhatsAppNumber();
 
+  const isMessenger = variant === 'messenger' || variant === 'instagram';
+  const chips = isMessenger ? MESSENGER_FILTER_CHIPS : FILTER_CHIPS;
   const isConnected = hasConnectedNumber && !numberLoading;
   const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers, {
     task: 'open chats and receive replies',
   });
+  const countLine = isMessenger
+    ? `24h reply window · ${formatCountLine(conversationTotal, unreadTotal)}`
+    : formatCountLine(conversationTotal, unreadTotal);
   const selectableAgents = agentOptions.filter((option) => option.value !== '');
   const visibleAgents = selectableAgents.slice(0, AGENT_VISIBLE_COUNT);
   const hiddenActiveFilter =
@@ -197,7 +211,7 @@ export default function InboxListHeader({
 
   return (
     <div className="shrink-0 border-b border-neutral-100 px-3 pb-2 pt-2 dark:border-neutral-800/80 md:pt-3">
-      {!numberLoading && !hasConnectedNumber && (
+      {!isMessenger && !numberLoading && !hasConnectedNumber && (
         <div
           role="status"
           data-testid="whatsapp-disconnected-banner"
@@ -221,7 +235,7 @@ export default function InboxListHeader({
           </Link>
         </div>
       )}
-      {inboundHealth?.state === 'unhealthy' && isConnected && (
+      {!isMessenger && inboundHealth?.state === 'unhealthy' && isConnected && (
         <div
           role="alert"
           data-testid="inbound-health-banner"
@@ -277,17 +291,19 @@ export default function InboxListHeader({
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-2">
             <h2 className="text-[18px] font-bold tracking-tight text-theme-fg">Inbox</h2>
-            <InboundStatusDot
-              isConnected={isConnected}
-              numberLoading={numberLoading}
-              inboundHealth={inboundHealth}
-            />
+            {!isMessenger && (
+              <InboundStatusDot
+                isConnected={isConnected}
+                numberLoading={numberLoading}
+                inboundHealth={inboundHealth}
+              />
+            )}
           </div>
           <p
             className="mt-0.5 min-h-[1.125rem] truncate whitespace-nowrap text-[12px] font-medium leading-[1.125rem] text-theme-muted"
-            title={formatCountLine(conversationTotal, unreadTotal)}
+            title={countLine}
           >
-            {formatCountLine(conversationTotal, unreadTotal)}
+            {countLine}
           </p>
         </div>
 
@@ -316,15 +332,17 @@ export default function InboxListHeader({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={onNewChat}
-            data-testid="inbox-new-chat"
-            className={`hidden h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] md:inline-flex ${FOCUS_RING_CLASS}`}
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
-            New chat
-          </button>
+          {!isMessenger && (
+            <button
+              type="button"
+              onClick={onNewChat}
+              data-testid="inbox-new-chat"
+              className={`hidden h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] md:inline-flex ${FOCUS_RING_CLASS}`}
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
+              New chat
+            </button>
+          )}
         </div>
       </div>
 
@@ -442,7 +460,7 @@ export default function InboxListHeader({
           aria-live="polite"
           className="-mx-1 mt-2.5 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain px-1 touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
-          {FILTER_CHIPS.map((item) => {
+          {chips.map((item) => {
             const active = chip === item.chip;
             return (
               <button

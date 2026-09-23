@@ -38,6 +38,8 @@ interface ConversationListProps {
   onSelect: (conversation: Conversation) => void;
   onContextMenu: (event: React.MouseEvent, conversation: Conversation) => void;
   onNewChat: () => void;
+  emptyVariant?: 'whatsapp' | 'messenger' | 'instagram';
+  pageConnected?: boolean;
 }
 
 function buildPageButtons(page: number, pageCount: number): Array<number | 'ellipsis'> {
@@ -100,6 +102,8 @@ export default function ConversationList({
   onSelect,
   onContextMenu,
   onNewChat,
+  emptyVariant = 'whatsapp',
+  pageConnected = true,
 }: ConversationListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
@@ -241,7 +245,12 @@ export default function ConversationList({
       <div className="flex min-h-0 flex-1 flex-col">
         {selectionBar}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <InboxListEmpty filtered={filtered} onNewChat={onNewChat} />
+          <InboxListEmpty
+            filtered={filtered}
+            onNewChat={onNewChat}
+            variant={emptyVariant}
+            connected={pageConnected}
+          />
         </div>
       </div>
     );

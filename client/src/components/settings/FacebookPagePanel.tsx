@@ -40,12 +40,12 @@ export default function FacebookPagePanel({
           to="/contacts?tab=pipeline&source=META_ADS"
           className="font-semibold text-[#1877F2] hover:underline"
         >
-          Facebook → Leads →
+          Open in Contacts →
         </Link>
       </p>
       <SettingsPanel
         title="Facebook Page"
-        description="Connect a Page to receive Instant Form leads."
+        description="Connect a Page for Instant Form leads and Messenger."
         icon={Facebook}
         footer={
           page ? (
@@ -98,7 +98,7 @@ export default function FacebookPagePanel({
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#1877F2] text-white">
               <Facebook className="h-5 w-5" strokeWidth={2.25} />
             </div>
-            <p className="mt-3 text-[14px] font-semibold text-theme-fg">Connect a Page to receive Instant Form leads.</p>
+            <p className="mt-3 text-[14px] font-semibold text-theme-fg">Connect a Page for Instant Form leads and Messenger.</p>
             <p className="mt-1 text-[12px] text-theme-secondary">
               Sign in with Facebook and pick your Page. No App ID in Settings.
             </p>

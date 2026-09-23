@@ -3,14 +3,16 @@ import {
   Bot,
   ClipboardList,
   CreditCard,
+  Facebook,
+  Instagram,
   LayoutDashboard,
   MessageSquare,
+  Hash,
   Package,
   Phone,
   Send,
   Settings2,
   Sparkles,
-  Target,
   Ticket,
   UsersRound,
   UserPlus,
@@ -24,28 +26,23 @@ export interface NavItem {
   icon: LucideIcon;
   label: string;
   end?: boolean;
-  /** Hide for these roles (if set, only these roles are hidden) */
   hideForRoles?: OrgRole[];
-  /** Show only for these roles */
   showForRoles?: OrgRole[];
-  /** Feature flag — hide from primary nav but keep route */
   hidden?: boolean;
 }
 
 export interface NavSection {
   label: string;
   items: NavItem[];
-  /** 3px platform color mark on the group label */
   accent?: 'facebook' | 'whatsapp' | 'instagram';
+  /** Dashboard-style row with chevron; children render under it. */
+  dropdown?: boolean;
+  icon?: LucideIcon;
 }
 
 const ADMIN_ROLES: OrgRole[] = ['OWNER', 'ADMIN'];
 const SUPERVISOR_PLUS: OrgRole[] = ['OWNER', 'ADMIN', 'SUPERVISOR'];
 
-/**
- * Icon choices aligned to glass mock + SaaS conventions:
- * home grid, chat, phone, bot, flow, send, doc, package, people, ticket, chart, team, card, gear.
- */
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: '',
@@ -54,6 +51,8 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'WhatsApp',
     accent: 'whatsapp',
+    dropdown: true,
+    icon: MessageSquare,
     items: [
       { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
       { to: '/calls', icon: Phone, label: 'Calls' },
@@ -65,17 +64,18 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Facebook',
     accent: 'facebook',
+    dropdown: true,
+    icon: Facebook,
+    items: [{ to: '/facebook/inbox', icon: MessageSquare, label: 'Inbox' }],
+  },
+  {
+    label: 'Instagram',
+    accent: 'instagram',
+    dropdown: true,
+    icon: Instagram,
     items: [
-      {
-        to: '/contacts?tab=pipeline&source=META_ADS',
-        icon: Target,
-        label: 'Leads',
-      },
-      {
-        to: '/facebook/inbox',
-        icon: MessageSquare,
-        label: 'Inbox',
-      },
+      { to: '/instagram/inbox', icon: MessageSquare, label: 'Inbox' },
+      { to: '/instagram/comments', icon: Hash, label: 'Comments' },
     ],
   },
   {
@@ -126,8 +126,8 @@ export const MOBILE_BOTTOM_NAV: NavItem[] = [
 
 export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/contacts?tab=pipeline&source=META_ADS', icon: Target, label: 'Leads' },
-  { to: '/facebook/inbox', icon: MessageSquare, label: 'Messenger' },
+  { to: '/facebook/inbox', icon: Facebook, label: 'Facebook Inbox' },
+  { to: '/instagram/inbox', icon: Instagram, label: 'Instagram Inbox' },
   { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },

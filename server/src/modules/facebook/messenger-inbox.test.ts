@@ -223,6 +223,7 @@ describe('Phase 3 Messenger inbox', () => {
     expect(src).toContain("Wait for the customer to message again.");
     expect(src).toContain('messengerWindowOpen');
     expect(src).toContain('sendPageTextMessage');
+    expect(src).toContain('req.query.q');
     expect(src).not.toContain('MetaWhatsAppService.sendMessage');
   });
 

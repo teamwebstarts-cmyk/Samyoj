@@ -60,6 +60,24 @@ describe('saveFacebookPageChannel', () => {
       })
     );
   });
+
+  it('disconnecting a Page also soft-disconnects this org Instagram channel', async () => {
+    const { disconnectFacebookPageChannel } = await import('./save-page-channel');
+    channelMock.findFirst.mockResolvedValue({
+      id: 'ch-fb',
+      organizationId: 'org-b',
+      platform: 'FB',
+    } as never);
+    channelMock.update.mockResolvedValue({} as never);
+    channelMock.updateMany.mockResolvedValue({ count: 1 } as never);
+    await disconnectFacebookPageChannel('org-b', 'ch-fb');
+    expect(channelMock.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: 'org-b', platform: 'IG', isActive: true },
+        data: { isActive: false },
+      })
+    );
+  });
 });
 
 describe('page-client token transport', () => {

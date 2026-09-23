@@ -13,13 +13,14 @@ import {
   MessageCircle,
   BadgeCheck,
   Facebook,
+  Instagram,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { TabTransition } from '../components/ui/TabTransition';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-import { settingsApi, whatsappApi, billingApi, facebookApi } from '../services/api';
+import { settingsApi, whatsappApi, billingApi, facebookApi, instagramApi } from '../services/api';
 import type {
   BusinessHoursSettings,
   WebhookStatus,
@@ -36,6 +37,7 @@ import SettingsSkeleton from '../components/settings/SettingsSkeleton';
 import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel';
 import FacebookPagePanel, { type FacebookPageSummary } from '../components/settings/FacebookPagePanel';
+import InstagramPagePanel, { type InstagramAccountSummary } from '../components/settings/InstagramPagePanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
@@ -50,6 +52,7 @@ type SettingsTab =
   | 'profile'
   | 'whatsapp'
   | 'facebook'
+  | 'instagram'
   | 'green-tick'
   | 'website-button'
   | 'inbox'
@@ -60,6 +63,7 @@ const SETTINGS_TAB_IDS: SettingsTab[] = [
   'profile',
   'whatsapp',
   'facebook',
+  'instagram',
   'green-tick',
   'website-button',
   'inbox',
@@ -94,6 +98,12 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'Facebook Page',
     hint: 'Instant Forms → CRM',
     icon: Facebook,
+  },
+  {
+    id: 'instagram',
+    label: 'Instagram',
+    hint: 'DMs and comments',
+    icon: Instagram,
   },
   {
     id: 'green-tick',
@@ -227,6 +237,11 @@ export default function SettingsPage() {
   const [facebookConnecting, setFacebookConnecting] = useState(false);
   const [facebookDisconnecting, setFacebookDisconnecting] = useState(false);
 
+  const [instagramAccount, setInstagramAccount] = useState<InstagramAccountSummary | null>(null);
+  const [instagramLoading, setInstagramLoading] = useState(false);
+  const [instagramConnecting, setInstagramConnecting] = useState(false);
+  const [instagramDisconnecting, setInstagramDisconnecting] = useState(false);
+
   const refreshFacebookPage = () => {
     setFacebookLoading(true);
     return facebookApi
@@ -274,6 +289,57 @@ export default function SettingsPage() {
     }
   };
 
+  const refreshInstagramAccount = () => {
+    setInstagramLoading(true);
+    return instagramApi
+      .account()
+      .then((res) => {
+        const account = res.data.data.account;
+        setInstagramAccount(
+          account
+            ? { channelId: account.channelId, igUserId: account.igUserId, username: account.username }
+            : null
+        );
+      })
+      .catch(() => {
+        /* keep prior */
+      })
+      .finally(() => setInstagramLoading(false));
+  };
+
+  const connectInstagramAccount = async () => {
+    if (!isOwnerOrAdmin) return;
+    setInstagramConnecting(true);
+    try {
+      const { data } = await instagramApi.connect();
+      const saved = data.data;
+      setInstagramAccount({
+        channelId: saved.channelId,
+        igUserId: saved.igUserId,
+        username: saved.username,
+      });
+      toastSuccess('Instagram connected');
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not connect Instagram');
+    } finally {
+      setInstagramConnecting(false);
+    }
+  };
+
+  const disconnectInstagramAccount = async () => {
+    if (!instagramAccount || !isOwnerOrAdmin) return;
+    setInstagramDisconnecting(true);
+    try {
+      await instagramApi.disconnect();
+      setInstagramAccount(null);
+      toastSuccess('Instagram disconnected');
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not disconnect Instagram');
+    } finally {
+      setInstagramDisconnecting(false);
+    }
+  };
+
   // Business Hours
   const [businessHours, setBusinessHours] = useState<BusinessHoursSettings>(DEFAULT_BUSINESS_HOURS);
   const [savingHours, setSavingHours] = useState(false);
@@ -289,6 +355,7 @@ export default function SettingsPage() {
       whatsappApi.webhookStatus(),
       refreshNumbers({ silent: true }),
       refreshFacebookPage(),
+      refreshInstagramAccount(),
     ])
       .then(([settingsRes, billingRes, webhookRes, numbersRes]) => {
         if (
@@ -501,6 +568,18 @@ export default function SettingsPage() {
                       disconnecting={facebookDisconnecting}
                       onConnect={() => void connectFacebookPage()}
                       onDisconnect={() => void disconnectFacebookPage()}
+                      canEdit={isOwnerOrAdmin}
+                    />
+                  )}
+
+                  {activeTab === 'instagram' && (
+                    <InstagramPagePanel
+                      account={instagramAccount}
+                      loading={instagramLoading && !instagramAccount}
+                      connecting={instagramConnecting}
+                      disconnecting={instagramDisconnecting}
+                      onConnect={() => void connectInstagramAccount()}
+                      onDisconnect={() => void disconnectInstagramAccount()}
                       canEdit={isOwnerOrAdmin}
                     />
                   )}

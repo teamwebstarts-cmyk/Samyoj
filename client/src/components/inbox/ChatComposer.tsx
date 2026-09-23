@@ -746,6 +746,7 @@ export default function ChatComposer({
         </ComposerPortalMenu>
       )}
 
+      {onAttach ? (
       <ComposerPortalMenu
         open={attachMenuOpen}
         anchorRef={attachMenuAnchorRef}
@@ -795,8 +796,10 @@ export default function ChatComposer({
           </button>
         )}
       </ComposerPortalMenu>
+      ) : null}
 
       <div className="flex items-end gap-1.5 md:block">
+        {onAttach ? (
         <button
           ref={attachBtnMobileRef}
           type="button"
@@ -814,6 +817,7 @@ export default function ChatComposer({
         >
           <Paperclip size={20} strokeWidth={2} />
         </button>
+        ) : null}
 
         <div className="min-w-0 flex-1 rounded-3xl border border-chat-input-border bg-chat-input-bg ring-1 ring-chat-input-border/40 transition focus-within:border-slate-400/70 focus-within:ring-slate-400/15 md:rounded-2xl dark:focus-within:border-slate-500/60 dark:focus-within:ring-slate-500/15">
           <textarea
@@ -846,6 +850,7 @@ export default function ChatComposer({
               </button>
 
               <div className="relative">
+                {onAttach ? (
                 <button
                   ref={attachBtnDesktopRef}
                   type="button"
@@ -863,6 +868,7 @@ export default function ChatComposer({
                 >
                   <Paperclip size={18} strokeWidth={2} />
                 </button>
+                ) : null}
               </div>
 
               <button
@@ -876,7 +882,7 @@ export default function ChatComposer({
               >
                 <Zap size={16} strokeWidth={2} />
               </button>
-              {canRecord && (
+              {canRecord && onAttach && (
                 <button
                   type="button"
                   className={`${toolBtn} ${recording ? 'text-red-600' : ''}`}
@@ -936,7 +942,7 @@ export default function ChatComposer({
               >
                 <SendHorizontal size={18} strokeWidth={2.25} />
               </button>
-            ) : canRecord ? (
+            ) : canRecord && onAttach ? (
               <button
                 type="button"
                 className={sendBtnClass(

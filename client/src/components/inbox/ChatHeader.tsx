@@ -44,6 +44,10 @@ interface ChatHeaderProps {
   onToggleFavorite: () => void;
   onToggleSearch: () => void;
   onOpenDetails?: () => void;
+  hideCall?: boolean;
+  hideBot?: boolean;
+  hideFavorite?: boolean;
+  windowVariant?: 'whatsapp' | 'messenger' | 'instagram';
 }
 
 function HeaderIconButton({
@@ -129,6 +133,10 @@ export default function ChatHeader({
   onToggleFavorite,
   onToggleSearch,
   onOpenDetails,
+  hideCall = false,
+  hideBot = false,
+  hideFavorite = false,
+  windowVariant = 'whatsapp',
 }: ChatHeaderProps) {
   const tipFor = useGlassTipProps();
   const [botMenuOpen, setBotMenuOpen] = useState(false);
@@ -240,7 +248,11 @@ export default function ChatHeader({
           </span>
         )}
         <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
-          {contact.phone}
+          {windowVariant === 'instagram'
+            ? 'Instagram'
+            : windowVariant === 'messenger'
+              ? 'Facebook Messenger'
+              : contact.phone}
         </p>
         {waitingForLabel(conversation.activeFlow?.waitingFor) && (
           <p className="truncate text-[11px] font-medium text-violet-700 dark:text-violet-300">
@@ -264,9 +276,10 @@ export default function ChatHeader({
         {serviceWindow === undefined ? (
           <span className="inbox-skeleton-shimmer hidden h-8 w-[6.5rem] rounded-[10px] md:h-9 md:w-[7.5rem] sm:block" />
         ) : (
-          <ServiceWindowBadge serviceWindow={serviceWindow} />
+          <ServiceWindowBadge serviceWindow={serviceWindow} variant={windowVariant} />
         )}
 
+        {!hideCall && (
         <HeaderIconButton
           label={callingBack ? 'Starting call…' : 'Start a call'}
           onClick={onCallBack}
@@ -279,12 +292,13 @@ export default function ChatHeader({
             <Phone className="h-4 w-4" strokeWidth={2.1} />
           )}
         </HeaderIconButton>
+        )}
 
         <HeaderIconButton label="Search in this chat" onClick={onToggleSearch} className="max-sm:hidden">
           <Search className="h-4 w-4" strokeWidth={2.1} />
         </HeaderIconButton>
 
-        {!isFavorite && (
+        {!hideFavorite && !isFavorite && (
           <HeaderIconButton
             label="Add to favourites"
             onClick={handleFavoriteClick}
@@ -294,7 +308,7 @@ export default function ChatHeader({
           </HeaderIconButton>
         )}
 
-        {isFavorite && (
+        {!hideFavorite && isFavorite && (
           <HeaderIconButton
             label="Remove from favourites"
             onClick={handleFavoriteClick}
@@ -309,6 +323,7 @@ export default function ChatHeader({
           </HeaderIconButton>
         )}
 
+        {!hideBot && (
         <div className="relative">
           <button
             ref={botBtnRef}
@@ -371,6 +386,7 @@ export default function ChatHeader({
             />
           )}
         </div>
+        )}
 
         <div className="relative">
           <button

@@ -129,6 +129,7 @@ export async function processRuleAutomations(
       : undefined;
 
     if (triggerType === 'KEYWORD' && context.message) {
+      if ((config.platform as string | undefined) === 'IG') continue;
       if (keywordMatches(context.message, { keyword: config.keyword as string | undefined })) {
         const message = (config.response as string) || (config.message as string);
         if (message) {

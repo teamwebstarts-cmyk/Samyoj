@@ -1,10 +1,12 @@
-import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronsLeft, X } from 'lucide-react';
-import { getVisibleNavSections } from '../../config/navigation';
+import { ChevronsLeft, ChevronDown, X } from 'lucide-react';
+import { getVisibleNavSections, type NavSection } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { PlatformBrand } from './PlatformBrand';
 import WhatsAppStatusCard from './WhatsAppStatusCard';
+import WhatsAppGlyph from '../dashboard/icons/WhatsAppGlyph';
 import { SidebarFlyoutTip, tipProps, useSidebarFlyoutTip } from './SidebarFlyoutTip';
 
 interface SidebarProps {
@@ -21,6 +23,7 @@ interface SidebarProps {
 const SECTION_SHORT: Record<string, string> = {
   WhatsApp: 'WA',
   Facebook: 'FB',
+  Instagram: 'IG',
   Support: 'SUPP',
   Insights: 'INS',
   Account: 'ACC',
@@ -34,6 +37,7 @@ function formatBadge(count: number): string {
 function NavItem({
   to,
   icon: Icon,
+  glyph,
   label,
   end,
   collapsed,
@@ -44,6 +48,7 @@ function NavItem({
 }: {
   to: string;
   icon: LucideIcon;
+  glyph?: 'whatsapp';
   label: string;
   end?: boolean;
   collapsed?: boolean;
@@ -83,10 +88,14 @@ function NavItem({
             ].join(' ')}
             style={{ transition: 'transform 200ms ease, background-color 200ms ease' }}
           >
-            <Icon
-              className={isActive ? 'h-[16px] w-[16px] text-white' : 'h-[17px] w-[17px]'}
-              strokeWidth={isActive ? 2 : 1.75}
-            />
+            {glyph === 'whatsapp' ? (
+              <WhatsAppGlyph className={isActive ? 'h-4 w-4 text-white' : 'h-4 w-4'} />
+            ) : (
+              <Icon
+                className={isActive ? 'h-[16px] w-[16px] text-white' : 'h-[17px] w-[17px]'}
+                strokeWidth={isActive ? 2 : 1.75}
+              />
+            )}
             {badgeLabel ? (
               <span
                 className={[
@@ -160,6 +169,134 @@ function CollapseButton({
         strokeWidth={1.8}
       />
     </button>
+  );
+}
+
+function PlatformDropdown({
+  section,
+  collapsed,
+  onNavigate,
+  inboxUnread,
+  onShowTip,
+  onHideTip,
+}: {
+  section: NavSection;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+  inboxUnread: number;
+  onShowTip: (text: string, el: HTMLElement) => void;
+  onHideTip: () => void;
+}) {
+  const location = useLocation();
+  const Icon = section.icon;
+  const childActive = section.items.some(
+    (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+  );
+  const storageKey = `sidebar-dropdown:${section.label}`;
+  const [open, setOpen] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored === '1') return true;
+      if (stored === '0') return false;
+    } catch {
+      /* ignore */
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try {
+        sessionStorage.setItem(storageKey, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  if (!Icon) return null;
+
+  if (collapsed) {
+    return (
+      <NavItem
+        to={section.items[0]?.to || '/'}
+        icon={Icon}
+        glyph={section.accent === 'whatsapp' ? 'whatsapp' : undefined}
+        label={section.label}
+        collapsed
+        onNavigate={onNavigate}
+        badge={section.items.some((i) => i.to === '/inbox') ? inboxUnread : undefined}
+        onShowTip={onShowTip}
+        onHideTip={onHideTip}
+      />
+    );
+  }
+
+  // Only the visible leaf is --active. Parent fills only while children are hidden.
+  const parentActive = childActive && !open;
+  const accentIdle =
+    section.accent === 'facebook'
+      ? 'text-[#1877F2]'
+      : section.accent === 'whatsapp'
+        ? 'text-emerald-600'
+        : section.accent === 'instagram'
+          ? 'text-[#E4405F]'
+          : '';
+
+  return (
+    <div className="sidebar-dropdown">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className={[
+          'sidebar-nav-item group relative box-border flex h-[var(--density-nav-item-h)] w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
+          'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
+          parentActive ? 'sidebar-nav-item--active' : 'sidebar-nav-item--idle',
+        ].join(' ')}
+      >
+        <span className="sidebar-nav-icon relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+          {section.accent === 'whatsapp' ? (
+            <WhatsAppGlyph
+              className={parentActive ? 'h-4 w-4 text-white' : 'h-4 w-4 text-emerald-600'}
+            />
+          ) : (
+            <Icon
+              className={parentActive ? 'h-[16px] w-[16px] text-white' : `h-[17px] w-[17px] ${accentIdle}`}
+              strokeWidth={parentActive ? 2 : 1.75}
+            />
+          )}
+        </span>
+        <span className="ml-2.5 flex min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap">
+          <span className="min-w-0 flex-1 truncate text-left">{section.label}</span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            strokeWidth={1.8}
+          />
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-1 flex flex-col gap-1 pl-3">
+          {section.items.map((item) => (
+            <NavItem
+              key={item.to}
+              {...item}
+              collapsed={false}
+              onNavigate={onNavigate}
+              badge={item.to === '/inbox' ? inboxUnread : undefined}
+              onShowTip={onShowTip}
+              onHideTip={onHideTip}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -300,24 +437,38 @@ export default function Sidebar({
         aria-label="Primary"
       >
         <div className="flex flex-col gap-3.5">
-          {navSections.map(({ label, items, accent }) => (
-            <div key={label || items[0]?.to || 'nav'}>
-              {label ? <SectionTitle label={label} collapsed={collapsed} accent={accent} /> : null}
-              <div className="flex flex-col gap-1">
-                {items.map((item) => (
-                  <NavItem
-                    key={item.to}
-                    {...item}
-                    collapsed={collapsed}
-                    onNavigate={onNavigate}
-                    badge={item.to === '/inbox' ? inboxUnread : undefined}
-                    onShowTip={onShowTip}
-                    onHideTip={onHideTip}
-                  />
-                ))}
+          {navSections.map((section) =>
+            section.dropdown ? (
+              <PlatformDropdown
+                key={section.label}
+                section={section}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+                inboxUnread={inboxUnread}
+                onShowTip={onShowTip}
+                onHideTip={onHideTip}
+              />
+            ) : (
+              <div key={section.label || section.items[0]?.to || 'nav'}>
+                {section.label ? (
+                  <SectionTitle label={section.label} collapsed={collapsed} accent={section.accent} />
+                ) : null}
+                <div className="flex flex-col gap-1">
+                  {section.items.map((item) => (
+                    <NavItem
+                      key={item.to}
+                      {...item}
+                      collapsed={collapsed}
+                      onNavigate={onNavigate}
+                      badge={item.to === '/inbox' ? inboxUnread : undefined}
+                      onShowTip={onShowTip}
+                      onHideTip={onHideTip}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
       </nav>
 

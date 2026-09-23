@@ -1,6 +1,10 @@
 import prisma from '../../config/database';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { subscribePageToLeadgen } from './page-client';
+import {
+  fetchPageInstagramAccount,
+  subscribeInstagramAccount,
+  subscribePageToLeadgen,
+} from './page-client';
 import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('facebook-save-page');
@@ -85,6 +89,20 @@ export async function saveFacebookPageChannel(opts: {
     });
   }
 
+  try {
+    await saveLinkedInstagramChannel({
+      organizationId: opts.organizationId,
+      pageId: opts.pageId,
+      pageAccessToken: opts.pageAccessToken,
+    });
+  } catch (err) {
+    log.warn('Linked Instagram Channel not saved', {
+      organizationId: opts.organizationId,
+      pageId: opts.pageId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return {
     channelId: channel.id,
     pageId: opts.pageId,
@@ -92,6 +110,83 @@ export async function saveFacebookPageChannel(opts: {
     subscribed,
     subscribeError,
   };
+}
+
+export async function saveLinkedInstagramChannel(opts: {
+  organizationId: string;
+  pageId: string;
+  pageAccessToken: string;
+}): Promise<{ channelId: string; igUserId: string; username: string | null } | null> {
+  const ig = await fetchPageInstagramAccount(opts.pageId, opts.pageAccessToken);
+  if (!ig) return null;
+
+  const encrypted = MetaWhatsAppService.encryptToken(opts.pageAccessToken);
+  const existing = await prisma.channel.findFirst({
+    where: {
+      organizationId: opts.organizationId,
+      platform: 'IG',
+      platformAccountId: ig.id,
+    },
+  });
+
+  const channel = existing
+    ? await prisma.channel.update({
+        where: { id: existing.id },
+        data: {
+          name: ig.username || ig.id,
+          accessToken: encrypted,
+          isActive: true,
+        },
+      })
+    : await prisma.channel.create({
+        data: {
+          organizationId: opts.organizationId,
+          platform: 'IG',
+          platformAccountId: ig.id,
+          name: ig.username || ig.id,
+          accessToken: encrypted,
+          isActive: true,
+        },
+      });
+
+  await prisma.channel.updateMany({
+    where: {
+      organizationId: opts.organizationId,
+      platform: 'IG',
+      isActive: true,
+      id: { not: channel.id },
+    },
+    data: { isActive: false },
+  });
+
+  const stolen = await prisma.channel.updateMany({
+    where: {
+      platform: 'IG',
+      platformAccountId: ig.id,
+      isActive: true,
+      id: { not: channel.id },
+    },
+    data: { isActive: false },
+  });
+  if (stolen.count > 0) {
+    log.info('Deactivated other orgs active IG Channel for same account', {
+      igUserId: ig.id,
+      organizationId: opts.organizationId,
+      deactivated: stolen.count,
+    });
+  }
+
+  try {
+    await subscribeInstagramAccount(ig.id, opts.pageAccessToken);
+  } catch (err) {
+    log.warn('IG subscribe deferred — Channel saved', {
+      organizationId: opts.organizationId,
+      igUserId: ig.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { channelId: channel.id, igUserId: ig.id, username: ig.username };
 }
 
 export async function disconnectFacebookPageChannel(
@@ -104,6 +199,11 @@ export async function disconnectFacebookPageChannel(
   if (!channel) return;
   await prisma.channel.update({
     where: { id: channel.id },
+    data: { isActive: false },
+  });
+  // Page-linked IG uses the Page token. Soft-disconnect so DMs/comments stop.
+  await prisma.channel.updateMany({
+    where: { organizationId, platform: 'IG', isActive: true },
     data: { isActive: false },
   });
 }

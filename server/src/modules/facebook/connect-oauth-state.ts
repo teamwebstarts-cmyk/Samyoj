@@ -78,6 +78,9 @@ export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'pages_read_engagement',
   'pages_messaging',
   'leads_retrieval',
+  'instagram_basic',
+  'instagram_manage_messages',
+  'instagram_manage_comments',
 ].join(',');
 
 export function buildFacebookPageOAuthUrl(opts: {
@@ -92,6 +95,8 @@ export function buildFacebookPageOAuthUrl(opts: {
     state: opts.state,
     response_type: 'code',
     scope: FACEBOOK_PAGE_LEADGEN_SCOPES,
+    // Re-open the Page picker if the last grant had zero Pages.
+    auth_type: 'rerequest',
   });
   return {
     mode: 'OAUTH_DIALOG',

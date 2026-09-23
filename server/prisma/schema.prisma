@@ -340,6 +340,7 @@ model Organization {
   users                          OrganizationUser[]
   whatsappNumbers                WhatsappNumber[]
   channels                       Channel[]
+  instagramComments              InstagramComment[]
   contactPlatformIdentities      ContactPlatformIdentity[]
   contacts                       Contact[]
   conversations                  Conversation[]
@@ -1126,10 +1127,35 @@ model Channel {
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads         Lead[]
   conversations Conversation[]
+  instagramComments InstagramComment[]
 
   @@unique([organizationId, platform, platformAccountId])
   @@index([platform, platformAccountId])
   @@map("channels")
+}
+
+/// Instagram post/reel comment. Not a Conversation row — private reply is one-shot.
+model InstagramComment {
+  id                 String    @id @default(uuid())
+  organizationId     String    @map("organization_id")
+  channelId          String    @map("channel_id")
+  igCommentId        String    @map("ig_comment_id")
+  igMediaId          String?   @map("ig_media_id")
+  fromId             String?   @map("from_id")
+  fromUsername       String?   @map("from_username")
+  text               String    @default("")
+  commentedAt        DateTime  @map("commented_at")
+  hidden             Boolean   @default(false)
+  privateReplySentAt DateTime? @map("private_reply_sent_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, igCommentId])
+  @@index([organizationId, channelId, commentedAt])
+  @@map("instagram_comments")
 }
 
 /// Maps a Contact to Meta-side ids (PSID / IGSID / wa_id). Phase 0 schema only.

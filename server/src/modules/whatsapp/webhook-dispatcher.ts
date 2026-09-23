@@ -658,11 +658,152 @@ export async function dispatchPageWebhookFields(
   return { claimed, unmatched, duplicates };
 }
 
+export async function resolveOrgFromIgChannel(igUserId: string | undefined) {
+  if (!igUserId) return null;
+  const rows = await prisma.channel.findMany({
+    where: {
+      platform: 'IG',
+      platformAccountId: igUserId,
+      isActive: true,
+    },
+    select: { id: true, organizationId: true, accessToken: true },
+    take: 2,
+  });
+  if (rows.length !== 1) {
+    if (rows.length > 1) {
+      log.warn('Ambiguous active Channel for Instagram — refusing ownership', { igUserId });
+    }
+    return null;
+  }
+  return rows[0];
+}
+
+export async function dispatchInstagramWebhookFields(
+  payload: Record<string, unknown>
+): Promise<{ claimed: number; unmatched: number; duplicates: number }> {
+  let claimed = 0;
+  let unmatched = 0;
+  let duplicates = 0;
+
+  for (const entry of (payload.entry as Array<Record<string, unknown>>) || []) {
+    const entryIgId = typeof entry.id === 'string' ? entry.id : undefined;
+
+    for (const event of (entry.messaging as Array<Record<string, unknown>>) || []) {
+      const sender = (event.sender as { id?: string } | undefined)?.id;
+      const message = event.message as Record<string, unknown> | undefined;
+      const field = 'messages';
+      const isSelf = (event as { is_self?: boolean }).is_self === true;
+      if (!message || message.is_echo === true) continue;
+      if (isSelf) continue;
+      const text = typeof message.text === 'string' ? message.text : '';
+      if (!text.trim() || !sender) continue;
+      if (sender === entryIgId) continue;
+
+      const channel = await resolveOrgFromIgChannel(entryIgId);
+      if (!channel) {
+        unmatched += 1;
+        continue;
+      }
+
+      const mid = typeof message.mid === 'string' ? message.mid : undefined;
+      const value: Record<string, unknown> = {
+        ...(mid ? { mid } : {}),
+        sender_id: sender,
+        text,
+      };
+      const tsRaw = event.timestamp;
+      const timestampMs =
+        typeof tsRaw === 'number'
+          ? tsRaw
+          : typeof tsRaw === 'string' && /^\d+$/.test(tsRaw)
+            ? Number(tsRaw)
+            : undefined;
+
+      const outcome = await claimAndRunPageEvent({
+        organizationId: channel.organizationId,
+        channelId: channel.id,
+        pageId: entryIgId,
+        field,
+        value,
+        run: async () => {
+          const { ingestInstagramTextMessage } = await import('../instagram/ingest');
+          await ingestInstagramTextMessage({
+            organizationId: channel.organizationId,
+            channelId: channel.id,
+            igsid: sender,
+            text: text.trim(),
+            metaMessageId: mid,
+            timestampMs,
+          });
+        },
+      });
+      if (outcome === 'duplicate') duplicates += 1;
+      else claimed += 1;
+    }
+
+    for (const change of (entry.changes as Array<Record<string, unknown>>) || []) {
+      const field = typeof change.field === 'string' ? change.field : 'unknown';
+      // ponytail: live_comments share this ingest path; Meta only allows private reply during the live broadcast. Graph error is the ceiling until we store isLive.
+      if (field !== 'comments' && field !== 'live_comments') {
+        unmatched += 1;
+        continue;
+      }
+      const value = (change.value as Record<string, unknown>) || {};
+      const channel = await resolveOrgFromIgChannel(entryIgId);
+      if (!channel) {
+        unmatched += 1;
+        continue;
+      }
+      const commentId =
+        (typeof value.id === 'string' && value.id) ||
+        (typeof value.comment_id === 'string' && value.comment_id) ||
+        '';
+      const from = (value.from as { id?: string; username?: string } | undefined) || {};
+      if (from.id && entryIgId && from.id === entryIgId) continue;
+      if (!commentId) {
+        unmatched += 1;
+        continue;
+      }
+      const media = (value.media as { id?: string } | undefined) || {};
+      const text = typeof value.text === 'string' ? value.text : '';
+
+      const outcome = await claimAndRunPageEvent({
+        organizationId: channel.organizationId,
+        channelId: channel.id,
+        pageId: entryIgId,
+        field,
+        value,
+        run: async () => {
+          const { ingestInstagramComment } = await import('../instagram/comment-ingest');
+          await ingestInstagramComment({
+            organizationId: channel.organizationId,
+            channelId: channel.id,
+            igCommentId: commentId,
+            igMediaId: media.id,
+            fromId: from.id,
+            fromUsername: from.username,
+            text,
+          });
+        },
+      });
+      if (outcome === 'duplicate') duplicates += 1;
+      else claimed += 1;
+    }
+  }
+
+  return { claimed, unmatched, duplicates };
+}
+
 export async function dispatchNonMessageWebhookFields(
   payload: Record<string, unknown>
 ): Promise<void> {
   if (payload.object === 'page') {
     await dispatchPageWebhookFields(payload);
+    return;
+  }
+
+  if (payload.object === 'instagram') {
+    await dispatchInstagramWebhookFields(payload);
     return;
   }
 

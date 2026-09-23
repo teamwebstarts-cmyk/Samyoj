@@ -1,54 +1,95 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Facebook, Loader2, MessageSquare, SendHorizontal } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CircleDot, StickyNote, UserPlus } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { facebookApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
-import { ServiceWindowBadge } from '../components/inbox/ServiceWindowBanner';
-import ContactAvatar from '../components/inbox/ContactAvatar';
+import InboxListHeader, { type ListChip } from '../components/inbox/InboxListHeader';
+import ConversationList from '../components/inbox/ConversationList';
+import ChatHeader from '../components/inbox/ChatHeader';
+import ChatComposer from '../components/inbox/ChatComposer';
+import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
+import ThreadSkeleton from '../components/inbox/ThreadSkeleton';
+import MessageBubble, { DateDivider } from '../components/inbox/MessageBubble';
+import SearchInChatBar from '../components/inbox/SearchInChatBar';
+import { formatDateDivider, groupMessagesByDate } from '../components/inbox/inboxUtils';
+import {
+  DetailsSectionCard,
+  DetailsSectionHeader,
+} from '../components/inbox/details/DetailsSectionCard';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../hooks/useSocket';
+import type { InboxSelectOption } from '../components/inbox/InboxSelect';
 import type { Conversation, InternalNote, Message, ServiceWindowInfo, TeamAgent } from '../types';
+import { PAGE_SIZE_OPTIONS, type PageSize } from '../components/inbox/useConversationList';
 
 type FbConversation = Conversation & { serviceWindow?: ServiceWindowInfo };
 
-type ListChip = 'all' | 'unread' | 'open';
+const EMPTY_IDS = new Set<string>();
+const TICKET_IDS = new Set<string>();
 
 export default function FacebookInboxPage() {
+  const { user } = useAuth();
   const [connected, setConnected] = useState<boolean | null>(null);
-  const [pageName, setPageName] = useState<string | null>(null);
   const [conversations, setConversations] = useState<FbConversation[]>([]);
   const [total, setTotal] = useState(0);
+  const [unreadTotal, setUnreadTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ListChip>('all');
+  const [agentFilter, setAgentFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(30);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<FbConversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
   const [noteDraft, setNoteDraft] = useState('');
+  const [assigning, setAssigning] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearch, setChatSearch] = useState('');
+  const [chatMatchIndex, setChatMatchIndex] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const debouncedSearch = useDebouncedValue(search);
+
+  selectedIdRef.current = selectedId;
 
   const loadList = useCallback(async () => {
     setLoading(true);
+    setListError(false);
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = {
+        page: String(page),
+        limit: String(pageSize),
+      };
+      if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
       if (chip === 'unread') params.unread = 'true';
       if (chip === 'open') params.status = 'OPEN';
+      if (chip === 'pending') params.status = 'PENDING';
+      if (agentFilter) params.assignedTo = agentFilter;
       const { data } = await facebookApi.inbox.list(params);
       const payload = data.data;
       setConnected(Boolean(payload.connected));
-      setPageName(payload.page?.name ?? null);
       setConversations(payload.conversations || []);
       setTotal(payload.total || 0);
+      setUnreadTotal(payload.unreadTotal || 0);
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not load Messenger inbox');
       setConnected(false);
+      setListError(true);
     } finally {
       setLoading(false);
     }
-  }, [chip]);
+  }, [agentFilter, chip, debouncedSearch, page, pageSize]);
 
   useEffect(() => {
     void loadList();
@@ -63,6 +104,9 @@ export default function FacebookInboxPage() {
 
   const openThread = useCallback(async (id: string) => {
     setSelectedId(id);
+    setThreadLoading(true);
+    setChatSearchOpen(false);
+    setChatSearch('');
     try {
       const [{ data: convRes }, { data: msgRes }] = await Promise.all([
         facebookApi.inbox.get(id),
@@ -76,11 +120,40 @@ export default function FacebookInboxPage() {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
         );
+        if (conv.unreadCount > 0) {
+          setUnreadTotal((n) => Math.max(0, n - 1));
+        }
       });
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not open conversation');
+    } finally {
+      setThreadLoading(false);
     }
   }, []);
+
+  useSocket((event, raw) => {
+    const payload = raw as {
+      platform?: string;
+      conversationId?: string;
+      message?: Message;
+    };
+    if (payload.platform !== 'FB') return;
+    if (event !== 'message:new' && event !== 'conversation:updated') return;
+    void loadList();
+    if (payload.conversationId && payload.conversationId === selectedIdRef.current) {
+      if (event === 'message:new' && payload.message) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === payload.message!.id) ? prev : [...prev, payload.message!]
+        );
+      } else {
+        void openThread(payload.conversationId);
+      }
+    }
+  });
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, selectedId]);
 
   const serviceWindow = selected?.serviceWindow;
   const windowOpen = Boolean(serviceWindow?.open);
@@ -107,12 +180,16 @@ export default function FacebookInboxPage() {
 
   const onAssign = async (agentId: string | null) => {
     if (!selectedId) return;
+    setAssigning(true);
     try {
       const { data } = await facebookApi.inbox.assign(selectedId, agentId);
       setSelected(data.data as FbConversation);
       toastSuccess(agentId ? 'Assigned' : 'Unassigned');
+      void loadList();
     } catch (err) {
       toastError(getErrorMessage(err) || 'Assign failed');
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -139,263 +216,292 @@ export default function FacebookInboxPage() {
     }
   };
 
-  const emptyNoPage = connected === false;
-  const chips = useMemo(
-    () =>
-      [
-        { id: 'all' as const, label: 'All' },
-        { id: 'unread' as const, label: 'Unread' },
-        { id: 'open' as const, label: 'Open' },
-      ] as const,
-    []
+  const chatMatches = useMemo(() => {
+    const q = chatSearch.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return messages.filter((m) => (m.content || '').toLowerCase().includes(q)).map((m) => m.id);
+  }, [chatSearch, messages]);
+
+  useEffect(() => {
+    setChatMatchIndex(0);
+  }, [chatSearch, selectedId]);
+
+  const agentOptions: InboxSelectOption[] = useMemo(
+    () => [
+      { value: '', label: 'All agents' },
+      ...agents.map((a) => ({ value: a.id, label: a.name, avatarKey: a.name })),
+    ],
+    [agents]
+  );
+
+  const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+  const groups = useMemo(() => groupMessagesByDate(messages), [messages]);
+
+  const handleChipChange = (next: ListChip) => {
+    setChip(next);
+    setPage(1);
+  };
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
+  const handleAgentFilterChange = (value: string) => {
+    setAgentFilter(value);
+    setPage(1);
+  };
+
+  const renderDetails = () =>
+    selected ? (
+    <div className="space-y-3 overflow-y-auto p-3">
+      <DetailsSectionCard>
+        <DetailsSectionHeader icon={<CircleDot className="h-3.5 w-3.5" />} title="Status" />
+        <div className="flex flex-wrap gap-1">
+          {(['OPEN', 'PENDING', 'CLOSED'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => void onStatus(s)}
+              className={`rounded-lg px-2 py-1 text-[11.5px] font-semibold ${
+                selected.status === s
+                  ? 'bg-whatsapp-500/15 text-whatsapp-800 dark:text-whatsapp-300'
+                  : 'bg-theme-muted/10 text-theme-muted'
+              }`}
+            >
+              {s === 'OPEN' ? 'Open' : s === 'PENDING' ? 'Pending' : 'Closed'}
+            </button>
+          ))}
+        </div>
+      </DetailsSectionCard>
+
+      <DetailsSectionCard>
+        <DetailsSectionHeader icon={<UserPlus className="h-3.5 w-3.5" />} title="Assign" />
+        <select
+          className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
+          value={selected.assignedAgent?.id || ''}
+          onChange={(e) => void onAssign(e.target.value ? e.target.value : null)}
+        >
+          <option value="">Unassigned</option>
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </DetailsSectionCard>
+
+      <DetailsSectionCard>
+        <DetailsSectionHeader icon={<StickyNote className="h-3.5 w-3.5" />} title="Notes" />
+        <form onSubmit={(e) => void onAddNote(e)} className="space-y-1.5">
+          <textarea
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            rows={2}
+            placeholder="Internal note…"
+            className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
+          />
+          <button type="submit" className="rounded-lg bg-theme-muted/15 px-2.5 py-1 text-[12px] font-semibold">
+            Add note
+          </button>
+        </form>
+        <ul className="mt-2 space-y-2">
+          {notes.map((n) => (
+            <li key={n.id} className="rounded-lg bg-theme-muted/10 px-2 py-1.5 text-[12px] text-theme-fg">
+              {n.content}
+            </li>
+          ))}
+        </ul>
+      </DetailsSectionCard>
+    </div>
+  ) : (
+    <p className="p-4 text-[12.5px] text-theme-muted">Open a chat for assign, status, and notes.</p>
   );
 
   return (
     <InboxGlassTipProvider>
-      <PageShell inbox className="flex min-h-0 flex-1 flex-col">
-        <div className="inbox-shell flex min-h-0 flex-1 overflow-hidden">
-          <aside className="flex w-full max-w-[22rem] shrink-0 flex-col border-r border-theme-border bg-theme-card/40">
-            <div className="border-b border-theme-border px-3 py-3">
-              <div className="flex items-center gap-2">
-                <Facebook className="h-4 w-4 text-[#1877F2]" strokeWidth={2.25} />
-                <h1 className="text-[15px] font-bold tracking-tight text-theme-fg">Messenger</h1>
-              </div>
-              <p className="mt-1 text-[12px] font-medium text-theme-muted">
-                24h reply window{pageName ? ` · ${pageName}` : ''}
-              </p>
-              <div className="mt-2 flex gap-1">
-                {chips.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setChip(c.id)}
-                    className={`rounded-lg px-2.5 py-1 text-[12px] font-semibold ${
-                      chip === c.id
-                        ? 'bg-[#1877F2]/15 text-[#1877F2]'
-                        : 'text-theme-muted hover:bg-theme-muted/10'
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+      <PageShell inbox>
+        <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+          <div className="inbox-shell inbox-shell--messenger flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
+            <div
+              className={`inbox-sidebar relative flex h-full min-h-0 w-full flex-col md:w-[22rem] ${
+                selected ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              <InboxListHeader
+                variant="messenger"
+                search={search}
+                onSearchChange={handleSearchChange}
+                chip={chip}
+                onChipChange={handleChipChange}
+                conversationTotal={total}
+                unreadTotal={unreadTotal}
+                agentFilter={agentFilter}
+                onAgentFilterChange={handleAgentFilterChange}
+                agentOptions={agentOptions}
+                selectionMode={false}
+                onCancelSelection={() => undefined}
+                onNewChat={() => undefined}
+                onRefresh={() => void loadList()}
+                onRetryHealth={() => undefined}
+              />
+              <ConversationList
+                conversations={conversations}
+                selectedId={selected?.id}
+                loading={loading}
+                error={listError}
+                filtered={Boolean(search || agentFilter || chip !== 'all')}
+                ticketConversationIds={TICKET_IDS}
+                selectionMode={false}
+                selectedIds={EMPTY_IDS}
+                agents={agents}
+                currentUserId={user?.id}
+                bulkBusy={false}
+                page={page}
+                pageCount={pageCount}
+                pageSize={pageSize}
+                total={total}
+                rangeStart={rangeStart}
+                rangeEnd={rangeEnd}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  if ((PAGE_SIZE_OPTIONS as readonly number[]).includes(size)) {
+                    setPageSize(size);
+                    setPage(1);
+                  }
+                }}
+                onToggleSelect={() => undefined}
+                onBulkAssign={() => undefined}
+                onBulkClose={() => undefined}
+                onBulkDelete={() => undefined}
+                onClearSelection={() => undefined}
+                onRetry={() => void loadList()}
+                onSelect={(conv) => void openThread(conv.id)}
+                onContextMenu={() => undefined}
+                onNewChat={() => undefined}
+                emptyVariant="messenger"
+                pageConnected={connected !== false}
+              />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {loading && (
-                <div className="flex items-center justify-center py-10 text-theme-muted">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              )}
-              {!loading && conversations.length === 0 && (
-                <p className="px-3 py-10 text-center text-[13px] text-theme-muted">
-                  No Messenger chats yet.
-                  {emptyNoPage ? (
-                    <>
-                      {' '}
-                      <Link to="/settings?tab=facebook" className="font-semibold text-[#1877F2] underline">
-                        Connect a Page
-                      </Link>
-                    </>
-                  ) : null}
-                </p>
-              )}
-              {!loading &&
-                conversations.map((c) => {
-                  const active = c.id === selectedId;
-                  const preview = c.messages?.[0]?.content || '—';
-                  const phone = c.contact?.phone || 'messenger';
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => void openThread(c.id)}
-                      className={`flex w-full items-start gap-2.5 border-b border-theme-border/60 px-3 py-2.5 text-left ${
-                        active ? 'bg-[#1877F2]/10' : 'hover:bg-theme-muted/5'
-                      }`}
-                    >
-                      <ContactAvatar name={c.contact?.name || phone} phone={phone} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-[13.5px] font-bold text-theme-fg">
-                            {c.contact?.name || phone}
-                          </p>
-                          {c.unreadCount > 0 && (
-                            <span className="rounded-full bg-[#1877F2] px-1.5 text-[10px] font-bold text-white">
-                              {c.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                        <p className="truncate text-[12px] text-theme-muted">{preview}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-            </div>
-            <p className="border-t border-theme-border px-3 py-2 text-[11px] text-theme-muted">
-              {total} conversation{total === 1 ? '' : 's'}
-            </p>
-          </aside>
-
-          <section className="flex min-w-0 flex-1 flex-col bg-theme-bg">
-            {!selected && (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-theme-muted">
-                <MessageSquare className="h-10 w-10 opacity-40" strokeWidth={1.5} />
-                <p className="text-[14px] font-medium">Select a Messenger chat</p>
-              </div>
-            )}
-            {selected && (
-              <>
-                <header className="flex items-center justify-between gap-3 border-b border-theme-border px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-bold text-theme-fg">
-                      {selected.contact?.name || selected.contact?.phone}
-                    </p>
-                    <p className="text-[12px] text-theme-muted">Facebook Messenger</p>
-                  </div>
-                  {serviceWindow && (
-                    <ServiceWindowBadge serviceWindow={serviceWindow} variant="messenger" />
-                  )}
-                </header>
-
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4">
-                  {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`flex ${m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-3 py-2 text-[13.5px] ${
-                          m.direction === 'OUTBOUND'
-                            ? 'bg-[#1877F2] text-white'
-                            : 'bg-theme-card text-theme-fg ring-1 ring-theme-border'
-                        }`}
-                      >
-                        {m.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {!windowOpen && (
-                  <div className="border-t border-rose-200/80 bg-rose-50/95 px-4 py-3 text-center text-[13px] font-semibold text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
-                    Wait for the customer to message again.
-                  </div>
-                )}
-
-                <form
-                  onSubmit={(e) => void onSend(e)}
-                  className="flex items-end gap-2 border-t border-theme-border px-3 py-3"
-                >
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    disabled={!windowOpen || sending}
-                    rows={2}
-                    placeholder={
-                      windowOpen
-                        ? 'Reply on Messenger…'
-                        : 'Wait for the customer to message again.'
-                    }
-                    className="min-h-[44px] flex-1 resize-none rounded-xl border border-theme-border bg-theme-card px-3 py-2 text-[13.5px] text-theme-fg outline-none focus:ring-2 focus:ring-[#1877F2]/30 disabled:opacity-60"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!windowOpen || sending || !draft.trim()}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#1877F2] text-white disabled:opacity-40"
-                    aria-label="Send"
-                  >
-                    {sending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <SendHorizontal className="h-4 w-4" strokeWidth={2.25} />
-                    )}
-                  </button>
-                </form>
-              </>
-            )}
-          </section>
-
-          <aside className="hidden w-[16.5rem] shrink-0 flex-col border-l border-theme-border bg-theme-card/30 lg:flex">
-            {selected ? (
-              <div className="space-y-4 overflow-y-auto p-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                    Status
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {(['OPEN', 'PENDING', 'CLOSED'] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => void onStatus(s)}
-                        className={`rounded-lg px-2 py-1 text-[11.5px] font-semibold ${
-                          selected.status === s
-                            ? 'bg-[#1877F2]/15 text-[#1877F2]'
-                            : 'bg-theme-muted/10 text-theme-muted'
-                        }`}
-                      >
-                        {s === 'OPEN' ? 'Open' : s === 'PENDING' ? 'Pending' : 'Closed'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                    Assign
-                  </p>
-                  <select
-                    className="mt-1.5 w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
-                    value={selected.assignedAgent?.id || ''}
-                    onChange={(e) => void onAssign(e.target.value ? e.target.value : null)}
-                  >
-                    <option value="">Unassigned</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">
-                    Notes
-                  </p>
-                  <form onSubmit={(e) => void onAddNote(e)} className="mt-1.5 space-y-1.5">
-                    <textarea
-                      value={noteDraft}
-                      onChange={(e) => setNoteDraft(e.target.value)}
-                      rows={2}
-                      placeholder="Internal note…"
-                      className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
+            <div
+              className={`inbox-chat-pane relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
+                !selected ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              {selected ? (
+                <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <ChatHeader
+                      conversation={selected}
+                      serviceWindow={serviceWindow}
+                      botIsLive={false}
+                      canUseAi={false}
+                      botToggling={false}
+                      callingBack={false}
+                      assigning={assigning}
+                      agents={agents}
+                      currentUserId={user?.id}
+                      viewers={[]}
+                      onBack={() => {
+                        setSelected(null);
+                        setSelectedId(null);
+                        setDetailsOpen(false);
+                      }}
+                      onCallBack={() => undefined}
+                      onAssign={(agentId) => void onAssign(agentId)}
+                      onToggleBot={() => undefined}
+                      onToggleFavorite={() => undefined}
+                      onToggleSearch={() => setChatSearchOpen((open) => !open)}
+                      onOpenDetails={() => setDetailsOpen(true)}
+                      hideCall
+                      hideBot
+                      hideFavorite
+                      windowVariant="messenger"
                     />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-theme-muted/15 px-2.5 py-1 text-[12px] font-semibold"
-                    >
-                      Add note
-                    </button>
-                  </form>
-                  <ul className="mt-2 space-y-2">
-                    {notes.map((n) => (
-                      <li
-                        key={n.id}
-                        className="rounded-lg bg-theme-muted/10 px-2 py-1.5 text-[12px] text-theme-fg"
-                      >
-                        {n.content}
-                      </li>
-                    ))}
-                  </ul>
+                    <SearchInChatBar
+                      open={chatSearchOpen}
+                      query={chatSearch}
+                      onQueryChange={setChatSearch}
+                      matchCount={chatMatches.length}
+                      activeIndex={chatMatchIndex}
+                      searching={false}
+                      onNext={() =>
+                        setChatMatchIndex((i) =>
+                          chatMatches.length ? (i + 1) % chatMatches.length : 0
+                        )
+                      }
+                      onPrev={() =>
+                        setChatMatchIndex((i) =>
+                          chatMatches.length
+                            ? (i - 1 + chatMatches.length) % chatMatches.length
+                            : 0
+                        )
+                      }
+                      onClose={() => {
+                        setChatSearchOpen(false);
+                        setChatSearch('');
+                      }}
+                    />
+                    {threadLoading ? (
+                      <ThreadSkeleton />
+                    ) : (
+                      <div className="inbox-thread-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
+                        {groups.map((group) => (
+                          <div key={group.date}>
+                            <DateDivider label={formatDateDivider(group.date)} />
+                            {group.messages.map((message) => (
+                              <MessageBubble
+                                key={message.id}
+                                message={message}
+                                highlightQuery={chatSearch.trim() || undefined}
+                                isActiveMatch={chatMatches[chatMatchIndex] === message.id}
+                              />
+                            ))}
+                          </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                      </div>
+                    )}
+                    {!windowOpen && (
+                      <div className="border-t border-rose-200/80 bg-rose-50/95 px-4 py-3 text-center text-[13px] font-semibold text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+                        Wait for the customer to message again.
+                      </div>
+                    )}
+                    <ChatComposer
+                      value={draft}
+                      onChange={setDraft}
+                      onSubmit={(e) => void onSend(e)}
+                      canSendMessages={windowOpen}
+                      sending={sending}
+                    />
+                  </div>
+
+                  <aside className="hidden w-[16.5rem] shrink-0 flex-col border-l border-theme-border bg-theme-card/30 lg:flex">
+                    {renderDetails()}
+                  </aside>
+
+                  {detailsOpen ? (
+                    <div className="absolute inset-0 z-30 flex flex-col bg-theme-surface lg:hidden">
+                      <div className="flex items-center justify-between border-b border-theme-border px-3 py-2">
+                        <p className="text-[13px] font-bold">Details</p>
+                        <button
+                          type="button"
+                          className="rounded-lg px-2 py-1 text-[12px] font-semibold text-theme-muted"
+                          onClick={() => setDetailsOpen(false)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      {renderDetails()}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ) : (
-              <p className="p-4 text-[12.5px] text-theme-muted">
-                Open a chat for assign, status, and notes.
-              </p>
-            )}
-          </aside>
+              ) : (
+                <ChatPlaceholder />
+              )}
+            </div>
+          </div>
         </div>
       </PageShell>
     </InboxGlassTipProvider>

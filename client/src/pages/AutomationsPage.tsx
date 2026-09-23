@@ -7,6 +7,7 @@ import {
   Clock,
   GitBranch,
   Hash,
+  Instagram,
   MessageSquareQuote,
   PauseCircle,
   PlayCircle,
@@ -163,6 +164,7 @@ const emptyForm = {
   awayMessage: '',
   tag: 'lead',
   handoff: false,
+  platform: 'WA' as 'WA' | 'IG',
   buttons: [] as QuickReplyButton[],
 };
 
@@ -310,6 +312,7 @@ export default function AutomationsPage() {
       awayMessage: String(config.awayMessage || ''),
       tag: String(config.tag || 'lead'),
       handoff: Boolean(config.handoff),
+      platform: config.platform === 'IG' ? 'IG' : 'WA',
       buttons: Array.isArray(config.buttons) ? (config.buttons as QuickReplyButton[]) : [],
     });
     setSlideOpen(true);
@@ -339,7 +342,11 @@ export default function AutomationsPage() {
       validationErrors.push('Reply message is required');
     }
     if (form.triggerType === 'KEYWORD' && !form.keyword.trim()) {
-      validationErrors.push('Enter the word customers should text');
+      validationErrors.push(
+        form.platform === 'IG'
+          ? 'Enter the word that should appear in a comment'
+          : 'Enter the word customers should text'
+      );
     }
     if (validationErrors.length > 0) {
       toastValidationErrors(validationErrors);
@@ -348,7 +355,10 @@ export default function AutomationsPage() {
 
     setSaving(true);
     const config: Record<string, unknown> = { message: form.message };
-    if (form.triggerType === 'KEYWORD') config.keyword = form.keyword;
+    if (form.triggerType === 'KEYWORD') {
+      config.keyword = form.keyword;
+      if (form.platform === 'IG') config.platform = 'IG';
+    }
     if (form.triggerType === 'BUSINESS_HOURS') {
       config.duringHoursMessage = form.duringHoursMessage || form.message;
       config.awayMessage = form.awayMessage;
@@ -359,7 +369,7 @@ export default function AutomationsPage() {
       config.tag = form.tag || 'lead';
       config.handoff = form.handoff;
     }
-    if (form.buttons.length > 0) config.buttons = form.buttons.slice(0, 3);
+    if (form.buttons.length > 0 && form.platform !== 'IG') config.buttons = form.buttons.slice(0, 3);
 
     const enabled = editing ? editing.enabled : true;
     try {
@@ -824,9 +834,20 @@ export default function AutomationsPage() {
                           </td>
                           <td className="px-5 py-3.5">
                             {automation.triggerType === 'KEYWORD' && config.keyword ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-300">
-                                <Hash className="h-3 w-3" />
-                                {config.keyword}
+                              <span className="inline-flex flex-wrap items-center gap-1">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-300">
+                                  <Hash className="h-3 w-3" />
+                                  {config.keyword}
+                                </span>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+                                    config.platform === 'IG'
+                                      ? 'bg-[#E4405F]/10 text-[#C13584] ring-[#E4405F]/20'
+                                      : 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20'
+                                  }`}
+                                >
+                                  {config.platform === 'IG' ? 'Instagram' : 'WhatsApp'}
+                                </span>
                               </span>
                             ) : (
                               <span className="text-[13px] text-theme-muted">—</span>
@@ -915,7 +936,13 @@ export default function AutomationsPage() {
                       type="button"
                       onClick={() => {
                         const defaults = triggerDefaults[type] || {};
-                        setForm((prev) => ({ ...prev, triggerType: type, ...defaults }));
+                        setForm((prev) => ({
+                          ...prev,
+                          triggerType: type,
+                          ...defaults,
+                          platform: type === 'KEYWORD' ? prev.platform : 'WA',
+                          buttons: type === 'KEYWORD' && prev.platform === 'IG' ? [] : prev.buttons,
+                        }));
                       }}
                       className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition ${
                         selected
@@ -977,21 +1004,74 @@ export default function AutomationsPage() {
                 value={form.triggerType}
                 options={triggerOptions}
                 isSearchable={false}
-                onChange={(e) => setForm({ ...form, triggerType: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    triggerType: e.target.value,
+                    platform: e.target.value === 'KEYWORD' ? form.platform : 'WA',
+                  })
+                }
                 required
               />
             )}
 
             {form.triggerType === 'KEYWORD' && (
-              <AppInput
-                id="keyword"
-                label="Word or phrase to watch for"
-                hint="We'll reply when a customer sends this word"
-                placeholder="pricing"
-                value={form.keyword}
-                onChange={(e) => setForm({ ...form, keyword: e.target.value })}
-                required
-              />
+              <>
+                <div className="space-y-2">
+                  <p className="text-[12px] font-bold text-neutral-700">Channel</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' },
+                        { id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' },
+                      ] as const
+                    ).map((opt) => {
+                      const selected = form.platform === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              platform: opt.id,
+                              buttons: opt.id === 'IG' ? [] : prev.buttons,
+                            }))
+                          }
+                          className={`rounded-xl border px-3 py-2.5 text-left ${
+                            selected
+                              ? opt.id === 'IG'
+                                ? 'border-[#E4405F]/40 bg-[#E4405F]/[0.06]'
+                                : 'border-emerald-300 bg-emerald-50/80'
+                              : 'border-neutral-200 bg-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 text-[13px] font-bold text-neutral-900">
+                            {opt.id === 'IG' ? (
+                              <Instagram className="h-3.5 w-3.5 text-[#E4405F]" />
+                            ) : null}
+                            {opt.label}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-neutral-500">{opt.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <AppInput
+                  id="keyword"
+                  label={form.platform === 'IG' ? 'Word in a comment' : 'Word or phrase to watch for'}
+                  hint={
+                    form.platform === 'IG'
+                      ? 'One private reply when this word appears. A 24h chat starts only after they reply in DMs.'
+                      : "We'll reply when a customer sends this word"
+                  }
+                  placeholder="pricing"
+                  value={form.keyword}
+                  onChange={(e) => setForm({ ...form, keyword: e.target.value })}
+                  required
+                />
+              </>
             )}
 
             {form.triggerType === 'LEAD_CAPTURE' && (
@@ -1061,6 +1141,7 @@ export default function AutomationsPage() {
               />
             )}
 
+            {form.platform !== 'IG' && (
             <div className="space-y-2">
               <p className="text-[12px] font-bold text-neutral-700">Add tap-to-reply buttons (optional, max 3)</p>
               {form.buttons.map((btn, idx) => (
@@ -1091,11 +1172,14 @@ export default function AutomationsPage() {
                 </AppButton>
               )}
             </div>
+            )}
           </section>
 
           {(form.message.trim() || form.duringHoursMessage.trim() || form.awayMessage.trim()) && (
             <section className="space-y-3 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4">
-              <p className="text-[13px] font-extrabold text-neutral-900">WhatsApp preview</p>
+              <p className="text-[13px] font-extrabold text-neutral-900">
+                {form.platform === 'IG' ? 'Instagram preview' : 'WhatsApp preview'}
+              </p>
 
               {form.triggerType === 'BUSINESS_HOURS' ? (
                 <div className="space-y-4">
@@ -1139,7 +1223,7 @@ export default function AutomationsPage() {
             </section>
           )}
 
-          {editing && form.message.trim() && (
+          {editing && form.message.trim() && form.platform !== 'IG' && (
             <section className="space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
               <p className="text-[13px] font-extrabold text-neutral-900">Send to my WhatsApp</p>
               <p className="text-[11px] leading-relaxed text-neutral-600">

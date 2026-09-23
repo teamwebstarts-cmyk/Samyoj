@@ -4,6 +4,7 @@ import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 import { tipProps } from './SidebarFlyoutTip';
+import MetaChannelChips from './MetaChannelChips';
 
 interface WhatsAppStatusCardProps {
   collapsed?: boolean;
@@ -92,12 +93,12 @@ export default function WhatsAppStatusCard({
 
   if (hasConnectedNumber && activeNumber) {
     return (
-      <Link
-        to={href}
-        onClick={onNavigate}
-        className="sidebar-wa-card sidebar-wa-card--connected group block p-2.5"
-      >
-        <div className="flex items-center gap-2.5">
+      <div className="sidebar-wa-card sidebar-wa-card--connected p-2.5">
+        <Link
+          to={href}
+          onClick={onNavigate}
+          className="group flex items-center gap-2.5 rounded-lg"
+        >
           <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#25D366] text-white shadow-[0_6px_16px_rgba(37,211,102,0.28)] transition-transform duration-200 group-hover:scale-[1.03]">
             <WhatsAppGlyph className="h-5 w-5" />
             <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] dark:border-[#0f1a14]" />
@@ -116,8 +117,10 @@ export default function WhatsAppStatusCard({
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 text-emerald-700 ring-1 ring-emerald-200/80 transition duration-200 group-hover:bg-white group-hover:text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25">
             <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2} />
           </span>
-        </div>
-      </Link>
+        </Link>
+
+        <MetaChannelChips className="mt-2" onNavigate={onNavigate} />
+      </div>
     );
   }
 

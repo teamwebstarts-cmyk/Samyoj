@@ -978,7 +978,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
   }
 
   // --- 3b. Page objects: claim when Channel resolves; never enqueue WhatsApp message processor ---
-  if (payload.object === 'page') {
+  if (payload.object === 'page' || payload.object === 'instagram') {
     try {
       await dispatchNonMessageWebhookFields(payload);
       log.info('Page webhook handled', {

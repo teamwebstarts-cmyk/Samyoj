@@ -140,7 +140,10 @@ router.post(
 
     const pages = await listManagedPages(userToken);
     if (pages.length === 0) {
-      throw new AppError(400, 'No Facebook Pages found for this account.');
+      throw new AppError(
+        400,
+        'No Facebook Pages found for this account. Use a Facebook login that is Admin of a Page, then on Facebook’s permission screen tick that Page and continue.'
+      );
     }
 
     if (pages.length === 1) {

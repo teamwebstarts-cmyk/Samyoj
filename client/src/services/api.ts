@@ -443,6 +443,7 @@ export const facebookApi = {
             }
           >;
           total: number;
+          unreadTotal?: number;
         };
       }>('/facebook/inbox', { params }),
     get: (id: string) =>
@@ -467,6 +468,72 @@ export const facebookApi = {
       api.patch(`/facebook/inbox/${id}/status`, { status }),
     addNote: (id: string, content: string) =>
       api.post(`/facebook/inbox/${id}/notes`, { content }),
+  },
+};
+
+export const instagramApi = {
+  account: () =>
+    api.get<{
+      data: {
+        connected: boolean;
+        account: { channelId: string; igUserId: string; username: string | null; connectedAt?: string } | null;
+      };
+    }>('/instagram/account'),
+  connect: () =>
+    api.post<{ data: { channelId: string; igUserId: string; username: string | null } }>(
+      '/instagram/connect'
+    ),
+  disconnect: () => api.post('/instagram/disconnect'),
+  inbox: {
+    list: (params?: Record<string, string>) =>
+      api.get<{
+        data: {
+          connected: boolean;
+          page: { channelId: string; pageId: string; name: string } | null;
+          conversations: Array<
+            import('../types').Conversation & {
+              serviceWindow?: import('../types').ServiceWindowInfo;
+            }
+          >;
+          total: number;
+          unreadTotal?: number;
+        };
+      }>('/instagram/inbox', { params }),
+    get: (id: string) =>
+      api.get<{
+        data: import('../types').Conversation & {
+          serviceWindow?: import('../types').ServiceWindowInfo;
+          internalNotes?: import('../types').InternalNote[];
+        };
+      }>(`/instagram/inbox/${id}`),
+    messages: (id: string) =>
+      api.get<{ data: { messages: import('../types').Message[] } }>(
+        `/instagram/inbox/${id}/messages`
+      ),
+    send: (id: string, content: string) =>
+      api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, {
+        content,
+      }),
+    markRead: (id: string) => api.post(`/instagram/inbox/${id}/read`),
+    assign: (id: string, agentId: string | null) =>
+      api.patch(`/instagram/inbox/${id}/assign`, { agentId }),
+    setStatus: (id: string, status: string) =>
+      api.patch(`/instagram/inbox/${id}/status`, { status }),
+    addNote: (id: string, content: string) =>
+      api.post(`/instagram/inbox/${id}/notes`, { content }),
+  },
+  comments: {
+    list: (params?: Record<string, string>) =>
+      api.get<{
+        data: {
+          connected: boolean;
+          comments: Array<Record<string, unknown>>;
+          total: number;
+        };
+      }>('/instagram/comments', { params }),
+    privateReply: (id: string, content: string) =>
+      api.post(`/instagram/comments/${id}/private-reply`, { content }),
+    hide: (id: string, hide: boolean) => api.post(`/instagram/comments/${id}/hide`, { hide }),
   },
 };
 
