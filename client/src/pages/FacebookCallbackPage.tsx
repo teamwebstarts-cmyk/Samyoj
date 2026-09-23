@@ -74,10 +74,12 @@ export default function FacebookCallbackPage() {
         sessionStorage.removeItem(CODE_KEY);
         sessionStorage.removeItem(STATE_KEY);
         setStatus('success');
+        const connectedName =
+          typeof result.pageName === 'string' ? `Connected ${result.pageName}` : 'Facebook Page connected';
         setMessage(
-          typeof result.pageName === 'string'
-            ? `Connected ${result.pageName}`
-            : 'Facebook Page connected'
+          result.subscribed === false && typeof result.subscribeError === 'string'
+            ? `${connectedName}. Leadgen subscribe failed — reconnect or check App Review permissions.`
+            : connectedName
         );
         window.setTimeout(() => navigate('/settings?tab=facebook', { replace: true }), 1200);
       })
@@ -95,10 +97,14 @@ export default function FacebookCallbackPage() {
       sessionStorage.removeItem(CODE_KEY);
       sessionStorage.removeItem(STATE_KEY);
       setStatus('success');
-      setMessage(
+      const connectedName =
         typeof data.data.pageName === 'string'
           ? `Connected ${data.data.pageName}`
-          : 'Facebook Page connected'
+          : 'Facebook Page connected';
+      setMessage(
+        data.data.subscribed === false && typeof data.data.subscribeError === 'string'
+          ? `${connectedName}. Leadgen subscribe failed — reconnect or check App Review permissions.`
+          : connectedName
       );
       window.setTimeout(() => navigate('/settings?tab=facebook', { replace: true }), 1200);
     } catch (err) {

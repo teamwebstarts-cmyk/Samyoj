@@ -37,8 +37,6 @@ export interface NavSection {
   items: NavItem[];
   /** 3px platform color mark on the group label */
   accent?: 'facebook' | 'whatsapp' | 'instagram';
-  /** Hide entire section until a Page is connected (checked at render) */
-  requireFacebookPage?: boolean;
 }
 
 const ADMIN_ROLES: OrgRole[] = ['OWNER', 'ADMIN'];
@@ -50,35 +48,48 @@ const SUPERVISOR_PLUS: OrgRole[] = ['OWNER', 'ADMIN', 'SUPERVISOR'];
  */
 export const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Main',
+    label: '',
+    items: [{ to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true }],
+  },
+  {
+    label: 'WhatsApp',
+    accent: 'whatsapp',
     items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
       { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
       { to: '/calls', icon: Phone, label: 'Calls' },
-      { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
-      { to: '/automations', icon: Workflow, label: 'Automations' },
-      { to: '/campaigns', icon: Send, label: 'Campaigns' },
       { to: '/templates', icon: ClipboardList, label: 'Templates' },
+      { to: '/campaigns', icon: Send, label: 'Campaigns' },
+      { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
+    ],
+  },
+  {
+    label: 'Facebook',
+    accent: 'facebook',
+    items: [
+      {
+        to: '/contacts?tab=pipeline&source=META_ADS',
+        icon: Target,
+        label: 'Leads',
+      },
+      {
+        to: '/facebook/inbox',
+        icon: MessageSquare,
+        label: 'Inbox',
+      },
+    ],
+  },
+  {
+    label: '',
+    items: [
+      { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
+      { to: '/contacts', icon: UserPlus, label: 'Contacts' },
+      { to: '/automations', icon: Workflow, label: 'Automations' },
       {
         to: '/content-studio',
         icon: Sparkles,
         label: 'Content Studio',
         hideForRoles: ['AGENT'],
         hidden: true,
-      },
-      { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
-      { to: '/contacts', icon: UserPlus, label: 'Contacts' },
-    ],
-  },
-  {
-    label: 'Facebook',
-    accent: 'facebook',
-    requireFacebookPage: true,
-    items: [
-      {
-        to: '/contacts?tab=pipeline&source=META_ADS',
-        icon: Target,
-        label: 'Leads',
       },
     ],
   },
@@ -115,6 +126,8 @@ export const MOBILE_BOTTOM_NAV: NavItem[] = [
 
 export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/contacts?tab=pipeline&source=META_ADS', icon: Target, label: 'Leads' },
+  { to: '/facebook/inbox', icon: MessageSquare, label: 'Messenger' },
   { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },
@@ -141,15 +154,12 @@ export function isNavItemVisible(
 
 export function getVisibleNavSections(
   role: OrgRole | null,
-  hiddenModules?: string[],
-  options?: { facebookPageConnected?: boolean }
+  hiddenModules?: string[]
 ): NavSection[] {
   return NAV_SECTIONS.map((section) => ({
     ...section,
     items: section.items.filter((item) => isNavItemVisible(item, role, hiddenModules)),
-  }))
-    .filter((section) => section.items.length > 0)
-    .filter((section) => !section.requireFacebookPage || options?.facebookPageConnected);
+  })).filter((section) => section.items.length > 0);
 }
 
 export function getVisibleMobileMoreItems(

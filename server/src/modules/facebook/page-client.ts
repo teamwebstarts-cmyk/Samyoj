@@ -27,9 +27,11 @@ export type GraphLeadPayload = {
 };
 
 async function graphGet<T>(path: string, accessToken: string): Promise<T> {
-  const sep = path.includes('?') ? '&' : '?';
-  const url = `${graphBase()}${path}${sep}access_token=${encodeURIComponent(accessToken)}`;
-  const res = await fetch(url);
+  // Bearer header — never put Page tokens on the query string (proxy/access logs).
+  const url = `${graphBase()}${path}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   const data = (await res.json()) as T & GraphError;
   if (!res.ok) {
     throw new Error(data.error?.message || `Graph GET ${path} failed (${res.status})`);
@@ -42,10 +44,13 @@ async function graphPost(
   accessToken: string,
   body: Record<string, string>
 ): Promise<Record<string, unknown>> {
-  const params = new URLSearchParams({ ...body, access_token: accessToken });
+  const params = new URLSearchParams(body);
   const res = await fetch(`${graphBase()}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Bearer ${accessToken}`,
+    },
     body: params.toString(),
   });
   const data = (await res.json()) as Record<string, unknown> & GraphError;
@@ -72,14 +77,15 @@ export async function listManagedPages(userAccessToken: string): Promise<Faceboo
     .map((p) => ({ id: p.id, name: p.name || p.id, accessToken: p.access_token }));
 }
 
-/** Subscribe the Page app install to leadgen webhooks. */
+/** Subscribe the Page app install to leadgen + messages webhooks. */
 export async function subscribePageToLeadgen(pageId: string, pageAccessToken: string): Promise<void> {
   try {
     await graphPost(`/${pageId}/subscribed_apps`, pageAccessToken, {
-      subscribed_fields: 'leadgen',
+      // Keep leadgen; Phase 3 adds messages. Do not drop Instant Forms.
+      subscribed_fields: 'leadgen,messages',
     });
   } catch (err) {
-    log.warn('Page leadgen subscribe failed', {
+    log.warn('Page webhook subscribe failed', {
       pageId,
       error: err instanceof Error ? err.message : String(err),
       metaCode: err && typeof err === 'object' && 'metaCode' in err ? (err as { metaCode?: number }).metaCode : undefined,
@@ -96,6 +102,27 @@ export async function fetchLeadgenLead(
     `/${leadgenId}?fields=id,created_time,field_data`,
     pageAccessToken
   );
+}
+
+/** Send a text reply on Messenger (Page messages API). Bearer only — not WhatsApp send. */
+export async function sendPageTextMessage(opts: {
+  pageId: string;
+  pageAccessToken: string;
+  recipientPsid: string;
+  text: string;
+}): Promise<{ messageId?: string }> {
+  const data = await graphPost(`/${opts.pageId}/messages`, opts.pageAccessToken, {
+    recipient: JSON.stringify({ id: opts.recipientPsid }),
+    messaging_type: 'RESPONSE',
+    message: JSON.stringify({ text: opts.text }),
+  });
+  const messageId =
+    typeof data.message_id === 'string'
+      ? data.message_id
+      : typeof (data as { messageId?: unknown }).messageId === 'string'
+        ? (data as { messageId: string }).messageId
+        : undefined;
+  return { messageId };
 }
 
 export function mapLeadgenFields(fieldData: LeadgenField[] | undefined): {

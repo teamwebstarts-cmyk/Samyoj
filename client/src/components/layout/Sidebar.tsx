@@ -1,10 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronsLeft, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { getVisibleNavSections } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
-import { facebookApi } from '../../services/api';
 import { PlatformBrand } from './PlatformBrand';
 import WhatsAppStatusCard from './WhatsAppStatusCard';
 import { SidebarFlyoutTip, tipProps, useSidebarFlyoutTip } from './SidebarFlyoutTip';
@@ -21,7 +19,7 @@ interface SidebarProps {
 
 /** Abbreviated section titles keep header height when collapsed so icons never jump up. */
 const SECTION_SHORT: Record<string, string> = {
-  Main: 'MA',
+  WhatsApp: 'WA',
   Facebook: 'FB',
   Support: 'SUPP',
   Insights: 'INS',
@@ -178,7 +176,9 @@ function SectionTitle({
   const accentBar =
     accent === 'facebook'
       ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-[#1877F2]'
-      : '';
+      : accent === 'whatsapp'
+        ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-emerald-500'
+        : '';
 
   return (
     <p
@@ -222,30 +222,12 @@ export default function Sidebar({
   inboxUnread = 0,
 }: SidebarProps) {
   const { orgRole, organization } = useAuth();
-  const [facebookPageConnected, setFacebookPageConnected] = useState(false);
   const uiToggles = (organization?.settings as Record<string, unknown>)?.uiToggles as
     | { hiddenModules?: string[] }
     | undefined;
-  const navSections = getVisibleNavSections(orgRole, uiToggles?.hiddenModules, {
-    facebookPageConnected,
-  });
+  const navSections = getVisibleNavSections(orgRole, uiToggles?.hiddenModules);
   // Tip enabled whenever collapsed (nav labels) or always for collapse button
   const { tip, onShowTip, onHideTip } = useSidebarFlyoutTip(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    facebookApi
-      .page()
-      .then((res) => {
-        if (!cancelled) setFacebookPageConnected(Boolean(res.data.data.connected));
-      })
-      .catch(() => {
-        if (!cancelled) setFacebookPageConnected(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [organization?.id]);
 
   return (
     <div
@@ -319,8 +301,8 @@ export default function Sidebar({
       >
         <div className="flex flex-col gap-3.5">
           {navSections.map(({ label, items, accent }) => (
-            <div key={label}>
-              <SectionTitle label={label} collapsed={collapsed} accent={accent} />
+            <div key={label || items[0]?.to || 'nav'}>
+              {label ? <SectionTitle label={label} collapsed={collapsed} accent={accent} /> : null}
               <div className="flex flex-col gap-1">
                 {items.map((item) => (
                   <NavItem

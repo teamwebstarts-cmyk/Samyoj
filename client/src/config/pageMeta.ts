@@ -12,6 +12,10 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Inbox',
     description: 'Reply to your customers',
   },
+  '/facebook/inbox': {
+    title: 'Messenger Inbox',
+    description: 'Facebook Page conversations',
+  },
   '/calls': {
     title: 'Calls',
     description: 'Voice calls handled by your AI bot',

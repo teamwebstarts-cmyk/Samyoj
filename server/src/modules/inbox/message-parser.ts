@@ -64,11 +64,7 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
 
   if (msgType === 'text') {
     const textBody = (msg.text as { body?: string } | undefined)?.body || '';
-    const referral = msg.referral as Record<string, unknown> | undefined;
-    return {
-      content: textBody,
-      ...(referral ? { referral } : {}),
-    };
+    return { content: textBody };
   }
 
   if (msgType === 'button') {
@@ -293,5 +289,11 @@ function parseInboundContent(msg: Record<string, unknown>): ParsedInboundMessage
 export function parseInboundMessage(msg: Record<string, unknown>): ParsedInboundMessage {
   const parsed = parseInboundContent(msg);
   const replyToMetaId = (msg.context as { id?: string } | undefined)?.id;
-  return replyToMetaId ? { ...parsed, replyToMetaId } : parsed;
+  // Meta attaches referral on the first CTWA message (any type); keep text-only parsers thin.
+  const referral = msg.referral as Record<string, unknown> | undefined;
+  return {
+    ...parsed,
+    ...(replyToMetaId ? { replyToMetaId } : {}),
+    ...(referral && !parsed.referral ? { referral } : {}),
+  };
 }

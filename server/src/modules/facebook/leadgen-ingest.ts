@@ -67,12 +67,14 @@ export async function ingestLeadgenForChannel(opts: {
   const normalizedPhone = phoneOk?.ok ? phoneOk.phone : null;
 
   if (normalizedPhone) {
-    const activeNumber = await prisma.whatsappNumber.findFirst({
+    // Number isolation: never pick “latest” when multiple active numbers exist.
+    const activeNumbers = await prisma.whatsappNumber.findMany({
       where: { organizationId: opts.organizationId, isActive: true },
-      orderBy: { updatedAt: 'desc' },
+      take: 2,
       select: { id: true },
     });
-    if (activeNumber) {
+    if (activeNumbers.length === 1) {
+      const activeNumber = activeNumbers[0];
       whatsappNumberId = activeNumber.id;
       const contact = await prisma.contact.upsert({
         where: {
@@ -106,13 +108,22 @@ export async function ingestLeadgenForChannel(opts: {
       });
       contactId = contact.id;
       contactForSend = contact;
+    } else if (activeNumbers.length > 1) {
+      log.info('Lead Ads contact skip — multiple active WhatsApp numbers', {
+        organizationId: opts.organizationId,
+        channelId: opts.channelId,
+      });
     }
   }
 
+  const noWaMessage =
+    !normalizedPhone ||
+    !contactForSend ||
+    !hasAuditableCampaignConsent(contactForSend);
   const notesParts = [
     mapped.email ? `email: ${mapped.email}` : null,
     !normalizedPhone && mapped.phone ? `raw_phone: ${mapped.phone}` : null,
-    !normalizedPhone ? 'No WhatsApp message — no phone or no consent.' : null,
+    noWaMessage ? 'No WhatsApp message — no phone or no consent.' : null,
   ].filter(Boolean);
 
   try {

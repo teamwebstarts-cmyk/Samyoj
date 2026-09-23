@@ -431,6 +431,43 @@ export const facebookApi = {
     }>('/facebook/connect/select', { pendingToken, pageId }),
   disconnect: (channelId?: string) =>
     api.post('/facebook/disconnect', channelId ? { channelId } : {}),
+  inbox: {
+    list: (params?: Record<string, string>) =>
+      api.get<{
+        data: {
+          connected: boolean;
+          page: { channelId: string; pageId: string; name: string } | null;
+          conversations: Array<
+            import('../types').Conversation & {
+              serviceWindow?: import('../types').ServiceWindowInfo;
+            }
+          >;
+          total: number;
+        };
+      }>('/facebook/inbox', { params }),
+    get: (id: string) =>
+      api.get<{
+        data: import('../types').Conversation & {
+          serviceWindow?: import('../types').ServiceWindowInfo;
+          internalNotes?: import('../types').InternalNote[];
+        };
+      }>(`/facebook/inbox/${id}`),
+    messages: (id: string) =>
+      api.get<{ data: { messages: import('../types').Message[] } }>(
+        `/facebook/inbox/${id}/messages`
+      ),
+    send: (id: string, content: string) =>
+      api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, {
+        content,
+      }),
+    markRead: (id: string) => api.post(`/facebook/inbox/${id}/read`),
+    assign: (id: string, agentId: string | null) =>
+      api.patch(`/facebook/inbox/${id}/assign`, { agentId }),
+    setStatus: (id: string, status: string) =>
+      api.patch(`/facebook/inbox/${id}/status`, { status }),
+    addNote: (id: string, content: string) =>
+      api.post(`/facebook/inbox/${id}/notes`, { content }),
+  },
 };
 
 export const automationApi = {

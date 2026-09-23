@@ -26,7 +26,7 @@ export function providerWebhookEventKey(
   field: string,
   value: Record<string, unknown>
 ): string {
-  const explicit = value.event_id || value.eventId || value.leadgen_id;
+  const explicit = value.event_id || value.eventId || value.leadgen_id || value.mid;
   if (typeof explicit === 'string' && explicit) return `${field}:${explicit}`;
   return `${entryId || 'unknown'}:${field}:${hashWebhookPayload(value)}`;
 }
@@ -487,7 +487,35 @@ export async function resolveOrgFromPageChannel(pageId: string | undefined) {
   return rows[0];
 }
 
-/** Phase 0 claim + Phase 1 leadgen ingest when Channel resolves. Never creates WA conversations. */
+async function claimAndRunPageEvent(opts: {
+  organizationId: string;
+  channelId: string;
+  pageId: string | undefined;
+  field: string;
+  value: Record<string, unknown>;
+  run: () => Promise<void>;
+}): Promise<'claimed' | 'duplicate'> {
+  const eventKey = providerWebhookEventKey(opts.pageId, opts.field, opts.value);
+  const owned = await claimProviderWebhookEvent(opts.organizationId, eventKey, opts.field);
+  if (!owned) {
+    log.info('Duplicate page webhook skipped', {
+      field: opts.field,
+      organizationId: opts.organizationId,
+      eventKey,
+    });
+    return 'duplicate';
+  }
+  try {
+    await opts.run();
+    await completeProviderWebhookEvent(opts.organizationId, eventKey);
+    return 'claimed';
+  } catch (error) {
+    await releaseProviderWebhookEvent(opts.organizationId, eventKey);
+    throw error;
+  }
+}
+
+/** Phase 0 claim + Phase 1 leadgen + Phase 3 Messenger. Never creates WA conversations. */
 export async function dispatchPageWebhookFields(
   payload: Record<string, unknown>
 ): Promise<{ claimed: number; unmatched: number; duplicates: number }> {
@@ -497,6 +525,72 @@ export async function dispatchPageWebhookFields(
 
   for (const entry of (payload.entry as Array<Record<string, unknown>>) || []) {
     const entryPageId = typeof entry.id === 'string' ? entry.id : undefined;
+
+    // Messenger Platform delivers DMs on entry.messaging[], not changes[].
+    for (const event of (entry.messaging as Array<Record<string, unknown>>) || []) {
+      const sender = (event.sender as { id?: string } | undefined)?.id;
+      const recipient = (event.recipient as { id?: string } | undefined)?.id;
+      const pageId = recipient || entryPageId;
+      const message = event.message as Record<string, unknown> | undefined;
+      const field = 'messages';
+
+      if (!message || message.is_echo === true) continue;
+      const text = typeof message.text === 'string' ? message.text : '';
+      if (!text.trim() || !sender) continue;
+
+      const channel = await resolveOrgFromPageChannel(pageId);
+      if (!channel) {
+        unmatched += 1;
+        log.info('Page messaging unmatched — no active Channel for Page', {
+          field,
+          pageId: pageId ?? null,
+        });
+        continue;
+      }
+
+      const mid = typeof message.mid === 'string' ? message.mid : undefined;
+      const value: Record<string, unknown> = {
+        ...(mid ? { mid } : {}),
+        sender_id: sender,
+        text,
+      };
+      const tsRaw = event.timestamp;
+      const timestampMs =
+        typeof tsRaw === 'number'
+          ? tsRaw
+          : typeof tsRaw === 'string' && /^\d+$/.test(tsRaw)
+            ? Number(tsRaw)
+            : undefined;
+
+      const outcome = await claimAndRunPageEvent({
+        organizationId: channel.organizationId,
+        channelId: channel.id,
+        pageId,
+        field,
+        value,
+        run: async () => {
+          const { ingestMessengerTextMessage } = await import('../facebook/messenger-ingest');
+          const result = await ingestMessengerTextMessage({
+            organizationId: channel.organizationId,
+            channelId: channel.id,
+            psid: sender,
+            text: text.trim(),
+            metaMessageId: mid,
+            timestampMs,
+          });
+          log.info('Page messaging ingested', {
+            organizationId: channel.organizationId,
+            channelId: channel.id,
+            conversationId: result.conversationId,
+            createdConversation: result.createdConversation,
+            skippedReason: result.skippedReason ?? null,
+          });
+        },
+      });
+      if (outcome === 'duplicate') duplicates += 1;
+      else claimed += 1;
+    }
+
     for (const change of (entry.changes as Array<Record<string, unknown>>) || []) {
       const field = typeof change.field === 'string' ? change.field : 'unknown';
       const value = (change.value as Record<string, unknown>) || {};
@@ -512,62 +606,52 @@ export async function dispatchPageWebhookFields(
         continue;
       }
 
-      const eventKey = providerWebhookEventKey(pageId, field, value);
-      const owned = await claimProviderWebhookEvent(channel.organizationId, eventKey, field);
-      if (!owned) {
-        duplicates += 1;
-        log.info('Duplicate page webhook skipped', {
-          field,
-          organizationId: channel.organizationId,
-          eventKey,
-        });
-        continue;
-      }
-
-      try {
-        if (field === 'leadgen') {
-          const leadgenId = typeof value.leadgen_id === 'string' ? value.leadgen_id : '';
-          if (!leadgenId || !channel.accessToken) {
-            log.warn('leadgen claim without leadgen_id or Page token', {
-              organizationId: channel.organizationId,
-              channelId: channel.id,
-              hasToken: Boolean(channel.accessToken),
-            });
+      const outcome = await claimAndRunPageEvent({
+        organizationId: channel.organizationId,
+        channelId: channel.id,
+        pageId,
+        field,
+        value,
+        run: async () => {
+          if (field === 'leadgen') {
+            const leadgenId = typeof value.leadgen_id === 'string' ? value.leadgen_id : '';
+            if (!leadgenId || !channel.accessToken) {
+              log.warn('leadgen claim without leadgen_id or Page token', {
+                organizationId: channel.organizationId,
+                channelId: channel.id,
+                hasToken: Boolean(channel.accessToken),
+              });
+            } else {
+              const { ingestLeadgenForChannel } = await import('../facebook/leadgen-ingest');
+              const { MetaWhatsAppService } = await import('./meta.service');
+              const pageToken = MetaWhatsAppService.decryptToken(channel.accessToken);
+              const result = await ingestLeadgenForChannel({
+                organizationId: channel.organizationId,
+                channelId: channel.id,
+                pageAccessToken: pageToken,
+                leadgenId,
+              });
+              log.info('Page leadgen ingested', {
+                organizationId: channel.organizationId,
+                channelId: channel.id,
+                leadgenId,
+                leadId: result.leadId,
+                created: result.created,
+                whatsappSent: result.whatsappSent,
+                skippedReason: result.skippedReason ?? null,
+              });
+            }
           } else {
-            const { ingestLeadgenForChannel } = await import('../facebook/leadgen-ingest');
-            const { MetaWhatsAppService } = await import('./meta.service');
-            const pageToken = MetaWhatsAppService.decryptToken(channel.accessToken);
-            const result = await ingestLeadgenForChannel({
+            log.info('Page webhook claimed and ignored', {
               organizationId: channel.organizationId,
               channelId: channel.id,
-              pageAccessToken: pageToken,
-              leadgenId,
-            });
-            log.info('Page leadgen ingested', {
-              organizationId: channel.organizationId,
-              channelId: channel.id,
-              eventKey,
-              leadgenId,
-              leadId: result.leadId,
-              created: result.created,
-              whatsappSent: result.whatsappSent,
-              skippedReason: result.skippedReason ?? null,
+              field,
             });
           }
-        } else {
-          log.info('Page webhook claimed and ignored', {
-            organizationId: channel.organizationId,
-            channelId: channel.id,
-            field,
-            eventKey,
-          });
-        }
-        await completeProviderWebhookEvent(channel.organizationId, eventKey);
-        claimed += 1;
-      } catch (error) {
-        await releaseProviderWebhookEvent(channel.organizationId, eventKey);
-        throw error;
-      }
+        },
+      });
+      if (outcome === 'duplicate') duplicates += 1;
+      else claimed += 1;
     }
   }
 

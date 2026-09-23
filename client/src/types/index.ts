@@ -374,6 +374,16 @@ export interface Conversation {
   botHandoffReason?: string | null;
   activeBot?: { id: string; name: string } | null;
   activeFlow?: ActiveFlowInfo | null;
+  /** Click-to-WhatsApp ad referral chip (from Conversation.botState.ctwaReferral). */
+  whatsappAd?: {
+    sourceId?: string;
+    name?: string;
+    sourceType?: string;
+    sourceUrl?: string;
+    body?: string;
+    ctwaClid?: string;
+    receivedAt?: string;
+  } | null;
   isFavorite?: boolean;
   snoozedUntil?: string | null;
   slaDueAt?: string | null;

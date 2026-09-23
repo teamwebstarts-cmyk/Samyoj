@@ -71,11 +71,12 @@ export function verifyFacebookPageOAuthState(token: string): FacebookPageConnect
   return decoded;
 }
 
-/** Scopes used for Page pick + leadgen subscribe + lead read. No ads editor. */
+/** Scopes used for Page pick + leadgen + Messenger. No ads editor. */
 export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'pages_show_list',
   'pages_manage_metadata',
   'pages_read_engagement',
+  'pages_messaging',
   'leads_retrieval',
 ].join(',');
 

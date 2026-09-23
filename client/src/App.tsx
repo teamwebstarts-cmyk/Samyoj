@@ -17,6 +17,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import DashboardPage from './pages/DashboardPage';
 import InboxPage from './pages/InboxPage';
+import FacebookInboxPage from './pages/FacebookInboxPage';
 import AutomationsPage from './pages/AutomationsPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
 import MetaFlowBuilder from './pages/MetaFlowBuilder';
@@ -81,6 +82,7 @@ export default function App() {
                     <Route element={<Layout />}>
                       <Route path="/" element={<DashboardPage />} />
                       <Route path="/inbox" element={<InboxPage />} />
+                      <Route path="/facebook/inbox" element={<FacebookInboxPage />} />
                       <Route path="/calls" element={<CallsPage />} />
                       <Route path="/calls/:callId" element={<CallsPage />} />
                       <Route path="/automations" element={<AutomationsPage />} />

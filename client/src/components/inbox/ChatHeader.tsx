@@ -220,6 +220,25 @@ export default function ChatHeader({
             </span>
           )}
         </div>
+        {conversation.whatsappAd && (
+          <span
+            role="status"
+            className="mt-0.5 inline-flex h-8 max-w-full items-center gap-1.5 truncate rounded-[10px] border border-emerald-200/80 bg-emerald-50 px-2.5 text-[12.5px] font-semibold leading-none tracking-wide text-emerald-800 md:h-9 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+            {...tipFor(conversation.whatsappAd.name || 'WhatsApp ad')}
+            aria-label={
+              conversation.whatsappAd.name
+                ? `WhatsApp ad: ${conversation.whatsappAd.name}`
+                : 'WhatsApp ad'
+            }
+          >
+            <span className="shrink-0">WhatsApp ad</span>
+            {conversation.whatsappAd.name && (
+              <span className="min-w-0 truncate font-medium opacity-90">
+                · {conversation.whatsappAd.name}
+              </span>
+            )}
+          </span>
+        )}
         <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
           {contact.phone}
         </p>

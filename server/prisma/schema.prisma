@@ -1123,8 +1123,9 @@ model Channel {
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  leads        Lead[]
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads         Lead[]
+  conversations Conversation[]
 
   @@unique([organizationId, platform, platformAccountId])
   @@index([platform, platformAccountId])
@@ -1154,6 +1155,8 @@ model Conversation {
   organizationId      String               @map("organization_id")
   contactId           String               @map("contact_id")
   whatsappNumberId    String?              @map("whatsapp_number_id")
+  /// Facebook/IG Page Channel. Null for WhatsApp threads — never stuff a Page into whatsappNumberId.
+  channelId           String?              @map("channel_id")
   assignedAgentId     String?              @map("assigned_agent_id")
   activeBotId         String?              @map("active_bot_id")
   botAssignmentSource BotAssignmentSource? @map("bot_assignment_source")
@@ -1176,6 +1179,7 @@ model Conversation {
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contact        Contact             @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
   whatsappNumber WhatsappNumber?     @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  channel        Channel?            @relation(fields: [channelId], references: [id], onDelete: Restrict)
   assignedAgent  User?               @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
   activeBot      AiBot?              @relation("ActiveBot", fields: [activeBotId], references: [id])
   messages       Message[]
@@ -1187,9 +1191,12 @@ model Conversation {
 
   @@unique([organizationId, id])
   @@unique([organizationId, contactId, whatsappNumberId])
+  /// Messenger/IG: one thread per Page Channel + contact (PSID-backed).
+  @@unique([organizationId, channelId, contactId])
   @@index([organizationId, lastMessageAt])
   @@index([organizationId, snoozedUntil])
   @@index([organizationId, whatsappNumberId, botAssignmentSource])
+  @@index([organizationId, channelId, lastMessageAt])
   @@map("conversations")
 }
 

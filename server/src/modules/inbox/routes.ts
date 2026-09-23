@@ -23,6 +23,7 @@ import { emitToOrg } from '../../realtime';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { parseActiveFlow } from '../flows/flow-state';
+import { whatsappAdFromBotState } from './ctwa-referral';
 import {
   findMessageByIdempotencyKey,
   isIdempotencyConflict,
@@ -312,8 +313,9 @@ router.get(
       const flowNodes = flow?.nodes as FlowNode[] | undefined;
       const activeFlow = parseActiveFlow(c.botState, flowNodes);
       if (activeFlow && flow?.name) activeFlow.flowName = flow.name;
+      const whatsappAd = whatsappAdFromBotState(c.botState);
       const { botState: _botState, ...rest } = c;
-      return { ...rest, activeFlow };
+      return { ...rest, activeFlow, whatsappAd };
     });
 
     const filtered = wantUnreplied
@@ -661,7 +663,11 @@ router.get(
     }
 
     const { botState: _botState, ...rest } = conversation;
-    sendSuccess(res, { ...rest, activeFlow });
+    sendSuccess(res, {
+      ...rest,
+      activeFlow,
+      whatsappAd: whatsappAdFromBotState(conversation.botState),
+    });
   })
 );
 

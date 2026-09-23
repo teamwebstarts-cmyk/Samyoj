@@ -52,6 +52,25 @@ export async function saveFacebookPageChannel(opts: {
     data: { isActive: false },
   });
 
+  // One active owner per Page id across orgs — otherwise webhook resolve is ambiguous and
+  // leadgen writes nowhere (resolveOrgFromPageChannel requires exactly one active Channel).
+  const stolen = await prisma.channel.updateMany({
+    where: {
+      platform: 'FB',
+      platformAccountId: opts.pageId,
+      isActive: true,
+      id: { not: channel.id },
+    },
+    data: { isActive: false },
+  });
+  if (stolen.count > 0) {
+    log.info('Deactivated other orgs active Channel for same Page', {
+      pageId: opts.pageId,
+      organizationId: opts.organizationId,
+      deactivated: stolen.count,
+    });
+  }
+
   let subscribed = false;
   let subscribeError: string | undefined;
   try {
@@ -59,7 +78,7 @@ export async function saveFacebookPageChannel(opts: {
     subscribed = true;
   } catch (err) {
     subscribeError = err instanceof Error ? err.message : String(err);
-    log.warn('Leadgen subscribe deferred — Channel saved', {
+    log.warn('Page webhook subscribe deferred — Channel saved', {
       organizationId: opts.organizationId,
       pageId: opts.pageId,
       error: subscribeError,

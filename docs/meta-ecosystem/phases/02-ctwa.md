@@ -26,7 +26,9 @@ Person taps WhatsApp on a Meta ad
   → chip renders in the thread header
 ```
 
-Store on the conversation (json column or two strings). Not a new Lead unless the agent creates one by hand.
+Store on the conversation (`botState.ctwaReferral` + `ctwaReceivedAt`). Not a new Lead unless the agent creates one by hand.
+
+**Payload fields (Cloud API, as used in code):** `referral.source_id`, `referral.headline`, `referral.body`, `referral.source_type`, `referral.source_url`, `referral.ctwa_clid` (optional). Meta does **not** send campaign name on this webhook — chip `name` is `headline`, else `body`. No click timestamp → no fake 72h countdown.
 
 ## UI
 
@@ -34,10 +36,10 @@ Existing `ChatHeader` name row. Chip is a small pill, same height as `ServiceWin
 
 ## Test
 
-- [ ] Inbound with a referral fixture shows the chip.
-- [ ] Inbound without referral shows no chip.
+- [x] Inbound with a referral fixture shows the chip.
+- [x] Inbound without referral shows no chip.
 - [ ] The thread still assigns, notes, and replies like any WhatsApp chat.
-- [ ] Facebook → Leads count does not change.
+- [x] Facebook → Leads count does not change.
 
 ## Competitors
 

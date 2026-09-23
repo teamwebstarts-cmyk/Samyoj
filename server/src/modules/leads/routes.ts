@@ -21,6 +21,11 @@ async function resolveWhatsappNumberSoft(req: Request, _res: Response, next: (er
     );
     next();
   } catch (err) {
+    // Multi-number without header must not 409 META_ADS list; number-scoped queries get empty filter.
+    if (err instanceof AppError && err.statusCode === 409) {
+      req.activeWhatsappNumberId = undefined;
+      return next();
+    }
     next(err);
   }
 }
@@ -180,6 +185,12 @@ router.patch(
       if (!contact) throw new AppError(404, 'Contact not found for the active WhatsApp number');
     }
     if (data.assignedAgentId) await assertAgentInOrg(orgId, data.assignedAgentId);
+    if (data.source !== undefined && isMetaAdsSource(data.source)) {
+      throw new AppError(
+        400,
+        'Meta Ads leads are created from Instant Form webhooks. Source cannot be set to META_ADS.'
+      );
+    }
 
     const lead = await prisma.lead.update({
       where: { id },

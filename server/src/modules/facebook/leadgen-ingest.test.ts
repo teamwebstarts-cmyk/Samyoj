@@ -14,10 +14,10 @@ const fetchLead = vi.fn();
 
 vi.mock('../../config/database', () => ({
   default: {
-    channel: { findMany: vi.fn() },
+    channel: { findMany: vi.fn(), updateMany: vi.fn() },
     lead: { findFirst: vi.fn(), create: vi.fn() },
     contact: { upsert: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
-    whatsappNumber: { findFirst: vi.fn() },
+    whatsappNumber: { findFirst: vi.fn(), findMany: vi.fn() },
     conversation: { create: vi.fn(), upsert: vi.fn() },
     organization: { findUnique: vi.fn() },
     providerWebhookEvent: {
@@ -103,6 +103,7 @@ describe('ingestLeadgenForChannel', () => {
     }) as never);
     orgMock.findUnique.mockResolvedValue({ settings: {} } as never);
     whatsappNumberMock.findFirst.mockResolvedValue(null as never);
+    whatsappNumberMock.findMany.mockResolvedValue([] as never);
   });
 
   it('same leadgen_id twice yields one Lead', async () => {
@@ -174,7 +175,7 @@ describe('ingestLeadgenForChannel', () => {
         { name: 'phone_number', values: ['919009785315'] },
       ],
     });
-    whatsappNumberMock.findFirst.mockResolvedValue({ id: 'wa-1' } as never);
+    whatsappNumberMock.findMany.mockResolvedValue([{ id: 'wa-1' }] as never);
     contactMock.upsert.mockResolvedValue({
       id: 'c-1',
       phone: '919009785315',
@@ -196,6 +197,37 @@ describe('ingestLeadgenForChannel', () => {
     expect(result.whatsappSent).toBe(false);
     expect(result.skippedReason).toBe('no_consent');
     expect(sendMessage).not.toHaveBeenCalled();
+    expect(leadMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          notes: expect.stringContaining('No WhatsApp message — no phone or no consent.'),
+        }),
+      })
+    );
+  });
+
+  it('phone with multiple active WhatsApp numbers → Lead only, no Contact on latest', async () => {
+    fetchLead.mockResolvedValue({
+      id: 'lead_multi',
+      field_data: [
+        { name: 'full_name', values: ['Multi'] },
+        { name: 'phone_number', values: ['919009785315'] },
+      ],
+    });
+    whatsappNumberMock.findMany.mockResolvedValue([{ id: 'wa-1' }, { id: 'wa-2' }] as never);
+
+    const result = await ingestLeadgenForChannel({
+      organizationId: 'org-1',
+      channelId: 'ch-1',
+      pageAccessToken: 'tok',
+      leadgenId: 'lead_multi',
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.contactId).toBeNull();
+    expect(result.whatsappSent).toBe(false);
+    expect(contactMock.upsert).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -211,6 +243,7 @@ describe('dispatchPageWebhookFields Phase 1', () => {
     leadMock.create.mockResolvedValue({ id: 'lead-row-1' } as never);
     orgMock.findUnique.mockResolvedValue({ settings: {} } as never);
     whatsappNumberMock.findFirst.mockResolvedValue(null as never);
+    whatsappNumberMock.findMany.mockResolvedValue([] as never);
     fetchLead.mockResolvedValue({
       id: 'lead_1',
       field_data: [{ name: 'email', values: ['x@y.com'] }],

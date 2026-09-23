@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { MetaWhatsAppService } from '../modules/whatsapp/meta.service';
 import { handleInboundAutomations } from '../modules/automation/engine';
 import { parseInboundMessage, type ParsedInboundMessage } from '../modules/inbox/message-parser';
+import { mergeCtwaReferral } from '../modules/inbox/ctwa-referral';
 import { downloadAndStoreMessageMedia } from '../modules/media/download.service';
 import { emitToOrg } from '../realtime';
 import { logError } from '../errors';
@@ -214,20 +215,11 @@ async function applyInboundMessageFollowups(params: {
         where: { id: conversation.id },
         select: { botState: true },
       });
-      const priorState =
-        existingConv?.botState && typeof existingConv.botState === 'object'
-          ? (existingConv.botState as Record<string, unknown>)
-          : {};
-      if (!priorState.ctwaReferral) {
+      const { next, wrote } = mergeCtwaReferral(existingConv?.botState, parsed.referral);
+      if (wrote) {
         await prisma.conversation.update({
           where: { id: conversation.id },
-          data: {
-            botState: {
-              ...priorState,
-              ctwaReferral: parsed.referral,
-              ctwaReceivedAt: new Date().toISOString(),
-            } as Prisma.InputJsonValue,
-          },
+          data: { botState: next as Prisma.InputJsonValue },
         });
         void dispatchOrgWebhook(orgId, 'referral.received', {
           conversationId: conversation.id,

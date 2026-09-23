@@ -8,6 +8,8 @@ import type { ServiceWindowInfo } from '../../types';
 interface ServiceWindowBannerProps {
   serviceWindow: ServiceWindowInfo;
   compact?: boolean;
+  /** Messenger closed copy — no WhatsApp templates. */
+  variant?: 'whatsapp' | 'messenger';
 }
 
 const COUNTDOWN_TICK_MS = 60_000;
@@ -70,9 +72,23 @@ const TONE_PULSE: Record<WindowTone, string> = {
 const BADGE_BASE =
   'relative hidden h-8 max-w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-[10px] border px-3 sm:inline-flex md:h-9';
 
-export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceWindowBannerProps) {
+export default function ServiceWindowBanner({
+  serviceWindow,
+  compact,
+  variant = 'whatsapp',
+}: ServiceWindowBannerProps) {
   useCountdownTick(true);
   if (serviceWindow.open) return null;
+
+  if (variant === 'messenger') {
+    return (
+      <div className="border-t border-rose-200/80 bg-rose-50/95 px-3 py-2 dark:border-rose-900/50 dark:bg-rose-950/30">
+        <p className="text-center text-caption font-semibold text-rose-900 dark:text-rose-200">
+          Wait for the customer to message again.
+        </p>
+      </div>
+    );
+  }
 
   if (compact) {
     return (
@@ -111,21 +127,30 @@ export default function ServiceWindowBanner({ serviceWindow, compact }: ServiceW
   );
 }
 
-export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) {
+export function ServiceWindowBadge({
+  serviceWindow,
+  variant = 'whatsapp',
+}: ServiceWindowBannerProps) {
   useCountdownTick(serviceWindow.open);
   const tipFor = useGlassTipProps();
   const tone = getWindowTone(serviceWindow);
 
   if (tone === 'closed') {
+    const closedLabel =
+      variant === 'messenger' ? 'Closed — wait' : 'Closed — template';
+    const closedTip =
+      variant === 'messenger'
+        ? 'Wait for the customer to message again.'
+        : 'Reply window closed — template required';
     return (
       <div
         role="status"
-        {...tipFor('Reply window closed — template required')}
+        {...tipFor(closedTip)}
         className={`${BADGE_BASE} ${TONE_PILL.closed} ${TONE_PULSE.closed}`}
       >
         <Lock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON.closed}`} strokeWidth={2.25} aria-hidden />
         <span className="truncate text-[12.5px] font-semibold leading-none tracking-wide">
-          Closed — template
+          {closedLabel}
         </span>
       </div>
     );
@@ -133,11 +158,13 @@ export function ServiceWindowBadge({ serviceWindow }: ServiceWindowBannerProps) 
 
   const expiry = formatWindowExpiry(serviceWindow.expiresAt);
   const label = expiry || 'Open';
+  const openTip =
+    variant === 'messenger' ? '24-hour Messenger reply window' : '24-hour WhatsApp reply window';
 
   return (
     <div
       role="status"
-      {...tipFor('24-hour WhatsApp reply window')}
+      {...tipFor(openTip)}
       className={`${BADGE_BASE} ${TONE_PILL[tone]} ${TONE_PULSE[tone]}`}
     >
       <Clock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON[tone]}`} strokeWidth={2.25} aria-hidden />

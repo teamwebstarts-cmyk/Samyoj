@@ -22,9 +22,12 @@ import {
 } from './connect-oauth-state';
 import { listManagedPages } from './page-client';
 import { disconnectFacebookPageChannel, saveFacebookPageChannel } from './save-page-channel';
+import messengerInboxRoutes from './messenger-inbox.routes';
 
 const log = createModuleLogger('facebook-routes');
 const router = Router();
+
+router.use('/inbox', messengerInboxRoutes);
 
 const adminGuard = [
   authenticate,
