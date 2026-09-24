@@ -67,11 +67,21 @@ const automationSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
-function isInstagramKeyword(triggerType: string, config: unknown): boolean {
+function isChannelKeyword(triggerType: string, config: unknown): boolean {
   return (
     triggerType === 'KEYWORD' &&
-    Boolean(config && typeof config === 'object' && (config as Record<string, unknown>).platform === 'IG')
+    Boolean(
+      config &&
+        typeof config === 'object' &&
+        ['FB', 'IG'].includes(String((config as Record<string, unknown>).platform))
+    )
   );
+}
+
+function channelAutomationPlatform(triggerType: string, config: unknown): 'FB' | 'IG' | null {
+  if (!isChannelKeyword(triggerType, config)) return null;
+  const platform = (config as Record<string, unknown>).platform;
+  return platform === 'FB' || platform === 'IG' ? platform : null;
 }
 
 function requireWhatsappNumber(numberId: string | undefined): string {
@@ -92,6 +102,17 @@ async function requireInstagramChannel(
   if (!channel) {
     throw new AppError(400, 'Connect Instagram before creating an Instagram automation.');
   }
+}
+
+async function requireFacebookChannel(
+  db: typeof prisma | Prisma.TransactionClient,
+  organizationId: string
+): Promise<void> {
+  const channel = await db.channel.findFirst({
+    where: { organizationId, platform: 'FB', isActive: true },
+    select: { id: true },
+  });
+  if (!channel) throw new AppError(400, 'Connect a Facebook Page before creating a Facebook automation.');
 }
 
 router.get(
@@ -134,7 +155,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const proposed = conflictPreviewSchema.parse(req.body);
-    if (!req.activeWhatsappNumberId && (proposed.kind === 'flow' || proposed.config?.platform !== 'IG')) {
+    if (!req.activeWhatsappNumberId && (proposed.kind === 'flow' || !isChannelKeyword(proposed.triggerType, proposed.config))) {
       throw new AppError(400, 'Connect a WhatsApp number for WhatsApp automation conflicts.');
     }
     const conflicts = await previewAutomationConflicts(orgId, proposed, req.activeWhatsappNumberId);
@@ -198,12 +219,13 @@ router.post(
     const data = automationSchema.parse(req.body);
     const orgId = req.user!.organizationId!;
     const numberId = req.activeWhatsappNumberId;
-    const instagramKeyword = isInstagramKeyword(data.triggerType, data.config);
-    const numberIdForStorage = instagramKeyword ? undefined : requireWhatsappNumber(numberId);
+    const channelPlatform = channelAutomationPlatform(data.triggerType, data.config);
+    const numberIdForStorage = channelPlatform ? undefined : requireWhatsappNumber(numberId);
 
     const automation = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
-      if (instagramKeyword) await requireInstagramChannel(tx, orgId);
+      if (channelPlatform === 'IG') await requireInstagramChannel(tx, orgId);
+      if (channelPlatform === 'FB') await requireFacebookChannel(tx, orgId);
       if (data.enabled) {
         await assertNoBlockingConflicts(
           orgId,
@@ -265,9 +287,10 @@ router.patch(
 
       const nextTriggerType = data.triggerType ?? existing.triggerType;
       const nextConfig = data.config ?? (existing.config as Record<string, unknown>);
-      const nextInstagramKeyword = isInstagramKeyword(nextTriggerType, nextConfig);
-      const nextNumberId = nextInstagramKeyword ? null : requireWhatsappNumber(numberId);
-      if (nextInstagramKeyword) await requireInstagramChannel(tx, orgId);
+      const nextChannelPlatform = channelAutomationPlatform(nextTriggerType, nextConfig);
+      const nextNumberId = nextChannelPlatform ? null : requireWhatsappNumber(numberId);
+      if (nextChannelPlatform === 'IG') await requireInstagramChannel(tx, orgId);
+      if (nextChannelPlatform === 'FB') await requireFacebookChannel(tx, orgId);
       const nextEnabled = data.enabled ?? existing.enabled;
       if (nextEnabled) {
         await assertNoBlockingConflicts(
@@ -341,8 +364,8 @@ router.post(
       where: { organizationId: orgId, id: paramId(req), ...automationScopeFilter(numberId) },
       select: { config: true },
     });
-    if (isInstagramKeyword('KEYWORD', automation?.config)) {
-      throw new AppError(400, 'Instagram comment automations cannot send a WhatsApp test message.');
+    if (isChannelKeyword('KEYWORD', automation?.config)) {
+      throw new AppError(400, 'Facebook and Instagram automations cannot send a WhatsApp test message.');
     }
     const result = await sendAutomationTestToPhone({
       organizationId: orgId,

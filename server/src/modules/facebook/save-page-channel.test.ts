@@ -105,16 +105,55 @@ describe('saveFacebookPageChannel', () => {
       id: 'ch-fb',
       organizationId: 'org-b',
       platform: 'FB',
+      platformAccountId: 'page_1',
     } as never);
     channelMock.update.mockResolvedValue({} as never);
     channelMock.updateMany.mockResolvedValue({ count: 1 } as never);
     await disconnectFacebookPageChannel('org-b', 'ch-fb');
     expect(channelMock.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { organizationId: 'org-b', platform: 'IG', isActive: true },
+        where: {
+          organizationId: 'org-b',
+          platform: 'IG',
+          parentPageId: 'page_1',
+          isActive: true,
+        },
         data: { isActive: false },
       })
     );
+  });
+
+  it('stores the parent Page when linking Instagram', async () => {
+    const { fetchPageInstagramAccount } = await import('./page-client');
+    vi.mocked(fetchPageInstagramAccount).mockResolvedValueOnce({
+      id: 'ig_1',
+      username: 'acme',
+    });
+    channelMock.findFirst
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce(null as never);
+    channelMock.create.mockResolvedValue({
+      id: 'ch-ig',
+      organizationId: 'org-b',
+      platform: 'IG',
+      platformAccountId: 'ig_1',
+      parentPageId: 'page_1',
+    } as never);
+    channelMock.updateMany.mockResolvedValue({ count: 0 } as never);
+
+    await expect(saveLinkedInstagramChannel({
+      organizationId: 'org-b',
+      pageId: 'page_1',
+      pageAccessToken: 'page-tok',
+    })).resolves.toMatchObject({ channelId: 'ch-ig', igUserId: 'ig_1' });
+
+    expect(channelMock.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        platform: 'IG',
+        platformAccountId: 'ig_1',
+        parentPageId: 'page_1',
+      }),
+    });
   });
 });
 

@@ -3,7 +3,7 @@
 **Audit:** [META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md](META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md).
 **Meta dashboard evidence:** [META_APP_CONFIGURATION_2026-09-24.md](META_APP_CONFIGURATION_2026-09-24.md).
 **Status:** Phase 0–5 code paths are hardened and regression-tested, but live Meta access and signed/public delivery are still unavailable.
-**Rechecked:** 2026-09-24 against the current repository and the cited Meta docs.
+**Rechecked:** 2026-09-25 against the current repository and the cited Meta docs.
 
 Agreed product boundaries remain: WhatsApp stays intact, Facebook/Instagram do not use `whatsappNumberId`, Ads Manager is not rebuilt, and inboxes remain separate by platform.
 
@@ -18,6 +18,7 @@ Agreed product boundaries remain: WhatsApp stays intact, Facebook/Instagram do n
 **Phase 0 decision (done):** `Channel` is additive only. WhatsApp remains keyed by `WhatsappNumber`.
 
 **Resolved in code:** `save-page-channel.ts` rejects an active matching Page/IG Channel in another organization with 409 and no write. Explicit transfer is not part of Phase 0–5.
+Instagram channels now persist `parentPageId`; reconnecting or disconnecting a Page cannot leave an active IG channel routed through an unrelated Page token.
 
 ## 3. Phone-less Lead Ads data model
 
@@ -56,3 +57,16 @@ Until Meta grants those use cases, Facebook’s dialog returns Invalid Scopes. S
 - Ads account selection is explicit, but live `ads_read` and Ads Manager comparison are unproven.
 - Production Facebook OAuth callback is missing from the live app redirect list.
 - The live app has only the WhatsApp webhook subscription; `page` and `instagram` are not subscribed.
+- Attachment-only Page/Instagram messages now persist as typed inbound media with metadata; real provider delivery and media URL behavior remain unproven.
+
+## 7. Release evidence still required
+
+Code tests and local health are not substitutes for these external checks:
+
+1. Meta App Review/Live mode for the approved Page, Messenger, Instagram, and Ads-read use cases.
+2. Production OAuth callback and `page`/`instagram` webhook subscriptions.
+3. Real Page DM, Instagram DM, comment/private-reply, and Ads Manager comparison evidence.
+4. A new customer-host WhatsApp reply that increments `totalReceived`.
+5. An off-box backup followed by an isolated customer-host restore drill.
+
+Until all five are recorded, this remains an internal test-deploy, not a customer-production-ready verdict.

@@ -21,7 +21,8 @@ export function jwtDevFallbackAllowed(nodeEnv = process.env.NODE_ENV): boolean {
 export function jwtSecretErrors(
   nodeEnv: string | undefined,
   secret: string,
-  refreshSecret: string
+  refreshSecret: string,
+  oauthStateSecret?: string
 ): string[] {
   const errors: string[] = [];
   if (looksWeakSecret(secret) && !jwtDevFallbackAllowed(nodeEnv)) {
@@ -29,6 +30,9 @@ export function jwtSecretErrors(
   }
   if (looksWeakSecret(refreshSecret) && !jwtDevFallbackAllowed(nodeEnv)) {
     errors.push('JWT_REFRESH_SECRET must be a strong secret (32+ chars), not the default');
+  }
+  if (oauthStateSecret !== undefined && looksWeakSecret(oauthStateSecret) && !jwtDevFallbackAllowed(nodeEnv)) {
+    errors.push('OAUTH_STATE_SECRET must be a strong secret (32+ chars), not the default');
   }
   return errors;
 }
@@ -125,6 +129,17 @@ export function platformAdminUrlErrors(
   }
 }
 
+export function productionAuthErrors(env: Record<string, string | undefined>): string[] {
+  const errors: string[] = [];
+  if (env.ALLOW_UNVERIFIED_LOGIN === 'true') {
+    errors.push('ALLOW_UNVERIFIED_LOGIN must be false or unset in production');
+  }
+  if (env.PLATFORM_MFA_REQUIRED !== 'true') {
+    errors.push('PLATFORM_MFA_REQUIRED=true is required in production');
+  }
+  return errors;
+}
+
 export function validateConfig(): void {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -135,7 +150,14 @@ export function validateConfig(): void {
     errors.push('DATABASE_URL is required');
   }
 
-  errors.push(...jwtSecretErrors(process.env.NODE_ENV, config.jwt.secret, config.jwt.refreshSecret));
+  errors.push(
+    ...jwtSecretErrors(
+      process.env.NODE_ENV,
+      config.jwt.secret,
+      config.jwt.refreshSecret,
+      config.jwt.oauthStateSecret
+    )
+  );
   errors.push(...platformAdminUrlErrors(process.env.NODE_ENV, config.platformAdminUrl));
   if (allowDevJwt && looksWeakSecret(config.jwt.secret)) {
     warnings.push('JWT_SECRET is weak/default — generate a strong value for any shared env');
@@ -145,6 +167,7 @@ export function validateConfig(): void {
   }
 
   if (isProd) {
+    errors.push(...productionAuthErrors(process.env));
     if (config.billing.allowTestBypass) {
       errors.push('BILLING_TEST_BYPASS must be disabled in production');
     }

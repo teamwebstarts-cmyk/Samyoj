@@ -7,7 +7,7 @@
 
 - Subscribe the Page to `messages` (in addition to `leadgen`).
 - Map PSID → `ContactPlatformIdentity`. Open a conversation on `channelId`, not `whatsappNumberId`.
-- Send and receive **text** inside 24 hours ([Messenger standard messaging](https://developers.facebook.com/documentation/business-messaging/messenger-platform/policy)).
+- Send and receive **text** inside 24 hours ([Messenger standard messaging](https://developers.facebook.com/documentation/business-messaging/messenger-platform/policy)). Attachment-only inbound events are a separate hardening item until they are persisted as inbox messages.
 - Reuse assign, notes, Open / Pending / Closed, human handoff.
 - Reuse the Inbox 3-pane layout as a **separate route** (`/facebook/inbox`), not a filter on `/inbox`.
 
@@ -37,7 +37,7 @@ Clone Inbox: list, thread, details. Differences only:
 |---------|--------|
 | List header chips | Keep All / Unread / Open. **Remove** Active/Inactive WhatsApp window chips. One line: “24h reply window”. |
 | Window pill | Same component. Closed copy is Messenger-specific. |
-| Composer | Text + the existing attach limits you have verified for Messenger. No template button. |
+| Composer | Text plus outbound media only when Meta can fetch a public HTTPS URL. No template button. |
 | Sidebar | Facebook group, blue mark, child **Inbox** |
 | Empty | “No Messenger chats yet.” Link: Settings → Facebook Page if no Page. |
 
@@ -46,6 +46,7 @@ Clone Inbox: list, thread, details. Differences only:
 - [ ] Message the Page from a test user. It appears only under Facebook → Inbox.
 - [ ] WhatsApp Inbox list is unchanged.
 - [ ] Reply inside 24h delivers.
+- [ ] Attachment-only inbound event creates a Messenger message instead of being silently skipped.
 - [ ] After the window, send is rejected in UI and API.
 - [ ] Same PSID twice updates one thread.
 - [ ] A lead from phase 1 does not become a Messenger thread unless they also message the Page.

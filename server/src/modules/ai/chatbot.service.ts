@@ -338,7 +338,9 @@ export async function generateBotReply(
   if (!input.testMode && !isVoice) {
     const chatSettings = conversation!.whatsappNumberId
       ? await getChatSettingsForNumber(input.organizationId, conversation!.whatsappNumberId)
-      : { aiEnabled: false, botId: null };
+      : conversation!.channelId && conversation!.botActive
+        ? { aiEnabled: true, botId: conversation!.activeBotId }
+        : { aiEnabled: false, botId: null };
 
     if (!isChatAiEffectivelyOn(conversation!.botActive, chatSettings.aiEnabled)) {
       return { reply: null, handoff: false, skipped: true, skipReason: 'bot_paused' };

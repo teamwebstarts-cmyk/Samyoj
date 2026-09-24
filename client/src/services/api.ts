@@ -461,7 +461,37 @@ export const facebookApi = {
       api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, {
         content,
       }),
+    sendMedia: (id: string, mediaUrl: string, kind: 'image' | 'video' | 'file') =>
+      api.post(`/facebook/inbox/${id}/messages`, { mediaUrl, kind }),
+    bulk: (ids: string[], action: 'assign' | 'close' | 'delete', agentId?: string | null) =>
+      api.post('/facebook/inbox/bulk', { ids, action, agentId }),
+    setBot: (id: string, botActive: boolean) =>
+      api.patch(`/facebook/inbox/${id}/bot`, { botActive }),
     markRead: (id: string) => api.post(`/facebook/inbox/${id}/read`),
+    markUnread: (id: string) => api.post(`/facebook/inbox/${id}/unread`),
+    favorite: (id: string, isFavorite: boolean) =>
+      api.patch(`/facebook/inbox/${id}/favorite`, { isFavorite }),
+    snooze: (id: string, hours: 1 | 4 | 24) => api.post(`/facebook/inbox/${id}/snooze`, { hours }),
+    exportChat: (id: string) =>
+      api.get<string>(`/facebook/inbox/${id}/export`, { responseType: 'text' }),
+    labels: () =>
+      api.get<{ data: { labels: Array<{ id: string; name: string; color: string }> } }>(
+        '/facebook/inbox/labels'
+      ),
+    conversationLabels: (id: string) =>
+      api.get<{ data: { labels: import('../types').ConversationLabel[] } }>(
+        `/facebook/inbox/${id}/labels`
+      ),
+    addLabel: (id: string, labelId: string) =>
+      api.post<{ data: { labels: import('../types').ConversationLabel[] } }>(
+        `/facebook/inbox/${id}/labels`,
+        { labelId }
+      ),
+    removeLabel: (id: string, labelId: string) =>
+      api.delete<{ data: { labels: import('../types').ConversationLabel[] } }>(
+        `/facebook/inbox/${id}/labels/${labelId}`
+      ),
+    remove: (id: string) => api.delete(`/facebook/inbox/${id}`),
     assign: (id: string, agentId: string | null) =>
       api.patch(`/facebook/inbox/${id}/assign`, { agentId }),
     setStatus: (id: string, status: string) =>
@@ -551,7 +581,37 @@ export const instagramApi = {
       api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, {
         content,
       }),
+    sendMedia: (id: string, mediaUrl: string, kind: 'image' | 'video' | 'file') =>
+      api.post(`/instagram/inbox/${id}/messages`, { mediaUrl, kind }),
+    bulk: (ids: string[], action: 'assign' | 'close' | 'delete', agentId?: string | null) =>
+      api.post('/instagram/inbox/bulk', { ids, action, agentId }),
+    setBot: (id: string, botActive: boolean) =>
+      api.patch(`/instagram/inbox/${id}/bot`, { botActive }),
     markRead: (id: string) => api.post(`/instagram/inbox/${id}/read`),
+    markUnread: (id: string) => api.post(`/instagram/inbox/${id}/unread`),
+    favorite: (id: string, isFavorite: boolean) =>
+      api.patch(`/instagram/inbox/${id}/favorite`, { isFavorite }),
+    snooze: (id: string, hours: 1 | 4 | 24) => api.post(`/instagram/inbox/${id}/snooze`, { hours }),
+    exportChat: (id: string) =>
+      api.get<string>(`/instagram/inbox/${id}/export`, { responseType: 'text' }),
+    labels: () =>
+      api.get<{ data: { labels: Array<{ id: string; name: string; color: string }> } }>(
+        '/instagram/inbox/labels'
+      ),
+    conversationLabels: (id: string) =>
+      api.get<{ data: { labels: import('../types').ConversationLabel[] } }>(
+        `/instagram/inbox/${id}/labels`
+      ),
+    addLabel: (id: string, labelId: string) =>
+      api.post<{ data: { labels: import('../types').ConversationLabel[] } }>(
+        `/instagram/inbox/${id}/labels`,
+        { labelId }
+      ),
+    removeLabel: (id: string, labelId: string) =>
+      api.delete<{ data: { labels: import('../types').ConversationLabel[] } }>(
+        `/instagram/inbox/${id}/labels/${labelId}`
+      ),
+    remove: (id: string) => api.delete(`/instagram/inbox/${id}`),
     assign: (id: string, agentId: string | null) =>
       api.patch(`/instagram/inbox/${id}/assign`, { agentId }),
     setStatus: (id: string, status: string) =>

@@ -26,7 +26,8 @@ export type ListChip =
   | 'favourites'
   | 'pending'
   | 'hasTicket'
-  | 'botActive';
+  | 'botActive'
+  | 'snoozed';
 
 const FILTER_CHIPS: Array<{ chip: ListChip; label: string; title?: string }> = [
   { chip: 'all', label: 'All' },
@@ -46,6 +47,8 @@ const MESSENGER_FILTER_CHIPS: Array<{ chip: ListChip; label: string; title?: str
   { chip: 'unread', label: 'Unread' },
   { chip: 'open', label: 'Open' },
   { chip: 'pending', label: 'Pending' },
+  { chip: 'favourites', label: 'Favorites' },
+  { chip: 'snoozed', label: 'Snoozed' },
 ];
 
 interface InboxListHeaderProps {

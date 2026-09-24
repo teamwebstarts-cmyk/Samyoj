@@ -1,6 +1,6 @@
 # Phase 7 — Linked assets (Settings only)
 
-**Code status (24 Sep 2026):** shipped as Settings → Channels. Inboxes stay separate.
+**Code status (25 Sep 2026):** shipped as Settings → Channels. WhatsApp, Facebook, and Instagram connect cards are grouped there; duplicate standalone channel tabs were removed. Inboxes stay separate.
 
 **Ships:** one Settings list of what is connected. Optional. Do this after the inboxes exist, not before.
 
@@ -30,6 +30,7 @@ Read `Channel` + `WhatsappNumber` for the org. Render cards. Connect buttons dee
 - [ ] Disconnect Page stops new leads and does not delete old leads.
 - [ ] WhatsApp disconnect behavior stays the current soft disconnect.
 - [ ] No secret fields.
+- [ ] Browser smoke confirms WhatsApp, Facebook, and Instagram appear once under Channels.
 
 ## Competitors
 

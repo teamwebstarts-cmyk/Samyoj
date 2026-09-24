@@ -22,6 +22,8 @@ export type IngestInstagramResult = {
   skippedReason?: string;
 };
 
+type InboundMessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+
 /** Map IGSID → ContactPlatformIdentity + IG Channel conversation. Never sets whatsappNumberId. */
 export async function ingestInstagramTextMessage(opts: {
   organizationId: string;
@@ -30,6 +32,8 @@ export async function ingestInstagramTextMessage(opts: {
   text: string;
   metaMessageId?: string;
   timestampMs?: number;
+  messageType?: InboundMessageType;
+  metadata?: unknown;
 }): Promise<IngestInstagramResult> {
   const igsid = opts.igsid.trim();
   if (!igsid) {
@@ -161,9 +165,10 @@ export async function ingestInstagramTextMessage(opts: {
       conversationId: conversation.id,
       metaMessageId: opts.metaMessageId || undefined,
       direction: 'INBOUND',
-      type: 'TEXT',
+      type: opts.messageType || 'TEXT',
       content: opts.text,
       status: 'DELIVERED',
+      metadata: opts.metadata as object | undefined,
       createdAt: receivedAt,
     },
   });

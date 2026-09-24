@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleDot, StickyNote, UserPlus } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
-import { instagramApi, teamApi } from '../services/api';
+import { cannedRepliesApi, inboxApi, instagramApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
@@ -22,12 +22,19 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import type { InboxSelectOption } from '../components/inbox/InboxSelect';
-import type { Conversation, InternalNote, Message, ServiceWindowInfo, TeamAgent } from '../types';
+import type {
+  CannedReply,
+  Conversation,
+  ConversationLabel,
+  InternalNote,
+  Message,
+  ServiceWindowInfo,
+  TeamAgent,
+} from '../types';
 import { PAGE_SIZE_OPTIONS, type PageSize } from '../components/inbox/useConversationList';
 
 type FbConversation = Conversation & { serviceWindow?: ServiceWindowInfo };
 
-const EMPTY_IDS = new Set<string>();
 const TICKET_IDS = new Set<string>();
 
 export default function InstagramInboxPage() {
@@ -52,6 +59,12 @@ export default function InstagramInboxPage() {
   const [threadLoading, setThreadLoading] = useState(false);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
   const [noteDraft, setNoteDraft] = useState('');
+  const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
+  const [orgLabels, setOrgLabels] = useState<Array<{ id: string; name: string; color: string }>>([]);
+  const [chatLabels, setChatLabels] = useState<ConversationLabel[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
@@ -75,6 +88,8 @@ export default function InstagramInboxPage() {
       if (chip === 'unread') params.unread = 'true';
       if (chip === 'open') params.status = 'OPEN';
       if (chip === 'pending') params.status = 'PENDING';
+      if (chip === 'favourites') params.favorite = 'true';
+      if (chip === 'snoozed') params.snoozed = 'true';
       if (agentFilter) params.assignedTo = agentFilter;
       const { data } = await instagramApi.inbox.list(params);
       const payload = data.data;
@@ -100,6 +115,14 @@ export default function InstagramInboxPage() {
       .agents()
       .then(({ data }) => setAgents(data.data.agents || []))
       .catch(() => setAgents([]));
+    cannedRepliesApi
+      .list()
+      .then(({ data }) => setCannedReplies(data.data.replies || []))
+      .catch(() => setCannedReplies([]));
+    instagramApi.inbox
+      .labels()
+      .then(({ data }) => setOrgLabels(data.data.labels || []))
+      .catch(() => setOrgLabels([]));
   }, []);
 
   const openThread = useCallback(async (id: string) => {
@@ -116,6 +139,10 @@ export default function InstagramInboxPage() {
       setSelected(conv);
       setNotes(conv.internalNotes || []);
       setMessages(msgRes.data.messages || []);
+      void instagramApi.inbox
+        .conversationLabels(id)
+        .then(({ data }) => setChatLabels(data.data.labels || []))
+        .catch(() => setChatLabels([]));
       void instagramApi.inbox.markRead(id).then(() => {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
@@ -205,6 +232,126 @@ export default function InstagramInboxPage() {
     }
   };
 
+  const downloadChat = async () => {
+    if (!selectedId) return;
+    try {
+      const { data } = await instagramApi.inbox.exportChat(selectedId);
+      const blob = new Blob([data], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'instagram-chat.txt';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Export failed');
+    }
+  };
+
+  const onFavorite = async () => {
+    if (!selected) return;
+    const next = !selected.isFavorite;
+    try {
+      await instagramApi.inbox.favorite(selected.id, next);
+      setSelected({ ...selected, isFavorite: next });
+      void loadList();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not update favorite');
+    }
+  };
+
+  const onMarkUnread = async () => {
+    if (!selectedId) return;
+    try {
+      await instagramApi.inbox.markUnread(selectedId);
+      toastSuccess('Marked unread');
+      void loadList();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not mark unread');
+    }
+  };
+
+  const onSnooze = async () => {
+    if (!selectedId) return;
+    try {
+      await instagramApi.inbox.snooze(selectedId, 4);
+      toastSuccess('Snoozed for 4 hours');
+      setSelected(null);
+      setSelectedId(null);
+      void loadList();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not snooze');
+    }
+  };
+
+  const onAddLabel = async (labelId: string) => {
+    if (!selectedId || !labelId) return;
+    try {
+      const { data } = await instagramApi.inbox.addLabel(selectedId, labelId);
+      setChatLabels(data.data.labels || []);
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not add label');
+    }
+  };
+
+  const onRemoveChat = async () => {
+    if (!selectedId || !window.confirm('Delete this chat?')) return;
+    try {
+      await instagramApi.inbox.remove(selectedId);
+      setSelected(null);
+      setSelectedId(null);
+      void loadList();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not delete chat');
+    }
+  };
+
+  const onToggleBot = async () => {
+    if (!selected) return;
+    try {
+      const { data } = await instagramApi.inbox.setBot(selected.id, !selected.botActive);
+      setSelected({ ...selected, botActive: Boolean(data.data.botActive) });
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not toggle the bot');
+    }
+  };
+
+  const onAttach = async (file: File) => {
+    if (!selectedId) return;
+    const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+    const data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    try {
+      const { data: up } = await inboxApi.uploadMedia({ mimeType: file.type || 'application/octet-stream', data, filename: file.name });
+      const mediaUrl = (up.data as { publicUrl?: string }).publicUrl;
+      if (!mediaUrl) throw new Error('Upload did not return a URL');
+      await instagramApi.inbox.sendMedia(selectedId, mediaUrl, kind);
+      toastSuccess('Sent');
+      void openThread(selectedId);
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not send the file');
+    }
+  };
+
+  const runBulk = async (action: 'assign' | 'close' | 'delete', agentId?: string | null) => {
+    if (!selectedIds.size) return;
+    setBulkBusy(true);
+    try {
+      await instagramApi.inbox.bulk([...selectedIds], action, agentId);
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+      void loadList();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Bulk action failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const onAddNote = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedId || !noteDraft.trim()) return;
@@ -277,6 +424,52 @@ export default function InstagramInboxPage() {
       </DetailsSectionCard>
 
       <DetailsSectionCard>
+        <DetailsSectionHeader icon={<CircleDot className="h-3.5 w-3.5" />} title="Chat" />
+        <div className="flex flex-wrap gap-1">
+          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold" onClick={() => void onMarkUnread()}>
+            Mark unread
+          </button>
+          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold" onClick={() => void onSnooze()}>
+            Snooze 4h
+          </button>
+          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold" onClick={() => void downloadChat()}>
+            Export
+          </button>
+          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold text-rose-700" onClick={() => void onRemoveChat()}>
+            Delete
+          </button>
+        </div>
+        <select
+          className="mt-2 w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
+          value=""
+          onChange={(e) => void onAddLabel(e.target.value)}
+        >
+          <option value="">Add label</option>
+          {orgLabels.map((label) => (
+            <option key={label.id} value={label.id}>
+              {label.name}
+            </option>
+          ))}
+        </select>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {chatLabels.map((row) => (
+            <button
+              key={row.label.id}
+              type="button"
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ background: row.label.color || '#e5e7eb' }}
+              onClick={() =>
+                selectedId &&
+                void instagramApi.inbox.removeLabel(selectedId, row.label.id).then(({ data }) => setChatLabels(data.data.labels || []))
+              }
+            >
+              {row.label.name}
+            </button>
+          ))}
+        </div>
+      </DetailsSectionCard>
+
+      <DetailsSectionCard>
         <DetailsSectionHeader icon={<UserPlus className="h-3.5 w-3.5" />} title="Assign" />
         <select
           className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
@@ -340,8 +533,11 @@ export default function InstagramInboxPage() {
                 agentFilter={agentFilter}
                 onAgentFilterChange={handleAgentFilterChange}
                 agentOptions={agentOptions}
-                selectionMode={false}
-                onCancelSelection={() => undefined}
+                selectionMode={selectionMode}
+                onCancelSelection={() => {
+                  setSelectionMode(false);
+                  setSelectedIds(new Set());
+                }}
                 onNewChat={() => undefined}
                 onRefresh={() => void loadList()}
                 onRetryHealth={() => undefined}
@@ -353,11 +549,11 @@ export default function InstagramInboxPage() {
                 error={listError}
                 filtered={Boolean(search || agentFilter || chip !== 'all')}
                 ticketConversationIds={TICKET_IDS}
-                selectionMode={false}
-                selectedIds={EMPTY_IDS}
+                selectionMode={selectionMode}
+                selectedIds={selectedIds}
                 agents={agents}
                 currentUserId={user?.id}
-                bulkBusy={false}
+                bulkBusy={bulkBusy}
                 page={page}
                 pageCount={pageCount}
                 pageSize={pageSize}
@@ -371,14 +567,29 @@ export default function InstagramInboxPage() {
                     setPage(1);
                   }
                 }}
-                onToggleSelect={() => undefined}
-                onBulkAssign={() => undefined}
-                onBulkClose={() => undefined}
-                onBulkDelete={() => undefined}
-                onClearSelection={() => undefined}
+                onToggleSelect={(id) => {
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    setSelectionMode(next.size > 0);
+                    return next;
+                  });
+                }}
+                onBulkAssign={(agent) => void runBulk('assign', agent.id)}
+                onBulkClose={() => void runBulk('close')}
+                onBulkDelete={() => void runBulk('delete')}
+                onClearSelection={() => {
+                  setSelectedIds(new Set());
+                  setSelectionMode(false);
+                }}
                 onRetry={() => void loadList()}
                 onSelect={(conv) => void openThread(conv.id)}
-                onContextMenu={() => undefined}
+                onContextMenu={(event, conv) => {
+                  event.preventDefault();
+                  setSelectionMode(true);
+                  setSelectedIds((prev) => new Set(prev).add(conv.id));
+                }}
                 onNewChat={() => undefined}
                 emptyVariant="instagram"
                 pageConnected={connected !== false}
@@ -396,8 +607,8 @@ export default function InstagramInboxPage() {
                     <ChatHeader
                       conversation={selected}
                       serviceWindow={serviceWindow}
-                      botIsLive={false}
-                      canUseAi={false}
+                      botIsLive={Boolean(selected.botActive)}
+                      canUseAi
                       botToggling={false}
                       callingBack={false}
                       assigning={assigning}
@@ -411,13 +622,11 @@ export default function InstagramInboxPage() {
                       }}
                       onCallBack={() => undefined}
                       onAssign={(agentId) => void onAssign(agentId)}
-                      onToggleBot={() => undefined}
-                      onToggleFavorite={() => undefined}
+                      onToggleBot={() => void onToggleBot()}
+                      onToggleFavorite={() => void onFavorite()}
                       onToggleSearch={() => setChatSearchOpen((open) => !open)}
                       onOpenDetails={() => setDetailsOpen(true)}
                       hideCall
-                      hideBot
-                      hideFavorite
                       windowVariant="instagram"
                     />
                     <SearchInChatBar
@@ -481,6 +690,8 @@ export default function InstagramInboxPage() {
                       onSubmit={(e) => void onSend(e)}
                       canSendMessages={windowOpen}
                       sending={sending}
+                      cannedReplies={cannedReplies}
+                      onAttach={(file) => void onAttach(file)}
                     />
                   </div>
 

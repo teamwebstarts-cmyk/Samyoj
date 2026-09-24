@@ -53,14 +53,15 @@ export function signFacebookPageOAuthState(
       ...payload,
       type: 'facebook_page_connect_oauth' as const,
     },
-    config.jwt.secret,
-    { algorithm: 'HS256', expiresIn: '30m' }
+    config.jwt.oauthStateSecret,
+    { algorithm: 'HS256', expiresIn: '30m', audience: 'samyoj-oauth-state' }
   );
 }
 
 export function verifyFacebookPageOAuthState(token: string): FacebookPageConnectOAuthState {
-  const decoded = jwt.verify(token, config.jwt.secret, {
+  const decoded = jwt.verify(token, config.jwt.oauthStateSecret, {
     algorithms: ['HS256'],
+    audience: 'samyoj-oauth-state',
   }) as FacebookPageConnectOAuthState;
   if (decoded.type !== 'facebook_page_connect_oauth') {
     throw new Error('Invalid OAuth state');

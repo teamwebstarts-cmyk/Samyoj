@@ -246,6 +246,47 @@ export async function fetchLeadgenLead(
 }
 
 /** Send a text reply on Messenger (Page messages API). Bearer only — not WhatsApp send. */
+export function httpsMediaUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export async function sendPageAttachment(opts: {
+  pageId: string;
+  pageAccessToken: string;
+  recipientId: string;
+  kind: 'image' | 'video' | 'file';
+  url: string;
+  instagram?: boolean;
+}): Promise<{ messageId?: string }> {
+  const message = {
+    attachment: { type: opts.kind, payload: { url: opts.url, is_reusable: true } },
+  };
+  const body: Record<string, string> = {
+    recipient: JSON.stringify({ id: opts.recipientId }),
+    message: JSON.stringify(message),
+  };
+  if (!opts.instagram) body.messaging_type = 'RESPONSE';
+  const data = await graphPost(`/${opts.pageId}/messages`, opts.pageAccessToken, body);
+  return { messageId: typeof data.message_id === 'string' ? data.message_id : undefined };
+}
+
+export async function markPageSeen(opts: {
+  pageId: string;
+  pageAccessToken: string;
+  recipientId: string;
+}): Promise<void> {
+  await graphPost(`/${opts.pageId}/messages`, opts.pageAccessToken, {
+    recipient: JSON.stringify({ id: opts.recipientId }),
+    sender_action: 'mark_seen',
+  });
+}
+
 export async function sendPageTextMessage(opts: {
   pageId: string;
   pageAccessToken: string;

@@ -83,10 +83,12 @@ export default function AutomationCard({
               className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
                 config.platform === 'IG'
                   ? 'bg-[#E4405F]/10 text-[#C13584] ring-[#E4405F]/20'
+                  : config.platform === 'FB'
+                    ? 'bg-[#1877F2]/10 text-[#1877F2] ring-[#1877F2]/20'
                   : 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20'
               }`}
             >
-              {config.platform === 'IG' ? 'Instagram' : 'WhatsApp'}
+              {config.platform === 'IG' ? 'Instagram' : config.platform === 'FB' ? 'Facebook' : 'WhatsApp'}
             </span>
           </div>
         </div>

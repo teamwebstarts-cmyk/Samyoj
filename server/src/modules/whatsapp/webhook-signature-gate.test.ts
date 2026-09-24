@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inboundWebhookSignatureGate } from './webhook-signature-gate';
+import { inboundWebhookSignatureGate, publicHttpsWebhookUrl } from './webhook-signature-gate';
 
 describe('inboundWebhookSignatureGate', () => {
   it('requires HMAC in production even when the platform app secret is configured', () => {
@@ -52,5 +52,20 @@ describe('inboundWebhookSignatureGate', () => {
         hasGlobalSecret: true,
       })
     ).toEqual({ action: 'allow_unsigned' });
+  });
+
+  it('requires HMAC for a public HTTPS webhook even in development', () => {
+    expect(
+      inboundWebhookSignatureGate({
+        nodeEnv: 'development',
+        hasSignature: false,
+        hasGlobalSecret: true,
+        requireSignature: publicHttpsWebhookUrl('https://random.ngrok-free.dev/api/whatsapp/webhook'),
+      })
+    ).toEqual({ action: 'reject', status: 401, reason: 'missing' });
+  });
+
+  it('keeps localhost development fixtures unsigned', () => {
+    expect(publicHttpsWebhookUrl('http://localhost:8000/api/whatsapp/webhook')).toBe(false);
   });
 });

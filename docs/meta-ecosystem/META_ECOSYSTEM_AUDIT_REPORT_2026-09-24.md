@@ -46,8 +46,8 @@ The score is split so a strong unit-test result cannot hide a missing Meta grant
 | Phase 3 Messenger | 7/10 | 1/10 | High | Separate inbox exists; live Page/message proof is blocked |
 | Phase 4 Instagram | 7/10 | 1/10 | High | HTTP ingress, IG-only automation, ownership, timing, and claim paths are hardened; live proof is pending |
 | Phase 5 Ads read | 8/10 | 1/10 | High | Read-only snapshot and explicit account picker exist; `ads_read` and live comparison are blocked |
-| Phase 6 Analytics | 0/10 | — | High | Not built |
-| Phase 7 Portfolio | 4/10 | — | High | Existing separate Settings tabs; unified Channels list not built |
+| Phase 6 Analytics | 7/10 | — | High | `/analytics` code exists with separate Meta and pipeline ledgers; live Ads snapshot/browser proof remains |
+| Phase 7 Portfolio | 8/10 | — | High | Settings → Channels groups WhatsApp, Facebook, and Instagram; inboxes remain separate |
 | Meta ecosystem overall | 6/10 | 1.5/10 | High | Code hardening is materially improved; not production-ready without Meta/live proof |
 
 ## Evidence classification
@@ -247,7 +247,7 @@ These are code-level results only. Signed/public Meta delivery and App Review ar
 - Comments search and hide/private-reply controls now have accessible labels; failure recovery remains toast + reload.
 - Unread badge aggregation is WhatsApp-only.
 - Facebook/Instagram composer and placeholder accents are channel-specific.
-- Settings has separate tabs, not the unified Channels portfolio promised by Phase 7.
+- Settings now has a unified Channels portfolio for WhatsApp, Facebook, and Instagram. Browser smoke and live connect proof remain pending.
 
 ## Capability matrix: what Samyoj does and does not ship
 

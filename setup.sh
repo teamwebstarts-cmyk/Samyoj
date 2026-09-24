@@ -57,8 +57,13 @@ if ! grep -q '^PLATFORM_ADMIN_URL=' server/.env; then
   ok "Set PLATFORM_ADMIN_URL=http://localhost:3001"
 fi
 if ! grep -q '^PLATFORM_MFA_REQUIRED=' server/.env; then
-  set_env_value PLATFORM_MFA_REQUIRED "false"
-  ok "Set PLATFORM_MFA_REQUIRED=false"
+  if grep -q '^NODE_ENV=production$' server/.env; then
+    set_env_value PLATFORM_MFA_REQUIRED "true"
+    ok "Set PLATFORM_MFA_REQUIRED=true for production"
+  else
+    set_env_value PLATFORM_MFA_REQUIRED "false"
+    ok "Set PLATFORM_MFA_REQUIRED=false for local development"
+  fi
 fi
 
 for key in JWT_SECRET JWT_REFRESH_SECRET ENCRYPTION_KEY META_VERIFY_TOKEN; do

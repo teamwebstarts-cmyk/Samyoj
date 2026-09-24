@@ -8,6 +8,13 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 import { instagramWindowOpen } from './ingest';
 import { sendInstagramTextMessage } from '../facebook/page-client';
+import { findParentPageChannel } from '../facebook/parent-page';
+import {
+  attachChannelInboxActions,
+  channelListScope,
+  deliverChannelMedia,
+  markConversationSeen,
+} from '../facebook/channel-inbox-actions';
 
 const router = Router();
 
@@ -60,6 +67,12 @@ async function loadInstagramConversation(orgId: string, channelId: string, conve
   });
 }
 
+attachChannelInboxActions(router, {
+  platform: 'IG',
+  missing: 'Connect Instagram in Settings first',
+  loadChannel: activeIgChannel,
+});
+
 router.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
@@ -104,6 +117,7 @@ router.get(
             ],
           }
         : {}),
+      ...channelListScope(req.query),
     };
 
     const unreadWhere = {
@@ -196,7 +210,14 @@ router.post(
   '/:id/messages',
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const body = z.object({ content: z.string().trim().min(1).max(1000) }).parse(req.body);
+    const body = z
+      .object({
+        content: z.string().trim().max(1000).optional(),
+        mediaUrl: z.string().trim().optional(),
+        kind: z.enum(['image', 'video', 'file']).optional(),
+      })
+      .refine((row) => Boolean(row.content) || Boolean(row.mediaUrl), { message: 'Message or media is required' })
+      .parse(req.body);
     const channel = await activeIgChannel(orgId);
     if (!channel?.accessToken) {
       throw new AppError(400, 'Connect Instagram in Settings first');
@@ -220,12 +241,23 @@ router.post(
     if (!identity?.externalId) {
       throw new AppError(400, 'Instagram identity missing for this contact');
     }
+    if (body.mediaUrl) {
+      await deliverChannelMedia({
+        organizationId: orgId,
+        platform: 'IG',
+        channelId: channel.id,
+        recipientId: identity.externalId,
+        conversationId: conversation.id,
+        mediaUrl: body.mediaUrl,
+        kind: body.kind || 'image',
+      });
+      sendSuccess(res, { ok: true });
+      return;
+    }
+    if (!body.content) throw new AppError(400, 'Message is required');
 
-    const fbPage = await prisma.channel.findFirst({
-      where: { organizationId: orgId, platform: 'FB', isActive: true },
-      select: { platformAccountId: true, accessToken: true },
-    });
-    const tokenCipher = fbPage?.accessToken || channel.accessToken;
+    const fbPage = await findParentPageChannel(orgId, channel.id);
+    const tokenCipher = fbPage?.accessToken;
     const pageId = fbPage?.platformAccountId;
     if (!pageId || !tokenCipher) {
       throw new AppError(400, 'Connect a Facebook Page linked to Instagram first');
@@ -289,16 +321,26 @@ router.post(
     const orgId = req.user!.organizationId!;
     const channel = await activeIgChannel(orgId);
     if (!channel) throw new AppError(404, 'Connect Instagram in Settings first');
-    const updated = await prisma.conversation.updateMany({
+    const conversation = await prisma.conversation.findFirst({
       where: {
         id: String(req.params.id),
         organizationId: orgId,
         channelId: channel.id,
         whatsappNumberId: null,
       },
+      select: { id: true, contactId: true },
+    });
+    if (!conversation) throw new AppError(404, 'Conversation not found');
+    await prisma.conversation.update({
+      where: { id: conversation.id },
       data: { unreadCount: 0 },
     });
-    if (!updated.count) throw new AppError(404, 'Conversation not found');
+    await markConversationSeen({
+      organizationId: orgId,
+      contactId: conversation.contactId,
+      platform: 'IG',
+      channelId: channel.id,
+    });
     sendSuccess(res, { ok: true });
   })
 );

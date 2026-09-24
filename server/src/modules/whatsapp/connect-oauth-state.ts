@@ -96,14 +96,15 @@ export function signConnectOAuthState(
       type: 'whatsapp_connect_oauth' as const,
       connectMode: payload.connectMode || 'standard',
     },
-    config.jwt.secret,
-    { algorithm: 'HS256', expiresIn: '30m' }
+    config.jwt.oauthStateSecret,
+    { algorithm: 'HS256', expiresIn: '30m', audience: 'samyoj-oauth-state' }
   );
 }
 
 export function verifyConnectOAuthState(token: string): WhatsappConnectOAuthState {
-  const decoded = jwt.verify(token, config.jwt.secret, {
+  const decoded = jwt.verify(token, config.jwt.oauthStateSecret, {
     algorithms: ['HS256'],
+    audience: 'samyoj-oauth-state',
   }) as WhatsappConnectOAuthState;
   if (decoded.type !== 'whatsapp_connect_oauth') {
     throw new Error('Invalid OAuth state');

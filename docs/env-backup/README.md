@@ -41,7 +41,7 @@ documented one-time procedure used on 2026-08-21:
 ```bash
 cd server
 npm run db:backup                        # documentary dump first
-npx prisma migrate deploy                # apply full chain ONCE on empty DB
+npm run db:migrate-startup-safe          # fail-closed migration workflow
 npm run db:preflight-number-isolation    # must exit 0
 cd .. && bash start.sh
 ```

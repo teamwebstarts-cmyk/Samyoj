@@ -1,6 +1,6 @@
 # Phase 6 — Analytics (two columns)
 
-**Code status (24 Sep 2026):** shipped at `/analytics`. Live Ads numbers still need a Meta snapshot.
+**Code status (25 Sep 2026):** shipped at `/analytics` in the test-deploy build. The page has two separate ledgers; live Ads numbers and authenticated browser smoke are still unproven.
 
 **Ships:** one page. Meta ads numbers beside our pipeline.  
 **First new main-rail page** since `/reports` currently redirects to Billing.
@@ -35,7 +35,8 @@ Dashboard card grid, two headings: **Meta ads** | **Your pipeline**. Sidebar: **
 - [ ] Won lead with no amount shows “—”.
 - [ ] Setting amount on a META_ADS lead changes only the right column.
 - [ ] A WhatsApp-ad chip conversation does not increment “Your pipeline” unless a lead exists.
-- [ ] Left column equals phase 5 for the same dates.
+- [ ] Left column equals phase 5 for the same selected snapshot/account.
+- [ ] Browser smoke confirms date/source filters affect only the pipeline column.
 
 ## Competitors
 

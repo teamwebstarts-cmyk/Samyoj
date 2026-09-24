@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bot,
   Clock,
+  Facebook,
   GitBranch,
   Hash,
   Instagram,
@@ -48,7 +49,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-import { automationApi, instagramApi } from '../services/api';
+import { automationApi, facebookApi, instagramApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
 import type { Automation, AutomationConflict } from '../types';
@@ -164,7 +165,7 @@ const emptyForm = {
   awayMessage: '',
   tag: 'lead',
   handoff: false,
-  platform: 'WA' as 'WA' | 'IG',
+  platform: 'WA' as 'WA' | 'FB' | 'IG',
   buttons: [] as QuickReplyButton[],
 };
 
@@ -201,6 +202,7 @@ export default function AutomationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = (searchParams.get('tab') as AutomationTab) || 'flows';
   const [instagramConnected, setInstagramConnected] = useState(false);
+  const [facebookConnected, setFacebookConnected] = useState(false);
   const activeTab = requestedTab === 'flows' && !hasConnectedNumber ? 'quick' : requestedTab;
 
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -242,14 +244,22 @@ export default function AutomationsPage() {
 
   useEffect(() => {
     if (!resolved) return;
-    instagramApi
-      .account()
-      .then(({ data }) => setInstagramConnected(Boolean(data.data.account)))
-      .catch(() => setInstagramConnected(false));
+    Promise.all([
+      instagramApi.account(),
+      facebookApi.page(),
+    ])
+      .then(([instagram, facebook]) => {
+        setInstagramConnected(Boolean(instagram.data.data.account));
+        setFacebookConnected(Boolean(facebook.data.data.page));
+      })
+      .catch(() => {
+        setInstagramConnected(false);
+        setFacebookConnected(false);
+      });
   }, [resolved]);
 
   const load = useCallback(() => {
-    if (!resolved || (!activeNumber && !instagramConnected)) return;
+    if (!resolved || (!activeNumber && !instagramConnected && !facebookConnected)) return;
     const requestNumberId = activeNumber?.id ?? null;
     setLoading(true);
     const params: Record<string, string> = {
@@ -273,7 +283,7 @@ export default function AutomationsPage() {
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current || requestNumberId === null) setLoading(false);
       });
-  }, [activeNumber, debouncedSearch, instagramConnected, page, resolved, statusFilter, triggerFilter]);
+  }, [activeNumber, debouncedSearch, facebookConnected, instagramConnected, page, resolved, statusFilter, triggerFilter]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -292,7 +302,7 @@ export default function AutomationsPage() {
   }, [load, activeTab]);
 
   useEffect(() => {
-    if (!resolved || (!activeNumber && !instagramConnected)) return;
+    if (!resolved || (!activeNumber && !instagramConnected && !facebookConnected)) return;
     const requestNumberId = activeNumber?.id ?? null;
     automationApi
       .conflicts()
@@ -305,6 +315,7 @@ export default function AutomationsPage() {
   }, [
     activeNumber,
     activeTab,
+    facebookConnected,
     flowSummary.active,
     flowSummary.paused,
     instagramConnected,
@@ -320,7 +331,7 @@ export default function AutomationsPage() {
     setForm({
       ...emptyForm,
       triggerType,
-      platform: !hasConnectedNumber && instagramConnected ? 'IG' : 'WA',
+      platform: hasConnectedNumber ? 'WA' : facebookConnected ? 'FB' : 'IG',
       ...defaults,
     });
     setSlideOpen(true);
@@ -338,7 +349,7 @@ export default function AutomationsPage() {
       awayMessage: String(config.awayMessage || ''),
       tag: String(config.tag || 'lead'),
       handoff: Boolean(config.handoff),
-      platform: config.platform === 'IG' ? 'IG' : 'WA',
+      platform: config.platform === 'FB' ? 'FB' : config.platform === 'IG' ? 'IG' : 'WA',
       buttons: Array.isArray(config.buttons) ? (config.buttons as QuickReplyButton[]) : [],
     });
     setSlideOpen(true);
@@ -383,7 +394,7 @@ export default function AutomationsPage() {
     const config: Record<string, unknown> = { message: form.message };
     if (form.triggerType === 'KEYWORD') {
       config.keyword = form.keyword;
-      if (form.platform === 'IG') config.platform = 'IG';
+      if (form.platform !== 'WA') config.platform = form.platform;
     }
     if (form.triggerType === 'BUSINESS_HOURS') {
       config.duringHoursMessage = form.duringHoursMessage || form.message;
@@ -531,16 +542,13 @@ export default function AutomationsPage() {
     value,
     label: triggerMeta[value].label,
   }));
-  const availableChannelOptions = hasConnectedNumber
-    ? [
-        { id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' },
-        ...(instagramConnected
-          ? [{ id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' }]
-          : []),
-      ]
-    : [{ id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' }];
+  const availableChannelOptions = [
+    ...(hasConnectedNumber ? [{ id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' }] : []),
+    ...(facebookConnected ? [{ id: 'FB' as const, label: 'Facebook', hint: 'Messenger keyword' }] : []),
+    ...(instagramConnected ? [{ id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' }] : []),
+  ];
 
-  if (resolved && !hasConnectedNumber && !instagramConnected) {
+  if (resolved && !hasConnectedNumber && !facebookConnected && !instagramConnected) {
     return (
       <PageShell>
         <WhatsAppConnectionEmptyState
@@ -886,10 +894,16 @@ export default function AutomationsPage() {
                                   className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
                                     config.platform === 'IG'
                                       ? 'bg-[#E4405F]/10 text-[#C13584] ring-[#E4405F]/20'
+                                      : config.platform === 'FB'
+                                        ? 'bg-[#1877F2]/10 text-[#1877F2] ring-[#1877F2]/20'
                                       : 'bg-emerald-500/10 text-emerald-800 ring-emerald-500/20'
                                   }`}
                                 >
-                                  {config.platform === 'IG' ? 'Instagram' : 'WhatsApp'}
+                                  {config.platform === 'IG'
+                                    ? 'Instagram'
+                                    : config.platform === 'FB'
+                                      ? 'Facebook'
+                                      : 'WhatsApp'}
                                 </span>
                               </span>
                             ) : (
@@ -1062,7 +1076,7 @@ export default function AutomationsPage() {
               <>
                 <div className="space-y-2">
                   <p className="text-[12px] font-bold text-neutral-700">Channel</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     {availableChannelOptions.map((opt) => {
                       const selected = form.platform === opt.id;
                       return (
@@ -1076,10 +1090,12 @@ export default function AutomationsPage() {
                               buttons: opt.id === 'IG' ? [] : prev.buttons,
                             }))
                           }
-                          className={`rounded-xl border px-3 py-2.5 text-left ${
+                            className={`rounded-xl border px-3 py-2.5 text-left ${
                             selected
                               ? opt.id === 'IG'
                                 ? 'border-[#E4405F]/40 bg-[#E4405F]/[0.06]'
+                                : opt.id === 'FB'
+                                  ? 'border-[#1877F2]/40 bg-[#1877F2]/[0.06]'
                                 : 'border-emerald-300 bg-emerald-50/80'
                               : 'border-neutral-200 bg-white'
                           }`}
@@ -1087,6 +1103,8 @@ export default function AutomationsPage() {
                           <span className="flex items-center gap-1.5 text-[13px] font-bold text-neutral-900">
                             {opt.id === 'IG' ? (
                               <Instagram className="h-3.5 w-3.5 text-[#E4405F]" />
+                            ) : opt.id === 'FB' ? (
+                              <Facebook className="h-3.5 w-3.5 text-[#1877F2]" />
                             ) : null}
                             {opt.label}
                           </span>
@@ -1102,7 +1120,7 @@ export default function AutomationsPage() {
                   hint={
                     form.platform === 'IG'
                       ? 'One private reply when this word appears. A 24h chat starts only after they reply in DMs.'
-                      : "We'll reply when a customer sends this word"
+                      : `We'll reply when a customer sends this word on ${form.platform === 'FB' ? 'Facebook Messenger' : 'WhatsApp'}`
                   }
                   placeholder="pricing"
                   value={form.keyword}

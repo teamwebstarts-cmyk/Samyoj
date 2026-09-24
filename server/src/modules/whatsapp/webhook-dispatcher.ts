@@ -8,6 +8,29 @@ import { invalidateTemplateCache } from '../templates/cache';
 
 const log = createModuleLogger('webhook-dispatcher');
 
+type InboundChannelMessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+
+export function channelMessageAttachment(message: Record<string, unknown>): {
+  type: InboundChannelMessageType;
+  content: string;
+  metadata: unknown;
+} | null {
+  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  const attachment = attachments[0];
+  if (!attachment || typeof attachment !== 'object') return null;
+  const row = attachment as Record<string, unknown>;
+  const rawType = typeof row.type === 'string' ? row.type.toLowerCase() : 'file';
+  const type: InboundChannelMessageType =
+    rawType === 'image' ? 'IMAGE' : rawType === 'video' ? 'VIDEO' : rawType === 'audio' ? 'AUDIO' : 'DOCUMENT';
+  const payload = row.payload && typeof row.payload === 'object' ? (row.payload as Record<string, unknown>) : {};
+  const url = typeof payload.url === 'string' ? payload.url : '';
+  return {
+    type,
+    content: url || `[${type}]`,
+    metadata: { attachments },
+  };
+}
+
 function stableValue(value: unknown): string {
   if (!value || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableValue).join(',')}]`;
@@ -535,8 +558,10 @@ export async function dispatchPageWebhookFields(
       const field = 'messages';
 
       if (!message || message.is_echo === true) continue;
-      const text = typeof message.text === 'string' ? message.text : '';
-      if (!text.trim() || !sender) continue;
+      const text = typeof message.text === 'string' ? message.text.trim() : '';
+      const attachment = channelMessageAttachment(message);
+      const content = text || attachment?.content || '';
+      if (!content || !sender) continue;
 
       const channel = await resolveOrgFromPageChannel(pageId);
       if (!channel) {
@@ -552,7 +577,7 @@ export async function dispatchPageWebhookFields(
       const value: Record<string, unknown> = {
         ...(mid ? { mid } : {}),
         sender_id: sender,
-        text,
+        text: content,
       };
       const tsRaw = event.timestamp;
       const timestampMs =
@@ -574,9 +599,11 @@ export async function dispatchPageWebhookFields(
             organizationId: channel.organizationId,
             channelId: channel.id,
             psid: sender,
-            text: text.trim(),
+            text: content,
             metaMessageId: mid,
             timestampMs,
+            messageType: attachment?.type,
+            metadata: attachment?.metadata,
           });
           log.info('Page messaging ingested', {
             organizationId: channel.organizationId,
@@ -585,13 +612,15 @@ export async function dispatchPageWebhookFields(
             createdConversation: result.createdConversation,
             skippedReason: result.skippedReason ?? null,
           });
-          if (!result.skippedReason) {
-            const { sendChannelKeywordReply } = await import('../facebook/channel-keyword');
-            await sendChannelKeywordReply({
+          if (text && !result.skippedReason) {
+            const { sendChannelAutoReply } = await import('../facebook/channel-keyword');
+            await sendChannelAutoReply({
               organizationId: channel.organizationId,
               platform: 'FB',
               recipientId: sender,
-              text: text.trim(),
+              text,
+              conversationId: result.conversationId,
+              isNew: result.createdConversation,
             });
           }
         },
@@ -704,8 +733,10 @@ export async function dispatchInstagramWebhookFields(
       const isSelf = (event as { is_self?: boolean }).is_self === true;
       if (!message || message.is_echo === true) continue;
       if (isSelf) continue;
-      const text = typeof message.text === 'string' ? message.text : '';
-      if (!text.trim() || !sender) continue;
+      const text = typeof message.text === 'string' ? message.text.trim() : '';
+      const attachment = channelMessageAttachment(message);
+      const content = text || attachment?.content || '';
+      if (!content || !sender) continue;
       if (sender === entryIgId) continue;
 
       const channel = await resolveOrgFromIgChannel(entryIgId);
@@ -718,7 +749,7 @@ export async function dispatchInstagramWebhookFields(
       const value: Record<string, unknown> = {
         ...(mid ? { mid } : {}),
         sender_id: sender,
-        text,
+        text: content,
       };
       const tsRaw = event.timestamp;
       const timestampMs =
@@ -740,17 +771,21 @@ export async function dispatchInstagramWebhookFields(
             organizationId: channel.organizationId,
             channelId: channel.id,
             igsid: sender,
-            text: text.trim(),
+            text: content,
             metaMessageId: mid,
             timestampMs,
+            messageType: attachment?.type,
+            metadata: attachment?.metadata,
           });
-          if (!result.skippedReason) {
-            const { sendChannelKeywordReply } = await import('../facebook/channel-keyword');
-            await sendChannelKeywordReply({
+          if (text && !result.skippedReason) {
+            const { sendChannelAutoReply } = await import('../facebook/channel-keyword');
+            await sendChannelAutoReply({
               organizationId: channel.organizationId,
               platform: 'IG',
               recipientId: sender,
-              text: text.trim(),
+              text,
+              conversationId: result.conversationId,
+              isNew: result.createdConversation,
             });
           }
         },

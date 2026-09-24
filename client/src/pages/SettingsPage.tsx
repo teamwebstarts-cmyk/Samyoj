@@ -12,8 +12,6 @@ import {
   Download,
   MessageCircle,
   BadgeCheck,
-  Facebook,
-  Instagram,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { TabTransition } from '../components/ui/TabTransition';
@@ -52,9 +50,6 @@ import { getErrorMessage } from '../utils/errors';
 type SettingsTab =
   | 'profile'
   | 'channels'
-  | 'whatsapp'
-  | 'facebook'
-  | 'instagram'
   | 'green-tick'
   | 'website-button'
   | 'inbox'
@@ -64,9 +59,6 @@ type SettingsTab =
 const SETTINGS_TAB_IDS: SettingsTab[] = [
   'profile',
   'channels',
-  'whatsapp',
-  'facebook',
-  'instagram',
   'green-tick',
   'website-button',
   'inbox',
@@ -95,24 +87,6 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'Channels',
     hint: 'WhatsApp, Facebook, Instagram',
     icon: Smartphone,
-  },
-  {
-    id: 'whatsapp',
-    label: 'WhatsApp',
-    hint: 'Connect business numbers',
-    icon: Smartphone,
-  },
-  {
-    id: 'facebook',
-    label: 'Facebook Page',
-    hint: 'Instant Forms → CRM',
-    icon: Facebook,
-  },
-  {
-    id: 'instagram',
-    label: 'Instagram',
-    hint: 'DMs and comments',
-    icon: Instagram,
   },
   {
     id: 'green-tick',
@@ -152,7 +126,10 @@ function resolveLegacyTab(raw: string | null): SettingsTab | null {
     case 'setup':
       return 'profile';
     case 'campaigns':
-      return 'whatsapp';
+    case 'whatsapp':
+    case 'facebook':
+    case 'instagram':
+      return 'channels';
     case 'official-check':
       return 'green-tick';
     case 'automation':
@@ -546,6 +523,16 @@ export default function SettingsPage() {
 
                   {activeTab === 'channels' && (
                     <div className="space-y-6">
+                      {whatsappGateMessage && (
+                        <EntitlementNotice
+                          message={whatsappGateMessage}
+                          upgradePlan={
+                            entitlements?.isLocked
+                              ? 'growth'
+                              : entitlements?.getUpgradePlan('waNumbers')
+                          }
+                        />
+                      )}
                       <WhatsAppChannelsPanel
                         numbers={numbers}
                         disconnectedNumbers={disconnectedNumbers}
@@ -586,67 +573,6 @@ export default function SettingsPage() {
                         canEdit={isOwnerOrAdmin}
                       />
                     </div>
-                  )}
-
-                  {activeTab === 'whatsapp' && (
-                    <>
-                      {whatsappGateMessage && (
-                        <EntitlementNotice
-                          className="mb-4"
-                          message={whatsappGateMessage}
-                          upgradePlan={
-                            entitlements?.isLocked
-                              ? 'growth'
-                              : entitlements?.getUpgradePlan('waNumbers')
-                          }
-                        />
-                      )}
-                      <WhatsAppChannelsPanel
-                        numbers={numbers}
-                        disconnectedNumbers={disconnectedNumbers}
-                        activeNumberId={activeNumber?.id ?? null}
-                        numberLimit={entitlementNumberLimit}
-                        planName={entitlementPlanName}
-                        loading={!numbersResolved || numbersLoading}
-                        connecting={connecting}
-                        onConnect={handleConnect}
-                        onDisconnect={(number) =>
-                          setDisconnectTarget({
-                            id: number.id,
-                            phone: number.phoneNumber,
-                            isOnBizApp: number.isOnBizApp,
-                            coexistenceStatus: number.coexistenceStatus,
-                          })
-                        }
-                        disconnectingId={disconnectingId}
-                        canEdit={isOwnerOrAdmin}
-                        canConnect={canConnectWhatsApp}
-                      />
-                    </>
-                  )}
-
-                  {activeTab === 'facebook' && (
-                    <FacebookPagePanel
-                      page={facebookPage}
-                      loading={facebookLoading && !facebookPage}
-                      connecting={facebookConnecting}
-                      disconnecting={facebookDisconnecting}
-                      onConnect={() => void connectFacebookPage()}
-                      onDisconnect={() => void disconnectFacebookPage()}
-                      canEdit={isOwnerOrAdmin}
-                    />
-                  )}
-
-                  {activeTab === 'instagram' && (
-                    <InstagramPagePanel
-                      account={instagramAccount}
-                      loading={instagramLoading && !instagramAccount}
-                      connecting={instagramConnecting}
-                      disconnecting={instagramDisconnecting}
-                      onConnect={() => void connectInstagramAccount()}
-                      onDisconnect={() => void disconnectInstagramAccount()}
-                      canEdit={isOwnerOrAdmin}
-                    />
                   )}
 
                   {activeTab === 'green-tick' && <OfficialCheckCard />}

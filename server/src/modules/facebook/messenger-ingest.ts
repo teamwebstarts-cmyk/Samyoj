@@ -23,6 +23,8 @@ export type IngestMessengerResult = {
   skippedReason?: string;
 };
 
+type InboundMessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+
 /**
  * Map PSID → ContactPlatformIdentity + channelId-scoped Conversation.
  * Never sets whatsappNumberId. Never creates a Lead.
@@ -34,6 +36,8 @@ export async function ingestMessengerTextMessage(opts: {
   text: string;
   metaMessageId?: string;
   timestampMs?: number;
+  messageType?: InboundMessageType;
+  metadata?: unknown;
 }): Promise<IngestMessengerResult> {
   const psid = opts.psid.trim();
   if (!psid) {
@@ -166,9 +170,10 @@ export async function ingestMessengerTextMessage(opts: {
       conversationId: conversation.id,
       metaMessageId: opts.metaMessageId || undefined,
       direction: 'INBOUND',
-      type: 'TEXT',
+      type: opts.messageType || 'TEXT',
       content: opts.text,
       status: 'DELIVERED',
+      metadata: opts.metadata as object | undefined,
       createdAt: receivedAt,
     },
   });

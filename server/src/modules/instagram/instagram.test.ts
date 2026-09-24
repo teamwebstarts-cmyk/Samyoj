@@ -308,7 +308,7 @@ describe('Phase 4 Instagram', () => {
       privateReplySentAt: null,
     } as never);
     channelMock.findFirst
-      .mockResolvedValueOnce({ accessToken: 'enc:ig' } as never)
+      .mockResolvedValueOnce({ parentPageId: 'page_1' } as never)
       .mockResolvedValueOnce({ platformAccountId: 'page_1', accessToken: 'enc:page' } as never);
     commentMock.update.mockResolvedValue({} as never);
 

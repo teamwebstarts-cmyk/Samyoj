@@ -58,14 +58,14 @@ Sidebar bottom card **and** Dashboard WhatsApp connection card (number ke neeche
 | 1 Lead Ads | Connect Page + Instant Form → Contacts | Done in code; form/ad/adset/campaign IDs retained | Blocked: scopes + Page webhook |
 | 2 CTWA | Ad click → WhatsApp thread pe pill | Done in code | Real ad click pending |
 | 3 Messenger | Facebook → Inbox, 24h text | Done in code | Blocked: scopes + Page |
-| 4 Instagram | Inbox + comments + comment-keyword | Code + regression coverage; live delivery pending | Blocked: Page-linked IG + scopes |
+| 4 Instagram | Inbox + comments + comment-keyword | Text inbox/comments code + regression coverage; attachment and parent-Page hardening pending | Blocked: Page-linked IG + scopes + real delivery |
 | 5 Ads read | Facebook → Ads | Read-only snapshot + explicit account picker | Blocked: `ads_read` + ad account on the Page |
-| 6 Analytics | Do column, fake ROI nahi | Nahi | — |
-| 7 Portfolio | Settings mein saari connections | Nahi | — |
+| 6 Analytics | Do columns, fake ROI nahi | `/analytics` shipped; browser/live snapshot proof pending | — |
+| 7 Portfolio | Settings mein saari connections | Settings → Channels shipped; browser/live connect proof pending | — |
 
 ## Phase 4 kya hai / kya nahi
 
-Hain: Page-linked IG `Channel`, DMs `/instagram/inbox`, comments list + one private reply (7 days), Automations KEYWORD + `config.platform=IG`. WhatsApp keyword IG pe nahi chalta.
+Hain: Page-linked IG `Channel`, text DMs `/instagram/inbox`, comments list + one private reply (7 days), and an IG keyword path. Attachment-only inbound, clean DM-vs-comment automation authoring, and parent-Page rebinding still need hardening.
 
 Nahi: Posts / Reels, Ads Manager editor, WA templates on IG, Instagram Login (IGSID-only), live transfer, TARGET billing.
 

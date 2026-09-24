@@ -5,6 +5,7 @@ import { authenticate, requireOrg, loadOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { hideInstagramComment } from '../facebook/page-client';
+import { findParentPageChannel } from '../facebook/parent-page';
 import { privateReplyOpen, sendPrivateReplyForComment } from './comment-ingest';
 
 const router = Router();
@@ -96,11 +97,9 @@ router.post(
       where: { id: String(req.params.id), organizationId: orgId, channelId: channel.id },
     });
     if (!row) throw new AppError(404, 'Comment not found');
-    const fbPage = await prisma.channel.findFirst({
-      where: { organizationId: orgId, platform: 'FB', isActive: true },
-      select: { accessToken: true },
-    });
-    const tokenCipher = fbPage?.accessToken || channel.accessToken;
+    const fbPage = await findParentPageChannel(orgId, channel.id);
+    const tokenCipher = fbPage?.accessToken;
+    if (!tokenCipher) throw new AppError(400, 'Connect the Facebook Page linked to Instagram first');
     const token = MetaWhatsAppService.decryptToken(tokenCipher);
     await hideInstagramComment({ commentId: row.igCommentId, pageAccessToken: token, hide: body.hide });
     const updated = await prisma.instagramComment.update({

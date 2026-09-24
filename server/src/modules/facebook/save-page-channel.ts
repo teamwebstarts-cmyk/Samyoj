@@ -74,6 +74,15 @@ export async function saveFacebookPageChannel(opts: {
     },
     data: { isActive: false },
   });
+  await prisma.channel.updateMany({
+    where: {
+      organizationId: opts.organizationId,
+      platform: 'IG',
+      isActive: true,
+      OR: [{ parentPageId: { not: opts.pageId } }, { parentPageId: null }],
+    },
+    data: { isActive: false },
+  });
 
   let subscribed = false;
   let subscribeError: string | undefined;
@@ -90,11 +99,22 @@ export async function saveFacebookPageChannel(opts: {
   }
 
   try {
-    await saveLinkedInstagramChannel({
+    const linkedInstagram = await saveLinkedInstagramChannel({
       organizationId: opts.organizationId,
       pageId: opts.pageId,
       pageAccessToken: opts.pageAccessToken,
     });
+    if (!linkedInstagram) {
+      await prisma.channel.updateMany({
+        where: {
+          organizationId: opts.organizationId,
+          platform: 'IG',
+          parentPageId: opts.pageId,
+          isActive: true,
+        },
+        data: { isActive: false },
+      });
+    }
   } catch (err) {
     if (err instanceof AppError && err.statusCode === 409) throw err;
     log.warn('Linked Instagram Channel not saved', {
@@ -137,6 +157,7 @@ export async function saveLinkedInstagramChannel(opts: {
         data: {
           name: ig.username || ig.id,
           accessToken: encrypted,
+          parentPageId: opts.pageId,
           isActive: true,
         },
       })
@@ -147,6 +168,7 @@ export async function saveLinkedInstagramChannel(opts: {
           platformAccountId: ig.id,
           name: ig.username || ig.id,
           accessToken: encrypted,
+          parentPageId: opts.pageId,
           isActive: true,
         },
       });
@@ -186,9 +208,14 @@ export async function disconnectFacebookPageChannel(
     where: { id: channel.id },
     data: { isActive: false },
   });
-  // Page-linked IG uses the Page token. Soft-disconnect so DMs/comments stop.
+  // Page-linked IG uses only this Page token. Soft-disconnect its linked IG rows.
   await prisma.channel.updateMany({
-    where: { organizationId, platform: 'IG', isActive: true },
+    where: {
+      organizationId,
+      platform: 'IG',
+      parentPageId: channel.platformAccountId,
+      isActive: true,
+    },
     data: { isActive: false },
   });
 }

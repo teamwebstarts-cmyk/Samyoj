@@ -9,17 +9,18 @@ export interface JwtPayload {
   userId: string;
   email: string;
   organizationId?: string;
+  type?: 'access' | 'refresh';
 }
 
 export function signAccessToken(payload: JwtPayload): string {
-  return jwt.sign(payload, config.jwt.secret, {
+  return jwt.sign({ ...payload, type: 'access' }, config.jwt.secret, {
     algorithm: 'HS256',
     expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
   });
 }
 
 export function signRefreshToken(payload: JwtPayload): string {
-  return jwt.sign(payload, config.jwt.refreshSecret, {
+  return jwt.sign({ ...payload, type: 'refresh' }, config.jwt.refreshSecret, {
     algorithm: 'HS256',
     expiresIn: config.jwt.refreshExpiresIn as jwt.SignOptions['expiresIn'],
     jwtid: randomBytes(16).toString('hex'),
@@ -27,15 +28,19 @@ export function signRefreshToken(payload: JwtPayload): string {
 }
 
 export function verifyAccessToken(token: string): JwtPayload {
-  return jwt.verify(token, config.jwt.secret, {
+  const payload = jwt.verify(token, config.jwt.secret, {
     algorithms: ACCESS_ALGORITHMS,
   }) as JwtPayload;
+  if (payload.type !== 'access') throw new Error('Invalid access token type');
+  return payload;
 }
 
 export function verifyRefreshToken(token: string): JwtPayload {
-  return jwt.verify(token, config.jwt.refreshSecret, {
+  const payload = jwt.verify(token, config.jwt.refreshSecret, {
     algorithms: REFRESH_ALGORITHMS,
   }) as JwtPayload;
+  if (payload.type !== 'refresh') throw new Error('Invalid refresh token type');
+  return payload;
 }
 
 export function parseExpiry(expiry: string): Date {

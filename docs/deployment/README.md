@@ -23,7 +23,7 @@ sudo -u samyoj nano /home/samyoj/Samyoj/server/.env
 # 3. Pull + install + migrate + build
 cd /home/samyoj/Samyoj
 sudo -u samyoj git pull origin <BRANCH>
-sudo -u samyoj bash -c 'cd server && npm ci && npx prisma generate && npx prisma migrate deploy && npm run build'
+sudo -u samyoj bash -c 'cd server && npm ci && npx prisma generate && npm run db:migrate-startup-safe && npm run build'
 sudo -u samyoj bash -c 'cd client && npm ci && npm run build'
 
 # 4. Restart + enable auto-start

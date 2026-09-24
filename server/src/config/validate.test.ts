@@ -4,6 +4,7 @@ import {
   jwtSecretErrors,
   looksWeakSecret,
   platformAdminUrlErrors,
+  productionAuthErrors,
   productionMetaConnectErrors,
 } from './validate';
 
@@ -87,5 +88,21 @@ describe('platform admin URL validation', () => {
     ).toContain(
       'PLATFORM_ADMIN_URL must be an origin without a path, query, or credentials'
     );
+  });
+});
+
+describe('production auth fail-closed policy', () => {
+  it('requires verified login and platform MFA', () => {
+    expect(productionAuthErrors({})).toEqual([
+      'PLATFORM_MFA_REQUIRED=true is required in production',
+    ]);
+    expect(productionAuthErrors({
+      ALLOW_UNVERIFIED_LOGIN: 'true',
+      PLATFORM_MFA_REQUIRED: 'true',
+    })).toEqual(['ALLOW_UNVERIFIED_LOGIN must be false or unset in production']);
+    expect(productionAuthErrors({
+      ALLOW_UNVERIFIED_LOGIN: 'false',
+      PLATFORM_MFA_REQUIRED: 'true',
+    })).toEqual([]);
   });
 });

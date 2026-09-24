@@ -15,15 +15,29 @@ describe('automationScopeFilter', () => {
           whatsappNumberId: null,
           config: { path: ['platform'], equals: 'IG' },
         },
+        {
+          triggerType: 'KEYWORD',
+          whatsappNumberId: null,
+          config: { path: ['platform'], equals: 'FB' },
+        },
       ],
     });
   });
 
   it('scopes an Instagram-only workspace to Instagram rows only', () => {
     expect(automationScopeFilter()).toEqual({
-      triggerType: 'KEYWORD',
-      whatsappNumberId: null,
-      config: { path: ['platform'], equals: 'IG' },
+      OR: [
+        {
+          triggerType: 'KEYWORD',
+          whatsappNumberId: null,
+          config: { path: ['platform'], equals: 'IG' },
+        },
+        {
+          triggerType: 'KEYWORD',
+          whatsappNumberId: null,
+          config: { path: ['platform'], equals: 'FB' },
+        },
+      ],
     });
   });
 });

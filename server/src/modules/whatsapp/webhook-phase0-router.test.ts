@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '../../config/database';
 import { processWebhookPayload } from '../../workers/webhook.processor';
 import {
+  channelMessageAttachment,
   dispatchPageWebhookFields,
   providerWebhookEventKey,
 } from './webhook-dispatcher';
@@ -136,6 +137,23 @@ beforeEach(() => {
 });
 
 describe('Phase 0 Meta webhook object router', () => {
+  it('keeps attachment-only Page messages instead of silently dropping them', () => {
+    expect(channelMessageAttachment({
+      attachments: [{ type: 'image', payload: { url: 'https://cdn.example/image.jpg' } }],
+    })).toEqual({
+      type: 'IMAGE',
+      content: 'https://cdn.example/image.jpg',
+      metadata: {
+        attachments: [{ type: 'image', payload: { url: 'https://cdn.example/image.jpg' } }],
+      },
+    });
+    expect(channelMessageAttachment({ attachments: [{ type: 'file', payload: {} }] })).toEqual({
+      type: 'DOCUMENT',
+      content: '[DOCUMENT]',
+      metadata: { attachments: [{ type: 'file', payload: {} }] },
+    });
+  });
+
   it('keeps the WhatsApp WABA path resolving the active number (no early drop)', async () => {
     // Transaction can fail later; the regression gate is that WABA still enters number lookup.
     vi.mocked(prisma.$transaction).mockRejectedValue(new Error('stop after number resolve'));

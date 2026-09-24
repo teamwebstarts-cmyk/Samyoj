@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { logError } from '../../errors';
 import { createModuleLogger } from '../../utils/logger';
 import { normalizePhoneIdentity } from '../../utils/phone';
-import { inboundWebhookSignatureGate } from './webhook-signature-gate';
+import { inboundWebhookSignatureGate, publicHttpsWebhookUrl } from './webhook-signature-gate';
 import {
   resolveActiveWhatsappNumberId,
 } from './active-number';
@@ -940,6 +940,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
     hasSignature: Boolean(signature),
     hasGlobalSecret: Boolean(config.meta.appSecret),
     hasRawBody: Boolean(req.rawBody),
+    requireSignature: publicHttpsWebhookUrl(config.meta.webhookUrl),
   });
 
   if (signatureGate.action === 'reject') {

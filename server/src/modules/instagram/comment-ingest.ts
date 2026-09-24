@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { sendInstagramPrivateReply } from '../facebook/page-client';
+import { findParentPageChannel } from '../facebook/parent-page';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { keywordMatches } from '../flows/trigger-match';
 
@@ -143,15 +144,8 @@ export async function sendPrivateReplyForComment(opts: {
     return { ok: false, error: 'Private replies are only available for 7 days.' };
   }
 
-  const igChannel = await prisma.channel.findFirst({
-    where: { id: opts.channelId, organizationId: opts.organizationId, platform: 'IG', isActive: true },
-    select: { accessToken: true },
-  });
-  const fbPage = await prisma.channel.findFirst({
-    where: { organizationId: opts.organizationId, platform: 'FB', isActive: true },
-    select: { platformAccountId: true, accessToken: true },
-  });
-  const tokenCipher = fbPage?.accessToken || igChannel?.accessToken;
+  const fbPage = await findParentPageChannel(opts.organizationId, opts.channelId);
+  const tokenCipher = fbPage?.accessToken;
   if (!fbPage?.platformAccountId || !tokenCipher) {
     return { ok: false, error: 'Connect a Facebook Page linked to Instagram first' };
   }

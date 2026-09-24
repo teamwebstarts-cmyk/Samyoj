@@ -13,7 +13,8 @@ import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 
 vi.mock('../../config/database', () => ({
   default: {
-    channel: { findMany: vi.fn(), findFirst: vi.fn() },
+     channel: { findMany: vi.fn(), findFirst: vi.fn() },
+     automation: { findMany: vi.fn() },
     contact: { create: vi.fn(), findUnique: vi.fn() },
     contactPlatformIdentity: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
     conversation: {
@@ -63,6 +64,7 @@ const identityMock = vi.mocked(prisma.contactPlatformIdentity);
 const contactMock = vi.mocked(prisma.contact);
 const conversationMock = vi.mocked(prisma.conversation);
 const messageMock = vi.mocked(prisma.message);
+const automationMock = vi.mocked(prisma.automation);
 const leadMock = vi.mocked(prisma.lead);
 const events = vi.mocked(prisma.providerWebhookEvent);
 
@@ -115,6 +117,7 @@ describe('Phase 3 Messenger inbox', () => {
     events.create.mockResolvedValue({} as never);
     events.findUnique.mockResolvedValue(null as never);
     events.updateMany.mockResolvedValue({ count: 1 } as never);
+    automationMock.findMany.mockResolvedValue([] as never);
   });
 
   it('Page message creates a Facebook-scoped thread, not a WhatsApp conversation', async () => {

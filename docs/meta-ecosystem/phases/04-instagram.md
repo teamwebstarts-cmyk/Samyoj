@@ -8,10 +8,10 @@
 ## Do
 
 - Connect the IG professional account **linked to the Page** (same Facebook Login). `Channel` platform `IG`.
-- DMs: 24h window, text, human must stay available if a bot replies.
+- DMs: 24h window, text and attachment-only inbound messages, human must stay available if a bot replies. Media is stored with typed message metadata; provider media URLs remain subject to expiry.
 - Comments: list on the post. Action **Send private reply** once per comment.
 - Confirm the required `instagram_manage_comments`, `pages_messaging`, Human Agent, Advanced Access, and Page-task gates before implementation; these are not inherited automatically from Phase 1.
-- Automations stay on the main rail. Create asks **WhatsApp or Instagram**. IG trigger is comment keyword → one private reply. The WhatsApp keyword automation is not copied across.
+- Automations stay on the main rail. The UI exposes WhatsApp, Facebook Messenger, and Instagram comment-keyword channels. Channel keyword rules are persisted separately from WhatsApp-number automations; the WhatsApp keyword automation is not copied across.
 
 ## Don't
 
@@ -31,7 +31,7 @@ Comment → comments webhook
         → if they reply in DM, 24h window starts, thread moves to Inbox
 ```
 
-Message bot may answer that DM later, from **AI Bots → Message bot**, with a channel toggle. Calling bot never appears here.
+The channel bot header toggle may answer that DM later, from **AI Bots → Message bot**. Calling bot never appears here. The visual WhatsApp flow graph is not used for IG.
 
 ## UI
 
@@ -40,7 +40,7 @@ Message bot may answer that DM later, from **AI Bots → Message bot**, with a c
 | Instagram → Inbox | Inbox clone. Pink 3px. No template button. Window pill = 24h. |
 | Instagram → Comments | Same list pane, rows are comments: @name, text, **Reply in DM**, **Hide**. Not a chat bubble. |
 | After one reply | Button becomes “Reply sent. Waiting for them.” |
-| Automations | Existing card grid. New card **Instagram comment**. Badge on each card: WhatsApp or Instagram. |
+| Automations | Existing card grid. Channel selector shows WhatsApp, Facebook, and Instagram when connected. Instagram remains comment-keyword only. |
 | Composer on a comment-origin thread | “One private reply per comment. A 24h chat starts only after they reply.” |
 
 ## Test
@@ -50,6 +50,8 @@ Message bot may answer that DM later, from **AI Bots → Message bot**, with a c
 - [ ] A WhatsApp keyword automation does not fire on that comment.
 - [ ] User reply after the private DM opens a 24h thread.
 - [ ] No WhatsApp template control on the IG composer.
+- [x] Attachment-only inbound event creates an IG message instead of being silently skipped.
+- [x] Reconnecting a different Facebook Page cannot send an old IG thread with the new Page token.
 - [ ] Ads/dark-post behavior is explicitly deferred until verified; no “Cannot automate this post” rule is shipped from the unverified vendor claim.
 - [ ] A real Instagram webhook reaches `POST /api/whatsapp/webhook`, passes signature validation, and creates the expected IG-scoped event/thread.
 

@@ -1117,6 +1117,7 @@ model Channel {
   organizationId    String          @map("organization_id")
   platform          ChannelPlatform
   platformAccountId String          @map("platform_account_id")
+  parentPageId      String?         @map("parent_page_id")
   /// Display name from Graph (Page name). Not a secret.
   name              String?
   /// AES-GCM ciphertext via MetaWhatsAppService.encryptToken / decryptToken. Null until connect.

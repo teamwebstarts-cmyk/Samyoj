@@ -4,21 +4,27 @@
 set -euo pipefail
 APP=/home/samyoj/Samyoj
 PM2=/usr/bin/pm2
-BRANCH="${DEPLOY_BRANCH:-phase-5-billing}"
+BRANCH="${DEPLOY_BRANCH:-main}"
 
 echo "===== 1. Pull origin/${BRANCH} ====="
 cd "$APP"
+[[ -z "$(git status --porcelain)" ]] || { echo "Refusing deploy with a dirty working tree"; exit 1; }
 git fetch origin "$BRANCH"
 git checkout "$BRANCH"
-git reset --hard "origin/${BRANCH}"
+git merge --ff-only "origin/${BRANCH}"
 echo "HEAD=$(git rev-parse --short HEAD) BRANCH=$(git branch --show-current) MSG=$(git log -1 --format=%s)"
 
 echo "===== 2. Server deps + prisma generate ====="
 cd "$APP/server"
+grep -q '^NODE_ENV=production$' .env || { echo "NODE_ENV=production is required"; exit 1; }
+grep -q '^OAUTH_STATE_SECRET=.\+' .env || { echo "OAUTH_STATE_SECRET is required"; exit 1; }
+grep -q '^ALLOW_UNVERIFIED_LOGIN=false$' .env || { echo "ALLOW_UNVERIFIED_LOGIN=false is required"; exit 1; }
+grep -q '^PLATFORM_MFA_REQUIRED=true$' .env || { echo "PLATFORM_MFA_REQUIRED=true is required"; exit 1; }
 npm ci 2>&1 | tail -4
 npx prisma generate 2>&1 | tail -3
 
 echo "===== 3. Safe migrate ====="
+npm run db:backup
 npm run db:migrate-startup-safe 2>&1 | tail -8
 
 echo "===== 4. Build server ====="
@@ -50,7 +56,7 @@ fs.writeFileSync(envPath, env);
 fs.chmodSync(envPath, 0o600);
 console.log('WEBHOOK_URL_OK');
 NODE
-npm run setup-webhook 2>&1 | tail -8 || echo "setup-webhook failed (check Meta token / WABA admin)"
+npm run setup-webhook 2>&1 | tail -8
 
 echo "===== 8. Restart PM2 ====="
 $PM2 restart whatsapp-api --update-env
@@ -65,3 +71,7 @@ for i in $(seq 1 45); do
   sleep 1
 done
 echo "DEPLOY_STEPS_DONE"
+
+echo "===== 10. Production smoke ====="
+cd "$APP"
+APP_DIR="$APP" bash scripts/vps-prod-smoke.sh

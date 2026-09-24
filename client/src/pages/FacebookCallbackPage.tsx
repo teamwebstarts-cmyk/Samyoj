@@ -70,7 +70,7 @@ export default function FacebookCallbackPage() {
 
     if (!code || !state) {
       setStatus('error');
-      setMessage('Missing Facebook authorization. Start again from Settings → Facebook Page.');
+      setMessage('Missing Facebook authorization. Start again from Settings → Channels.');
       return;
     }
 
@@ -133,7 +133,7 @@ export default function FacebookCallbackPage() {
     } catch (err) {
       setStatus('error');
       setMessage(
-        (getErrorMessage(err) || 'Could not connect selected Page').replace(/\bWhatsApp\b/g, 'Facebook')
+        getErrorMessage(err) || 'Could not connect selected Page'
       );
     } finally {
       setSelecting(false);

@@ -36,12 +36,16 @@ export const config = {
     refreshSecret:
       process.env.JWT_REFRESH_SECRET ||
       (process.env.NODE_ENV === 'development' ? 'dev-refresh-secret' : ''),
+    oauthStateSecret:
+      process.env.OAUTH_STATE_SECRET ||
+      (process.env.NODE_ENV === 'production' ? '' : 'dev-oauth-state-secret'),
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   auth: {
-    // ponytail: email verify stays off until SMTP can actually deliver. Set ALLOW_UNVERIFIED_LOGIN=false to turn the gate back on.
-    allowUnverifiedLogin: process.env.ALLOW_UNVERIFIED_LOGIN !== 'false',
+    // Development keeps the local bootstrap convenient; production requires explicit opt-in.
+    allowUnverifiedLogin:
+      process.env.NODE_ENV !== 'production' && process.env.ALLOW_UNVERIFIED_LOGIN !== 'false',
   },
   meta: {
     appId: process.env.META_APP_ID || '',

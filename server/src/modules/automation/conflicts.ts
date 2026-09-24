@@ -44,14 +44,21 @@ export interface ConflictPreviewInput {
 export function automationScopeFilter(
   whatsappNumberId?: string
 ): Prisma.AutomationWhereInput {
-  const instagramKeyword = {
-    triggerType: 'KEYWORD' as const,
-    whatsappNumberId: null,
-    config: { path: ['platform'], equals: 'IG' },
-  } satisfies Prisma.AutomationWhereInput;
-  if (!whatsappNumberId) return instagramKeyword;
+  const channelKeywords = [
+    {
+      triggerType: 'KEYWORD' as const,
+      whatsappNumberId: null,
+      config: { path: ['platform'], equals: 'IG' },
+    },
+    {
+      triggerType: 'KEYWORD' as const,
+      whatsappNumberId: null,
+      config: { path: ['platform'], equals: 'FB' },
+    },
+  ] satisfies Prisma.AutomationWhereInput[];
+  if (!whatsappNumberId) return { OR: channelKeywords };
   return {
-    OR: [{ whatsappNumberId }, instagramKeyword],
+    OR: [{ whatsappNumberId }, ...channelKeywords],
   };
 }
 
@@ -147,7 +154,9 @@ export function findAutomationConflicts(
   for (const a of automations.filter((x) => x.triggerType === 'KEYWORD')) {
     const kw = String((a.config as Record<string, unknown>).keyword || '').toLowerCase();
     if (!kw) continue;
-    const platform = (a.config as Record<string, unknown>).platform === 'IG' ? 'IG' : 'WA';
+    const configuredPlatform = (a.config as Record<string, unknown>).platform;
+    const platform =
+      configuredPlatform === 'IG' || configuredPlatform === 'FB' ? configuredPlatform : 'WA';
     const key = `${platform}:${kw}`;
     keywordMap.set(key, [...(keywordMap.get(key) || []), a]);
   }

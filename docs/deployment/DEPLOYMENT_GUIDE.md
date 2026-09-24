@@ -166,7 +166,7 @@ gcloud compute ssh samyoj-server --zone=asia-south1-c --command="whoami"
 | `META_API_VERSION` | `v21.0` | latest stable (e.g. `v25.0`) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | `key.json` (file missing) | place `key.json` at `/home/samyoj/Samyoj/server/key.json` |
 
-> ⚠️ **Production validation:** `server/src/config/validate.ts` fails fast (exits) if in `NODE_ENV=production` and: `JWT_SECRET` weak, `ENCRYPTION_KEY` not 64-hex, or `META_VERIFY_TOKEN` is default. Fix these before switching to production mode.
+> ⚠️ **Production validation:** `server/src/config/validate.ts` fails fast (exits) if in `NODE_ENV=production` and: `JWT_SECRET`/`JWT_REFRESH_SECRET`/`OAUTH_STATE_SECRET` are weak, `ENCRYPTION_KEY` is not 64-hex, `META_VERIFY_TOKEN` is default, or unverified login/MFA is not explicitly fail-closed. Fix these before switching to production mode.
 
 ### Client build-time env (optional)
 - `VITE_API_ORIGIN` — only if API is on a different origin than the frontend. When served by the same Express app, leave unset (same-origin works automatically).
@@ -175,7 +175,7 @@ gcloud compute ssh samyoj-server --zone=asia-south1-c --command="whoami"
 
 ## 5. How to Deploy / Redeploy (Step-by-Step)
 
-Preferred path on `samyoj-server` (as user `samyoj`): `bash /home/samyoj/Samyoj/scripts/vps-deploy.sh`. That script pulls `phase-5-billing`, builds server/client/admin, pins `META_WEBHOOK_URL` to `https://app.samyoj.com/api/whatsapp/webhook`, re-registers the Meta app callback, then restarts `whatsapp-api` only.
+Preferred path on `samyoj-server` (as user `samyoj`): `bash /home/samyoj/Samyoj/scripts/vps-deploy.sh`. That script fast-forwards the configured branch (default `main`), backs up before the safe migration, builds server/client/admin, pins `META_WEBHOOK_URL` to `https://app.samyoj.com/api/whatsapp/webhook`, re-registers the Meta app callback, then restarts `whatsapp-api` only and runs the production smoke test.
 
 > ⚠️ **Do these in order** if you are not using `vps-deploy.sh`. Steps 1–3 are critical and must happen before a build.
 
@@ -247,13 +247,13 @@ sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj && git pull origin <BRANCH>'
 sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npm ci && npx prisma generate'
 
 # Apply new migrations (⚠️ backup DB first if this is a big change)
-sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npx prisma migrate deploy'
+sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/server && npm run db:migrate-startup-safe'
 
 # Client deps
 sudo -u samyoj bash -c 'cd /home/samyoj/Samyoj/client && npm ci'
 ```
 
-> 💡 If `prisma migrate deploy` fails due to drift, use `npx prisma migrate dev` (interactive) or inspect `prisma migrate diff`.
+> If the safe migration refuses to run, stop and inspect the reported drift or reconciliation instructions. Do not bypass it with raw Prisma migration commands.
 
 ### Step 6 — Build both apps
 
@@ -425,7 +425,7 @@ df -h /                                        # disk space
 sudo journalctl --vacuum-size=200M && sudo apt clean        # 1. free disk
 # 2. edit .env (fix BASE_URL, META_APP_ID/SECRET/WEBHOOK_URL, NODE_ENV=production)
 cd /home/samyoj/Samyoj && sudo -u samyoj git pull origin <BRANCH>
-sudo -u samyoj bash -c 'cd server && npm ci && npx prisma generate && npx prisma migrate deploy && npm run build'
+sudo -u samyoj bash -c 'cd server && npm ci && npx prisma generate && npm run db:migrate-startup-safe && npm run build'
 sudo -u samyoj bash -c 'cd client && npm ci && npm run build'
 sudo -u samyoj bash -c 'pm2 restart config/ecosystem.config.js && pm2 save'
 sudo systemctl enable --now pm2-samyoj
