@@ -1280,6 +1280,8 @@ model Lead {
   source           String?
   assignedAgentId  String?   @map("assigned_agent_id")
   notes            String?
+  /// Deal value set by an agent after Won. Null until set — never treat as ₹0.
+  amount           Decimal?  @db.Decimal(12, 2)
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 

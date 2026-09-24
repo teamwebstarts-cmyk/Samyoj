@@ -1,0 +1,1 @@
+ALTER TABLE "leads" ADD COLUMN "amount" DECIMAL(12,2);

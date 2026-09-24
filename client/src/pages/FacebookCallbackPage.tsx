@@ -103,7 +103,7 @@ export default function FacebookCallbackPage() {
       .catch((err) => {
         setStatus('error');
         setMessage(
-          (getErrorMessage(err) || 'Could not connect Facebook Page').replace(/\bWhatsApp\b/g, 'Facebook')
+          getErrorMessage(err) || 'Could not connect Facebook Page'
         );
       });
   }, [authLoading, user, searchParams, navigate]);

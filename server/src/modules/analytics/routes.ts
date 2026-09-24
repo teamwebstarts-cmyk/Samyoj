@@ -15,6 +15,9 @@ import {
   startOfDay,
   endOfDay,
 } from './overview-period';
+import { pipelineColumn, type PipelinePlatform } from './meta-pipeline';
+import { ADS_ATTRIBUTION_LABEL, ADS_PERIOD_LABEL } from '../facebook/ads-insights';
+
 const router = Router();
 
 // Dashboard + Reports overview must work for every connected org.
@@ -1314,6 +1317,79 @@ router.get(
         createdAt: m.createdAt,
       }))
     );
+  })
+);
+
+router.get(
+  '/meta-pipeline',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const platformRaw = typeof req.query.platform === 'string' ? req.query.platform : 'all';
+    const platform: PipelinePlatform =
+      platformRaw === 'facebook' || platformRaw === 'instagram' || platformRaw === 'whatsapp'
+        ? platformRaw
+        : 'all';
+    const from = typeof req.query.from === 'string' ? new Date(req.query.from) : null;
+    const to = typeof req.query.to === 'string' ? new Date(req.query.to) : null;
+    const [snapshot, leads, facebook, instagram, whatsapp] = await Promise.all([
+      prisma.metaAdsSnapshot.findUnique({ where: { organizationId: orgId } }),
+      prisma.lead.findMany({
+        where: { organizationId: orgId },
+        select: {
+          id: true,
+          title: true,
+          stage: true,
+          amount: true,
+          metaLeadId: true,
+          createdAt: true,
+        },
+      }),
+      prisma.channel.findFirst({
+        where: { organizationId: orgId, platform: 'FB', isActive: true },
+        select: { id: true },
+      }),
+      prisma.channel.findFirst({
+        where: { organizationId: orgId, platform: 'IG', isActive: true },
+        select: { id: true },
+      }),
+      prisma.whatsappNumber.findFirst({
+        where: { organizationId: orgId, isActive: true },
+        select: { id: true },
+      }),
+    ]);
+    const column = pipelineColumn(
+      leads.map((lead) => ({
+        id: lead.id,
+        title: lead.title,
+        stage: lead.stage,
+        amount: lead.amount == null ? null : lead.amount.toString(),
+        metaLeadId: lead.metaLeadId,
+        createdAt: lead.createdAt,
+      })),
+      platform,
+      from && !Number.isNaN(from.getTime()) ? from : null,
+      to && !Number.isNaN(to.getTime()) ? to : null
+    );
+    sendSuccess(res, {
+      meta: snapshot
+        ? {
+            spend: snapshot.spend,
+            metaLeads: snapshot.leads,
+            cpl: snapshot.cpl,
+            currency: snapshot.currency,
+            periodLabel: ADS_PERIOD_LABEL,
+            attributionLabel: snapshot.attributionLabel || ADS_ATTRIBUTION_LABEL,
+            periodStart: snapshot.periodStart,
+            periodEnd: snapshot.periodEnd,
+          }
+        : null,
+      pipeline: column,
+      filters: {
+        facebook: Boolean(facebook),
+        instagram: Boolean(instagram),
+        whatsapp: Boolean(whatsapp),
+      },
+    });
   })
 );
 

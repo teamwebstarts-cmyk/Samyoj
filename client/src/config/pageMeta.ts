@@ -8,6 +8,10 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Dashboard',
     description: "Here's your WhatsApp workspace at a glance",
   },
+  '/analytics': {
+    title: 'Analytics',
+    description: 'Meta ads beside your pipeline. No combined ROI.',
+  },
   '/inbox': {
     title: 'Inbox',
     description: 'Reply to your customers',

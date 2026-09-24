@@ -16,6 +16,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import DashboardPage from './pages/DashboardPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import InboxPage from './pages/InboxPage';
 import FacebookInboxPage from './pages/FacebookInboxPage';
 import FacebookAdsPage from './pages/FacebookAdsPage';
@@ -84,6 +85,7 @@ export default function App() {
                   <Route element={<OnboardingGate />}>
                     <Route element={<Layout />}>
                       <Route path="/" element={<DashboardPage />} />
+                      <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route path="/inbox" element={<InboxPage />} />
                       <Route path="/facebook/inbox" element={<FacebookInboxPage />} />
                       <Route path="/facebook/ads" element={<FacebookAdsPage />} />

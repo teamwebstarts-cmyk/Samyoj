@@ -14,6 +14,13 @@ The previous audit found a Phase 4 HTTP admission blocker. That blocker has now 
 
 The current Meta app is also the dominant live blocker:
 
+The dashboard screenshots captured on 24 Sep 2026 are saved in
+[META_APP_CONFIGURATION_2026-09-24.md](META_APP_CONFIGURATION_2026-09-24.md). They confirm
+the relevant use-case cards and show several Page permissions as ready for testing, but
+`instagram_basic` and `instagram_manage_messages` still show **Add to App** and
+`instagram_manage_comments` is not confirmed. This explains the current Invalid Scopes error
+on Page reconnect; it does not invalidate an already-saved Page connection.
+
 - app `1766674304665017` / **Samyoj** is in Development mode and is not Live;
 - only WhatsApp privileges are approved;
 - Page/Messenger/Lead/Ads privileges are rejected or have incomplete review requirements;

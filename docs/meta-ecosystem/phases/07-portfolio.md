@@ -1,5 +1,7 @@
 # Phase 7 — Linked assets (Settings only)
 
+**Code status (24 Sep 2026):** shipped as Settings → Channels. Inboxes stay separate.
+
 **Ships:** one Settings list of what is connected. Optional. Do this after the inboxes exist, not before.
 
 ## Do

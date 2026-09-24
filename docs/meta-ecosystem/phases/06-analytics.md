@@ -1,5 +1,7 @@
 # Phase 6 — Analytics (two columns)
 
+**Code status (24 Sep 2026):** shipped at `/analytics`. Live Ads numbers still need a Meta snapshot.
+
 **Ships:** one page. Meta ads numbers beside our pipeline.  
 **First new main-rail page** since `/reports` currently redirects to Billing.
 

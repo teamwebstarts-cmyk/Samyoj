@@ -585,6 +585,15 @@ export async function dispatchPageWebhookFields(
             createdConversation: result.createdConversation,
             skippedReason: result.skippedReason ?? null,
           });
+          if (!result.skippedReason) {
+            const { sendChannelKeywordReply } = await import('../facebook/channel-keyword');
+            await sendChannelKeywordReply({
+              organizationId: channel.organizationId,
+              platform: 'FB',
+              recipientId: sender,
+              text: text.trim(),
+            });
+          }
         },
       });
       if (outcome === 'duplicate') duplicates += 1;
@@ -727,7 +736,7 @@ export async function dispatchInstagramWebhookFields(
         value,
         run: async () => {
           const { ingestInstagramTextMessage } = await import('../instagram/ingest');
-          await ingestInstagramTextMessage({
+          const result = await ingestInstagramTextMessage({
             organizationId: channel.organizationId,
             channelId: channel.id,
             igsid: sender,
@@ -735,6 +744,15 @@ export async function dispatchInstagramWebhookFields(
             metaMessageId: mid,
             timestampMs,
           });
+          if (!result.skippedReason) {
+            const { sendChannelKeywordReply } = await import('../facebook/channel-keyword');
+            await sendChannelKeywordReply({
+              organizationId: channel.organizationId,
+              platform: 'IG',
+              recipientId: sender,
+              text: text.trim(),
+            });
+          }
         },
       });
       if (outcome === 'duplicate') duplicates += 1;

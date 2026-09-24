@@ -6,6 +6,10 @@ Existing plans, phases, UI notes, and the current audit for Meta work. Code is t
 
 **Final handoff/testing:** [PHASE_0_5_FINAL_HANDOFF_2026-09-24.md](PHASE_0_5_FINAL_HANDOFF_2026-09-24.md)
 
+**App Review and live-test runbook:** [META_APP_REVIEW_AND_LIVE_TEST_RUNBOOK_2026-09-24.md](META_APP_REVIEW_AND_LIVE_TEST_RUNBOOK_2026-09-24.md)
+
+**24 Sep live-testing session (senior summary):** [META_LIVE_TESTING_SESSION_SUMMARY_2026-09-24.md](META_LIVE_TESTING_SESSION_SUMMARY_2026-09-24.md)
+
 **Verdict:** Phases 0–5 code paths are hardened and regression-tested; non-WhatsApp Meta live proof remains blocked by app review/configuration. Read [BLOCKERS.md](BLOCKERS.md) and the audit before changing code. Product boundaries and separate-inbox decisions remain unchanged.
 
 1. [Blockers](BLOCKERS.md) — decisions required before Phase 0/1

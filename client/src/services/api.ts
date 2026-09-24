@@ -930,6 +930,8 @@ export const analyticsApi = {
     api.get('/analytics/templates', { params: days ? { days: String(days) } : {} }),
   activity: (limit = 4) =>
     api.get('/analytics/activity', { params: { limit: String(limit) } }),
+  metaPipeline: (params?: Record<string, string>) =>
+    api.get('/analytics/meta-pipeline', { params }),
   exportCsv: (params?: Record<string, string>) =>
     api.get('/analytics/export', { params, responseType: 'blob' }),
 };

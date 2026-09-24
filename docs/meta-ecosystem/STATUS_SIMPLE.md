@@ -1,10 +1,18 @@
 # Ab kya hai (24 Sep 2026)
 
 Detailed audit: [META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md](META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md).
+Saved Meta dashboard evidence: [META_APP_CONFIGURATION_2026-09-24.md](META_APP_CONFIGURATION_2026-09-24.md).
 
 Code plan ke hisaab se **0–5** tak ka scope harden kiya gaya hai. Instagram `object` HTTP route, IG-only automation, channel ownership, comment timing/private-reply claim, Lead Ads attribution IDs, Ads account selection, and channel-specific inbox UI are now covered by code/tests. **Live Facebook Page / Instagram / Ads abhi proven nahi.** Meta app **Development** mode mein hai.
 
 ## Facebook Page connect kyun fail ho sakta hai
+
+The 24 Sep dashboard screenshots show Page permissions/use cases configured for testing, but
+`instagram_basic` and `instagram_manage_messages` still show **Add to App**; 
+`instagram_manage_comments` is not visibly confirmed. The full OAuth request includes these
+Instagram scopes, so reconnect can still fail with Invalid Scopes even when the existing Page
+connection remains usable. See the saved configuration record for the exact evidence and the
+recommended Facebook-now / Instagram-next decision.
 
 Screenshot wala error Facebook ka hai:
 

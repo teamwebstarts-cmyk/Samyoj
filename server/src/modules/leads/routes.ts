@@ -47,6 +47,7 @@ const leadSchema = z.object({
   source: z.string().optional(),
   assignedAgentId: z.string().uuid().optional(),
   notes: z.string().optional(),
+  amount: z.number().nonnegative().nullable().optional(),
 });
 
 function isMetaAdsSource(value: unknown): boolean {
@@ -204,6 +205,9 @@ router.patch(
         ...(data.source !== undefined ? { source: data.source } : {}),
         ...(data.assignedAgentId !== undefined ? { assignedAgentId: data.assignedAgentId } : {}),
         ...(data.notes !== undefined ? { notes: data.notes } : {}),
+        ...(data.amount !== undefined
+          ? { amount: data.amount == null ? null : new Prisma.Decimal(data.amount.toFixed(2)) }
+          : {}),
       },
       include: {
         contact: { select: { id: true, phone: true, name: true } },

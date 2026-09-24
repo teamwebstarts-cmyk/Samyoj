@@ -41,7 +41,7 @@ import FacebookPagePanel, { type FacebookPageSummary } from '../components/setti
 import InstagramPagePanel, { type InstagramAccountSummary } from '../components/settings/InstagramPagePanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
-import SecuritySettingsPanel from '../components/settings/SecuritySettingsPanel';
+import TeamSecurityPanel from '../components/team/TeamSecurityPanel';
 import WhatsAppButtonBuilder from '../components/settings/WhatsAppButtonBuilder';
 import OfficialCheckCard from '../components/settings/OfficialCheckCard';
 import WhatsAppConnectModeModal from '../components/whatsapp/WhatsAppConnectModeModal';
@@ -51,6 +51,7 @@ import { getErrorMessage } from '../utils/errors';
 
 type SettingsTab =
   | 'profile'
+  | 'channels'
   | 'whatsapp'
   | 'facebook'
   | 'instagram'
@@ -62,6 +63,7 @@ type SettingsTab =
 
 const SETTINGS_TAB_IDS: SettingsTab[] = [
   'profile',
+  'channels',
   'whatsapp',
   'facebook',
   'instagram',
@@ -87,6 +89,12 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
     label: 'Business profile',
     hint: 'Name, industry & contacts',
     icon: Building2,
+  },
+  {
+    id: 'channels',
+    label: 'Channels',
+    hint: 'WhatsApp, Facebook, Instagram',
+    icon: Smartphone,
   },
   {
     id: 'whatsapp',
@@ -536,6 +544,50 @@ export default function SettingsPage() {
                     />
                   )}
 
+                  {activeTab === 'channels' && (
+                    <div className="space-y-6">
+                      <WhatsAppChannelsPanel
+                        numbers={numbers}
+                        disconnectedNumbers={disconnectedNumbers}
+                        activeNumberId={activeNumber?.id ?? null}
+                        numberLimit={entitlementNumberLimit}
+                        planName={entitlementPlanName}
+                        loading={!numbersResolved || numbersLoading}
+                        connecting={connecting}
+                        onConnect={handleConnect}
+                        onDisconnect={(number) =>
+                          setDisconnectTarget({
+                            id: number.id,
+                            phone: number.phoneNumber,
+                            isOnBizApp: number.isOnBizApp,
+                            coexistenceStatus: number.coexistenceStatus,
+                          })
+                        }
+                        disconnectingId={disconnectingId}
+                        canEdit={isOwnerOrAdmin}
+                        canConnect={canConnectWhatsApp}
+                      />
+                      <FacebookPagePanel
+                        page={facebookPage}
+                        loading={facebookLoading && !facebookPage}
+                        connecting={facebookConnecting}
+                        disconnecting={facebookDisconnecting}
+                        onConnect={() => void connectFacebookPage()}
+                        onDisconnect={() => void disconnectFacebookPage()}
+                        canEdit={isOwnerOrAdmin}
+                      />
+                      <InstagramPagePanel
+                        account={instagramAccount}
+                        loading={instagramLoading && !instagramAccount}
+                        connecting={instagramConnecting}
+                        disconnecting={instagramDisconnecting}
+                        onConnect={() => void connectInstagramAccount()}
+                        onDisconnect={() => void disconnectInstagramAccount()}
+                        canEdit={isOwnerOrAdmin}
+                      />
+                    </div>
+                  )}
+
                   {activeTab === 'whatsapp' && (
                     <>
                       {whatsappGateMessage && (
@@ -619,7 +671,7 @@ export default function SettingsPage() {
                     </>
                   )}
 
-                  {activeTab === 'security' && <SecuritySettingsPanel />}
+                  {activeTab === 'security' && <TeamSecurityPanel />}
                 </TabTransition>
               </div>
             </div>

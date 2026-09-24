@@ -1,6 +1,7 @@
 # Meta ecosystem — Phase 0/1 blockers
 
 **Audit:** [META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md](META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md).
+**Meta dashboard evidence:** [META_APP_CONFIGURATION_2026-09-24.md](META_APP_CONFIGURATION_2026-09-24.md).
 **Status:** Phase 0–5 code paths are hardened and regression-tested, but live Meta access and signed/public delivery are still unavailable.
 **Rechecked:** 2026-09-24 against the current repository and the cited Meta docs.
 
@@ -32,6 +33,12 @@ Agreed product boundaries remain: WhatsApp stays intact, Facebook/Instagram do n
 `pages_show_list`, `pages_manage_metadata`, `pages_read_engagement`, `pages_messaging`, `leads_retrieval`, `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`, `ads_read`.
 
 No `ads_management`. Subscribe uses the Page token. Graph version stays `config.meta.apiVersion`.
+
+The supplied dashboard screenshots show the Page permissions and use-case cards, but
+`instagram_basic` and `instagram_manage_messages` still show **Add to App**;
+`instagram_manage_comments` is not visibly confirmed. Keep the existing Page connection for
+Facebook testing, and configure all three Instagram permissions before reconnecting for the
+Instagram test.
 
 **Live app check (same `META_APP_ID`, Development mode, not Live):**
 - Approved: `whatsapp_business_messaging`, `whatsapp_business_management`, `public_profile`, `openid`.
