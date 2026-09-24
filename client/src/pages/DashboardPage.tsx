@@ -14,6 +14,7 @@ import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceD
 import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
 import GettingStartedCard from '../components/dashboard/GettingStartedCard';
 import DashboardQuickActions from '../components/dashboard/DashboardQuickActions';
+import MetaAdsRecap from '../components/dashboard/MetaAdsRecap';
 import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import AppButton from '../components/ui/AppButton';
@@ -233,6 +234,7 @@ export default function DashboardPage() {
     <PageShell>
       <div className="dashboard-stack pb-5 sm:pb-6">
         <WhatsAppConnectGuide onStatusChange={onWaStatusChange} />
+        <MetaAdsRecap />
 
         {loading && !stats ? (
           <DashboardSkeleton />

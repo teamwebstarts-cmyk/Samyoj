@@ -23,8 +23,6 @@ import { parseWhatsappNumbersPayload } from '../../utils/whatsappWorkspace';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 import { whatsappDisconnectDialogCopy } from '../../utils/whatsappDisconnectCopy';
 import WhatsAppConnectModeModal from '../whatsapp/WhatsAppConnectModeModal';
-import MetaChannelChips from '../layout/MetaChannelChips';
-
 interface WhatsappNumberRow {
   id: string;
   phoneNumber: string;
@@ -448,7 +446,6 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
             </button>
           </div>
         </div>
-        <MetaChannelChips className="mt-2" />
         <ConfirmDialog
           open={disconnectConfirmOpen}
           onClose={() => setDisconnectConfirmOpen(false)}

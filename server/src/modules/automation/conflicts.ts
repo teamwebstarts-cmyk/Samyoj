@@ -1,7 +1,7 @@
 import prisma from '../../config/database';
 import { AppError } from '../../utils/response';
 import type { Prisma } from '@prisma/client';
-import { automationsForNumberFilter, flowsForNumberFilter } from '../whatsapp/active-number';
+import { flowsForNumberFilter } from '../whatsapp/active-number';
 
 export interface AutomationConflictLink {
   label: string;
@@ -39,6 +39,20 @@ export interface ConflictPreviewInput {
   triggerConfig?: unknown;
   enabled?: boolean;
   status?: string;
+}
+
+export function automationScopeFilter(
+  whatsappNumberId?: string
+): Prisma.AutomationWhereInput {
+  const instagramKeyword = {
+    triggerType: 'KEYWORD' as const,
+    whatsappNumberId: null,
+    config: { path: ['platform'], equals: 'IG' },
+  } satisfies Prisma.AutomationWhereInput;
+  if (!whatsappNumberId) return instagramKeyword;
+  return {
+    OR: [{ whatsappNumberId }, instagramKeyword],
+  };
 }
 
 function autoHref(id?: string): string {
@@ -133,10 +147,13 @@ export function findAutomationConflicts(
   for (const a of automations.filter((x) => x.triggerType === 'KEYWORD')) {
     const kw = String((a.config as Record<string, unknown>).keyword || '').toLowerCase();
     if (!kw) continue;
-    keywordMap.set(kw, [...(keywordMap.get(kw) || []), a]);
+    const platform = (a.config as Record<string, unknown>).platform === 'IG' ? 'IG' : 'WA';
+    const key = `${platform}:${kw}`;
+    keywordMap.set(key, [...(keywordMap.get(key) || []), a]);
   }
-  for (const [kw, rows] of keywordMap) {
+  for (const [key, rows] of keywordMap) {
     if (rows.length > 1) {
+      const kw = key.slice(key.indexOf(':') + 1);
       conflicts.push({
         type: 'duplicate_keyword',
         severity: 'error',
@@ -207,7 +224,7 @@ export function findAutomationConflicts(
     flowKeywordMap.set(kw, [...(flowKeywordMap.get(kw) || []), f]);
   }
   for (const [kw, flowRows] of flowKeywordMap) {
-    const quickRows = keywordMap.get(kw);
+    const quickRows = keywordMap.get(`WA:${kw}`);
     if (quickRows?.length) {
       conflicts.push({
         type: 'keyword_flow_overlap',
@@ -358,11 +375,11 @@ function toConflictRows(automations: Array<{ id: string; name: string; triggerTy
 
 export async function detectAutomationConflicts(
   organizationId: string,
-  whatsappNumberId: string
+  whatsappNumberId?: string
 ): Promise<AutomationConflict[]> {
   const [automations, flows] = await Promise.all([
     prisma.automation.findMany({
-      where: { organizationId, ...automationsForNumberFilter(whatsappNumberId), enabled: true },
+      where: { organizationId, ...automationScopeFilter(whatsappNumberId), enabled: true },
     }),
     prisma.flow.findMany({
       where: {
@@ -381,12 +398,12 @@ export async function detectAutomationConflicts(
 export async function previewAutomationConflicts(
   organizationId: string,
   proposed: ConflictPreviewInput,
-  whatsappNumberId: string,
+  whatsappNumberId?: string,
   db: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<AutomationConflict[]> {
   const [automations, flows] = await Promise.all([
     db.automation.findMany({
-      where: { organizationId, ...automationsForNumberFilter(whatsappNumberId), enabled: true },
+      where: { organizationId, ...automationScopeFilter(whatsappNumberId), enabled: true },
     }),
     db.flow.findMany({
       where: {
@@ -410,7 +427,7 @@ export function getBlockingConflicts(conflicts: AutomationConflict[]): Automatio
 export async function assertNoBlockingConflicts(
   organizationId: string,
   proposed: ConflictPreviewInput,
-  whatsappNumberId: string,
+  whatsappNumberId?: string,
   db: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<void> {
   const conflicts = await previewAutomationConflicts(organizationId, proposed, whatsappNumberId, db);

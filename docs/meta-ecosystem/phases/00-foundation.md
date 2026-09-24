@@ -29,7 +29,7 @@ Meta POST /webhook
   anything else                        → claim + ignore (so we can see it in logs)
 ```
 
-This is the target behavior, not the current behavior. Today the HTTP route returns before non-WABA payloads reach organization resolution or the durable event path. Phase 0 does not create contacts.
+Current status: the HTTP route handles `page` and `instagram` through the non-WABA durable path after signature validation. Phase 0 does not create contacts; later dispatchers own Page/Instagram feature writes.
 
 ## UI
 
@@ -38,7 +38,7 @@ None. Sidebar stays as shipped.
 ## Test
 
 - [ ] Send a normal WhatsApp inbound. `totalReceived` still increments.
-- [ ] **Not implemented today:** the HTTP route currently returns `200` for `{ "object": "page", "entry": [...] }` before signature, organization resolution, and durable claim. Do not mark this gate passed until the route and Page/IG ownership path are implemented.
+- [ ] Signed Page and Instagram fixtures reach signature validation, organization resolution, and durable claim. Regression coverage exists; public Meta proof remains pending.
 - [ ] After that path exists, POST a signed Page fixture. It must not create a WhatsApp conversation, and a second identical fixture must not double-insert (`ProviderWebhookEvent` unique).
 - [ ] Existing lead create still errors with “Connect a WhatsApp number” until phase 1 changes that route on purpose.
 

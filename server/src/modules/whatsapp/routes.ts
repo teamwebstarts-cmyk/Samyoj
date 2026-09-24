@@ -892,8 +892,9 @@ router.post('/webhook', async (req: Request, res: Response) => {
   const payload = req.body as Record<string, unknown>;
   // Phase 0 router: WABA unchanged; page (leadgen) signature + Channel claim; else ack without inventing an org.
   if (
-    payload.object !== 'whatsapp_business_account' &&
-    payload.object !== 'page'
+     payload.object !== 'whatsapp_business_account' &&
+     payload.object !== 'page' &&
+     payload.object !== 'instagram'
   ) {
     log.info('Webhook ignored — unsupported Meta object', {
       requestId,
@@ -977,8 +978,9 @@ router.post('/webhook', async (req: Request, res: Response) => {
     }
   }
 
-  // --- 3b. Page objects: claim when Channel resolves; never enqueue WhatsApp message processor ---
-  if (payload.object === 'page' || payload.object === 'instagram') {
+  // --- 3b. Page/Instagram objects: claim when Channel resolves; never enqueue WhatsApp message processor ---
+  const webhookObject = typeof payload.object === 'string' ? payload.object : '';
+  if (webhookObject === 'page' || webhookObject === 'instagram') {
     try {
       await dispatchNonMessageWebhookFields(payload);
       log.info('Page webhook handled', {

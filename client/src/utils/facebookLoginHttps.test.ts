@@ -32,6 +32,17 @@ describe('facebookLoginHttpsBlockedReason', () => {
     expect(reason).toMatch(/http:\/\//);
   });
 
+  it('uses Facebook Page wording when that connect is blocked', () => {
+    const reason = facebookLoginHttpsBlockedReason(
+      { protocol: 'http:', hostname: 'localhost', port: '57320' },
+      'https://sample-3000.app.github.dev',
+      'Facebook Page',
+    );
+    expect(reason).toContain('Facebook Page connect');
+    expect(reason).toContain('Connect Page');
+    expect(reason).not.toContain('WhatsApp');
+  });
+
   it('blocks Cursor forwarded localhost ports and points at the Codespace HTTPS origin', () => {
     const reason = facebookLoginHttpsBlockedReason(
       { protocol: 'http:', hostname: 'localhost', port: '50825' },

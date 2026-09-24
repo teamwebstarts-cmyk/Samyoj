@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { facebookApi, instagramApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { getErrorMessage } from '../../utils/errors';
-
+import { facebookLoginHttpsBlockedReason } from '../../utils/facebookLoginHttps';
 type MetaChip = {
   connected: boolean;
   label: string;
@@ -18,49 +18,25 @@ export function safeFbConnectReturn(raw: string | null | undefined): string {
   return raw;
 }
 
-export default function MetaChannelChips({
-  className = '',
-  onNavigate,
-}: {
-  className?: string;
-  onNavigate?: () => void;
-}) {
+export function useMetaChannelConnect() {
   const { orgRole } = useAuth();
   const location = useLocation();
   const canConnect = orgRole === 'OWNER' || orgRole === 'ADMIN';
-  const [facebook, setFacebook] = useState<MetaChip | null>(null);
-  const [instagram, setInstagram] = useState<MetaChip | null>(null);
   const [busy, setBusy] = useState<'fb' | 'ig' | null>(null);
-
-  const refreshMeta = () => {
-    void facebookApi
-      .page()
-      .then((res) => {
-        const page = res.data.data.page;
-        setFacebook(
-          page ? { connected: true, label: page.name } : { connected: false, label: 'Connect Page' }
-        );
-      })
-      .catch(() => setFacebook({ connected: false, label: 'Connect Page' }));
-    void instagramApi
-      .account()
-      .then((res) => {
-        const account = res.data.data.account;
-        setInstagram(
-          account
-            ? { connected: true, label: account.username ? `@${account.username}` : 'Instagram' }
-            : { connected: false, label: 'Connect IG' }
-        );
-      })
-      .catch(() => setInstagram({ connected: false, label: 'Connect IG' }));
-  };
-
-  useEffect(() => {
-    refreshMeta();
-  }, []);
 
   const startFacebookConnect = async () => {
     if (!canConnect) return;
+    const blocked = facebookLoginHttpsBlockedReason(
+      window.location,
+      typeof import.meta.env.VITE_CODESPACE_HTTPS_ORIGIN === 'string'
+        ? import.meta.env.VITE_CODESPACE_HTTPS_ORIGIN
+        : '',
+      'Facebook Page',
+    );
+    if (blocked) {
+      toastError(blocked);
+      return;
+    }
     setBusy('fb');
     try {
       sessionStorage.setItem('fb_connect_return', `${location.pathname}${location.search}`);
@@ -81,47 +57,104 @@ export default function MetaChannelChips({
     try {
       const { data } = await instagramApi.connect();
       const saved = data.data;
-      setInstagram({
-        connected: true,
-        label: saved.username ? `@${saved.username}` : 'Instagram',
-      });
       toastSuccess('Instagram connected');
+      setBusy(null);
+      return saved;
     } catch (err) {
       const message = getErrorMessage(err) || 'Could not connect Instagram';
+      setBusy(null);
       if (/facebook page first/i.test(message)) {
         toastError('Connect a Facebook Page first');
         await startFacebookConnect();
-        return;
+        return null;
       }
       toastError(message);
-    } finally {
-      setBusy(null);
+      return null;
     }
   };
 
+  return { canConnect, busy, startFacebookConnect, startInstagramConnect };
+}
+
+/** Shared Facebook/Instagram connection state (one fetch, reused by chips + dashboard strip). */
+export function useMetaChannelStatus() {
+  const [facebook, setFacebook] = useState<MetaChip | null>(null);
+  const [instagram, setInstagram] = useState<MetaChip | null>(null);
+
+  useEffect(() => {
+    void facebookApi
+      .page()
+      .then((res) => {
+        const page = res.data.data.page;
+        setFacebook(
+          page ? { connected: true, label: page.name } : { connected: false, label: 'Connect Page' }
+        );
+      })
+      .catch(() => setFacebook({ connected: false, label: 'Connect Page' }));
+    void instagramApi
+      .account()
+      .then((res) => {
+        const account = res.data.data.account;
+        setInstagram(
+          account
+            ? { connected: true, label: account.username ? `@${account.username}` : 'Instagram' }
+            : { connected: false, label: 'Connect IG' }
+        );
+      })
+      .catch(() => setInstagram({ connected: false, label: 'Connect IG' }));
+  }, []);
+
+  const markInstagramConnected = (username: string) => {
+    setInstagram({ connected: true, label: username ? `@${username}` : 'Instagram' });
+  };
+
+  return { facebook, instagram, markInstagramConnected };
+}
+
+export default function MetaChannelChips({
+  className = '',
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+}) {
+  const { canConnect, busy, startFacebookConnect, startInstagramConnect } = useMetaChannelConnect();
+  const { facebook, instagram, markInstagramConnected } = useMetaChannelStatus();
+
+  const connectInstagram = async () => {
+    const saved = await startInstagramConnect();
+    if (!saved || typeof saved !== 'object') return;
+    const username = 'username' in saved && typeof saved.username === 'string' ? saved.username : '';
+    markInstagramConnected(username);
+  };
+
   return (
-    <div className={`grid grid-cols-2 gap-1.5 ${className}`.trim()}>
+    <div
+      className={`rounded-xl border border-slate-200/80 bg-white/70 p-1.5 shadow-sm dark:border-white/10 dark:bg-white/5 ${className}`.trim()}
+    >
       {facebook?.connected ? (
         <Link
           to="/facebook/inbox"
           onClick={onNavigate}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-white/80 px-2 py-1.5 ring-1 ring-[#1877F2]/20 hover:bg-white dark:bg-[#1877F2]/10"
+          className="flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-[#1877F2]/5"
           title={facebook.label}
         >
           <Facebook className="h-3.5 w-3.5 shrink-0 text-[#1877F2]" strokeWidth={2.25} />
-          <span className="truncate text-[10.5px] font-bold text-theme-fg">{facebook.label}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">Facebook</span>
+          <span className="shrink-0 text-[10px] font-semibold text-emerald-600">Connected</span>
         </Link>
       ) : (
         <button
           type="button"
           onClick={() => void startFacebookConnect()}
           disabled={!canConnect || busy === 'fb'}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-white/80 px-2 py-1.5 text-left ring-1 ring-[#1877F2]/20 hover:bg-white disabled:opacity-50 dark:bg-[#1877F2]/10"
+          className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-[#1877F2]/5 disabled:opacity-50"
           title={canConnect ? 'Connect Facebook Page' : 'Ask an admin to connect'}
         >
           <Facebook className="h-3.5 w-3.5 shrink-0 text-[#1877F2]" strokeWidth={2.25} />
-          <span className="truncate text-[10.5px] font-bold text-theme-fg">
-            {busy === 'fb' ? 'Connecting…' : facebook?.label || 'Connect Page'}
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">Facebook</span>
+          <span className="shrink-0 text-[10px] font-semibold text-theme-muted">
+            {busy === 'fb' ? 'Connecting…' : 'Not connected'}
           </span>
         </button>
       )}
@@ -129,23 +162,25 @@ export default function MetaChannelChips({
         <Link
           to="/instagram/inbox"
           onClick={onNavigate}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-white/80 px-2 py-1.5 ring-1 ring-[#E4405F]/20 hover:bg-white dark:bg-[#E4405F]/10"
+          className="flex min-w-0 items-center gap-2 rounded-lg border-t border-slate-100 px-2.5 py-2 text-left hover:bg-[#E4405F]/5 dark:border-white/10"
           title={instagram.label}
         >
           <Instagram className="h-3.5 w-3.5 shrink-0 text-[#E4405F]" strokeWidth={2.25} />
-          <span className="truncate text-[10.5px] font-bold text-theme-fg">{instagram.label}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">Instagram</span>
+          <span className="shrink-0 text-[10px] font-semibold text-emerald-600">Connected</span>
         </Link>
       ) : (
         <button
           type="button"
-          onClick={() => void startInstagramConnect()}
+          onClick={() => void connectInstagram()}
           disabled={!canConnect || busy === 'ig'}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-white/80 px-2 py-1.5 text-left ring-1 ring-[#E4405F]/20 hover:bg-white disabled:opacity-50 dark:bg-[#E4405F]/10"
+          className="flex w-full min-w-0 items-center gap-2 rounded-lg border-t border-slate-100 px-2.5 py-2 text-left hover:bg-[#E4405F]/5 disabled:opacity-50 dark:border-white/10"
           title={canConnect ? 'Connect Instagram' : 'Ask an admin to connect'}
         >
           <Instagram className="h-3.5 w-3.5 shrink-0 text-[#E4405F]" strokeWidth={2.25} />
-          <span className="truncate text-[10.5px] font-bold text-theme-fg">
-            {busy === 'ig' ? 'Connecting…' : instagram?.label || 'Connect IG'}
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">Instagram</span>
+          <span className="shrink-0 text-[10px] font-semibold text-theme-muted">
+            {busy === 'ig' ? 'Connecting…' : 'Not connected'}
           </span>
         </button>
       )}

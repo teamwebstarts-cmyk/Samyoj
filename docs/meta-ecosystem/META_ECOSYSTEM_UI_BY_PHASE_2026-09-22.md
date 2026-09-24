@@ -1,8 +1,10 @@
 # Meta ecosystem — sidebar & UI (revised 2026-09-23)
 
-**Status:** Working spec for the connect phase. Live sidebar is **not** moved yet.  
+**Status:** Working spec plus historical target. The sidebar and separate inbox routes are present in current code; see [META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md](META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md) for the recheck.
 **Chosen:** **Separate inboxes.** One dropdown per platform.  
 **Build order** is unchanged: [`META_ECOSYSTEM_V2_PLAN_2026-09-18.md`](META_ECOSYSTEM_V2_PLAN_2026-09-18.md). This file only decides **where the screen sits**.
+
+The target below says Facebook/Instagram groups are hidden until their assets connect. Current code keeps the groups visible and uses connect/empty states instead. Treat that as an explicit UI decision to revisit, not as a hidden implementation gap.
 
 ---
 

@@ -936,6 +936,9 @@ void pollConversationAnalytics().catch((err) =>
 void pollQualityRatings().catch((err) =>
   logError(err, { source: 'worker', action: 'pollQualityRatings' })
 );
+void import('../modules/facebook/ads-insights')
+  .then(({ pollMetaAdsSnapshots }) => pollMetaAdsSnapshots())
+  .catch((err) => logError(err, { source: 'worker', action: 'pollMetaAdsSnapshots' }));
 setInterval(() => {
   pollConversationAnalytics().catch((err) =>
     logError(err, { source: 'worker', action: 'pollConversationAnalytics' })
@@ -946,6 +949,9 @@ setInterval(() => {
   pollTemplateRejections().catch((err) =>
     logError(err, { source: 'worker', action: 'pollTemplateRejections' })
   );
+  import('../modules/facebook/ads-insights')
+    .then(({ pollMetaAdsSnapshots }) => pollMetaAdsSnapshots())
+    .catch((err) => logError(err, { source: 'worker', action: 'pollMetaAdsSnapshots' }));
 }, 24 * 60 * 60 * 1000);
 
 // Scheduled campaign processor (every minute)

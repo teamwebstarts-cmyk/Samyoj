@@ -1,10 +1,12 @@
 # Meta ecosystem
 
-Existing plans, phases, and UI notes for the next Meta work. Nothing here is implementation.
+Existing plans, phases, UI notes, and the current audit for Meta work. Code is the source of truth; planning prose is not proof of implementation.
 
-**Execute from here** (rechecked 2026-09-23 against the repo and Meta’s Lead Ads / Pages / Instagram docs)
+**Current audit:** [META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md](META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md)
 
-**Verdict:** Phase 0 and Phase 1 are **not start-ready**. Read [BLOCKERS.md](BLOCKERS.md) before implementation; it records the five unresolved decisions and the current code evidence. Product boundaries and the separate-inbox UI decision remain unchanged.
+**Final handoff/testing:** [PHASE_0_5_FINAL_HANDOFF_2026-09-24.md](PHASE_0_5_FINAL_HANDOFF_2026-09-24.md)
+
+**Verdict:** Phases 0–5 code paths are hardened and regression-tested; non-WhatsApp Meta live proof remains blocked by app review/configuration. Read [BLOCKERS.md](BLOCKERS.md) and the audit before changing code. Product boundaries and separate-inbox decisions remain unchanged.
 
 1. [Blockers](BLOCKERS.md) — decisions required before Phase 0/1
 2. [Architecture](ARCHITECTURE.md) — DB and API reuse, code that blocks us

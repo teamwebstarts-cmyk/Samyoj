@@ -110,6 +110,10 @@ describe('registerAppWebhook', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ success: true }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
       });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -117,7 +121,7 @@ describe('registerAppWebhook', () => {
       'https://collision-modified-spur.ngrok-free.dev/api/whatsapp/webhook'
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const [, init] = fetchMock.mock.calls[1] as [string, { method?: string; body?: string }];
     expect(init.method).toBe('POST');
     expect(String(init.body)).toContain(
@@ -144,12 +148,16 @@ describe('registerAppWebhook', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ success: true }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
       });
     vi.stubGlobal('fetch', fetchMock);
 
     await MetaWhatsAppService.registerAppWebhook('https://app.samyoj.com/api/whatsapp/webhook');
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const [, init] = fetchMock.mock.calls[1] as [string, { method?: string; body?: string }];
     expect(init.method).toBe('POST');
     expect(String(init.body)).toContain(encodeURIComponent('https://app.samyoj.com/api/whatsapp/webhook'));

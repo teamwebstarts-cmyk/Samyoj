@@ -766,6 +766,9 @@ export async function dispatchInstagramWebhookFields(
       }
       const media = (value.media as { id?: string } | undefined) || {};
       const text = typeof value.text === 'string' ? value.text : '';
+      const commentedAt = parseMetaTimestamp(
+        value.created_time ?? value.timestamp ?? value.comment_timestamp ?? entry.time
+      );
 
       const outcome = await claimAndRunPageEvent({
         organizationId: channel.organizationId,
@@ -783,6 +786,7 @@ export async function dispatchInstagramWebhookFields(
             fromId: from.id,
             fromUsername: from.username,
             text,
+            commentedAt,
           });
         },
       });

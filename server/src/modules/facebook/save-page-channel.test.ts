@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { saveFacebookPageChannel } from './save-page-channel';
+import { saveFacebookPageChannel, saveLinkedInstagramChannel } from './save-page-channel';
 import prisma from '../../config/database';
 
 vi.mock('../../config/database', () => ({
@@ -22,7 +22,9 @@ vi.mock('../whatsapp/meta.service', () => ({
 }));
 
 vi.mock('./page-client', () => ({
+  fetchPageInstagramAccount: vi.fn().mockResolvedValue(null),
   subscribePageToLeadgen: vi.fn().mockResolvedValue(undefined),
+  subscribeInstagramAccount: vi.fn().mockResolvedValue(undefined),
 }));
 
 const channelMock = vi.mocked(prisma.channel);
@@ -32,33 +34,69 @@ describe('saveFacebookPageChannel', () => {
     vi.clearAllMocks();
   });
 
-  it('soft-deactivates other orgs active Channel for the same Page id', async () => {
-    channelMock.findFirst.mockResolvedValue(null as never);
+  it('rejects a Page already active in another organization without stealing it', async () => {
+    channelMock.findFirst
+      .mockResolvedValueOnce({ id: 'ch-other', organizationId: 'org-a' } as never);
     channelMock.create.mockResolvedValue({
       id: 'ch-new',
       organizationId: 'org-b',
       platformAccountId: 'page_1',
     } as never);
-    channelMock.updateMany.mockResolvedValue({ count: 1 } as never);
 
-    await saveFacebookPageChannel({
+    await expect(saveFacebookPageChannel({
       organizationId: 'org-b',
       pageId: 'page_1',
       pageName: 'Acme',
       pageAccessToken: 'page-tok',
-    });
+    })).rejects.toMatchObject({ statusCode: 409 });
+    expect(channelMock.create).not.toHaveBeenCalled();
+    expect(channelMock.update).not.toHaveBeenCalled();
+    expect(channelMock.updateMany).not.toHaveBeenCalled();
+  });
 
-    expect(channelMock.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          platform: 'FB',
-          platformAccountId: 'page_1',
-          isActive: true,
-          id: { not: 'ch-new' },
-        }),
-        data: { isActive: false },
+  it('rejects a linked Instagram account already active in another organization', async () => {
+    const { fetchPageInstagramAccount } = await import('./page-client');
+    vi.mocked(fetchPageInstagramAccount).mockResolvedValueOnce({
+      id: 'ig_1',
+      username: 'acme',
+    });
+    channelMock.findFirst.mockResolvedValueOnce({ id: 'ch-other', organizationId: 'org-a' } as never);
+
+    await expect(
+      saveLinkedInstagramChannel({
+        organizationId: 'org-b',
+        pageId: 'page_1',
+        pageAccessToken: 'page-tok',
       })
-    );
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(channelMock.create).not.toHaveBeenCalled();
+    expect(channelMock.update).not.toHaveBeenCalled();
+    expect(channelMock.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not hide a linked Instagram ownership conflict behind a successful Page connect', async () => {
+    const { fetchPageInstagramAccount } = await import('./page-client');
+    vi.mocked(fetchPageInstagramAccount).mockResolvedValueOnce({
+      id: 'ig_1',
+      username: 'acme',
+    });
+    channelMock.findFirst
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce({ id: 'ch-ig-other', organizationId: 'org-a' } as never);
+    channelMock.create.mockResolvedValue({
+      id: 'ch-fb-new',
+      organizationId: 'org-b',
+      platformAccountId: 'page_1',
+    } as never);
+    channelMock.updateMany.mockResolvedValue({ count: 0 } as never);
+
+    await expect(saveFacebookPageChannel({
+      organizationId: 'org-b',
+      pageId: 'page_1',
+      pageName: 'Acme',
+      pageAccessToken: 'page-tok',
+    })).rejects.toMatchObject({ statusCode: 409 });
   });
 
   it('disconnecting a Page also soft-disconnects this org Instagram channel', async () => {

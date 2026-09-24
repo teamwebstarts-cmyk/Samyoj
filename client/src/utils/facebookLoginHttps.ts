@@ -20,19 +20,22 @@ export function canUseFacebookJsSdk(location: PageLocation): boolean {
 export function facebookLoginHttpsBlockedReason(
   location: PageLocation,
   codespaceHttpsOrigin = '',
+  product: 'WhatsApp' | 'Facebook Page' = 'WhatsApp',
 ): string | null {
   if (location.protocol === 'https:') return null;
 
+  const action = product === 'WhatsApp' ? 'WhatsApp Connect' : 'Facebook Page connect';
+  const button = product === 'WhatsApp' ? 'Connect WhatsApp' : 'Connect Page';
   const origin = codespaceHttpsOrigin.replace(/\/$/, '');
   if (isLocalHost(location.hostname) && origin) {
     const port = httpPort(location);
     if (port !== DEV_CLIENT_PORT) {
-      return `Facebook will not finish WhatsApp Connect on this http://localhost tab (port forwarding). Open ${origin} then click Connect WhatsApp.`;
+      return `Facebook will not finish ${action} on this http://localhost tab (port forwarding). Open ${origin} then click ${button}.`;
     }
-    return `Facebook will not finish WhatsApp Connect on http://. Open ${origin} (HTTPS preview), then click Connect WhatsApp again.`;
+    return `Facebook will not finish ${action} on http://. Open ${origin} (HTTPS preview), then click ${button} again.`;
   }
   if (isLocalHost(location.hostname)) {
-    return 'Facebook will not finish WhatsApp Connect on http://. In Ports, open port 3000 with the HTTPS preview URL, then try Connect again.';
+    return `Facebook will not finish ${action} on http://. In Ports, open port 3000 with the HTTPS preview URL, then try ${button} again.`;
   }
-  return 'Facebook will not finish WhatsApp Connect on an insecure http page. Open Samyoj over https and try again.';
+  return `Facebook will not finish ${action} on an insecure http page. Open Samyoj over https and try again.`;
 }

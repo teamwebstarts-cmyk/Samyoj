@@ -21,7 +21,15 @@ vi.mock('../../config/database', () => ({
       updateMany: vi.fn(),
     },
     message: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-    instagramComment: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+    instagramComment: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+    },
     automation: { findMany: vi.fn() },
     lead: { findFirst: vi.fn(), create: vi.fn() },
     whatsappNumber: { findMany: vi.fn(), findFirst: vi.fn() },
@@ -110,6 +118,7 @@ describe('Phase 4 Instagram', () => {
     events.create.mockResolvedValue({} as never);
     events.findUnique.mockResolvedValue(null as never);
     events.updateMany.mockResolvedValue({ count: 1 } as never);
+    commentMock.updateMany.mockResolvedValue({ count: 1 } as never);
     automationMock.findMany.mockResolvedValue([] as never);
   });
 
@@ -238,6 +247,11 @@ describe('Phase 4 Instagram', () => {
 
     const result = await dispatchInstagramWebhookFields(igCommentFixture());
     expect(result.claimed).toBe(1);
+    expect(commentMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ commentedAt: new Date(1_700_000_000 * 1000) }),
+      })
+    );
     expect(conversationMock.create).not.toHaveBeenCalled();
     expect(messageMock.create).not.toHaveBeenCalled();
   });

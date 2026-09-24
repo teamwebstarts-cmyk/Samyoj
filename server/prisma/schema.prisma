@@ -340,6 +340,7 @@ model Organization {
   users                          OrganizationUser[]
   whatsappNumbers                WhatsappNumber[]
   channels                       Channel[]
+  metaAdsSnapshot                MetaAdsSnapshot?
   instagramComments              InstagramComment[]
   contactPlatformIdentities      ContactPlatformIdentity[]
   contacts                       Contact[]
@@ -1128,6 +1129,7 @@ model Channel {
   leads         Lead[]
   conversations Conversation[]
   instagramComments InstagramComment[]
+  metaAdsSnapshots  MetaAdsSnapshot[]
 
   @@unique([organizationId, platform, platformAccountId])
   @@index([platform, platformAccountId])
@@ -1156,6 +1158,31 @@ model InstagramComment {
   @@unique([organizationId, igCommentId])
   @@index([organizationId, channelId, commentedAt])
   @@map("instagram_comments")
+}
+
+/// Latest Meta Ads Insights read for one org. Not Samyoj revenue and not a billing plan.
+model MetaAdsSnapshot {
+  id               String   @id @default(uuid())
+  organizationId   String   @unique @map("organization_id")
+  channelId        String   @map("channel_id")
+  adAccountId      String   @map("ad_account_id")
+  currency         String   @default("USD")
+  spend            String
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  leads            Int      @default(0)
+  cpl              String?
+  periodStart      String?  @map("period_start")
+  periodEnd        String?  @map("period_end")
+  attributionLabel String   @default("7-day click / 1-day view") @map("attribution_label")
+  fetchedAt        DateTime @map("fetched_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("meta_ads_snapshots")
 }
 
 /// Maps a Contact to Meta-side ids (PSID / IGSID / wa_id). Phase 0 schema only.
@@ -1244,6 +1271,10 @@ model Lead {
   channelId        String?   @map("channel_id")
   /// Meta Instant Form leadgen id. Unique per org for idempotent ingest.
   metaLeadId       String?   @map("meta_lead_id")
+  metaFormId       String?   @map("meta_form_id")
+  metaAdId         String?   @map("meta_ad_id")
+  metaAdSetId      String?   @map("meta_adset_id")
+  metaCampaignId   String?   @map("meta_campaign_id")
   title            String
   stage            LeadStage @default(NEW)
   source           String?

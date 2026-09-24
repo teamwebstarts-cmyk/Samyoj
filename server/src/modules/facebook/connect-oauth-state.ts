@@ -71,7 +71,7 @@ export function verifyFacebookPageOAuthState(token: string): FacebookPageConnect
   return decoded;
 }
 
-/** Scopes used for Page pick + leadgen + Messenger. No ads editor. */
+/** Page + IG + read-only Ads Insights. Cannot create or pause ads. */
 export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'pages_show_list',
   'pages_manage_metadata',
@@ -81,6 +81,7 @@ export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'instagram_basic',
   'instagram_manage_messages',
   'instagram_manage_comments',
+  'ads_read',
 ].join(',');
 
 export function buildFacebookPageOAuthUrl(opts: {

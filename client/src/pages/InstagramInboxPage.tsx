@@ -466,10 +466,16 @@ export default function InstagramInboxPage() {
                     )}
                     {!windowOpen && (
                       <div className="border-t border-rose-200/80 bg-rose-50/95 px-4 py-3 text-center text-[13px] font-semibold text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
-                        Wait for the customer to message again.
+                        Wait for the customer to message again. Instagram has no WhatsApp-style template here.
                       </div>
                     )}
+                    {windowOpen && (
+                      <p className="border-t border-theme-border px-4 py-2 text-center text-[11px] leading-relaxed text-theme-muted">
+                        Replies stay in this 24-hour window. WhatsApp templates are not used here.
+                      </p>
+                    )}
                     <ChatComposer
+                      platform="instagram"
                       value={draft}
                       onChange={setDraft}
                       onSubmit={(e) => void onSend(e)}
@@ -499,7 +505,7 @@ export default function InstagramInboxPage() {
                   ) : null}
                 </div>
               ) : (
-                <ChatPlaceholder />
+                <ChatPlaceholder platform="instagram" />
               )}
             </div>
           </div>

@@ -3,10 +3,25 @@ import EmptyStateHeroImage from '../ui/EmptyStateHeroImage';
 
 interface ChatPlaceholderProps {
   onNewChat?: () => void;
+  platform?: 'whatsapp' | 'facebook' | 'instagram';
 }
 
 /** Right pane when no chat is open — hero illustration + onboarding copy. */
-export default function ChatPlaceholder({ onNewChat }: ChatPlaceholderProps) {
+export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: ChatPlaceholderProps) {
+  const accent = {
+    whatsapp: {
+      dot: 'bg-whatsapp-500',
+      button: 'border-whatsapp-500/35 text-whatsapp-600 hover:border-whatsapp-500/55 hover:bg-whatsapp-50/80 dark:border-whatsapp-500/30 dark:text-whatsapp-400 dark:hover:bg-whatsapp-950/30',
+    },
+    facebook: {
+      dot: 'bg-[#1877F2]',
+      button: 'border-[#1877F2]/35 text-[#1877F2] hover:border-[#1877F2]/55 hover:bg-[#1877F2]/5 dark:border-[#1877F2]/30 dark:text-[#69a7ff] dark:hover:bg-[#1877F2]/15',
+    },
+    instagram: {
+      dot: 'bg-[#E4405F]',
+      button: 'border-[#E4405F]/35 text-[#d6335a] hover:border-[#E4405F]/55 hover:bg-[#E4405F]/5 dark:border-[#E4405F]/30 dark:text-[#ff7b99] dark:hover:bg-[#E4405F]/15',
+    },
+  }[platform];
   return (
     <div
       className="inbox-placeholder-bg relative flex h-full min-h-0 flex-1 flex-col overflow-hidden"
@@ -50,7 +65,7 @@ export default function ChatPlaceholder({ onNewChat }: ChatPlaceholderProps) {
               aria-hidden
             >
               <div className="h-px w-full bg-slate-200/90 dark:bg-slate-700/80" />
-              <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-whatsapp-500 shadow-[0_0_0_3px_rgba(255,255,255,0.95)] dark:shadow-[0_0_0_3px_rgba(15,23,42,0.95)]" />
+              <span className={`absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${accent.dot} shadow-[0_0_0_3px_rgba(255,255,255,0.95)] dark:shadow-[0_0_0_3px_rgba(15,23,42,0.95)]`} />
             </div>
 
             <p
@@ -64,7 +79,7 @@ export default function ChatPlaceholder({ onNewChat }: ChatPlaceholderProps) {
               <button
                 type="button"
                 onClick={onNewChat}
-                className="inbox-placeholder-card mt-3 inline-flex items-center gap-2 rounded-full border border-whatsapp-500/35 bg-white px-4 py-2 text-[12.5px] font-semibold text-whatsapp-600 shadow-[0_2px_10px_rgba(37,211,102,0.08)] transition hover:border-whatsapp-500/55 hover:bg-whatsapp-50/80 dark:border-whatsapp-500/30 dark:bg-neutral-900 dark:text-whatsapp-400 dark:hover:bg-whatsapp-950/30 sm:mt-3.5 sm:py-2.5 sm:text-[13px]"
+                className={`inbox-placeholder-card mt-3 inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2 text-[12.5px] font-semibold shadow-[0_2px_10px_rgba(15,23,42,0.06)] transition ${accent.button} dark:bg-neutral-900 sm:mt-3.5 sm:py-2.5 sm:text-[13px]`}
                 style={{ animationDelay: '300ms' }}
               >
                 <MessageSquarePlus className="h-4 w-4 shrink-0" strokeWidth={2.25} />

@@ -68,7 +68,6 @@ must(!meta.includes('ads_management'), 'Phase 5 ads must not ship here');
 
 const nav = read('client/src/config/navigation.ts');
 must(!/\/instagram\/posts/.test(nav), 'Posts must stay out');
-must(!/label:\s*'Ads'/.test(nav), 'Phase 5 Ads nav must not ship yet');
 
 const vitest = spawnSync(
   'npx',

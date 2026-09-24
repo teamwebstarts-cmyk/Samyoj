@@ -3,6 +3,8 @@
 **Ships:** IG DMs in their own inbox, a comments list, and Instagram as a channel on the **existing** Automations page.  
 **Official:** [Private replies](https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/private-replies) — one message, 7 days, then nothing until they reply. Live-comment private replies are only available during the broadcast. The current Page-linked example posts to `/<PAGE_ID>/messages`; do not hard-code an IG-ID path until the chosen login/API path is confirmed.
 
+**Audit status (24 Sep 2026):** The HTTP admission, IG-only automation scope, ownership, timestamp, and private-reply claim boundaries are hardened and regression-tested. Treat live Instagram as unproven until a real signed Instagram event is observed.
+
 ## Do
 
 - Connect the IG professional account **linked to the Page** (same Facebook Login). `Channel` platform `IG`.
@@ -49,6 +51,7 @@ Message bot may answer that DM later, from **AI Bots → Message bot**, with a c
 - [ ] User reply after the private DM opens a 24h thread.
 - [ ] No WhatsApp template control on the IG composer.
 - [ ] Ads/dark-post behavior is explicitly deferred until verified; no “Cannot automate this post” rule is shipped from the unverified vendor claim.
+- [ ] A real Instagram webhook reaches `POST /api/whatsapp/webhook`, passes signature validation, and creates the expected IG-scoped event/thread.
 
 ## Competitors
 

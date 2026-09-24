@@ -250,7 +250,7 @@ function PlatformDropdown({
           : '';
 
   return (
-    <div className="sidebar-dropdown">
+    <div className={`sidebar-dropdown sidebar-dropdown--${section.accent || 'default'}`}>
       <button
         type="button"
         onClick={toggle}

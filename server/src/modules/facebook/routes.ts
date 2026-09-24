@@ -22,6 +22,7 @@ import {
 } from './connect-oauth-state';
 import { listManagedPages } from './page-client';
 import { disconnectFacebookPageChannel, saveFacebookPageChannel } from './save-page-channel';
+import { listOrgAdsAccounts, readAdsSummary, selectOrgAdsAccount } from './ads-insights';
 import messengerInboxRoutes from './messenger-inbox.routes';
 
 const log = createModuleLogger('facebook-routes');
@@ -58,6 +59,34 @@ router.get(
           }
         : null,
     });
+  })
+);
+
+router.get(
+  '/ads-summary',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    sendSuccess(res, await readAdsSummary(orgId));
+  })
+);
+
+router.get(
+  '/ads-accounts',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (req: Request, res: Response) => {
+    sendSuccess(res, await listOrgAdsAccounts(req.user!.organizationId!));
+  })
+);
+
+router.post(
+  '/ads-account',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { adAccountId } = z.object({ adAccountId: z.string().min(1) }).parse(req.body);
+    sendSuccess(res, await selectOrgAdsAccount(req.user!.organizationId!, adAccountId));
   })
 );
 

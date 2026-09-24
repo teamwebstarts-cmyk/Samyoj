@@ -1,7 +1,7 @@
 # Phase 1 — Lead Ads (connect phase)
 
 **Target:** Connect a Facebook Page. An Instant Form lead becomes a Contact + Lead in **this** org after the lead-only data-model decision; phone-less representation is not yet promised.  
-**Menu:** `Facebook → Leads` only. Settings holds **Connect Page**.  
+**Current:** Connect + ingest + Page-only pipeline filtering exist in code, including phone-less Lead rows and provider form/ad/adset/campaign IDs. No live Page/Lead proof exists. The current menu exposes Facebook Inbox/Ads; the pipeline is reached from the Page settings card rather than a dedicated Leads child.
 **Official:** [Lead Ads](https://developers.facebook.com/documentation/ads-commerce/marketing-api/guides/lead-ads), [leadgen webhooks](https://developers.facebook.com/docs/graph-api/webhooks/getting-started/webhooks-for-leadgen/), subscribe example on Graph **v26.0** [`/{page-id}/subscribed_apps`](https://developers.facebook.com/docs/graph-api/reference/page/subscribed_apps/).
 
 ## Do
@@ -36,12 +36,12 @@ Admin → Settings → Facebook Page → Connect Page
 Person submits Instant Form in Ads Manager (or Meta lead test tool)
   → webhook object=page field=leadgen
   → fetch lead → Contact + Lead (source Meta Ads)
-  → Facebook → Leads  (pipeline filter)
+  → Contacts pipeline → Meta Ads source filter
 ```
 
-Lead with email only, or with neither phone nor email, is **pending the Phase 1 lead-only data-model decision**. Do not promise a phone-less `Contact` row until the schema and all phone consumers have been audited. The eventual record must retain `metaLeadId`, form name, and no WhatsApp button when phone or consent is absent.
+Lead with email only, or with neither phone nor email, is stored as a Lead with `contactId = null`; it never creates a fake phone. `metaLeadId` is unique per organization and the row retains Meta form/ad/adset/campaign IDs. No WhatsApp follow-up is attempted without a valid phone, auditable consent, and an approved template.
 
-`leads/routes.ts` today throws without a WhatsApp number, scopes reads to the active number, and does not apply the documented `source=META_ADS` filter. The client pipeline does not send that filter either. Phase 1 adds a server path that creates and lists `META_ADS` leads **without** `activeWhatsappNumberId`; the manual “new lead” button can keep requiring WhatsApp.
+The current `leads/routes.ts` has the Phase 1 server path that lists `META_ADS` leads without `activeWhatsappNumberId`; the client pipeline applies the source filter. The manual “new lead” path can still require WhatsApp. This paragraph remains a historical pre-implementation note and must not be used as current status.
 
 ## UI (match WhatsApp numbers)
 
@@ -63,7 +63,7 @@ Colors: Facebook blue 3px on the group only. Pipeline stays the current amber/em
 
 - [ ] Meta Lead Ads testing tool → one Contact + one Lead in the org that connected the Page. Not in another org.
 - [ ] Repeat the same `leadgen_id` → still one lead.
-- [ ] **Blocked until the schema decision:** a form without phone must be stored through the approved lead-only representation, with zero WhatsApp sends.
+- [ ] A form without phone is stored through the lead-only representation, with zero WhatsApp sends.
 - [ ] Form with phone but no consent → lead exists, zero template sends.
 - [ ] Page-only organization can list/filter `META_ADS` leads without an active WhatsApp number.
 - [ ] WhatsApp inbound on the same org still lands in WhatsApp Inbox.

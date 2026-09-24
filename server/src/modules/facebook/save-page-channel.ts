@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { AppError } from '../../errors';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import {
   fetchPageInstagramAccount,
@@ -9,6 +10,23 @@ import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('facebook-save-page');
 
+async function assertActiveChannelOwnership(
+  platform: 'FB' | 'IG',
+  platformAccountId: string,
+  organizationId: string
+): Promise<void> {
+  const owner = await prisma.channel.findFirst({
+    where: { platform, platformAccountId, isActive: true },
+    select: { organizationId: true },
+  });
+  if (owner && owner.organizationId !== organizationId) {
+    throw new AppError(
+      409,
+      `${platform} account is already connected to another organization`
+    );
+  }
+}
+
 export async function saveFacebookPageChannel(opts: {
   organizationId: string;
   pageId: string;
@@ -17,6 +35,7 @@ export async function saveFacebookPageChannel(opts: {
 }): Promise<{ channelId: string; pageId: string; pageName: string; subscribed: boolean; subscribeError?: string }> {
   const encrypted = MetaWhatsAppService.encryptToken(opts.pageAccessToken);
 
+  await assertActiveChannelOwnership('FB', opts.pageId, opts.organizationId);
   const existing = await prisma.channel.findFirst({
     where: {
       organizationId: opts.organizationId,
@@ -56,25 +75,6 @@ export async function saveFacebookPageChannel(opts: {
     data: { isActive: false },
   });
 
-  // One active owner per Page id across orgs — otherwise webhook resolve is ambiguous and
-  // leadgen writes nowhere (resolveOrgFromPageChannel requires exactly one active Channel).
-  const stolen = await prisma.channel.updateMany({
-    where: {
-      platform: 'FB',
-      platformAccountId: opts.pageId,
-      isActive: true,
-      id: { not: channel.id },
-    },
-    data: { isActive: false },
-  });
-  if (stolen.count > 0) {
-    log.info('Deactivated other orgs active Channel for same Page', {
-      pageId: opts.pageId,
-      organizationId: opts.organizationId,
-      deactivated: stolen.count,
-    });
-  }
-
   let subscribed = false;
   let subscribeError: string | undefined;
   try {
@@ -96,6 +96,7 @@ export async function saveFacebookPageChannel(opts: {
       pageAccessToken: opts.pageAccessToken,
     });
   } catch (err) {
+    if (err instanceof AppError && err.statusCode === 409) throw err;
     log.warn('Linked Instagram Channel not saved', {
       organizationId: opts.organizationId,
       pageId: opts.pageId,
@@ -120,6 +121,7 @@ export async function saveLinkedInstagramChannel(opts: {
   const ig = await fetchPageInstagramAccount(opts.pageId, opts.pageAccessToken);
   if (!ig) return null;
 
+  await assertActiveChannelOwnership('IG', ig.id, opts.organizationId);
   const encrypted = MetaWhatsAppService.encryptToken(opts.pageAccessToken);
   const existing = await prisma.channel.findFirst({
     where: {
@@ -158,23 +160,6 @@ export async function saveLinkedInstagramChannel(opts: {
     },
     data: { isActive: false },
   });
-
-  const stolen = await prisma.channel.updateMany({
-    where: {
-      platform: 'IG',
-      platformAccountId: ig.id,
-      isActive: true,
-      id: { not: channel.id },
-    },
-    data: { isActive: false },
-  });
-  if (stolen.count > 0) {
-    log.info('Deactivated other orgs active IG Channel for same account', {
-      igUserId: ig.id,
-      organizationId: opts.organizationId,
-      deactivated: stolen.count,
-    });
-  }
 
   try {
     await subscribeInstagramAccount(ig.id, opts.pageAccessToken);

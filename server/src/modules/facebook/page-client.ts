@@ -23,6 +23,10 @@ export type LeadgenField = { name: string; values: string[] };
 export type GraphLeadPayload = {
   id: string;
   created_time?: string;
+  form_id?: string;
+  ad_id?: string;
+  adset_id?: string;
+  campaign_id?: string;
   field_data?: LeadgenField[];
 };
 
@@ -34,7 +38,11 @@ async function graphGet<T>(path: string, accessToken: string): Promise<T> {
   });
   const data = (await res.json()) as T & GraphError;
   if (!res.ok) {
-    throw new Error(data.error?.message || `Graph GET ${path} failed (${res.status})`);
+    const err = new Error(data.error?.message || `Graph GET ${path} failed (${res.status})`) as Error & {
+      metaCode?: number;
+    };
+    err.metaCode = data.error?.code;
+    throw err;
   }
   return data;
 }
@@ -232,7 +240,7 @@ export async function fetchLeadgenLead(
   pageAccessToken: string
 ): Promise<GraphLeadPayload> {
   return graphGet<GraphLeadPayload>(
-    `/${leadgenId}?fields=id,created_time,field_data`,
+    `/${leadgenId}?fields=id,created_time,form_id,ad_id,adset_id,campaign_id,field_data`,
     pageAccessToken
   );
 }
@@ -309,6 +317,75 @@ export async function sendInstagramPrivateReply(opts: {
         : undefined;
   const recipientId = typeof data.recipient_id === 'string' ? data.recipient_id : undefined;
   return { messageId, recipientId };
+}
+
+export type GraphAdAccount = {
+  id: string;
+  name: string | null;
+  currency: string | null;
+  accountStatus: number | null;
+};
+
+function mapAdAccount(row: Record<string, unknown>): GraphAdAccount | null {
+  const id = typeof row.id === 'string' ? row.id : '';
+  if (!id) return null;
+  return {
+    id,
+    name: typeof row.name === 'string' ? row.name : null,
+    currency: typeof row.currency === 'string' ? row.currency : null,
+    accountStatus: typeof row.account_status === 'number' ? row.account_status : null,
+  };
+}
+
+/** Page token first, then /me/adaccounts. Read-only. First non-empty list wins. */
+export async function listAdAccountsForPage(
+  pageId: string,
+  pageAccessToken: string
+): Promise<GraphAdAccount[]> {
+  const paths = [
+    `/${pageId}/assigned_ad_accounts?fields=id,name,currency,account_status&limit=10`,
+    `/me/adaccounts?fields=id,name,currency,account_status&limit=10`,
+  ];
+  let successEmpty = false;
+  let permissionErr: unknown;
+  for (const path of paths) {
+    try {
+      const data = await graphGet<{ data?: Array<Record<string, unknown>> }>(path, pageAccessToken);
+      const rows = (data.data || [])
+        .map((row) => mapAdAccount(row))
+        .filter((row): row is GraphAdAccount => Boolean(row));
+      if (rows.length) return rows;
+      successEmpty = true;
+    } catch (err) {
+      const code = (err as { metaCode?: number }).metaCode;
+      if (code === 100) continue;
+      if (code === 10 || code === 200 || code === 190) {
+        permissionErr = err;
+        continue;
+      }
+      const message = err instanceof Error ? err.message : '';
+      if (/permission|ads_read/i.test(message)) {
+        permissionErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!successEmpty && permissionErr) throw permissionErr;
+  return [];
+}
+
+/** Account-level Insights. Attribution is 7-day click / 1-day view. Period is last 7 days. */
+export async function fetchAdAccountInsights(
+  adAccountId: string,
+  pageAccessToken: string
+): Promise<{ data?: unknown }> {
+  const id = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+  const windows = encodeURIComponent('["7d_click","1d_view"]');
+  return graphGet<{ data?: unknown }>(
+    `/${id}/insights?fields=spend,impressions,clicks,actions,date_start,date_stop&date_preset=last_7d&level=account&action_attribution_windows=${windows}`,
+    pageAccessToken
+  );
 }
 
 export async function hideInstagramComment(opts: {

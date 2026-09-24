@@ -18,6 +18,7 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import DashboardPage from './pages/DashboardPage';
 import InboxPage from './pages/InboxPage';
 import FacebookInboxPage from './pages/FacebookInboxPage';
+import FacebookAdsPage from './pages/FacebookAdsPage';
 import InstagramInboxPage from './pages/InstagramInboxPage';
 import InstagramCommentsPage from './pages/InstagramCommentsPage';
 import AutomationsPage from './pages/AutomationsPage';
@@ -85,6 +86,7 @@ export default function App() {
                       <Route path="/" element={<DashboardPage />} />
                       <Route path="/inbox" element={<InboxPage />} />
                       <Route path="/facebook/inbox" element={<FacebookInboxPage />} />
+                      <Route path="/facebook/ads" element={<FacebookAdsPage />} />
                       <Route path="/instagram/inbox" element={<InstagramInboxPage />} />
                       <Route path="/instagram/comments" element={<InstagramCommentsPage />} />
                       <Route path="/calls" element={<CallsPage />} />

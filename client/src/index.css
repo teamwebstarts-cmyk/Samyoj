@@ -409,6 +409,19 @@
     color: #64748b;
   }
 
+  /* Keep the platform mark recognizable while its dropdown is open. */
+  .sidebar-dropdown--whatsapp:has(.sidebar-nav-item--active) > button.sidebar-nav-item .sidebar-nav-icon {
+    color: #059669;
+  }
+
+  .sidebar-dropdown--facebook:has(.sidebar-nav-item--active) > button.sidebar-nav-item .sidebar-nav-icon {
+    color: #1877f2;
+  }
+
+  .sidebar-dropdown--instagram:has(.sidebar-nav-item--active) > button.sidebar-nav-item .sidebar-nav-icon {
+    color: #e4405f;
+  }
+
   .sidebar-dropdown:has(.sidebar-nav-item--active) > button.sidebar-nav-item:hover {
     background: transparent;
     border-color: transparent;

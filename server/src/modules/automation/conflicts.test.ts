@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { findAutomationConflicts, mergeProposedForConflicts } from './conflicts';
+import {
+  automationScopeFilter,
+  findAutomationConflicts,
+  mergeProposedForConflicts,
+} from './conflicts';
+
+describe('automationScopeFilter', () => {
+  it('scopes WhatsApp rows to one number while including org-level Instagram keywords', () => {
+    expect(automationScopeFilter('wa-1')).toEqual({
+      OR: [
+        { whatsappNumberId: 'wa-1' },
+        {
+          triggerType: 'KEYWORD',
+          whatsappNumberId: null,
+          config: { path: ['platform'], equals: 'IG' },
+        },
+      ],
+    });
+  });
+
+  it('scopes an Instagram-only workspace to Instagram rows only', () => {
+    expect(automationScopeFilter()).toEqual({
+      triggerType: 'KEYWORD',
+      whatsappNumberId: null,
+      config: { path: ['platform'], equals: 'IG' },
+    });
+  });
+});
 
 describe('findAutomationConflicts', () => {
   it('warns when ANY_MESSAGE catch-all coexists with keyword journeys', () => {

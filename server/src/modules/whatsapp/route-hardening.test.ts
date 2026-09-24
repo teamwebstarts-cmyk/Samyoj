@@ -39,18 +39,20 @@ describe('WhatsApp route hardening', () => {
     expect(routesSrc).toContain("'/webhook-replay'");
   });
 
-  it('routes page objects through signature then Channel claim, not the early WABA drop', () => {
+  it('routes Page and Instagram objects through signature then Channel claim', () => {
     const postBlock = routesSrc.slice(routesSrc.indexOf("router.post('/webhook'"));
     expect(postBlock).toContain("payload.object !== 'page'");
+    expect(postBlock).toContain("payload.object !== 'instagram'");
     expect(postBlock).toContain('dispatchNonMessageWebhookFields');
     const hmacIdx = postBlock.indexOf('inboundWebhookSignatureGate');
     // Handler branch (not the log line) comes after signature validation.
     const pageHandlerIdx = postBlock.indexOf(
-      "// --- 3b. Page objects: claim when Channel resolves; never enqueue WhatsApp message processor ---"
+      "// --- 3b. Page/Instagram objects: claim when Channel resolves; never enqueue WhatsApp message processor ---"
     );
     expect(hmacIdx).toBeGreaterThan(-1);
     expect(pageHandlerIdx).toBeGreaterThan(hmacIdx);
-    expect(postBlock.slice(pageHandlerIdx)).toContain("payload.object === 'page'");
+    expect(postBlock.slice(pageHandlerIdx)).toContain("webhookObject === 'page'");
+    expect(postBlock.slice(pageHandlerIdx)).toContain("webhookObject === 'instagram'");
     expect(postBlock.slice(pageHandlerIdx)).toContain('dispatchNonMessageWebhookFields');
     expect(postBlock).not.toContain('Webhook ignored — not a WhatsApp business account payload');
   });

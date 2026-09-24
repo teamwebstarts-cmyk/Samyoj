@@ -3,6 +3,7 @@ import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { sendInstagramPrivateReply } from '../facebook/page-client';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { keywordMatches } from '../flows/trigger-match';
 
 const log = createModuleLogger('instagram-comment-ingest');
 
@@ -102,14 +103,13 @@ async function maybeSendCommentKeywordReply(opts: {
       enabled: true,
       triggerType: 'KEYWORD',
     },
+    orderBy: { createdAt: 'asc' },
   });
 
-  const haystack = opts.text.toLowerCase();
   const match = automations.find((a) => {
     const config = (a.config || {}) as { platform?: string; keyword?: string; message?: string; response?: string };
     if (config.platform !== 'IG') return false;
-    const keyword = (config.keyword || '').trim().toLowerCase();
-    return keyword.length > 0 && haystack.includes(keyword);
+    return keywordMatches(opts.text, { keyword: config.keyword });
   });
   if (!match) return false;
 
@@ -156,6 +156,21 @@ export async function sendPrivateReplyForComment(opts: {
     return { ok: false, error: 'Connect a Facebook Page linked to Instagram first' };
   }
 
+  // ponytail: atomic claim prevents concurrent duplicate replies; a provider idempotency key is the upgrade if crash recovery becomes required.
+  const claimedAt = new Date();
+  const claimed = await prisma.instagramComment.updateMany({
+    where: {
+      id: row.id,
+      organizationId: opts.organizationId,
+      channelId: opts.channelId,
+      privateReplySentAt: null,
+    },
+    data: { privateReplySentAt: claimedAt },
+  });
+  if (claimed.count !== 1) {
+    return { ok: false, error: 'Reply sent. Waiting for them.' };
+  }
+
   try {
     const pageToken = MetaWhatsAppService.decryptToken(tokenCipher);
     await sendInstagramPrivateReply({
@@ -164,12 +179,12 @@ export async function sendPrivateReplyForComment(opts: {
       commentId: opts.igCommentId,
       text: opts.text,
     });
-    await prisma.instagramComment.update({
-      where: { id: row.id },
-      data: { privateReplySentAt: new Date() },
-    });
     return { ok: true };
   } catch (err) {
+    await prisma.instagramComment.update({
+      where: { id: row.id },
+      data: { privateReplySentAt: null },
+    });
     return { ok: false, error: err instanceof Error ? err.message : 'Private reply failed' };
   }
 }

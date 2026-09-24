@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { facebookApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
 import { safeFbConnectReturn } from '../components/layout/MetaChannelChips';
+import { facebookOAuthDeniedMessage } from '../utils/facebookOAuthDenied';
 
 type PageStatus = 'loading' | 'select' | 'success' | 'error';
 
@@ -50,6 +51,17 @@ export default function FacebookCallbackPage() {
     }
     if (ran.current) return;
     ran.current = true;
+
+    const denied = facebookOAuthDeniedMessage({
+      error: searchParams.get('error'),
+      error_description: searchParams.get('error_description'),
+      error_message: searchParams.get('error_message'),
+    });
+    if (denied) {
+      setStatus('error');
+      setMessage(denied);
+      return;
+    }
 
     const code = searchParams.get('code') || sessionStorage.getItem(CODE_KEY);
     const state = searchParams.get('state') || sessionStorage.getItem(STATE_KEY);

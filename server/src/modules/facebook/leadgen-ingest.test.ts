@@ -137,6 +137,10 @@ describe('ingestLeadgenForChannel', () => {
   it('no phone → Lead exists, no WhatsApp send', async () => {
     fetchLead.mockResolvedValue({
       id: 'lead_email',
+      form_id: 'form_42',
+      ad_id: 'ad_42',
+      adset_id: 'adset_42',
+      campaign_id: 'campaign_42',
       field_data: [
         { name: 'full_name', values: ['Email Only'] },
         { name: 'email', values: ['only@example.com'] },
@@ -160,6 +164,10 @@ describe('ingestLeadgenForChannel', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           metaLeadId: 'lead_email',
+          metaFormId: 'form_42',
+          metaAdId: 'ad_42',
+          metaAdSetId: 'adset_42',
+          metaCampaignId: 'campaign_42',
           source: META_ADS_SOURCE,
           contactId: null,
         }),

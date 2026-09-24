@@ -1,17 +1,22 @@
 # Meta ecosystem — Phase 0/1 blockers
 
-**Status:** Phase 0 landed. Phase 1 Lead Ads implemented 2026-09-23 (connect + ingest + Settings/Facebook → Leads).  
-**Rechecked:** 2026-09-23 against the current repository and the cited Meta docs.
+**Audit:** [META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md](META_ECOSYSTEM_AUDIT_REPORT_2026-09-24.md).
+**Status:** Phase 0–5 code paths are hardened and regression-tested, but live Meta access and signed/public delivery are still unavailable.
+**Rechecked:** 2026-09-24 against the current repository and the cited Meta docs.
 
 Agreed product boundaries remain: WhatsApp stays intact, Facebook/Instagram do not use `whatsappNumberId`, Ads Manager is not rebuilt, and inboxes remain separate by platform.
 
 ## 1. Non-WABA webhook ownership and durability
 
-**Phase 0 decision (done):** Dedup only when a Channel resolves the Page to exactly one active org. Claim + complete `ProviderWebhookEvent`. Unmatched Page: verify signature, ack, log, do not invent an org.
+**Current decision:** Dedup only when a Channel resolves the Page to exactly one active org. Claim + complete `ProviderWebhookEvent`. Unmatched Page: verify signature, ack, log, do not invent an org.
+
+**Resolved in code:** the HTTP object gate now admits `instagram` and routes it through signature validation and the existing non-WhatsApp dispatcher. Signed/public Meta delivery proof remains open.
 
 ## 2. Channel migration and canonical tenancy
 
 **Phase 0 decision (done):** `Channel` is additive only. WhatsApp remains keyed by `WhatsappNumber`.
+
+**Resolved in code:** `save-page-channel.ts` rejects an active matching Page/IG Channel in another organization with 409 and no write. Explicit transfer is not part of Phase 0–5.
 
 ## 3. Phone-less Lead Ads data model
 
@@ -23,14 +28,24 @@ Agreed product boundaries remain: WhatsApp stays intact, Facebook/Instagram do n
 
 ## 5. Meta permission, login, and API-version matrix
 
-**Phase 1 scopes requested (connect flow):**
-`pages_show_list,pages_manage_metadata,pages_read_engagement,leads_retrieval`
+**Connect flow requests (24 Sep 2026):**
+`pages_show_list`, `pages_manage_metadata`, `pages_read_engagement`, `pages_messaging`, `leads_retrieval`, `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`, `ads_read`.
 
-Subscribe uses `POST /{page-id}/subscribed_apps?subscribed_fields=leadgen` with the Page token. Graph version stays `config.meta.apiVersion` (default **v21.0**); WhatsApp default was not changed.
+No `ads_management`. Subscribe uses the Page token. Graph version stays `config.meta.apiVersion`.
 
-**Still open / live proof needed:**
-- App Review + Business Verification for the above scopes.
-- If Graph rejects leadgen subscribe without `ads_management` / `pages_manage_ads`, record the exact error here and do **not** invent a second OAuth product. Connect still saves the Channel; `subscribeError` is returned on the connect response.
-- Confirm least-privilege in the live App Dashboard before the review screencast.
+**Live app check (same `META_APP_ID`, Development mode, not Live):**
+- Approved: `whatsapp_business_messaging`, `whatsapp_business_management`, `public_profile`, `openid`.
+- Rejected, still in a submission: the Page scopes above plus `ads_read`, `ads_management`, `pages_manage_ads`, Marketing API Access Tier.
+- Instagram scopes are not on the privilege list at all.
+- App webhook subscription is only `whatsapp_business_account`. `page` and `instagram` are not subscribed.
+- Valid OAuth redirect includes one Codespace `/settings/facebook/callback`. `https://app.samyoj.com/settings/facebook/callback` is not in the list.
 
-Until live subscribe is proven on a real Page, treat App Review scope confirmation as the remaining Phase 1 operational blocker — product code ships with the scopes above.
+Until Meta grants those use cases, Facebook’s dialog returns Invalid Scopes. Samyoj cannot approve that from code. Do not add `ads_management` to the connect string if a later Graph error asks for it — record the error here instead.
+
+## 6. Audit-only gaps before production
+
+- Atomic private-reply claiming prevents concurrent duplicate sends; a crash between claim and provider send remains a documented durability ceiling.
+- Comment-to-DM identity/banner and persisted `live_comments` state remain out of Phase 0–5.
+- Ads account selection is explicit, but live `ads_read` and Ads Manager comparison are unproven.
+- Production Facebook OAuth callback is missing from the live app redirect list.
+- The live app has only the WhatsApp webhook subscription; `page` and `instagram` are not subscribed.

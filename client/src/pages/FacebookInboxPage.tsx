@@ -258,60 +258,60 @@ export default function FacebookInboxPage() {
       <DetailsSectionCard>
         <DetailsSectionHeader icon={<CircleDot className="h-3.5 w-3.5" />} title="Status" />
         <div className="flex flex-wrap gap-1">
-          {(['OPEN', 'PENDING', 'CLOSED'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => void onStatus(s)}
-              className={`rounded-lg px-2 py-1 text-[11.5px] font-semibold ${
-                selected.status === s
+                    {(['OPEN', 'PENDING', 'CLOSED'] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => void onStatus(s)}
+                        className={`rounded-lg px-2 py-1 text-[11.5px] font-semibold ${
+                          selected.status === s
                   ? 'bg-whatsapp-500/15 text-whatsapp-800 dark:text-whatsapp-300'
-                  : 'bg-theme-muted/10 text-theme-muted'
-              }`}
-            >
-              {s === 'OPEN' ? 'Open' : s === 'PENDING' ? 'Pending' : 'Closed'}
-            </button>
-          ))}
-        </div>
+                            : 'bg-theme-muted/10 text-theme-muted'
+                        }`}
+                      >
+                        {s === 'OPEN' ? 'Open' : s === 'PENDING' ? 'Pending' : 'Closed'}
+                      </button>
+                    ))}
+                  </div>
       </DetailsSectionCard>
 
       <DetailsSectionCard>
         <DetailsSectionHeader icon={<UserPlus className="h-3.5 w-3.5" />} title="Assign" />
-        <select
+                  <select
           className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
-          value={selected.assignedAgent?.id || ''}
-          onChange={(e) => void onAssign(e.target.value ? e.target.value : null)}
-        >
-          <option value="">Unassigned</option>
-          {agents.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+                    value={selected.assignedAgent?.id || ''}
+                    onChange={(e) => void onAssign(e.target.value ? e.target.value : null)}
+                  >
+                    <option value="">Unassigned</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
       </DetailsSectionCard>
 
       <DetailsSectionCard>
         <DetailsSectionHeader icon={<StickyNote className="h-3.5 w-3.5" />} title="Notes" />
         <form onSubmit={(e) => void onAddNote(e)} className="space-y-1.5">
-          <textarea
-            value={noteDraft}
-            onChange={(e) => setNoteDraft(e.target.value)}
-            rows={2}
-            placeholder="Internal note…"
-            className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
-          />
+                    <textarea
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      rows={2}
+                      placeholder="Internal note…"
+                      className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
+                    />
           <button type="submit" className="rounded-lg bg-theme-muted/15 px-2.5 py-1 text-[12px] font-semibold">
-            Add note
-          </button>
-        </form>
-        <ul className="mt-2 space-y-2">
-          {notes.map((n) => (
+                      Add note
+                    </button>
+                  </form>
+                  <ul className="mt-2 space-y-2">
+                    {notes.map((n) => (
             <li key={n.id} className="rounded-lg bg-theme-muted/10 px-2 py-1.5 text-[12px] text-theme-fg">
-              {n.content}
-            </li>
-          ))}
-        </ul>
+                        {n.content}
+                      </li>
+                    ))}
+                  </ul>
       </DetailsSectionCard>
     </div>
   ) : (
@@ -469,6 +469,7 @@ export default function FacebookInboxPage() {
                       </div>
                     )}
                     <ChatComposer
+                      platform="facebook"
                       value={draft}
                       onChange={setDraft}
                       onSubmit={(e) => void onSend(e)}
@@ -494,12 +495,12 @@ export default function FacebookInboxPage() {
                         </button>
                       </div>
                       {renderDetails()}
-                    </div>
-                  ) : null}
                 </div>
-              ) : (
-                <ChatPlaceholder />
-              )}
+                  ) : null}
+              </div>
+            ) : (
+                <ChatPlaceholder platform="facebook" />
+            )}
             </div>
           </div>
         </div>

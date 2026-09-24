@@ -28,6 +28,7 @@ import type {
 import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
 import { whatsappDisconnectDialogCopy } from '../utils/whatsappDisconnectCopy';
+import { facebookLoginHttpsBlockedReason } from '../utils/facebookLoginHttps';
 import { useWhatsAppConnectPicker } from '../hooks/useWhatsAppConnectPicker';
 
 // Subcomponents
@@ -262,8 +263,20 @@ export default function SettingsPage() {
 
   const connectFacebookPage = async () => {
     if (!isOwnerOrAdmin) return;
+    const blocked = facebookLoginHttpsBlockedReason(
+      window.location,
+      typeof import.meta.env.VITE_CODESPACE_HTTPS_ORIGIN === 'string'
+        ? import.meta.env.VITE_CODESPACE_HTTPS_ORIGIN
+        : '',
+      'Facebook Page',
+    );
+    if (blocked) {
+      toastError(blocked);
+      return;
+    }
     setFacebookConnecting(true);
     try {
+      sessionStorage.setItem('fb_connect_return', `${window.location.pathname}${window.location.search}`);
       const redirectUri = `${window.location.origin}/settings/facebook/callback`;
       const { data } = await facebookApi.connectUrl(redirectUri);
       const launch = data.data as { url?: string };

@@ -145,6 +145,7 @@ interface ChatComposerProps {
   onClearReply?: () => void;
   contactName?: string | null;
   agentName?: string | null;
+  platform?: 'whatsapp' | 'facebook' | 'instagram';
 }
 
 function formatFileSize(bytes: number) {
@@ -191,6 +192,7 @@ export default function ChatComposer({
   onClearReply,
   contactName,
   agentName,
+  platform = 'whatsapp',
 }: ChatComposerProps) {
   // `sending` intentionally unused for locking — optimistic send clears draft and
   // shows PENDING on the bubble; keeping the Send spinner made WhatsApp UX feel broken.
@@ -198,6 +200,23 @@ export default function ChatComposer({
 
   const { onShowTip, onHideTip } = useInboxGlassTip();
   const tipFor = (label: string) => composerTipProps(label, onShowTip, onHideTip);
+  const accent = platform === 'facebook'
+    ? {
+        border: 'border-[#1877F2]',
+        text: 'text-[#1877F2]',
+        primary: 'bg-[#1877F2] text-white shadow-[0_4px_14px_rgba(24,119,242,0.28)] hover:brightness-105',
+      }
+    : platform === 'instagram'
+      ? {
+          border: 'border-[#E4405F]',
+          text: 'text-[#d6335a]',
+          primary: 'bg-[#E4405F] text-white shadow-[0_4px_14px_rgba(228,64,95,0.28)] hover:brightness-105',
+        }
+      : {
+          border: 'border-whatsapp-500',
+          text: 'text-whatsapp-700 dark:text-whatsapp-400',
+          primary: 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:brightness-105',
+        };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const localTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -563,9 +582,9 @@ export default function ChatComposer({
       className="relative z-20 border-t border-neutral-100 bg-theme-surface/95 px-2 py-2 backdrop-blur-md sm:px-3 sm:py-2.5 md:px-4 dark:border-neutral-800/80"
     >
       {replyToPreview && (
-        <div className="mb-2 flex items-start gap-2 rounded-xl border-l-4 border-whatsapp-500 bg-neutral-50/90 px-2.5 py-2 dark:bg-neutral-900/50">
+        <div className={`mb-2 flex items-start gap-2 rounded-xl border-l-4 ${accent.border} bg-neutral-50/90 px-2.5 py-2 dark:bg-neutral-900/50`}>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-whatsapp-700 dark:text-whatsapp-400">Replying</p>
+            <p className={`text-[11px] font-bold ${accent.text}`}>Replying</p>
             <p className="truncate text-[12px] text-theme-muted">{replyToPreview}</p>
           </div>
           <button
@@ -915,7 +934,7 @@ export default function ChatComposer({
                 aria-label="Send"
                 {...tipFor('Send')}
                 className={sendBtnClass(
-                  `bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:brightness-105 ${
+                  `${accent.primary} ${
                     sendAnim === 'punch' ? 'inbox-send-punch' : sendAnim === 'shake' ? 'inbox-send-shake' : ''
                   }`
                 )}
@@ -935,7 +954,7 @@ export default function ChatComposer({
                 aria-label="Send"
                 {...tipFor('Send')}
                 className={sendBtnClass(
-                  `bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)] hover:brightness-105 ${
+                  `${accent.primary} ${
                     sendAnim === 'punch' ? 'inbox-send-punch' : sendAnim === 'shake' ? 'inbox-send-shake' : ''
                   }`
                 )}

@@ -48,7 +48,7 @@ import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-import { automationApi } from '../services/api';
+import { automationApi, instagramApi } from '../services/api';
 import { WhatsAppMessagePreview } from '../components/inbox/WhatsAppPreview';
 import InteractiveMessageCard from '../components/inbox/InteractiveMessageCard';
 import type { Automation, AutomationConflict } from '../types';
@@ -199,7 +199,9 @@ export default function AutomationsPage() {
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as AutomationTab) || 'flows';
+  const requestedTab = (searchParams.get('tab') as AutomationTab) || 'flows';
+  const [instagramConnected, setInstagramConnected] = useState(false);
+  const activeTab = requestedTab === 'flows' && !hasConnectedNumber ? 'quick' : requestedTab;
 
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,9 +240,17 @@ export default function AutomationsPage() {
   const hasFilters = Boolean(search || triggerFilter || statusFilter);
   const showPagination = total > DEFAULT_PAGE_SIZE;
 
+  useEffect(() => {
+    if (!resolved) return;
+    instagramApi
+      .account()
+      .then(({ data }) => setInstagramConnected(Boolean(data.data.account)))
+      .catch(() => setInstagramConnected(false));
+  }, [resolved]);
+
   const load = useCallback(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
+    if (!resolved || (!activeNumber && !instagramConnected)) return;
+    const requestNumberId = activeNumber?.id ?? null;
     setLoading(true);
     const params: Record<string, string> = {
       page: String(page),
@@ -254,16 +264,16 @@ export default function AutomationsPage() {
     automationApi
       .list(params)
       .then(({ data }) => {
-        if (requestNumberId !== activeNumberIdRef.current) return;
+        if (requestNumberId !== activeNumberIdRef.current && requestNumberId !== null) return;
         setAutomations(data.data.automations);
         setTotal(data.data.total);
         setSummary(data.data.summary);
       })
       .catch((err) => toastError(getErrorMessage(err, 'Failed to load automations')))
       .finally(() => {
-        if (requestNumberId === activeNumberIdRef.current) setLoading(false);
+        if (requestNumberId === activeNumberIdRef.current || requestNumberId === null) setLoading(false);
       });
-  }, [activeNumber, debouncedSearch, page, resolved, statusFilter, triggerFilter]);
+  }, [activeNumber, debouncedSearch, instagramConnected, page, resolved, statusFilter, triggerFilter]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -282,21 +292,37 @@ export default function AutomationsPage() {
   }, [load, activeTab]);
 
   useEffect(() => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
+    if (!resolved || (!activeNumber && !instagramConnected)) return;
+    const requestNumberId = activeNumber?.id ?? null;
     automationApi
       .conflicts()
       .then(({ data }) => {
-        if (requestNumberId === activeNumberIdRef.current) setConflicts(data.data.conflicts || []);
+        if (requestNumberId === activeNumberIdRef.current || requestNumberId === null) {
+          setConflicts(data.data.conflicts || []);
+        }
       })
       .catch(() => {});
-  }, [activeNumber, activeTab, flowSummary.active, flowSummary.paused, resolved, summary.active, summary.paused]);
+  }, [
+    activeNumber,
+    activeTab,
+    flowSummary.active,
+    flowSummary.paused,
+    instagramConnected,
+    resolved,
+    summary.active,
+    summary.paused,
+  ]);
 
   const openCreate = (triggerType = 'KEYWORD') => {
     if (!canUseAutomations) return;
     setEditing(null);
     const defaults = triggerDefaults[triggerType] || {};
-    setForm({ ...emptyForm, triggerType, ...defaults });
+    setForm({
+      ...emptyForm,
+      triggerType,
+      platform: !hasConnectedNumber && instagramConnected ? 'IG' : 'WA',
+      ...defaults,
+    });
     setSlideOpen(true);
   };
 
@@ -498,8 +524,23 @@ export default function AutomationsPage() {
           { label: 'On', value: summary.active, hint: 'Active now', tone: 'live', icon: PlayCircle },
           { label: 'Off', value: summary.paused, hint: 'Turned off', tone: 'paused', icon: PauseCircle },
         ];
+  const availableCreatableTriggers = hasConnectedNumber
+    ? creatableTriggers
+    : (['KEYWORD'] as const);
+  const availableTriggerOptions = availableCreatableTriggers.map((value) => ({
+    value,
+    label: triggerMeta[value].label,
+  }));
+  const availableChannelOptions = hasConnectedNumber
+    ? [
+        { id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' },
+        ...(instagramConnected
+          ? [{ id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' }]
+          : []),
+      ]
+    : [{ id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' }];
 
-  if (resolved && !hasConnectedNumber) {
+  if (resolved && !hasConnectedNumber && !instagramConnected) {
     return (
       <PageShell>
         <WhatsAppConnectionEmptyState
@@ -527,8 +568,10 @@ export default function AutomationsPage() {
           value={activeTab}
           onChange={setTab}
           options={[
-            { value: 'flows', label: 'Conversation flows', shortLabel: 'Flows', icon: GitBranch },
-            { value: 'quick', label: 'Auto-replies', shortLabel: 'Replies', icon: MessageSquareQuote },
+            ...(hasConnectedNumber
+              ? [{ value: 'flows' as const, label: 'Conversation flows', shortLabel: 'Flows', icon: GitBranch }]
+              : []),
+            { value: 'quick' as const, label: 'Auto-replies', shortLabel: 'Replies', icon: MessageSquareQuote },
           ]}
           ariaLabel="Automation sections"
         />
@@ -926,7 +969,7 @@ export default function AutomationsPage() {
             <section className="space-y-2">
               <p className="text-[13px] font-extrabold text-neutral-900">1. When should we reply?</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {creatableTriggers.map((type) => {
+                {availableCreatableTriggers.map((type) => {
                   const meta = triggerMeta[type];
                   const Icon = meta.icon;
                   const selected = form.triggerType === type;
@@ -1002,7 +1045,7 @@ export default function AutomationsPage() {
                 id="trigger-type"
                 label="When to reply"
                 value={form.triggerType}
-                options={triggerOptions}
+                options={availableTriggerOptions}
                 isSearchable={false}
                 onChange={(e) =>
                   setForm({
@@ -1020,12 +1063,7 @@ export default function AutomationsPage() {
                 <div className="space-y-2">
                   <p className="text-[12px] font-bold text-neutral-700">Channel</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(
-                      [
-                        { id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' },
-                        { id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' },
-                      ] as const
-                    ).map((opt) => {
+                    {availableChannelOptions.map((opt) => {
                       const selected = form.platform === opt.id;
                       return (
                         <button

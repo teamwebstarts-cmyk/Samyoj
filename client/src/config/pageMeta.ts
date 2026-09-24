@@ -12,6 +12,14 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Inbox',
     description: 'Reply to your customers',
   },
+  '/facebook/inbox': {
+    title: 'Facebook Inbox',
+    description: 'Messenger conversations for your Page',
+  },
+  '/facebook/ads': {
+    title: 'Ads performance',
+    description: "Meta's numbers. Not Samyoj revenue.",
+  },
   '/instagram/inbox': {
     title: 'Instagram Inbox',
     description: 'Instagram Direct conversations',
@@ -118,7 +126,14 @@ export function isBuilderRoute(pathname: string): boolean {
 
 /** Inbox fills the viewport under the topbar — main must not page-scroll. */
 export function isInboxRoute(pathname: string): boolean {
-  return pathname === '/inbox' || pathname.startsWith('/inbox/');
+  return (
+    pathname === '/inbox' ||
+    pathname.startsWith('/inbox/') ||
+    pathname === '/facebook/inbox' ||
+    pathname.startsWith('/facebook/inbox/') ||
+    pathname === '/instagram/inbox' ||
+    pathname.startsWith('/instagram/inbox/')
+  );
 }
 
 /** Calls uses the same full-viewport shell card as Inbox — lock main scroll. */

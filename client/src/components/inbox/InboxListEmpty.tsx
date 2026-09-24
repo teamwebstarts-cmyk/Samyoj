@@ -4,6 +4,7 @@ import AppButton from '../ui/AppButton';
 import InboxEmptyIcon from './InboxEmptyIcon';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
+import { useMetaChannelConnect } from '../layout/MetaChannelChips';
 
 interface InboxListEmptyProps {
   filtered?: boolean;
@@ -19,6 +20,7 @@ export default function InboxListEmpty({
   connected,
 }: InboxListEmptyProps) {
   const { hasConnectedNumber, loading, disconnectedNumbers } = useWhatsAppNumber();
+  const { canConnect, busy, startFacebookConnect, startInstagramConnect } = useMetaChannelConnect();
   const whatsappConnected = hasConnectedNumber;
   const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers, {
     task: 'start receiving customer messages',
@@ -49,15 +51,19 @@ export default function InboxListEmpty({
         <p className="mt-2 max-w-[260px] text-[13px] leading-relaxed text-theme-secondary">
           {pageConnected
             ? 'When someone DMs your professional account, it shows up here.'
-            : 'Connect Instagram in Settings. It uses the Facebook Page already linked.'}
+            : 'Instagram uses the Facebook Page already linked to this workspace.'}
         </p>
         {!pageConnected && (
           <div className="mt-5 w-full max-w-[220px]">
-            <Link to="/settings?tab=instagram">
-              <AppButton fullWidth size="sm">
-                Connect Instagram
-              </AppButton>
-            </Link>
+            <AppButton
+              fullWidth
+              size="sm"
+              disabled={!canConnect || busy === 'ig'}
+              title={canConnect ? 'Connect Instagram' : 'Ask an admin to connect'}
+              onClick={() => void startInstagramConnect()}
+            >
+              {busy === 'ig' ? 'Connecting…' : canConnect ? 'Connect Instagram' : 'Ask an admin'}
+            </AppButton>
           </div>
         )}
       </div>
@@ -74,15 +80,19 @@ export default function InboxListEmpty({
         <p className="mt-2 max-w-[260px] text-[13px] leading-relaxed text-theme-secondary">
           {pageConnected
             ? 'When someone messages your Page, it shows up here.'
-            : 'Connect a Page in Settings to receive Messenger chats.'}
+            : 'Connect the Page here. Messenger chats land in this inbox, not WhatsApp.'}
         </p>
         {!pageConnected && (
           <div className="mt-5 w-full max-w-[220px]">
-            <Link to="/settings?tab=facebook">
-              <AppButton fullWidth size="sm">
-                Connect Page
-              </AppButton>
-            </Link>
+            <AppButton
+              fullWidth
+              size="sm"
+              disabled={!canConnect || busy === 'fb'}
+              title={canConnect ? 'Connect Facebook Page' : 'Ask an admin to connect'}
+              onClick={() => void startFacebookConnect()}
+            >
+              {busy === 'fb' ? 'Connecting…' : canConnect ? 'Connect Page' : 'Ask an admin'}
+            </AppButton>
           </div>
         )}
       </div>

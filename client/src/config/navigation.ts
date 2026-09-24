@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  BarChart3,
   Bot,
   ClipboardList,
   CreditCard,
@@ -66,7 +67,10 @@ export const NAV_SECTIONS: NavSection[] = [
     accent: 'facebook',
     dropdown: true,
     icon: Facebook,
-    items: [{ to: '/facebook/inbox', icon: MessageSquare, label: 'Inbox' }],
+    items: [
+      { to: '/facebook/inbox', icon: MessageSquare, label: 'Inbox' },
+      { to: '/facebook/ads', icon: BarChart3, label: 'Ads' },
+    ],
   },
   {
     label: 'Instagram',
@@ -127,7 +131,9 @@ export const MOBILE_BOTTOM_NAV: NavItem[] = [
 export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/facebook/inbox', icon: Facebook, label: 'Facebook Inbox' },
+  { to: '/facebook/ads', icon: BarChart3, label: 'Facebook Ads' },
   { to: '/instagram/inbox', icon: Instagram, label: 'Instagram Inbox' },
+  { to: '/instagram/comments', icon: Hash, label: 'Instagram Comments' },
   { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },

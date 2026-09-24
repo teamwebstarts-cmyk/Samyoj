@@ -1,11 +1,13 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { EyeOff, Instagram, Loader2, SendHorizontal } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
+import AppButton from '../components/ui/AppButton';
+import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
 import { instagramApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
-import { Link } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 type CommentRow = {
   id: string;
@@ -22,14 +24,16 @@ export default function InstagramCommentsPage() {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  const debouncedQ = useDebouncedValue(q);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (q.trim()) params.q = q.trim();
+      if (debouncedQ.trim()) params.q = debouncedQ.trim();
       const { data } = await instagramApi.comments.list(params);
       setConnected(Boolean(data.data.connected));
       setComments((data.data.comments || []) as CommentRow[]);
@@ -39,7 +43,7 @@ export default function InstagramCommentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, [debouncedQ]);
 
   useEffect(() => {
     void load();
@@ -89,7 +93,11 @@ export default function InstagramCommentsPage() {
         <p className="mb-4 text-[13px] text-theme-muted">
           One private reply per comment, within 7 days. A 24h chat starts only after they reply in DMs.
         </p>
+        <label htmlFor="instagram-comment-search" className="sr-only">
+          Search comments
+        </label>
         <input
+          id="instagram-comment-search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search comments"
@@ -101,17 +109,28 @@ export default function InstagramCommentsPage() {
           </div>
         )}
         {!loading && comments.length === 0 && (
-          <p className="py-10 text-center text-[13px] text-theme-muted">
-            No comments yet.
-            {connected === false ? (
-              <>
-                {' '}
-                <Link to="/settings?tab=instagram" className="font-semibold text-[#E4405F] underline">
-                  Connect Instagram
-                </Link>
-              </>
-            ) : null}
-          </p>
+          <div className="rounded-2xl border border-theme-border bg-theme-card/60 px-5 py-8 text-center">
+            <p className="text-[15px] font-bold tracking-tight text-theme-fg">
+              {connected === false ? 'Connect Instagram' : 'No comments yet'}
+            </p>
+            <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-theme-muted">
+              {connected === false
+                ? 'Comments on the professional account linked to your Facebook Page show up here. One private reply each, within 7 days.'
+                : 'When someone comments, you can hide it or send one private reply. A 24-hour chat starts only after they reply in DMs.'}
+            </p>
+            {connected === false && (
+              <div className="mx-auto mt-4 w-full max-w-[220px]">
+                <AppButton
+                  fullWidth
+                  size="sm"
+                  disabled={!canConnect || busy === 'ig'}
+                  onClick={() => void startInstagramConnect()}
+                >
+                  {busy === 'ig' ? 'Connecting…' : canConnect ? 'Connect Instagram' : 'Ask an admin'}
+                </AppButton>
+              </div>
+            )}
+          </div>
         )}
         <ul className="space-y-3">
           {comments.map((c) => (
@@ -132,6 +151,7 @@ export default function InstagramCommentsPage() {
                   type="button"
                   onClick={() => void hide(c.id, !c.hidden)}
                   disabled={busyId === c.id}
+                  aria-label={`${c.hidden ? 'Unhide' : 'Hide'} comment from @${c.fromUsername || 'unknown'}`}
                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-semibold text-theme-muted hover:bg-theme-muted/10"
                 >
                   <EyeOff className="h-3.5 w-3.5" />
@@ -145,6 +165,7 @@ export default function InstagramCommentsPage() {
               ) : c.privateReplyOpen ? (
                 <form onSubmit={(e) => void sendReply(e, c.id)} className="mt-3 flex items-end gap-2">
                   <textarea
+                    aria-label={`Private reply to @${c.fromUsername || 'unknown'}`}
                     value={drafts[c.id] || ''}
                     onChange={(e) => setDrafts((prev) => ({ ...prev, [c.id]: e.target.value }))}
                     rows={2}

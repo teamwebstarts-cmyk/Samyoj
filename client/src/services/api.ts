@@ -34,7 +34,7 @@ export class WhatsappNumberScopeError extends Error {
 export function isNumberScopedUrl(url?: string) {
   if (!url) return false;
   const path = url.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/api(?=\/)/, '');
-  return /^\/(inbox|contacts|calling|ai-bot|campaigns|templates|flows(?:-assets)?|automations|analytics|tickets|commerce|leads|wa-forms)(?:\/|$)/.test(
+  return /^\/(inbox|contacts|calling|ai-bot|campaigns|templates|flows(?:-assets)?|analytics|tickets|commerce|leads|wa-forms)(?:\/|$)/.test(
     path
   );
 }
@@ -469,6 +469,43 @@ export const facebookApi = {
     addNote: (id: string, content: string) =>
       api.post(`/facebook/inbox/${id}/notes`, { content }),
   },
+  adsSummary: () =>
+    api.get<{
+      data: {
+        status: 'no_page' | 'no_account' | 'needs_permission' | 'ready' | 'error';
+        attributionLabel: string;
+        periodLabel: string;
+        adsManagerUrl: string;
+        snapshot: {
+          adAccountId: string;
+          currency: string;
+          spend: string;
+          impressions: number;
+          clicks: number;
+          leads: number;
+          cpl: string | null;
+          periodStart: string | null;
+          periodEnd: string | null;
+          attributionLabel: string;
+          fetchedAt: string;
+        } | null;
+      };
+    }>('/facebook/ads-summary'),
+  adsAccounts: () =>
+    api.get<{
+      data: {
+        status: 'no_page' | 'no_account' | 'needs_permission' | 'ready';
+        selectedAccountId: string | null;
+        accounts: Array<{
+          id: string;
+          name: string | null;
+          currency: string | null;
+          accountStatus: number | null;
+        }>;
+      };
+    }>('/facebook/ads-accounts'),
+  selectAdsAccount: (adAccountId: string) =>
+    api.post<{ data: { selectedAccountId: string } }>('/facebook/ads-account', { adAccountId }),
 };
 
 export const instagramApi = {
