@@ -1,0 +1,133 @@
+.fads-page {
+  --fads-blue: #1877f2;
+  --fads-ink: #12182a;
+  --fads-muted: #6b7280;
+  --fads-line: #e6eef8;
+  --fads-card: #ffffff;
+}
+
+.fads-header {
+  background: linear-gradient(180deg, #f4f9ff 0%, #f8fbff 100%);
+  border: 1px solid #e3eefc;
+  border-radius: 18px;
+}
+
+.fads-mark {
+  display: flex;
+  height: 36px;
+  width: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #1877f2;
+  color: #fff;
+}
+
+.fads-card {
+  background: var(--fads-card);
+  border: 1px solid var(--fads-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.fads-metric {
+  display: flex;
+  min-height: 118px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 16px;
+}
+
+.fads-ico {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.fads-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 12px;
+  background: #f3f8ff;
+  padding: 10px 14px;
+  color: #3d4f6f;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.fads-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 36px 24px 32px;
+  text-align: center;
+}
+
+.fads-art {
+  position: relative;
+  width: 168px;
+  height: 120px;
+  margin-bottom: 8px;
+}
+
+.fads-art-window {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 112px;
+  height: 78px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 70%);
+  border: 1px solid #d7e6fb;
+  box-shadow: 0 10px 24px rgba(24, 119, 242, 0.12);
+}
+
+.fads-art-bar {
+  position: absolute;
+  bottom: 14px;
+  width: 10px;
+  border-radius: 4px 4px 2px 2px;
+  background: #8eb7f5;
+}
+
+.fads-art-badge {
+  position: absolute;
+  right: 22px;
+  bottom: 16px;
+  display: flex;
+  height: 34px;
+  width: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #1877f2;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(24, 119, 242, 0.28);
+}
+
+.fads-spark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #93c5fd;
+  transform: rotate(18deg);
+}
+
+.dark .fads-page {
+  --fads-ink: var(--color-text);
+  --fads-muted: var(--color-text-muted);
+  --fads-line: var(--color-border-strong);
+  --fads-card: var(--color-surface);
+}
+
+.dark .fads-header,
+.dark .fads-note {
+  background: rgba(24, 119, 242, 0.08);
+  border-color: rgba(24, 119, 242, 0.2);
+  color: var(--color-text-muted);
+}
