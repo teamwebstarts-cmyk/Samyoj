@@ -1331,10 +1331,20 @@ router.get(
         : 'all';
     const from = typeof req.query.from === 'string' ? new Date(req.query.from) : null;
     const to = typeof req.query.to === 'string' ? new Date(req.query.to) : null;
+    const validFrom = from && !Number.isNaN(from.getTime()) ? from : null;
+    const validTo = to && !Number.isNaN(to.getTime()) ? to : null;
+    // The pipeline column only counts Meta form leads, and the page must not materialise the
+    // org's whole lead history — push both bounds into SQL (S-16 / G-16).
     const [snapshot, leads, facebook, instagram, whatsapp] = await Promise.all([
       prisma.metaAdsSnapshot.findUnique({ where: { organizationId: orgId } }),
       prisma.lead.findMany({
-        where: { organizationId: orgId },
+        where: {
+          organizationId: orgId,
+          metaLeadId: { not: null },
+          ...(validFrom || validTo
+            ? { createdAt: { ...(validFrom ? { gte: validFrom } : {}), ...(validTo ? { lte: validTo } : {}) } }
+            : {}),
+        },
         select: {
           id: true,
           title: true,
@@ -1343,6 +1353,8 @@ router.get(
           metaLeadId: true,
           createdAt: true,
         },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
       }),
       prisma.channel.findFirst({
         where: { organizationId: orgId, platform: 'FB', isActive: true },
@@ -1367,8 +1379,8 @@ router.get(
         createdAt: lead.createdAt,
       })),
       platform,
-      from && !Number.isNaN(from.getTime()) ? from : null,
-      to && !Number.isNaN(to.getTime()) ? to : null
+      validFrom,
+      validTo
     );
     sendSuccess(res, {
       meta: snapshot

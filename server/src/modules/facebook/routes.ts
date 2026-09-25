@@ -134,6 +134,7 @@ router.get(
 router.post(
   '/connect/callback',
   ...adminGuard,
+  requireActiveCommercial(),
   asyncHandler(async (req: Request, res: Response) => {
     const { code, state } = req.body as { code?: string; state?: string };
     if (!code) throw new AppError(400, 'Authorization code required');
@@ -210,6 +211,7 @@ router.post(
 router.post(
   '/connect/select',
   ...adminGuard,
+  requireActiveCommercial(),
   asyncHandler(async (req: Request, res: Response) => {
     const data = z
       .object({

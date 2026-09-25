@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
+import { computeSlaDueAt } from '../sla/service';
 
 const log = createModuleLogger('facebook-messenger-ingest');
 
@@ -104,6 +105,17 @@ export async function ingestMessengerTextMessage(opts: {
       });
       if (!raced) throw err;
       contactId = raced.contactId;
+      // The Contact this request just created lost the identity race and has no conversation
+      // or message yet, so it would be an orphan forever (S-05 step 1 / G-05).
+      try {
+        await prisma.contact.delete({ where: { id: contact.id } });
+      } catch (cleanupErr) {
+        log.warn('Messenger orphan contact cleanup failed', {
+          organizationId: opts.organizationId,
+          contactId: contact.id,
+          error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+        });
+      }
     }
   }
 
@@ -129,6 +141,7 @@ export async function ingestMessengerTextMessage(opts: {
           status: 'OPEN',
           lastMessageAt: receivedAt,
           cs24hWindowOpensAt: receivedAt,
+          slaDueAt: computeSlaDueAt(receivedAt),
           unreadCount: 1,
         },
         select: { id: true, unreadCount: true },
@@ -150,11 +163,23 @@ export async function ingestMessengerTextMessage(opts: {
   }
 
   if (opts.metaMessageId) {
+    // The global unique index on metaMessageId is the real dedupe key — Meta mids are unique.
+    // Assert the match belongs to this conversation rather than silently returning a foreign
+    // conversation id (S-07 / G-07).
     const existingMsg = await prisma.message.findUnique({
       where: { metaMessageId: opts.metaMessageId },
       select: { id: true, conversationId: true },
     });
     if (existingMsg) {
+      if (existingMsg.conversationId !== conversation.id) {
+        log.warn('Messenger message id already stored in another conversation', {
+          organizationId: opts.organizationId,
+          channelId: opts.channelId,
+          metaMessageId: opts.metaMessageId,
+          conversationId: conversation.id,
+          existingConversationId: existingMsg.conversationId,
+        });
+      }
       return {
         conversationId: existingMsg.conversationId,
         messageId: existingMsg.id,

@@ -23,6 +23,25 @@ function migrationSql(name: string): string {
   return fs.existsSync(sqlPath) ? fs.readFileSync(sqlPath, 'utf8') : '';
 }
 
+function verifyFreshDatabaseIsEmpty(): boolean {
+  const check = spawnSync('npx', ['prisma', 'db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'], {
+    input: `
+      DO $$
+      DECLARE public_table_count integer;
+      BEGIN
+        SELECT COUNT(*) INTO public_table_count
+        FROM pg_catalog.pg_tables
+        WHERE schemaname = 'public';
+        IF public_table_count <> 0 THEN
+          RAISE EXCEPTION 'database is not empty';
+        END IF;
+      END $$;
+    `,
+    encoding: 'utf8',
+  });
+  return check.status === 0;
+}
+
 const status = spawnSync('npx', ['prisma', 'migrate', 'status'], { encoding: 'utf8' });
 const output = `${status.stdout || ''}\n${status.stderr || ''}`;
 
@@ -38,6 +57,18 @@ if (output.includes('Database schema is up to date')) {
 const pending = pendingMigrationNames(output);
 
 if (pending.includes(historicalDestructiveMigration)) {
+  if (verifyFreshDatabaseIsEmpty()) {
+    console.warn(
+      'Fresh empty database verified; applying the full migration chain because the historical ' +
+        'deduplication migration has no rows to delete.'
+    );
+    const deploy = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
+    if (deploy.status !== 0) {
+      throw new Error(`Fresh-database migration deploy failed with exit code ${deploy.status ?? 1}`);
+    }
+    console.log(`Applied migrations: ${pending.join(', ')}`);
+    process.exit(0);
+  }
   throw new Error(
     'Startup refused to migrate. Historical destructive WhatsApp-number migration is pending. ' +
       'Use the documented backup/preflight reconciliation workflow; raw prisma migrate deploy is prohibited.'

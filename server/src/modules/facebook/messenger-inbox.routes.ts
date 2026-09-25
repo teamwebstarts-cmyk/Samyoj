@@ -266,6 +266,13 @@ router.post(
       },
     });
 
+    // Irreversibility boundary: record that a provider call is in flight *before* it happens,
+    // so a crash mid-send can never look like a never-attempted message (S-09 / G-09).
+    await prisma.message.update({
+      where: { id: pending.id },
+      data: { providerCallStartedAt: new Date() },
+    });
+
     try {
       const sent = await sendPageTextMessage({
         pageId: channel.platformAccountId,
@@ -278,13 +285,18 @@ router.post(
         data: {
           status: 'SENT',
           metaMessageId: sent.messageId || undefined,
-          providerCallStartedAt: new Date(),
         },
       });
       await prisma.conversation.update({
         where: { id: conversation.id },
         data: { lastMessageAt: new Date() },
       });
+      try {
+        const { markFirstResponse } = await import('../sla/service');
+        await markFirstResponse(conversation.id);
+      } catch {
+        /* SLA bookkeeping must never fail a message that Meta already accepted. */
+      }
       emitToOrg(orgId, 'message:new', {
         conversationId: conversation.id,
         channelId: channel.id,

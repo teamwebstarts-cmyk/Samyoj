@@ -128,21 +128,34 @@ async function deliverChannelText(
   opts: { organizationId: string; platform: 'FB' | 'IG'; recipientId: string; conversationId?: string },
   reply: string
 ): Promise<boolean> {
-  let page;
-  if (opts.platform === 'IG' && opts.conversationId) {
-    const conversation = await prisma.conversation.findFirst({
-      where: { id: opts.conversationId, organizationId: opts.organizationId },
-      select: { channelId: true },
+  // Always resolve the Page from the conversation. Falling back to "the first active Page"
+  // would send with another Page's token once an org owns several (S-02 / G-02).
+  const conversation = opts.conversationId
+    ? await prisma.conversation.findFirst({
+        where: { id: opts.conversationId, organizationId: opts.organizationId },
+        select: { channelId: true },
+      })
+    : null;
+  if (!conversation?.channelId) {
+    logger.warn('Channel reply skipped — conversation has no channel', {
+      organizationId: opts.organizationId,
+      platform: opts.platform,
+      conversationId: opts.conversationId ?? null,
     });
-    page = conversation?.channelId
-      ? await findParentPageChannel(opts.organizationId, conversation.channelId)
-      : null;
-  } else {
-    page = await prisma.channel.findFirst({
-      where: { organizationId: opts.organizationId, platform: 'FB', isActive: true },
-      select: { platformAccountId: true, accessToken: true },
-    });
+    return false;
   }
+  const page =
+    opts.platform === 'IG'
+      ? await findParentPageChannel(opts.organizationId, conversation.channelId)
+      : await prisma.channel.findFirst({
+          where: {
+            id: conversation.channelId,
+            organizationId: opts.organizationId,
+            platform: 'FB',
+            isActive: true,
+          },
+          select: { platformAccountId: true, accessToken: true },
+        });
   if (!page?.accessToken) return false;
   const token = MetaWhatsAppService.decryptToken(page.accessToken);
   if (opts.platform === 'FB') {

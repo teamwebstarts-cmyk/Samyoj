@@ -2,10 +2,14 @@
 set -euo pipefail
 
 # =============================================================================
-# Samyoj — Public webhook tunnel (required for inbound WhatsApp)
+# Samyoj — Public HTTPS tunnel (inbound webhook + Meta OAuth / Connect UI)
 # =============================================================================
 # ALWAYS uses ngrok. No Cloudflare / cloudflared fallback.
 # Fails clearly if ngrok CLI or NGROK_AUTHTOKEN is missing.
+#
+# Default TUNNEL_PORT=8000 (API webhook). In Codespaces, prefer stable
+# https://{name}-3000/8000.app.github.dev (see scripts/public-dev-url.sh) instead of ngrok.
+# Override TUNNEL_PORT=3000 only if you want one ngrok URL for UI+API proxy.
 #
 # Usage:  bash scripts/dev-tunnel.sh
 # =============================================================================
@@ -26,18 +30,24 @@ fail()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 
 mkdir -p "$LOG_DIR"
 
-write_env_webhook() {
-  local webhook_url="$1"
-  ENV_FILE="$ENV_FILE" WEBHOOK_URL="$webhook_url" node <<'NODE'
+write_env_key() {
+  local key="$1"
+  local value="$2"
+  ENV_FILE="$ENV_FILE" ENV_KEY="$key" ENV_VALUE="$value" node <<'NODE'
 const fs = require('node:fs');
 const file = process.env.ENV_FILE;
-const value = process.env.WEBHOOK_URL;
+const key = process.env.ENV_KEY;
+const value = process.env.ENV_VALUE;
 const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-const index = lines.findIndex((line) => line.startsWith('META_WEBHOOK_URL='));
-if (index >= 0) lines[index] = `META_WEBHOOK_URL=${value}`;
-else lines.push(`META_WEBHOOK_URL=${value}`);
+const index = lines.findIndex((line) => line.startsWith(`${key}=`));
+if (index >= 0) lines[index] = `${key}=${value}`;
+else lines.push(`${key}=${value}`);
 fs.writeFileSync(file, lines.join('\n'));
 NODE
+}
+
+write_env_webhook() {
+  write_env_key META_WEBHOOK_URL "$1"
 }
 
 wait_for_tunnel() {
@@ -103,7 +113,6 @@ publish_tunnel() {
   [[ -f "$ENV_FILE" ]] || fail "server/.env not found — cannot update META_WEBHOOK_URL"
   write_env_webhook "$webhook_url"
   ok "Updated server/.env: META_WEBHOOK_URL=${webhook_url}"
-
   echo "pending" > "$RUN_DIR/webhook-status"
   echo "$tunnel_url" > "$RUN_DIR/tunnel-url"
 

@@ -133,31 +133,6 @@ info "Applying pending database migrations..."
   fail "Database migrations were refused by the fail-closed safety workflow. Follow docs/WHATSAPP_NUMBER_MIGRATION_SAFETY.md."
 ok "Database schema is current"
 
-if ! is_running tunnel; then
-  rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
-  info "Starting public webhook tunnel..."
-  start_process tunnel "bash scripts/dev-tunnel.sh"
-  for attempt in {1..60}; do
-    if [[ -s "$RUN_DIR/tunnel-url" ]]; then
-      WEBHOOK_ENV="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2- || true)"
-      [[ -n "$WEBHOOK_ENV" ]] && break
-    fi
-    is_running tunnel || fail "Tunnel failed. See .run/logs/tunnel.log"
-    sleep 1
-  done
-  [[ -s "$RUN_DIR/tunnel-url" ]] || fail "Tunnel URL was not created. See .run/logs/tunnel.log"
-  WEBHOOK_ENV="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2- || true)"
-  [[ -n "$WEBHOOK_ENV" ]] || fail "META_WEBHOOK_URL is still empty after tunnel start."
-else
-  ok "tunnel is already running"
-  [[ -s "$RUN_DIR/tunnel-url" ]] ||
-    fail "Tunnel PID exists but its URL is missing. Run bash stop.sh, then bash start.sh."
-fi
-
-TUNNEL_BASE="$(cat "$RUN_DIR/tunnel-url")"
-WEBHOOK_URL="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2-)"
-ok "Tunnel ready: $TUNNEL_BASE"
-
 info "Starting API server..."
 restart_api
 
@@ -170,35 +145,6 @@ curl -fsS http://localhost:8000/health >/dev/null 2>&1 ||
   fail "API did not become healthy. See .run/logs/api.log"
 ok "API is healthy"
 
-VERIFY_TOKEN="$(grep -m1 '^META_VERIFY_TOKEN=' server/.env | cut -d= -f2-)"
-info "Verifying public webhook challenge..."
-CHALLENGE_OK=false
-VERIFY_URL="${WEBHOOK_URL}?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=ping"
-for attempt in {1..60}; do
-  # Node fetch is more reliable than curl for public tunnel DNS in Codespaces
-  BODY="$(
-    VERIFY_URL="$VERIFY_URL" node <<'NODE' 2>/dev/null || true
-const url = process.env.VERIFY_URL;
-const ctrl = new AbortController();
-const timer = setTimeout(() => ctrl.abort(), 8000);
-fetch(url, { signal: ctrl.signal })
-  .then(async (res) => process.stdout.write(await res.text()))
-  .catch(() => {})
-  .finally(() => clearTimeout(timer));
-NODE
-  )"
-  if [[ "$BODY" == "ping" ]]; then
-    CHALLENGE_OK=true
-    break
-  fi
-  sleep 1
-done
-[[ "$CHALLENGE_OK" == true ]] ||
-  fail "Public webhook challenge failed. Inbox replies will not arrive. See .run/logs/tunnel.log"
-
-ok "Public webhook challenge passed"
-(cd server && npm run setup-webhook) >/dev/null 2>&1 && ok "Meta webhook registered" || warn "Meta webhook registration pending (connect a number first if needed)"
-
 info "Starting Client..."
 start_process client "npm --prefix client run dev -- --host 0.0.0.0"
 for attempt in {1..30}; do
@@ -209,6 +155,105 @@ done
 curl -fsS http://localhost:3000 >/dev/null 2>&1 ||
   fail "Client did not become reachable. See .run/logs/client.log"
 ok "Client is reachable"
+
+# shellcheck source=scripts/public-dev-url.sh
+source "$ROOT_DIR/scripts/public-dev-url.sh"
+
+PUBLIC_MODE="${SAMYOJ_PUBLIC_MODE:-auto}"
+if [[ "$PUBLIC_MODE" == "auto" ]]; then
+  if [[ "${SAMYOJ_FORCE_NGROK:-0}" == "1" ]]; then
+    PUBLIC_MODE="ngrok"
+  elif codespace_name; then
+    PUBLIC_MODE="codespace"
+  else
+    PUBLIC_MODE="ngrok"
+  fi
+fi
+
+CONNECT_HTTPS_ORIGIN=""
+WEBHOOK_URL=""
+
+if [[ "$PUBLIC_MODE" == "codespace" ]]; then
+  ensure_codespace_ports_public
+  CLIENT_ORIGIN="$(codespace_client_origin)"
+  API_ORIGIN="$(codespace_api_origin)"
+  apply_codespace_env
+  CONNECT_HTTPS_ORIGIN="$CLIENT_ORIGIN"
+  WEBHOOK_URL="${API_ORIGIN}/api/whatsapp/webhook"
+  ok "Using stable Codespaces URLs (set once in Meta; same until this codespace is deleted)"
+  ok "  UI + OAuth: $CLIENT_ORIGIN"
+  ok "  Webhook:    $WEBHOOK_URL"
+
+  info "Checking Codespaces port previews (3000 UI, 8000 API)..."
+  PREVIEW_OK=true
+  if ! probe_https_status "${CLIENT_ORIGIN}/"; then
+    warn "Port 3000 preview is not reachable (HTTP 404). In Cursor/VS Code: Ports → forward 3000 → Visibility Public → open browser from Ports tab."
+    PREVIEW_OK=false
+  fi
+  if ! probe_https_status "${API_ORIGIN}/health"; then
+    warn "Port 8000 preview is not reachable. Forward port 8000 as Public (Meta webhook)."
+    PREVIEW_OK=false
+  fi
+  if [[ "$PREVIEW_OK" != true ]]; then
+    if [[ "${SAMYOJ_NGROK_FALLBACK:-0}" == "1" ]]; then
+      warn "Falling back to ngrok (SAMYOJ_NGROK_FALLBACK=1). OAuth URLs will change when ngrok restarts."
+      PUBLIC_MODE="ngrok"
+    else
+      warn "Codespaces preview not live yet — Meta URLs in server/.env are already set (stable). Forward ports 3000+8000 as Public, then: cd server && npm run setup-webhook"
+      CODESPACE_PORTS_PENDING=1
+    fi
+  fi
+fi
+
+if [[ "$PUBLIC_MODE" == "ngrok" ]]; then
+  if is_running tunnel; then
+    info "Restarting ngrok tunnel..."
+    stop_tree "$(cat "$RUN_DIR/tunnel.pid")"
+    rm -f "$RUN_DIR/tunnel.pid" "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
+  fi
+  rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
+  info "Starting ngrok tunnel (ephemeral URL — use Codespaces mode to avoid Meta URL churn)..."
+  start_process tunnel "bash scripts/dev-tunnel.sh"
+  for attempt in {1..60}; do
+    if [[ -s "$RUN_DIR/tunnel-url" ]]; then
+      WEBHOOK_ENV="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2- || true)"
+      [[ -n "$WEBHOOK_ENV" ]] && break
+    fi
+    is_running tunnel || fail "Tunnel failed. See .run/logs/tunnel.log"
+    sleep 1
+  done
+  [[ -s "$RUN_DIR/tunnel-url" ]] || fail "Tunnel URL was not created. See .run/logs/tunnel.log"
+  CONNECT_HTTPS_ORIGIN="$(cat "$RUN_DIR/tunnel-url")"
+  WEBHOOK_URL="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2-)"
+  ok "ngrok ready: $CONNECT_HTTPS_ORIGIN"
+fi
+
+info "Restarting API so it loads the current META_WEBHOOK_URL..."
+restart_api
+for attempt in {1..40}; do
+  curl -fsS http://localhost:8000/health >/dev/null 2>&1 && break
+  is_running api || fail "API failed after public URL setup. See .run/logs/api.log"
+  sleep 1
+done
+
+VERIFY_TOKEN="$(grep -m1 '^META_VERIFY_TOKEN=' server/.env | cut -d= -f2-)"
+info "Verifying public webhook challenge..."
+CHALLENGE_OK=false
+for attempt in {1..60}; do
+  if verify_webhook_challenge "$WEBHOOK_URL" "$VERIFY_TOKEN"; then
+    CHALLENGE_OK=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$CHALLENGE_OK" == true ]]; then
+  ok "Public webhook challenge passed"
+  (cd server && npm run setup-webhook) >/dev/null 2>&1 && ok "Meta webhook registered" || warn "Meta webhook registration pending (connect a number first if needed)"
+elif [[ -n "${CODESPACE_PORTS_PENDING:-}" ]]; then
+  warn "Webhook verify skipped until Codespaces ports 3000 and 8000 are Public (stable URL already in server/.env)."
+else
+  fail "Public webhook challenge failed. Inbox replies will not arrive. See .run/logs/tunnel.log or forward Codespace port 8000."
+fi
 
 info "Starting Admin..."
 start_process admin "npm --prefix admin run dev -- --host 0.0.0.0"
@@ -224,11 +269,25 @@ ok "Admin is reachable"
 harden_local_permissions
 
 echo ""
-ok "All services started (inbound webhook required and verified)."
-echo "  Open:  http://localhost:3000"
-echo "  Admin: http://localhost:3001"
-echo "  API:   http://localhost:8000"
-echo "  Webhook: $WEBHOOK_URL"
+if [[ "$CHALLENGE_OK" == true ]]; then
+  ok "All services started (public webhook verified)."
+else
+  ok "All services started (public webhook not verified yet — see warnings above)."
+fi
+echo "  Connect + test UI (HTTPS): $CONNECT_HTTPS_ORIGIN"
+echo "  Local UI (no Connect):     http://localhost:3000"
+echo "  Admin:                     http://localhost:3001"
+echo "  API (local):               http://localhost:8000"
+echo "  Webhook (Meta):            $WEBHOOK_URL"
+if [[ "$PUBLIC_MODE" == "codespace" ]]; then
+  echo "  Meta (stable — register once for this codespace name):"
+  echo "    OAuth: ${CONNECT_HTTPS_ORIGIN}/settings/whatsapp/callback/popup"
+  echo "           ${CONNECT_HTTPS_ORIGIN}/settings/facebook/callback"
+  echo "    JS SDK domain: ${CONNECT_HTTPS_ORIGIN}"
+elif [[ -n "$CONNECT_HTTPS_ORIGIN" ]]; then
+  echo "  Meta OAuth (ngrok — update when URL changes):"
+  echo "    ${CONNECT_HTTPS_ORIGIN}/settings/whatsapp/callback/popup"
+fi
 echo "  Webhook registration: $(cat "$RUN_DIR/webhook-status" 2>/dev/null || echo pending)"
 echo "  Logs: .run/logs/"
 echo "  Stop: bash stop.sh"

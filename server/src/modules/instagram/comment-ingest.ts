@@ -4,7 +4,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { sendInstagramPrivateReply } from '../facebook/page-client';
 import { findParentPageChannel } from '../facebook/parent-page';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { keywordMatches } from '../flows/trigger-match';
+import { matchChannelKeyword } from '../facebook/channel-keyword';
 
 const log = createModuleLogger('instagram-comment-ingest');
 
@@ -102,20 +102,16 @@ async function maybeSendCommentKeywordReply(opts: {
     where: {
       organizationId: opts.organizationId,
       enabled: true,
+      whatsappNumberId: null,
       triggerType: 'KEYWORD',
     },
     orderBy: { createdAt: 'asc' },
+    select: { triggerType: true, config: true },
   });
 
-  const match = automations.find((a) => {
-    const config = (a.config || {}) as { platform?: string; keyword?: string; message?: string; response?: string };
-    if (config.platform !== 'IG') return false;
-    return keywordMatches(opts.text, { keyword: config.keyword });
-  });
-  if (!match) return false;
-
-  const config = (match.config || {}) as { message?: string; response?: string };
-  const reply = (config.response || config.message || '').trim();
+  // One matcher for DMs and comments so the two paths cannot drift (S-11 / G-11).
+  // Comments stay keyword-only by design — no welcome/lead-capture/away fallbacks.
+  const reply = matchChannelKeyword(automations, 'IG', opts.text);
   if (!reply) return false;
 
   const sent = await sendPrivateReplyForComment({

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/database';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { requireActiveCommercial } from '../../middleware/plan-guard';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { saveLinkedInstagramChannel } from '../facebook/save-page-channel';
@@ -41,11 +42,13 @@ router.get(
 router.post(
   '/connect',
   ...adminGuard,
+  requireActiveCommercial(),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const page = await prisma.channel.findFirst({
       where: { organizationId: orgId, platform: 'FB', isActive: true },
       select: { platformAccountId: true, accessToken: true },
+      orderBy: { updatedAt: 'desc' },
     });
     if (!page?.accessToken) {
       throw new AppError(400, 'Connect a Facebook Page first, then link Instagram.');

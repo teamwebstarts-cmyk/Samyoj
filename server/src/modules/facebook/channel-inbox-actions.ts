@@ -49,7 +49,7 @@ export async function markConversationSeen(opts: {
   organizationId: string;
   contactId: string;
   platform: 'FB' | 'IG';
-  channelId?: string;
+  channelId: string;
 }): Promise<void> {
   try {
     const [identity, page] = await Promise.all([
@@ -61,10 +61,17 @@ export async function markConversationSeen(opts: {
         },
         select: { externalId: true },
       }),
-      opts.platform === 'IG' && opts.channelId
+      // Resolve the Page from the conversation's own channel — never "the first active
+      // Page", which could mark_seen with another Page's token (S-02 / G-02).
+      opts.platform === 'IG'
         ? findParentPageChannel(opts.organizationId, opts.channelId)
         : prisma.channel.findFirst({
-            where: { organizationId: opts.organizationId, platform: 'FB', isActive: true },
+            where: {
+              id: opts.channelId,
+              organizationId: opts.organizationId,
+              platform: 'FB',
+              isActive: true,
+            },
             select: { platformAccountId: true, accessToken: true },
           }),
     ]);
@@ -364,11 +371,17 @@ export async function deliverChannelMedia(opts: {
 }): Promise<void> {
   const url = httpsMediaUrl(opts.mediaUrl);
   if (!url) throw new AppError(400, 'Media URL must be https');
+  // Same rule as text: the conversation's own channel decides the Page (S-02 / G-02).
   const page =
     opts.platform === 'IG'
       ? await findParentPageChannel(opts.organizationId, opts.channelId)
       : await prisma.channel.findFirst({
-          where: { organizationId: opts.organizationId, platform: 'FB', isActive: true },
+          where: {
+            id: opts.channelId,
+            organizationId: opts.organizationId,
+            platform: 'FB',
+            isActive: true,
+          },
           select: { platformAccountId: true, accessToken: true },
         });
   if (!page?.accessToken) throw new AppError(400, 'Connect a Facebook Page in Settings first');
@@ -389,4 +402,10 @@ export async function deliverChannelMedia(opts: {
       status: 'SENT',
     },
   });
+  try {
+    const { markFirstResponse } = await import('../sla/service');
+    await markFirstResponse(opts.conversationId);
+  } catch {
+    /* SLA bookkeeping must never fail a message that Meta already accepted. */
+  }
 }

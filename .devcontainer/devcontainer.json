@@ -1,0 +1,20 @@
+{
+  "name": "Samyoj",
+  "forwardPorts": [3000, 3001, 8000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Samyoj UI — Meta Connect (HTTPS)",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    },
+    "8000": {
+      "label": "Samyoj API — Meta webhook",
+      "visibility": "public"
+    },
+    "3001": {
+      "label": "Platform admin",
+      "visibility": "private"
+    }
+  },
+  "postCreateCommand": "echo 'Samyoj: after start, open the forwarded HTTPS link for port 3000 (not http://localhost) for WhatsApp Connect.'"
+}

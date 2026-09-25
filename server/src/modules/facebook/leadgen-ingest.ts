@@ -66,6 +66,14 @@ export async function ingestLeadgenForChannel(opts: {
   const phoneOk = phoneCandidate ? validatePhone(normalizePhoneIdentity(phoneCandidate)) : null;
   const normalizedPhone = phoneOk?.ok ? phoneOk.phone : null;
 
+  // Why no WhatsApp-capable Contact could be resolved. Kept machine-readable so operators
+  // can tell "no number configured" apart from "pick one of several" (see S-10 / G-10).
+  let contactSkipReason: string = !phoneCandidate
+    ? 'no_phone'
+    : !normalizedPhone
+      ? 'invalid_phone'
+      : 'no_whatsapp_number';
+
   if (normalizedPhone) {
     // Number isolation: never pick “latest” when multiple active numbers exist.
     const activeNumbers = await prisma.whatsappNumber.findMany({
@@ -109,6 +117,7 @@ export async function ingestLeadgenForChannel(opts: {
       contactId = contact.id;
       contactForSend = contact;
     } else if (activeNumbers.length > 1) {
+      contactSkipReason = 'ambiguous_whatsapp_number';
       log.info('Lead Ads contact skip — multiple active WhatsApp numbers', {
         organizationId: opts.organizationId,
         channelId: opts.channelId,
@@ -159,13 +168,11 @@ export async function ingestLeadgenForChannel(opts: {
       whatsappSent,
       skippedReason: whatsappSent
         ? undefined
-        : !normalizedPhone
-          ? 'no_phone'
-          : !contactForSend
-            ? 'no_whatsapp_number'
-            : !hasAuditableCampaignConsent(contactForSend)
-              ? 'no_consent'
-              : 'no_approved_template',
+        : !contactForSend
+          ? contactSkipReason
+          : !hasAuditableCampaignConsent(contactForSend)
+            ? 'no_consent'
+            : 'no_approved_template',
     };
   } catch (err) {
     // Race: unique (organizationId, metaLeadId) — treat as idempotent.
