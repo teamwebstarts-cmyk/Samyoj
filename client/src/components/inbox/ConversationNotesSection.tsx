@@ -88,6 +88,7 @@ interface ConversationNotesSectionProps {
   currentUserId?: string;
   conversationId?: string | null;
   onAddNote?: (content: string) => Promise<InternalNote>;
+  allowDeleteNotes?: boolean;
 }
 
 export default function ConversationNotesSection({
@@ -96,6 +97,7 @@ export default function ConversationNotesSection({
   currentUserId,
   conversationId,
   onAddNote,
+  allowDeleteNotes = true,
 }: ConversationNotesSectionProps) {
   const tipFor = useGlassTipProps();
   const { canManageTeam } = useAuth();
@@ -208,7 +210,8 @@ export default function ConversationNotesSection({
           {notes.map((note) => {
             const body = stripCallIdsFromNote(note.content);
             if (!body) return null;
-            const canDelete = note.user?.id === currentUserId || canManageTeam;
+            const canDelete =
+              allowDeleteNotes && (note.user?.id === currentUserId || canManageTeam);
             return (
               <div
                 key={note.id}

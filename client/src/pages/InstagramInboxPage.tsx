@@ -1,5 +1,4 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleDot, StickyNote, UserPlus } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { cannedRepliesApi, inboxApi, instagramApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -11,13 +10,10 @@ import ChatHeader from '../components/inbox/ChatHeader';
 import ChatComposer from '../components/inbox/ChatComposer';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import ThreadSkeleton from '../components/inbox/ThreadSkeleton';
-import MessageBubble, { DateDivider } from '../components/inbox/MessageBubble';
+import GroupedThreadMessages from '../components/inbox/GroupedThreadMessages';
 import SearchInChatBar from '../components/inbox/SearchInChatBar';
-import { formatDateDivider, groupMessagesByDate } from '../components/inbox/inboxUtils';
-import {
-  DetailsSectionCard,
-  DetailsSectionHeader,
-} from '../components/inbox/details/DetailsSectionCard';
+import InboxDetailsPanel, { type ChannelLabelsBridge } from '../components/inbox/InboxDetailsPanel';
+import { useChannelDetailsToggle } from '../components/inbox/useChannelDetailsToggle';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../hooks/useSocket';
@@ -58,15 +54,12 @@ export default function InstagramInboxPage() {
   const [sending, setSending] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
-  const [noteDraft, setNoteDraft] = useState('');
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
-  const [orgLabels, setOrgLabels] = useState<Array<{ id: string; name: string; color: string }>>([]);
-  const [chatLabels, setChatLabels] = useState<ConversationLabel[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [assigning, setAssigning] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsToggle = useChannelDetailsToggle(selectedId);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearch, setChatSearch] = useState('');
   const [chatMatchIndex, setChatMatchIndex] = useState(0);
@@ -89,7 +82,6 @@ export default function InstagramInboxPage() {
       if (chip === 'open') params.status = 'OPEN';
       if (chip === 'pending') params.status = 'PENDING';
       if (chip === 'favourites') params.favorite = 'true';
-      if (chip === 'snoozed') params.snoozed = 'true';
       if (agentFilter) params.assignedTo = agentFilter;
       const { data } = await instagramApi.inbox.list(params);
       const payload = data.data;
@@ -119,10 +111,6 @@ export default function InstagramInboxPage() {
       .list()
       .then(({ data }) => setCannedReplies(data.data.replies || []))
       .catch(() => setCannedReplies([]));
-    instagramApi.inbox
-      .labels()
-      .then(({ data }) => setOrgLabels(data.data.labels || []))
-      .catch(() => setOrgLabels([]));
   }, []);
 
   const openThread = useCallback(async (id: string) => {
@@ -131,18 +119,16 @@ export default function InstagramInboxPage() {
     setChatSearchOpen(false);
     setChatSearch('');
     try {
-      const [{ data: convRes }, { data: msgRes }] = await Promise.all([
+      const [{ data: convRes }, { data: msgRes }, labelsRes] = await Promise.all([
         instagramApi.inbox.get(id),
         instagramApi.inbox.messages(id),
+        instagramApi.inbox.conversationLabels(id),
       ]);
       const conv = convRes.data as FbConversation;
-      setSelected(conv);
+      const labels = labelsRes.data.data.labels || [];
+      setSelected({ ...conv, labels });
       setNotes(conv.internalNotes || []);
       setMessages(msgRes.data.messages || []);
-      void instagramApi.inbox
-        .conversationLabels(id)
-        .then(({ data }) => setChatLabels(data.data.labels || []))
-        .catch(() => setChatLabels([]));
       void instagramApi.inbox.markRead(id).then(() => {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
@@ -221,17 +207,6 @@ export default function InstagramInboxPage() {
     }
   };
 
-  const onStatus = async (status: string) => {
-    if (!selectedId) return;
-    try {
-      const { data } = await instagramApi.inbox.setStatus(selectedId, status);
-      setSelected(data.data as FbConversation);
-      void loadList();
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Status update failed');
-    }
-  };
-
   const downloadChat = async () => {
     if (!selectedId) return;
     try {
@@ -257,52 +232,6 @@ export default function InstagramInboxPage() {
       void loadList();
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not update favorite');
-    }
-  };
-
-  const onMarkUnread = async () => {
-    if (!selectedId) return;
-    try {
-      await instagramApi.inbox.markUnread(selectedId);
-      toastSuccess('Marked unread');
-      void loadList();
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not mark unread');
-    }
-  };
-
-  const onSnooze = async () => {
-    if (!selectedId) return;
-    try {
-      await instagramApi.inbox.snooze(selectedId, 4);
-      toastSuccess('Snoozed for 4 hours');
-      setSelected(null);
-      setSelectedId(null);
-      void loadList();
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not snooze');
-    }
-  };
-
-  const onAddLabel = async (labelId: string) => {
-    if (!selectedId || !labelId) return;
-    try {
-      const { data } = await instagramApi.inbox.addLabel(selectedId, labelId);
-      setChatLabels(data.data.labels || []);
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not add label');
-    }
-  };
-
-  const onRemoveChat = async () => {
-    if (!selectedId || !window.confirm('Delete this chat?')) return;
-    try {
-      await instagramApi.inbox.remove(selectedId);
-      setSelected(null);
-      setSelectedId(null);
-      void loadList();
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not delete chat');
     }
   };
 
@@ -352,18 +281,6 @@ export default function InstagramInboxPage() {
     }
   };
 
-  const onAddNote = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!selectedId || !noteDraft.trim()) return;
-    try {
-      const { data } = await instagramApi.inbox.addNote(selectedId, noteDraft.trim());
-      setNotes((prev) => [data.data as InternalNote, ...prev]);
-      setNoteDraft('');
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not add note');
-    }
-  };
-
   const chatMatches = useMemo(() => {
     const q = chatSearch.trim().toLowerCase();
     if (!q) return [] as string[];
@@ -385,7 +302,36 @@ export default function InstagramInboxPage() {
   const pageCount = Math.max(1, Math.ceil(total / pageSize) || 1);
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
-  const groups = useMemo(() => groupMessagesByDate(messages), [messages]);
+
+  const channelLabels = useMemo((): ChannelLabelsBridge | undefined => {
+    if (!selectedId) return undefined;
+    const inbox = instagramApi.inbox;
+    const id = selectedId;
+    return {
+      listOrgLabels: async () => {
+        const { data } = await inbox.labels();
+        return data.data.labels;
+      },
+      addToConversation: async (labelId) => {
+        const { data } = await inbox.addLabel(id, labelId);
+        return data.data.labels;
+      },
+      removeFromConversation: async (labelId) => {
+        const { data } = await inbox.removeLabel(id, labelId);
+        return data.data.labels;
+      },
+    };
+  }, [selectedId]);
+
+  const channelDetailsFlags = useMemo(
+    () => ({
+      contactTags: false,
+      savedAnswers: false,
+      flows: false,
+      ticket: false,
+    }),
+    []
+  );
 
   const handleChipChange = (next: ListChip) => {
     setChip(next);
@@ -399,118 +345,6 @@ export default function InstagramInboxPage() {
     setAgentFilter(value);
     setPage(1);
   };
-
-  const renderDetails = () =>
-    selected ? (
-    <div className="space-y-3 overflow-y-auto p-3">
-      <DetailsSectionCard>
-        <DetailsSectionHeader icon={<CircleDot className="h-3.5 w-3.5" />} title="Status" />
-        <div className="flex flex-wrap gap-1">
-          {(['OPEN', 'PENDING', 'CLOSED'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => void onStatus(s)}
-              className={`rounded-lg px-2 py-1 text-[11.5px] font-semibold ${
-                selected.status === s
-                  ? 'bg-whatsapp-500/15 text-whatsapp-800 dark:text-whatsapp-300'
-                  : 'bg-theme-muted/10 text-theme-muted'
-              }`}
-            >
-              {s === 'OPEN' ? 'Open' : s === 'PENDING' ? 'Pending' : 'Closed'}
-            </button>
-          ))}
-        </div>
-      </DetailsSectionCard>
-
-      <DetailsSectionCard>
-        <DetailsSectionHeader icon={<CircleDot className="h-3.5 w-3.5" />} title="Chat" />
-        <div className="flex flex-wrap gap-1">
-          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold" onClick={() => void onMarkUnread()}>
-            Mark unread
-          </button>
-          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold" onClick={() => void onSnooze()}>
-            Snooze 4h
-          </button>
-          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold" onClick={() => void downloadChat()}>
-            Export
-          </button>
-          <button type="button" className="rounded-lg bg-theme-muted/10 px-2 py-1 text-[11.5px] font-semibold text-rose-700" onClick={() => void onRemoveChat()}>
-            Delete
-          </button>
-        </div>
-        <select
-          className="mt-2 w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
-          value=""
-          onChange={(e) => void onAddLabel(e.target.value)}
-        >
-          <option value="">Add label</option>
-          {orgLabels.map((label) => (
-            <option key={label.id} value={label.id}>
-              {label.name}
-            </option>
-          ))}
-        </select>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {chatLabels.map((row) => (
-            <button
-              key={row.label.id}
-              type="button"
-              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-              style={{ background: row.label.color || '#e5e7eb' }}
-              onClick={() =>
-                selectedId &&
-                void instagramApi.inbox.removeLabel(selectedId, row.label.id).then(({ data }) => setChatLabels(data.data.labels || []))
-              }
-            >
-              {row.label.name}
-            </button>
-          ))}
-        </div>
-      </DetailsSectionCard>
-
-      <DetailsSectionCard>
-        <DetailsSectionHeader icon={<UserPlus className="h-3.5 w-3.5" />} title="Assign" />
-        <select
-          className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
-          value={selected.assignedAgent?.id || ''}
-          onChange={(e) => void onAssign(e.target.value ? e.target.value : null)}
-        >
-          <option value="">Unassigned</option>
-          {agents.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </DetailsSectionCard>
-
-      <DetailsSectionCard>
-        <DetailsSectionHeader icon={<StickyNote className="h-3.5 w-3.5" />} title="Notes" />
-        <form onSubmit={(e) => void onAddNote(e)} className="space-y-1.5">
-          <textarea
-            value={noteDraft}
-            onChange={(e) => setNoteDraft(e.target.value)}
-            rows={2}
-            placeholder="Internal note…"
-            className="w-full rounded-lg border border-theme-border bg-theme-card px-2 py-1.5 text-[12.5px]"
-          />
-          <button type="submit" className="rounded-lg bg-theme-muted/15 px-2.5 py-1 text-[12px] font-semibold">
-            Add note
-          </button>
-        </form>
-        <ul className="mt-2 space-y-2">
-          {notes.map((n) => (
-            <li key={n.id} className="rounded-lg bg-theme-muted/10 px-2 py-1.5 text-[12px] text-theme-fg">
-              {n.content}
-            </li>
-          ))}
-        </ul>
-      </DetailsSectionCard>
-    </div>
-  ) : (
-    <p className="p-4 text-[12.5px] text-theme-muted">Open a chat for assign, status, and notes.</p>
-  );
 
   return (
     <InboxGlassTipProvider>
@@ -618,14 +452,14 @@ export default function InstagramInboxPage() {
                       onBack={() => {
                         setSelected(null);
                         setSelectedId(null);
-                        setDetailsOpen(false);
+                        detailsToggle.close();
                       }}
                       onCallBack={() => undefined}
                       onAssign={(agentId) => void onAssign(agentId)}
                       onToggleBot={() => void onToggleBot()}
                       onToggleFavorite={() => void onFavorite()}
                       onToggleSearch={() => setChatSearchOpen((open) => !open)}
-                      onOpenDetails={() => setDetailsOpen(true)}
+                      onOpenDetails={() => detailsToggle.toggle()}
                       hideCall
                       windowVariant="instagram"
                     />
@@ -656,22 +490,13 @@ export default function InstagramInboxPage() {
                     {threadLoading ? (
                       <ThreadSkeleton />
                     ) : (
-                      <div className="inbox-thread-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
-                        {groups.map((group) => (
-                          <div key={group.date}>
-                            <DateDivider label={formatDateDivider(group.date)} />
-                            {group.messages.map((message) => (
-                              <MessageBubble
-                                key={message.id}
-                                message={message}
-                                highlightQuery={chatSearch.trim() || undefined}
-                                isActiveMatch={chatMatches[chatMatchIndex] === message.id}
-                              />
-                            ))}
-                          </div>
-                        ))}
-                        <div ref={messagesEndRef} />
-                      </div>
+                      <GroupedThreadMessages
+                        messages={messages}
+                        highlightQuery={chatSearch.trim() || undefined}
+                        activeMatchId={chatMatches[chatMatchIndex]}
+                        scrollClassName="inbox-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4"
+                        endRef={messagesEndRef}
+                      />
                     )}
                     {!windowOpen && (
                       <div className="border-t border-rose-200/80 bg-rose-50/95 px-4 py-3 text-center text-[13px] font-semibold text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
@@ -695,25 +520,35 @@ export default function InstagramInboxPage() {
                     />
                   </div>
 
-                  <aside className="hidden w-[16.5rem] shrink-0 flex-col border-l border-theme-border bg-theme-card/30 lg:flex">
-                    {renderDetails()}
-                  </aside>
-
-                  {detailsOpen ? (
-                    <div className="absolute inset-0 z-30 flex flex-col bg-theme-surface lg:hidden">
-                      <div className="flex items-center justify-between border-b border-theme-border px-3 py-2">
-                        <p className="text-[13px] font-bold">Details</p>
-                        <button
-                          type="button"
-                          className="rounded-lg px-2 py-1 text-[12px] font-semibold text-theme-muted"
-                          onClick={() => setDetailsOpen(false)}
-                        >
-                          Close
-                        </button>
-                      </div>
-                      {renderDetails()}
-                    </div>
-                  ) : null}
+                  <InboxDetailsPanel
+                    conversation={selected}
+                    notes={notes}
+                    currentUserId={user?.id}
+                    onNotesChange={setNotes}
+                    onLabelsChange={(labels: ConversationLabel[]) =>
+                      setSelected((prev) => (prev ? { ...prev, labels } : prev))
+                    }
+                    onContactChange={(contact) =>
+                      setSelected((prev) => (prev ? { ...prev, contact } : prev))
+                    }
+                    onConvertToTicket={() => undefined}
+                    onExport={() => void downloadChat()}
+                    panelOpen={detailsToggle.panelOpen}
+                    onPanelOpenChange={detailsToggle.setPanelOpen}
+                    overlayOpen={detailsToggle.overlayOpen}
+                    onOverlayClose={detailsToggle.close}
+                    channelLabels={channelLabels}
+                    featureFlags={channelDetailsFlags}
+                    allowDeleteNotes={false}
+                    onAddNoteOverride={
+                      selectedId
+                        ? async (content) => {
+                            const { data } = await instagramApi.inbox.addNote(selectedId, content);
+                            return data.data as InternalNote;
+                          }
+                        : undefined
+                    }
+                  />
                 </div>
               ) : (
                 <ChatPlaceholder platform="instagram" />

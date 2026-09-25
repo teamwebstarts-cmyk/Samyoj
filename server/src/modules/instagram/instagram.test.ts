@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import prisma from '../../config/database';
-import { dispatchInstagramWebhookFields, dispatchPageWebhookFields } from '../whatsapp/webhook-dispatcher';
+import {
+  dispatchInstagramWebhookFields,
+  dispatchPageWebhookFields,
+  parseJsonPreservingLargeIds,
+} from '../whatsapp/webhook-dispatcher';
 import { ingestInstagramTextMessage, instagramContactPhone, instagramWindowOpen } from './ingest';
 import { ingestInstagramComment, privateReplyOpen, sendPrivateReplyForComment } from './comment-ingest';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
@@ -236,6 +240,54 @@ describe('Phase 4 Instagram', () => {
     });
     expect(second.ok).toBe(false);
     expect(second.error).toMatch(/Waiting for them/);
+  });
+
+  it('numeric Instagram comment ids are stored against the connected account', async () => {
+    const raw = `{
+      "object": "instagram",
+      "entry": [{
+        "id": 17841424744855401,
+        "time": 1700000000,
+        "changes": [{
+          "field": "comments",
+          "value": {
+            "id": 18074865634493149,
+            "text": "hiii",
+            "from": { "id": 496274539931542, "username": "nirbhay_hiwse" },
+            "media": { "id": 18030876632058880 }
+          }
+        }]
+      }]
+    }`;
+    const payload = parseJsonPreservingLargeIds(raw);
+    expect((payload.entry as Array<{ id: string }>)[0].id).toBe('17841424744855401');
+
+    channelMock.findMany.mockResolvedValue([
+      { id: 'ch_ig', organizationId: 'org_1', accessToken: 'enc:tok' },
+    ] as never);
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({ id: 'row_num', igCommentId: '18074865634493149' } as never);
+
+    const result = await dispatchInstagramWebhookFields(payload);
+    expect(result.claimed).toBe(1);
+    expect(result.unmatched).toBe(0);
+    expect(commentMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          igCommentId: '18074865634493149',
+          igMediaId: '18030876632058880',
+          fromId: '496274539931542',
+          fromUsername: 'nirbhay_hiwse',
+          text: 'hiii',
+        }),
+      })
+    );
+  });
+
+  it('plain JSON.parse loses the Instagram account id; the preserving parser does not', () => {
+    const raw = '{"id":17841424744855401}';
+    expect(String(JSON.parse(raw).id)).not.toBe('17841424744855401');
+    expect(parseJsonPreservingLargeIds(raw).id).toBe('17841424744855401');
   });
 
   it('IG comment webhook does not create a Page Messenger thread', async () => {

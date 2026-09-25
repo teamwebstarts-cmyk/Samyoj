@@ -8,6 +8,28 @@ import { invalidateTemplateCache } from '../templates/cache';
 
 const log = createModuleLogger('webhook-dispatcher');
 
+/** JSON.parse drops precision on Instagram's 17-digit ids. Quote those integers first. */
+export function parseJsonPreservingLargeIds(raw: string): Record<string, unknown> {
+  const quoted = raw.replace(/([:\[,]\s*)(\d{16,})(?=\s*[,}\]])/g, '$1"$2"');
+  const parsed: unknown = JSON.parse(quoted);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Webhook body is not an object');
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/** Meta sends comment ids as JSON numbers or strings. Channel keys are strings. */
+export function metaScalarId(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) {
+    return String(value);
+  }
+  return undefined;
+}
+
 type InboundChannelMessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
 
 export function channelMessageAttachment(message: Record<string, unknown>): {
@@ -802,22 +824,44 @@ export async function dispatchInstagramWebhookFields(
         continue;
       }
       const value = (change.value as Record<string, unknown>) || {};
-      const channel = await resolveOrgFromIgChannel(entryIgId);
+      // Comment notifications often use numeric ids. DM entry.id stays string-only above.
+      const commentEntryId = metaScalarId(entry.id);
+      const channel = await resolveOrgFromIgChannel(commentEntryId);
       if (!channel) {
         unmatched += 1;
+        log.warn('Instagram comment webhook unmatched — no active Channel', {
+          field,
+          entryId: commentEntryId ?? null,
+          entryIdType: typeof entry.id,
+        });
         continue;
       }
-      const commentId =
-        (typeof value.id === 'string' && value.id) ||
-        (typeof value.comment_id === 'string' && value.comment_id) ||
-        '';
-      const from = (value.from as { id?: string; username?: string } | undefined) || {};
-      if (from.id && entryIgId && from.id === entryIgId) continue;
+      const commentId = metaScalarId(value.id) || metaScalarId(value.comment_id) || '';
+      const fromRaw = value.from;
+      const from =
+        fromRaw && typeof fromRaw === 'object' ? (fromRaw as { id?: unknown; username?: unknown }) : {};
+      const fromId = metaScalarId(from.id);
+      const fromUsername = typeof from.username === 'string' ? from.username : undefined;
+      if (fromId && commentEntryId && fromId === commentEntryId) {
+        log.info('Instagram comment webhook skipped — from the business account', {
+          field,
+          entryId: commentEntryId,
+        });
+        continue;
+      }
       if (!commentId) {
         unmatched += 1;
+        log.warn('Instagram comment webhook unmatched — missing comment id', {
+          field,
+          entryId: commentEntryId,
+          idType: typeof value.id,
+          commentIdType: typeof value.comment_id,
+        });
         continue;
       }
-      const media = (value.media as { id?: string } | undefined) || {};
+      const mediaRaw = value.media;
+      const media =
+        mediaRaw && typeof mediaRaw === 'object' ? (mediaRaw as { id?: unknown }) : {};
       const text = typeof value.text === 'string' ? value.text : '';
       const commentedAt = parseMetaTimestamp(
         value.created_time ?? value.timestamp ?? value.comment_timestamp ?? entry.time
@@ -826,7 +870,7 @@ export async function dispatchInstagramWebhookFields(
       const outcome = await claimAndRunPageEvent({
         organizationId: channel.organizationId,
         channelId: channel.id,
-        pageId: entryIgId,
+        pageId: commentEntryId,
         field,
         value,
         run: async () => {
@@ -835,9 +879,9 @@ export async function dispatchInstagramWebhookFields(
             organizationId: channel.organizationId,
             channelId: channel.id,
             igCommentId: commentId,
-            igMediaId: media.id,
-            fromId: from.id,
-            fromUsername: from.username,
+            igMediaId: metaScalarId(media.id),
+            fromId,
+            fromUsername,
             text,
             commentedAt,
           });

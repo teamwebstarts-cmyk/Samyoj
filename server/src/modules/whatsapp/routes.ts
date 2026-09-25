@@ -44,7 +44,7 @@ import {
   persistAndEnqueueInboundWebhook,
   replayInboundWebhookEnvelope,
 } from './webhook-accept';
-import { dispatchNonMessageWebhookFields } from './webhook-dispatcher';
+import { dispatchNonMessageWebhookFields, parseJsonPreservingLargeIds } from './webhook-dispatcher';
 import { emitProductEvent } from '../platform/events';
 import { requireActiveCommercial, requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
@@ -983,7 +983,13 @@ router.post('/webhook', async (req: Request, res: Response) => {
   const webhookObject = typeof payload.object === 'string' ? payload.object : '';
   if (webhookObject === 'page' || webhookObject === 'instagram') {
     try {
-      await dispatchNonMessageWebhookFields(payload);
+      // Instagram ids are 17-digit JSON numbers. Express JSON.parse rounds them, so the
+      // Channel lookup misses @teamsamyoj and the comment is acked then dropped.
+      const dispatchPayload =
+        webhookObject === 'instagram' && req.rawBody
+          ? parseJsonPreservingLargeIds(req.rawBody)
+          : payload;
+      await dispatchNonMessageWebhookFields(dispatchPayload);
       log.info('Page webhook handled', {
         requestId,
         field,

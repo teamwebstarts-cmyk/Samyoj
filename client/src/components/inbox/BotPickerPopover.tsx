@@ -135,6 +135,21 @@ export default function BotPickerPopover({
         coords ? 'visible' : 'invisible'
       }`}
     >
+      {!loading && enabledBots.length === 0 && (
+        <div className="border-b border-amber-200/70 bg-gradient-to-r from-amber-50/95 to-orange-50/80 px-3 py-2.5 dark:border-amber-800/40 dark:from-amber-950/50 dark:to-orange-950/40">
+          <p className="text-[12px] font-semibold leading-snug text-amber-950 dark:text-amber-100">
+            Create and enable a chat agent first.
+          </p>
+          <Link
+            to="/ai-bot"
+            onClick={onClose}
+            className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-whatsapp-700 hover:underline dark:text-whatsapp-400"
+          >
+            Open AI Bots
+            <ExternalLink className="h-3 w-3" strokeWidth={2.25} aria-hidden />
+          </Link>
+        </div>
+      )}
       <div className="border-b border-theme-border/60 px-3 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -220,12 +235,6 @@ export default function BotPickerPopover({
                 </button>
               );
             })}
-
-            {enabledBots.length === 0 && (
-              <p className="px-3 py-3 text-[12px] text-theme-muted">
-                No enabled bots. Create one in AI Bots.
-              </p>
-            )}
 
             {activeBotId && !enabledBots.some((b) => b.id === activeBotId) && (
               <p className="px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">

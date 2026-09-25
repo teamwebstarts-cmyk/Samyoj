@@ -48,7 +48,6 @@ const MESSENGER_FILTER_CHIPS: Array<{ chip: ListChip; label: string; title?: str
   { chip: 'open', label: 'Open' },
   { chip: 'pending', label: 'Pending' },
   { chip: 'favourites', label: 'Favorites' },
-  { chip: 'snoozed', label: 'Snoozed' },
 ];
 
 interface InboxListHeaderProps {

@@ -57,6 +57,19 @@ const DETAILS_TABS: ReadonlyArray<{
   { id: 'notes', label: 'Notes', shortLabel: 'Notes', icon: StickyNote },
 ];
 
+export type ChannelLabelsBridge = {
+  listOrgLabels: () => Promise<InboxLabel[]>;
+  addToConversation: (labelId: string) => Promise<ConversationLabel[]>;
+  removeFromConversation: (labelId: string) => Promise<ConversationLabel[]>;
+};
+
+export type InboxDetailsFeatureFlags = {
+  contactTags?: boolean;
+  savedAnswers?: boolean;
+  flows?: boolean;
+  ticket?: boolean;
+};
+
 interface InboxDetailsPanelProps {
   conversation: Conversation;
   notes: InternalNote[];
@@ -78,6 +91,11 @@ interface InboxDetailsPanelProps {
   overlaySection?: PanelSection;
   onOverlayClose?: () => void;
   panelWidth?: number;
+  /** Messenger / Instagram inbox label APIs (org catalog + attach). */
+  channelLabels?: ChannelLabelsBridge;
+  featureFlags?: InboxDetailsFeatureFlags;
+  onAddNoteOverride?: (content: string) => Promise<InternalNote>;
+  allowDeleteNotes?: boolean;
 }
 
 export default function InboxDetailsPanel({
@@ -97,6 +115,10 @@ export default function InboxDetailsPanel({
   overlaySection,
   onOverlayClose,
   panelWidth,
+  channelLabels,
+  featureFlags,
+  onAddNoteOverride,
+  allowDeleteNotes = true,
 }: InboxDetailsPanelProps) {
   const tipFor = useGlassTipProps();
   const { resolved: themeResolved } = useTheme();
@@ -104,6 +126,10 @@ export default function InboxDetailsPanel({
   const conversationId = conversation.id;
   const contact = conversation.contact;
   const labels = conversation.labels ?? [];
+  const showContactTags = featureFlags?.contactTags !== false;
+  const showSavedAnswers = featureFlags?.savedAnswers !== false;
+  const showFlows = featureFlags?.flows !== false;
+  const showTicket = featureFlags?.ticket !== false;
 
   const [detailsTab, setDetailsTab] = useState<DetailsTab>('overview');
   const [allLabels, setAllLabels] = useState<InboxLabel[]>([]);
@@ -130,10 +156,18 @@ export default function InboxDetailsPanel({
   const availableLabels = allLabels.filter((label) => !appliedLabelIds.has(label.id));
 
   useEffect(() => {
-    labelsApi
-      .list()
-      .then(({ data }) => setAllLabels(data.data.labels))
-      .catch(console.error);
+    if (channelLabels) {
+      channelLabels
+        .listOrgLabels()
+        .then((org) => setAllLabels(org))
+        .catch(console.error);
+    } else {
+      labelsApi
+        .list()
+        .then(({ data }) => setAllLabels(data.data.labels))
+        .catch(console.error);
+    }
+    if (!showContactTags) return;
     contactApi
       .tags()
       .then(({ data }) => {
@@ -143,7 +177,7 @@ export default function InboxDetailsPanel({
         );
       })
       .catch(console.error);
-  }, []);
+  }, [channelLabels, showContactTags]);
 
   useEffect(() => {
     onPanelOpenChange(false);
@@ -242,8 +276,12 @@ export default function InboxDetailsPanel({
   const handleAddLabel = async (labelId: string) => {
     if (labels.some((l) => l.label.id === labelId)) return;
     try {
-      const { data } = await labelsApi.addToConversation(conversationId, labelId);
-      onLabelsChange(data.data.labels);
+      if (channelLabels) {
+        onLabelsChange(await channelLabels.addToConversation(labelId));
+      } else {
+        const { data } = await labelsApi.addToConversation(conversationId, labelId);
+        onLabelsChange(data.data.labels);
+      }
     } catch {
       toastError('Failed to update label');
     }
@@ -251,8 +289,12 @@ export default function InboxDetailsPanel({
 
   const handleRemoveLabel = async (labelId: string) => {
     try {
-      const { data } = await labelsApi.removeFromConversation(conversationId, labelId);
-      onLabelsChange(data.data.labels);
+      if (channelLabels) {
+        onLabelsChange(await channelLabels.removeFromConversation(labelId));
+      } else {
+        const { data } = await labelsApi.removeFromConversation(conversationId, labelId);
+        onLabelsChange(data.data.labels);
+      }
     } catch {
       toastError('Failed to update label');
     }
@@ -275,8 +317,12 @@ export default function InboxDetailsPanel({
     }
     try {
       // Create alone only adds to the org catalog — attach to this conversation immediately.
-      const { data: attached } = await labelsApi.addToConversation(conversationId, created.id);
-      onLabelsChange(attached.data.labels);
+      if (channelLabels) {
+        onLabelsChange(await channelLabels.addToConversation(created.id));
+      } else {
+        const { data: attached } = await labelsApi.addToConversation(conversationId, created.id);
+        onLabelsChange(attached.data.labels);
+      }
     } catch {
       toastError('Label created, but could not add it to this chat');
     } finally {
@@ -345,17 +391,19 @@ export default function InboxDetailsPanel({
       'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white bg-emerald-600';
     return (
     <>
-      <button
-        type="button"
-        aria-label={hasTicket ? 'View ticket for this chat' : 'Create ticket'}
-        title={hasTicket ? 'Ticket already exists for this chat' : 'Create ticket'}
-        onClick={onConvertToTicket}
-        className={`${btn} text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40`}
-        {...tipFor(hasTicket ? 'Ticket exists' : 'Create ticket', opts.tipSide)}
-      >
-        <Ticket className="h-4 w-4" strokeWidth={iconStroke} />
-        {hasTicket && <span className={ticketBadge}>1</span>}
-      </button>
+      {showTicket && (
+        <button
+          type="button"
+          aria-label={hasTicket ? 'View ticket for this chat' : 'Create ticket'}
+          title={hasTicket ? 'Ticket already exists for this chat' : 'Create ticket'}
+          onClick={onConvertToTicket}
+          className={`${btn} text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40`}
+          {...tipFor(hasTicket ? 'Ticket exists' : 'Create ticket', opts.tipSide)}
+        >
+          <Ticket className="h-4 w-4" strokeWidth={iconStroke} />
+          {hasTicket && <span className={ticketBadge}>1</span>}
+        </button>
+      )}
       <button
         type="button"
         aria-label="Export chat"
@@ -428,17 +476,19 @@ export default function InboxDetailsPanel({
           <div className="space-y-2.5 px-3 py-3">
             <ConversationNotesSection
               key={conversationId}
-              conversationId={conversationId}
+              conversationId={onAddNoteOverride ? undefined : conversationId}
               notes={notes}
               onNotesChange={onNotesChange}
               currentUserId={currentUserId}
+              onAddNote={onAddNoteOverride}
+              allowDeleteNotes={allowDeleteNotes}
             />
           </div>
         ) : (
           <div className="space-y-2.5 px-3 py-3">
-            <ContactSavedAnswersSection contact={contact} />
+            {showSavedAnswers && <ContactSavedAnswersSection contact={contact} />}
 
-            {conversation.activeFlow && (
+            {showFlows && conversation.activeFlow && (
               <FlowJumpControl
                 conversationId={conversation.id}
                 activeFlow={conversation.activeFlow}
@@ -580,6 +630,7 @@ export default function InboxDetailsPanel({
               </div>
             </DetailsSectionCard>
 
+            {showContactTags && (
             <DetailsSectionCard data-section="tags">
               <DetailsSectionHeader
                 icon={<Hash className="h-3.5 w-3.5" strokeWidth={2.25} />}
@@ -676,6 +727,7 @@ export default function InboxDetailsPanel({
                 </div>
               )}
             </DetailsSectionCard>
+            )}
           </div>
         )}
       </div>
@@ -734,22 +786,26 @@ export default function InboxDetailsPanel({
             <span className={`${railBadge} bg-amber-600`}>{notes.length}</span>
           )}
         </button>
-        <span className={railDivider} aria-hidden />
-        <button
-          type="button"
-          aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
-          aria-pressed={panelOpen && activeSection === 'tags'}
-          onClick={() => openPanel('tags')}
-          className={railSectionClass(
-            'tags',
-            'text-sky-600 dark:text-sky-400',
-            'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
-          )}
-          {...tipFor('Contact tags', 'left')}
-        >
-          <Hash className="h-4 w-4" strokeWidth={iconStroke} />
-          {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
-        </button>
+        {showContactTags && (
+          <>
+            <span className={railDivider} aria-hidden />
+            <button
+              type="button"
+              aria-label={tagCount > 0 ? `Contact tags, ${tagCount}` : 'Contact tags'}
+              aria-pressed={panelOpen && activeSection === 'tags'}
+              onClick={() => openPanel('tags')}
+              className={railSectionClass(
+                'tags',
+                'text-sky-600 dark:text-sky-400',
+                'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
+              )}
+              {...tipFor('Contact tags', 'left')}
+            >
+              <Hash className="h-4 w-4" strokeWidth={iconStroke} />
+              {tagCount > 0 && <span className={`${railBadge} bg-sky-600`}>{tagCount}</span>}
+            </button>
+          </>
+        )}
       </div>
 
       <span className="my-1.5 h-px w-6 shrink-0 bg-theme-border/80 dark:bg-white/12" aria-hidden />

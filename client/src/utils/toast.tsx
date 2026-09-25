@@ -26,15 +26,12 @@ const sharedOptions: ToastOptions = {
 };
 
 function getToastPosition(): ToastOptions['position'] {
-  if (typeof window === 'undefined') return 'top-center';
-  return window.innerWidth < 1024 ? 'bottom-center' : 'top-center';
+  return 'top-center';
 }
 
 function toastContainerStyle(): CSSProperties {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
   return {
-    bottom: isMobile ? 88 : undefined,
-    top: isMobile ? undefined : 20,
+    top: 20,
     zIndex: 10050,
   };
 }
