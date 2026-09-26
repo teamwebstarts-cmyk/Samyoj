@@ -5,10 +5,17 @@ import prisma from '../../config/database';
 import {
   dispatchInstagramWebhookFields,
   dispatchPageWebhookFields,
+  isOwnInstagramComment,
   parseJsonPreservingLargeIds,
 } from '../whatsapp/webhook-dispatcher';
 import { ingestInstagramTextMessage, instagramContactPhone, instagramWindowOpen } from './ingest';
-import { ingestInstagramComment, privateReplyOpen, sendPrivateReplyForComment } from './comment-ingest';
+import {
+  COMMENT_PAGE_SIZE,
+  ingestInstagramComment,
+  instagramCommentListWhere,
+  privateReplyOpen,
+  sendPrivateReplyForComment,
+} from './comment-ingest';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 
 vi.mock('../../config/database', () => ({
@@ -59,8 +66,12 @@ vi.mock('../facebook/page-client', async () => {
   return {
     ...actual,
     sendInstagramPrivateReply: vi.fn().mockResolvedValue({ messageId: 'mid.pr', recipientId: 'igsid_1' }),
+    replyToInstagramComment: vi.fn().mockResolvedValue(undefined),
     sendInstagramTextMessage: vi.fn().mockResolvedValue({ messageId: 'mid.out' }),
     hideInstagramComment: vi.fn(),
+    fetchInstagramComment: vi.fn().mockResolvedValue(null),
+    listInstagramMediaIds: vi.fn().mockResolvedValue({ ids: [] }),
+    listMediaComments: vi.fn().mockResolvedValue({ comments: [] }),
   };
 });
 
@@ -284,6 +295,107 @@ describe('Phase 4 Instagram', () => {
     );
   });
 
+  it('keeps a customer comment when Meta sets from.id to the business account id', async () => {
+    const raw = `{
+      "object": "instagram",
+      "entry": [{
+        "id": "17841424744855401",
+        "time": 1700000000,
+        "changes": [{
+          "field": "comments",
+          "value": {
+            "id": "18074865634493149",
+            "text": "hiiii test",
+            "from": { "id": "17841424744855401", "username": "nirbhay_hiwse" },
+            "media": { "id": "18030876632058880" }
+          }
+        }]
+      }]
+    }`;
+    channelMock.findMany.mockResolvedValue([
+      { id: 'ch_ig', organizationId: 'org_1', accessToken: 'enc:tok', name: 'teamsamyoj' },
+    ] as never);
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({ id: 'row_customer', igCommentId: '18074865634493149' } as never);
+
+    const result = await dispatchInstagramWebhookFields(parseJsonPreservingLargeIds(raw));
+    expect(result.claimed).toBe(1);
+    expect(commentMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          fromUsername: 'nirbhay_hiwse',
+          text: 'hiiii test',
+        }),
+      })
+    );
+  });
+
+  it('still skips a comment the connected account wrote itself', async () => {
+    const raw = `{
+      "object": "instagram",
+      "entry": [{
+        "id": "17841424744855401",
+        "changes": [{
+          "field": "comments",
+          "value": {
+            "id": "18074865634493150",
+            "text": "ff",
+            "from": { "id": "17841424744855401", "username": "teamsamyoj" }
+          }
+        }]
+      }]
+    }`;
+    channelMock.findMany.mockResolvedValue([
+      { id: 'ch_ig', organizationId: 'org_1', accessToken: 'enc:tok', name: 'teamsamyoj' },
+    ] as never);
+
+    const result = await dispatchInstagramWebhookFields(parseJsonPreservingLargeIds(raw));
+    expect(result.claimed).toBe(0);
+    expect(commentMock.create).not.toHaveBeenCalled();
+    expect(isOwnInstagramComment({
+      fromId: '17841424744855401',
+      entryId: '17841424744855401',
+      fromUsername: 'nirbhay_hiwse',
+      businessUsername: 'teamsamyoj',
+    })).toBe(false);
+  });
+
+  it('looks up a comment when Meta omits the username and the id matches the business', async () => {
+    const { fetchInstagramComment } = await import('../facebook/page-client');
+    vi.mocked(fetchInstagramComment).mockResolvedValueOnce({
+      id: '18074865634493149',
+      text: 'hiiii test',
+      username: 'nirbhay_hiwse',
+    });
+    const raw = `{
+      "object": "instagram",
+      "entry": [{
+        "id": "17841424744855401",
+        "changes": [{
+          "field": "comments",
+          "value": {
+            "id": "18074865634493149",
+            "text": "",
+            "from": { "id": "17841424744855401" }
+          }
+        }]
+      }]
+    }`;
+    channelMock.findMany.mockResolvedValue([
+      { id: 'ch_ig', organizationId: 'org_1', accessToken: 'enc:tok', name: 'teamsamyoj' },
+    ] as never);
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({ id: 'row_lookup', igCommentId: '18074865634493149' } as never);
+
+    const result = await dispatchInstagramWebhookFields(parseJsonPreservingLargeIds(raw));
+    expect(result.claimed).toBe(1);
+    expect(commentMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ fromUsername: 'nirbhay_hiwse', text: 'hiiii test' }),
+      })
+    );
+  });
+
   it('plain JSON.parse loses the Instagram account id; the preserving parser does not', () => {
     const raw = '{"id":17841424744855401}';
     expect(String(JSON.parse(raw).id)).not.toBe('17841424744855401');
@@ -363,6 +475,15 @@ describe('Phase 4 Instagram', () => {
       .mockResolvedValueOnce({ parentPageId: 'page_1' } as never)
       .mockResolvedValueOnce({ platformAccountId: 'page_1', accessToken: 'enc:page' } as never);
     commentMock.update.mockResolvedValue({} as never);
+    identityMock.findUnique.mockResolvedValue(null as never);
+    contactMock.create.mockResolvedValue({ id: 'ct_ig' } as never);
+    identityMock.create.mockResolvedValue({} as never);
+    conversationMock.findFirst.mockResolvedValue(null as never);
+    conversationMock.create.mockResolvedValue({ id: 'conv_pr', unreadCount: 0 } as never);
+    messageMock.findUnique.mockResolvedValue(null as never);
+    messageMock.create.mockResolvedValue({ id: 'msg_pr', direction: 'OUTBOUND' } as never);
+    conversationMock.update.mockResolvedValue({ id: 'conv_pr' } as never);
+    contactMock.findUnique.mockResolvedValue({ id: 'ct_ig', name: 'buyer', phone: 'instagram:igsid_1' } as never);
 
     const stored = await ingestInstagramComment({
       organizationId: 'org_1',
@@ -374,6 +495,183 @@ describe('Phase 4 Instagram', () => {
     expect(sendInstagramPrivateReply).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'ig-reply', commentId: 'cmt_price' })
     );
-    expect(conversationMock.create).not.toHaveBeenCalled();
+    const { replyToInstagramComment } = await import('../facebook/page-client');
+    expect(replyToInstagramComment).not.toHaveBeenCalled();
+    expect(conversationMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ channelId: 'ch_ig', whatsappNumberId: null }),
+      })
+    );
+    expect(messageMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ direction: 'OUTBOUND', content: 'ig-reply', status: 'SENT' }),
+      })
+    );
+  });
+
+  it('keyword with only a public reply does not send a DM', async () => {
+    const { replyToInstagramComment, sendInstagramPrivateReply } = await import('../facebook/page-client');
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({ id: 'row_pub', igCommentId: 'cmt_pub', commentedAt: new Date() } as never);
+    automationMock.findMany.mockResolvedValue([
+      { triggerType: 'KEYWORD', config: { platform: 'IG', keyword: 'PRICE', publicMessage: 'Check your DMs' } },
+    ] as never);
+    commentMock.findFirst.mockResolvedValue({
+      id: 'row_pub',
+      igCommentId: 'cmt_pub',
+      publicReplySentAt: null,
+    } as never);
+    channelMock.findFirst
+      .mockResolvedValueOnce({ parentPageId: 'page_1' } as never)
+      .mockResolvedValueOnce({ platformAccountId: 'page_1', accessToken: 'enc:page' } as never);
+
+    const stored = await ingestInstagramComment({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igCommentId: 'cmt_pub',
+      text: 'PRICE please',
+    });
+    expect(stored.automationSent).toBe(true);
+    expect(replyToInstagramComment).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Check your DMs', commentId: 'cmt_pub' })
+    );
+    expect(sendInstagramPrivateReply).not.toHaveBeenCalled();
+  });
+
+  it('keyword with both texts posts on the comment and sends a DM', async () => {
+    const { replyToInstagramComment, sendInstagramPrivateReply } = await import('../facebook/page-client');
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({ id: 'row_both', igCommentId: 'cmt_both', commentedAt: new Date() } as never);
+    automationMock.findMany.mockResolvedValue([
+      {
+        triggerType: 'KEYWORD',
+        config: { platform: 'IG', keyword: 'PRICE', message: '₹999', publicMessage: 'Check your DMs' },
+      },
+    ] as never);
+    commentMock.findFirst.mockResolvedValue({
+      id: 'row_both',
+      igCommentId: 'cmt_both',
+      commentedAt: new Date(),
+      publicReplySentAt: null,
+      privateReplySentAt: null,
+    } as never);
+    channelMock.findFirst.mockResolvedValue({
+      parentPageId: 'page_1',
+      platformAccountId: 'page_1',
+      accessToken: 'enc:page',
+    } as never);
+    identityMock.findUnique.mockResolvedValue({ contactId: 'ct_ig' } as never);
+    conversationMock.findFirst.mockResolvedValue({ id: 'conv_pr', unreadCount: 0 } as never);
+    messageMock.findUnique.mockResolvedValue(null as never);
+    messageMock.create.mockResolvedValue({ id: 'msg_pr' } as never);
+    conversationMock.update.mockResolvedValue({ id: 'conv_pr' } as never);
+    contactMock.findUnique.mockResolvedValue({ id: 'ct_ig' } as never);
+
+    const stored = await ingestInstagramComment({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igCommentId: 'cmt_both',
+      text: 'PRICE',
+    });
+    expect(stored.automationSent).toBe(true);
+    expect(replyToInstagramComment).toHaveBeenCalled();
+    expect(sendInstagramPrivateReply).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '₹999' })
+    );
+  });
+
+  it('rejects a second public reply on the same comment', async () => {
+    const { replyToInstagramComment } = await import('../facebook/page-client');
+    const { sendPublicReplyForComment } = await import('./comment-ingest');
+    commentMock.findFirst.mockResolvedValue({
+      id: 'row_pub',
+      publicReplySentAt: new Date(),
+    } as never);
+    const second = await sendPublicReplyForComment({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      commentRowId: 'row_pub',
+      igCommentId: 'cmt_pub',
+      text: 'again',
+    });
+    expect(second.ok).toBe(false);
+    expect(replyToInstagramComment).not.toHaveBeenCalled();
+  });
+
+  it('history sync stores comments and does not auto-reply', async () => {
+    const { listInstagramMediaIds, listMediaComments, sendInstagramPrivateReply } = await import('../facebook/page-client');
+    vi.mocked(listInstagramMediaIds).mockResolvedValue({ ids: ['media_1'] });
+    vi.mocked(listMediaComments).mockResolvedValue({
+      comments: [{ id: 'cmt_old', text: 'PRICE please', username: 'buyer' }],
+    });
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({ id: 'row_old', igCommentId: 'cmt_old' } as never);
+    automationMock.findMany.mockResolvedValue([
+      { triggerType: 'KEYWORD', config: { platform: 'IG', keyword: 'PRICE', message: 'ig-reply' } },
+    ] as never);
+
+    const { syncInstagramComments } = await import('./comment-sync');
+    const result = await syncInstagramComments({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igUserId: 'ig_biz_1',
+      pageAccessToken: 'page-token',
+      businessUsername: 'teamsamyoj',
+      maxMedia: 5,
+      maxScan: 20,
+    });
+    expect(result.inserted).toBe(1);
+    expect(sendInstagramPrivateReply).not.toHaveBeenCalled();
+    const { replyToInstagramComment } = await import('../facebook/page-client');
+    expect(replyToInstagramComment).not.toHaveBeenCalled();
+    expect(commentMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ igCommentId: 'cmt_old', text: 'PRICE please' }),
+      })
+    );
+  });
+
+  it('comment list pages 25 at a time and filters need-reply on the server', () => {
+    expect(COMMENT_PAGE_SIZE).toBe(25);
+    const now = new Date('2026-09-26T12:00:00.000Z');
+    const open = instagramCommentListWhere({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      status: 'open',
+      now,
+    });
+    expect(open.hidden).toBe(false);
+    expect(open.privateReplySentAt).toBeNull();
+    expect(open.commentedAt).toEqual({ gt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) });
+    const sent = instagramCommentListWhere({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      status: 'sent',
+    });
+    expect(sent.privateReplySentAt).toEqual({ not: null });
+  });
+
+  it('comments delete route is registered before :id handlers', () => {
+    const src = readFileSync(join(__dirname, 'comments.routes.ts'), 'utf8');
+    const deleteAt = src.indexOf("'/delete'");
+    const replyAt = src.indexOf("'/:id/private-reply'");
+    expect(deleteAt).toBeGreaterThan(-1);
+    expect(replyAt).toBeGreaterThan(deleteAt);
+  });
+
+  it('subscribes post comments even when live comments are rejected', async () => {
+    const { subscribeInstagramAccount } = await import('../facebook/page-client');
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const ok = () => Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    const denied = () =>
+      Promise.resolve(new Response(JSON.stringify({ error: { message: '(#3) no live', code: 3 } }), { status: 400 }));
+    fetchMock.mockImplementationOnce(ok).mockImplementationOnce(denied);
+    await expect(subscribeInstagramAccount('17841424744855401', 'page-token')).resolves.toBeUndefined();
+    const firstBody = String(fetchMock.mock.calls[0]?.[1] && (fetchMock.mock.calls[0][1] as RequestInit).body);
+    const secondBody = String(fetchMock.mock.calls[1]?.[1] && (fetchMock.mock.calls[1][1] as RequestInit).body);
+    expect(firstBody).toContain('messages%2Ccomments');
+    expect(firstBody).not.toContain('live_comments');
+    expect(secondBody).toContain('live_comments');
+    fetchMock.mockRestore();
   });
 });

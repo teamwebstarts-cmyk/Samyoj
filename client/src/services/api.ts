@@ -219,7 +219,11 @@ export const authApi = {
     api.get('/auth/oauth/google/url', { params: returnTo ? { returnTo } : undefined }),
   googleStatus: () => api.get('/auth/oauth/google/status'),
   exchangeOAuthCode: (code: string) => api.post('/auth/oauth/exchange', { code }),
-  me: () => api.get('/auth/me'),
+  /** 401 is a normal “no session” probe — do not throw (avoids noisy error interceptors). */
+  me: () =>
+    api.get('/auth/me', {
+      validateStatus: (status) => status === 200 || status === 401,
+    }),
   logout: () => api.post('/auth/logout', {}),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
@@ -461,8 +465,16 @@ export const facebookApi = {
       api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, {
         content,
       }),
-    sendMedia: (id: string, mediaUrl: string, kind: 'image' | 'video' | 'file') =>
-      api.post(`/facebook/inbox/${id}/messages`, { mediaUrl, kind }),
+    sendMedia: (
+      id: string,
+      payload: {
+        mediaUrl: string;
+        kind: 'image' | 'video' | 'audio' | 'file';
+        mediaPath?: string;
+        filename?: string;
+        mimeType?: string;
+      }
+    ) => api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, payload),
     bulk: (ids: string[], action: 'assign' | 'close' | 'delete', agentId?: string | null) =>
       api.post('/facebook/inbox/bulk', { ids, action, agentId }),
     setBot: (id: string, botActive: boolean) =>
@@ -498,6 +510,7 @@ export const facebookApi = {
       api.patch(`/facebook/inbox/${id}/status`, { status }),
     addNote: (id: string, content: string) =>
       api.post(`/facebook/inbox/${id}/notes`, { content }),
+    deleteNote: (noteId: string) => api.delete(`/facebook/inbox/notes/${noteId}`),
   },
   adsSummary: () =>
     api.get<{
@@ -581,8 +594,16 @@ export const instagramApi = {
       api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, {
         content,
       }),
-    sendMedia: (id: string, mediaUrl: string, kind: 'image' | 'video' | 'file') =>
-      api.post(`/instagram/inbox/${id}/messages`, { mediaUrl, kind }),
+    sendMedia: (
+      id: string,
+      payload: {
+        mediaUrl: string;
+        kind: 'image' | 'video' | 'audio' | 'file';
+        mediaPath?: string;
+        filename?: string;
+        mimeType?: string;
+      }
+    ) => api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, payload),
     bulk: (ids: string[], action: 'assign' | 'close' | 'delete', agentId?: string | null) =>
       api.post('/instagram/inbox/bulk', { ids, action, agentId }),
     setBot: (id: string, botActive: boolean) =>
@@ -618,6 +639,7 @@ export const instagramApi = {
       api.patch(`/instagram/inbox/${id}/status`, { status }),
     addNote: (id: string, content: string) =>
       api.post(`/instagram/inbox/${id}/notes`, { content }),
+    deleteNote: (noteId: string) => api.delete(`/instagram/inbox/notes/${noteId}`),
   },
   comments: {
     list: (params?: Record<string, string>) =>
@@ -631,6 +653,10 @@ export const instagramApi = {
     privateReply: (id: string, content: string) =>
       api.post(`/instagram/comments/${id}/private-reply`, { content }),
     hide: (id: string, hide: boolean) => api.post(`/instagram/comments/${id}/hide`, { hide }),
+    publicReply: (id: string, content: string) =>
+      api.post(`/instagram/comments/${id}/public-reply`, { content }),
+    remove: (ids: string[]) => api.post<{ data: { deleted: number } }>('/instagram/comments/delete', { ids }),
+    sync: () => api.post<{ data: { inserted: number; scanned: number } }>('/instagram/comments/sync'),
   },
 };
 

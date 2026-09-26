@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInboxRoute } from './pageMeta';
+import { getPageMeta, isInboxRoute } from './pageMeta';
 
 describe('inbox shell routes', () => {
   it('locks scrolling for WhatsApp, Facebook, and Instagram inboxes', () => {
@@ -11,5 +11,10 @@ describe('inbox shell routes', () => {
   it('does not classify unrelated pages as inbox shells', () => {
     expect(isInboxRoute('/facebook/ads')).toBe(false);
     expect(isInboxRoute('/instagram/comments')).toBe(false);
+  });
+
+  it('uses Messenger-native title for Facebook inbox', () => {
+    expect(getPageMeta('/facebook/inbox').title).toBe('Messenger Inbox');
+    expect(getPageMeta('/facebook/inbox').description).toContain('24-hour');
   });
 });

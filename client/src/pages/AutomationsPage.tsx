@@ -161,6 +161,7 @@ const emptyForm = {
   triggerType: 'KEYWORD',
   keyword: '',
   message: '',
+  publicMessage: '',
   duringHoursMessage: '',
   awayMessage: '',
   tag: 'lead',
@@ -345,6 +346,7 @@ export default function AutomationsPage() {
       triggerType: automation.triggerType,
       keyword: String(config.keyword || ''),
       message: String(config.message || ''),
+      publicMessage: String(config.publicMessage || ''),
       duringHoursMessage: String(config.duringHoursMessage || config.message || ''),
       awayMessage: String(config.awayMessage || ''),
       tag: String(config.tag || 'lead'),
@@ -375,6 +377,10 @@ export default function AutomationsPage() {
         validationErrors.push('During-hours message is required');
       }
       if (!form.awayMessage.trim()) validationErrors.push('After-hours message is required');
+    } else if (form.triggerType === 'KEYWORD' && form.platform === 'IG') {
+      if (!form.message.trim() && !form.publicMessage.trim()) {
+        validationErrors.push('Add a public reply, a private DM, or both');
+      }
     } else if (!form.message.trim()) {
       validationErrors.push('Reply message is required');
     }
@@ -395,6 +401,9 @@ export default function AutomationsPage() {
     if (form.triggerType === 'KEYWORD') {
       config.keyword = form.keyword;
       if (form.platform !== 'WA') config.platform = form.platform;
+      if (form.platform === 'IG' && form.publicMessage.trim()) {
+        config.publicMessage = form.publicMessage.trim();
+      }
     }
     if (form.triggerType === 'BUSINESS_HOURS') {
       config.duringHoursMessage = form.duringHoursMessage || form.message;
@@ -847,7 +856,15 @@ export default function AutomationsPage() {
                       const meta = getTriggerMeta(automation.triggerType);
                       const Icon = meta.icon;
                       const config = automation.config as Record<string, string>;
-                      const preview = config.message || '—';
+                      const preview =
+                        config.platform === 'IG'
+                          ? [
+                              config.publicMessage ? `Post: ${config.publicMessage}` : '',
+                              config.message ? `DM: ${config.message}` : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || '—'
+                          : String(config.message || '—');
 
                       return (
                         <tr
@@ -1119,7 +1136,7 @@ export default function AutomationsPage() {
                   label={form.platform === 'IG' ? 'Word in a comment' : 'Word or phrase to watch for'}
                   hint={
                     form.platform === 'IG'
-                      ? 'One private reply when this word appears. A 24h chat starts only after they reply in DMs.'
+                      ? 'One public reply, one private DM, or both. A 24h chat starts only after they reply in DMs.'
                       : `We'll reply when a customer sends this word on ${form.platform === 'FB' ? 'Facebook Messenger' : 'WhatsApp'}`
                   }
                   placeholder="pricing"
@@ -1183,6 +1200,28 @@ export default function AutomationsPage() {
                     Settings
                   </Link>
                   .
+                </p>
+              </>
+            ) : form.triggerType === 'KEYWORD' && form.platform === 'IG' ? (
+              <>
+                <AppTextarea
+                  id="public-reply"
+                  label="Public reply on the post"
+                  placeholder="Check your DMs"
+                  value={form.publicMessage}
+                  onChange={(e) => setForm({ ...form, publicMessage: e.target.value })}
+                  rows={3}
+                />
+                <AppTextarea
+                  id="reply-message"
+                  label="Private DM"
+                  placeholder="The price is ₹999"
+                  value={form.message}
+                  onChange={(e) => setForm({ ...form, message: e.target.value })}
+                  rows={3}
+                />
+                <p className="text-[11px] font-medium text-neutral-500">
+                  A comment like PRICE can post “Check your DMs” and send the price in a private DM. Leave either box empty to send only the other.
                 </p>
               </>
             ) : (

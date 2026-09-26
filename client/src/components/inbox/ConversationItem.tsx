@@ -3,7 +3,12 @@ import { Bot, Check, GitBranch, PhoneOff, Star, Ticket } from 'lucide-react';
 import ContactAvatar from './ContactAvatar';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { softStatusPillStyle } from './details/DetailsSectionCard';
-import { formatListTime, getMessagePreview } from './inboxUtils';
+import {
+  formatInstagramContactTitle,
+  formatListTime,
+  formatMessengerContactTitle,
+  getMessagePreview,
+} from './inboxUtils';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { waitingForLabel } from '../../utils/flow-waiting';
@@ -19,6 +24,7 @@ interface ConversationItemProps {
   checked?: boolean;
   onToggleSelect?: () => void;
   currentUserId?: string;
+  listVariant?: 'whatsapp' | 'messenger' | 'instagram';
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -38,6 +44,7 @@ export default function ConversationItem({
   checked = false,
   onToggleSelect,
   currentUserId,
+  listVariant = 'whatsapp',
 }: ConversationItemProps) {
   const tipFor = useGlassTipProps();
   const { resolved: themeResolved } = useTheme();
@@ -93,6 +100,13 @@ export default function ConversationItem({
       ? 'You'
       : assignedAgent.name
     : null;
+
+  const rowTitle =
+    listVariant === 'instagram'
+      ? formatInstagramContactTitle(contact)
+      : listVariant === 'messenger'
+        ? formatMessengerContactTitle(contact)
+        : contact.name || contact.phone;
 
   return (
     <button
@@ -157,7 +171,7 @@ export default function ConversationItem({
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[14px] font-bold leading-tight text-theme-fg">
-              {contact.name || contact.phone}
+              {rowTitle}
             </span>
             {conversation.isFavorite && (
               <span

@@ -37,6 +37,7 @@ import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel';
 import FacebookPagePanel, { type FacebookPageSummary } from '../components/settings/FacebookPagePanel';
 import InstagramPagePanel, { type InstagramAccountSummary } from '../components/settings/InstagramPagePanel';
+import MetaPreviewMockPanel from '../components/settings/MetaPreviewMockPanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
 import TeamSecurityPanel from '../components/team/TeamSecurityPanel';
@@ -572,6 +573,7 @@ export default function SettingsPage() {
                         onDisconnect={() => void disconnectInstagramAccount()}
                         canEdit={isOwnerOrAdmin}
                       />
+                      <MetaPreviewMockPanel />
                     </div>
                   )}
 

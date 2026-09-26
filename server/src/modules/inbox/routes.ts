@@ -48,6 +48,16 @@ import { checkQuota, getOrgEntitlements } from '../billing/entitlements.service'
 
 const router = Router();
 
+async function findOrgScopedMessage(orgId: string, messageId: string) {
+  return prisma.message.findFirst({
+    where: {
+      id: messageId,
+      conversation: { organizationId: orgId },
+    },
+    include: { conversation: { select: { organizationId: true } } },
+  });
+}
+
 function emitInbox(req: Request, event: string, data: Record<string, unknown>): void {
   emitToOrg(req.user!.organizationId!, event, {
     ...(req.activeWhatsappNumberId ? { whatsappNumberId: req.activeWhatsappNumberId } : {}),
@@ -144,7 +154,7 @@ router.get(
     if (!message) throw new AppError(404, 'Message not found');
 
     const metadata = message.metadata as MessageMediaMetadata | null;
-    if (!metadata?.mediaId && !metadata?.mediaPath) {
+    if (!metadata?.mediaId && !metadata?.mediaPath && !metadata?.externalUrl) {
       throw new AppError(404, 'No media attached to this message');
     }
 
@@ -456,17 +466,12 @@ router.get(
     const messageId = req.params.messageId as string;
     const orgId = req.user!.organizationId!;
 
-    const message = await prisma.message.findFirst({
-      where: {
-        id: messageId,
-        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
-      },
-    });
+    const message = await findOrgScopedMessage(orgId, messageId);
 
     if (!message) throw new AppError(404, 'Message not found');
 
     const metadata = message.metadata as MessageMediaMetadata | null;
-    if (!metadata?.mediaId && !metadata?.mediaPath) {
+    if (!metadata?.mediaId && !metadata?.mediaPath && !metadata?.externalUrl) {
       throw new AppError(404, 'No media attached to this message');
     }
 
@@ -488,20 +493,16 @@ router.get(
     const messageId = req.params.messageId as string;
     const orgId = req.user!.organizationId!;
 
-    const message = await prisma.message.findFirst({
-      where: {
-        id: messageId,
-        conversation: scopedConversationParent(orgId, req.activeWhatsappNumberId),
-      },
-    });
+    const message = await findOrgScopedMessage(orgId, messageId);
 
     if (!message) throw new AppError(404, 'Message not found');
 
     const metadata = message.metadata as MessageMediaMetadata | null;
-    if (!metadata?.mediaId && !metadata?.mediaPath) {
+    if (!metadata?.mediaId && !metadata?.mediaPath && !metadata?.externalUrl) {
       throw new AppError(404, 'No media attached to this message');
     }
 
+    // Messenger/IG CDN links fail in the browser (hotlink). Always proxy through us.
     const { path, expiresAt } = buildSignedMediaPath(message.id);
     // Prefer same-origin relative `url` so the Vite/nginx proxy serves media
     // without cross-origin CORP issues. `absoluteUrl` is for tooling / split deploys.

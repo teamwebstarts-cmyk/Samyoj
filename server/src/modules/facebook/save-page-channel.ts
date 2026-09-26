@@ -193,6 +193,25 @@ export async function saveLinkedInstagramChannel(opts: {
     });
   }
 
+  try {
+    const { syncInstagramComments } = await import('../instagram/comment-sync');
+    await syncInstagramComments({
+      organizationId: opts.organizationId,
+      channelId: channel.id,
+      igUserId: ig.id,
+      pageAccessToken: opts.pageAccessToken,
+      businessUsername: ig.username,
+      maxMedia: 10,
+      maxScan: 200,
+    });
+  } catch (err) {
+    log.warn('IG comment history sync deferred', {
+      organizationId: opts.organizationId,
+      igUserId: ig.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return { channelId: channel.id, igUserId: ig.id, username: ig.username };
 }
 

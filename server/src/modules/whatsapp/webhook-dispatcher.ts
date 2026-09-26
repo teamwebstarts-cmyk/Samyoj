@@ -30,6 +30,26 @@ export function metaScalarId(value: unknown): string | undefined {
   return undefined;
 }
 
+function instagramHandle(value: string | null | undefined): string {
+  return (value || '').trim().replace(/^@/, '').toLowerCase();
+}
+
+/**
+ * Meta often sets comment `from.id` to the professional account id for every comment.
+ * The commenter is `from.username`. Own comments are the ones whose handle matches the connected account.
+ */
+export function isOwnInstagramComment(opts: {
+  fromId?: string;
+  entryId?: string;
+  fromUsername?: string;
+  businessUsername?: string | null;
+}): boolean {
+  const commenter = instagramHandle(opts.fromUsername);
+  const business = instagramHandle(opts.businessUsername);
+  if (commenter && business) return commenter === business;
+  return Boolean(opts.fromId && opts.entryId && opts.fromId === opts.entryId);
+}
+
 type InboundChannelMessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
 
 export function channelMessageAttachment(message: Record<string, unknown>): {
@@ -42,14 +62,33 @@ export function channelMessageAttachment(message: Record<string, unknown>): {
   if (!attachment || typeof attachment !== 'object') return null;
   const row = attachment as Record<string, unknown>;
   const rawType = typeof row.type === 'string' ? row.type.toLowerCase() : 'file';
-  const type: InboundChannelMessageType =
-    rawType === 'image' ? 'IMAGE' : rawType === 'video' ? 'VIDEO' : rawType === 'audio' ? 'AUDIO' : 'DOCUMENT';
   const payload = row.payload && typeof row.payload === 'object' ? (row.payload as Record<string, unknown>) : {};
   const url = typeof payload.url === 'string' ? payload.url : '';
+  const urlPath = url.split('?')[0].toLowerCase();
+  const isGif =
+    rawType === 'gif' ||
+    rawType === 'animated_image_share' ||
+    urlPath.endsWith('.gif');
+  const isSticker = rawType === 'sticker';
+  const type: InboundChannelMessageType =
+    rawType === 'image' || isGif || isSticker
+      ? 'IMAGE'
+      : rawType === 'video'
+        ? 'VIDEO'
+        : rawType === 'audio'
+          ? 'AUDIO'
+          : 'DOCUMENT';
+  const content =
+    type === 'IMAGE' ? '[image]' : type === 'VIDEO' ? '[video]' : type === 'AUDIO' ? '[audio]' : '[document]';
   return {
     type,
-    content: url || `[${type}]`,
-    metadata: { attachments },
+    content: url ? content : `[${type}]`,
+    metadata: {
+      attachments,
+      ...(url ? { externalUrl: url } : {}),
+      ...(isGif ? { isGif: true, mimeType: 'image/gif' } : {}),
+      ...(isSticker ? { isSticker: true } : {}),
+    },
   };
 }
 
@@ -726,7 +765,7 @@ export async function resolveOrgFromIgChannel(igUserId: string | undefined) {
       platformAccountId: igUserId,
       isActive: true,
     },
-    select: { id: true, organizationId: true, accessToken: true },
+    select: { id: true, organizationId: true, accessToken: true, name: true },
     take: 2,
   });
   if (rows.length !== 1) {
@@ -789,11 +828,18 @@ export async function dispatchInstagramWebhookFields(
         value,
         run: async () => {
           const { ingestInstagramTextMessage } = await import('../instagram/ingest');
+          const { resolveInstagramContactName } = await import('../instagram/contact-name');
+          const contactName = await resolveInstagramContactName(
+            channel.organizationId,
+            channel.id,
+            sender
+          );
           const result = await ingestInstagramTextMessage({
             organizationId: channel.organizationId,
             channelId: channel.id,
             igsid: sender,
             text: content,
+            contactName: contactName ?? undefined,
             metaMessageId: mid,
             timestampMs,
             messageType: attachment?.type,
@@ -841,11 +887,49 @@ export async function dispatchInstagramWebhookFields(
       const from =
         fromRaw && typeof fromRaw === 'object' ? (fromRaw as { id?: unknown; username?: unknown }) : {};
       const fromId = metaScalarId(from.id);
-      const fromUsername = typeof from.username === 'string' ? from.username : undefined;
-      if (fromId && commentEntryId && fromId === commentEntryId) {
+      let fromUsername = typeof from.username === 'string' ? from.username : undefined;
+      let resolvedFromId = fromId;
+      let resolvedText = typeof value.text === 'string' ? value.text : '';
+      const looksLikeOwn = isOwnInstagramComment({
+        fromId,
+        entryId: commentEntryId,
+        fromUsername,
+        businessUsername: channel.name,
+      });
+      // Meta sometimes omits the commenter handle and repeats the business id.
+      // Look the comment up before dropping it.
+      if (looksLikeOwn && !fromUsername && commentId && channel.accessToken) {
+        try {
+          const { fetchInstagramComment } = await import('../facebook/page-client');
+          const { MetaWhatsAppService } = await import('./meta.service');
+          const token = MetaWhatsAppService.decryptToken(channel.accessToken);
+          const fetched = await fetchInstagramComment(commentId, token);
+          const fetchedUsername = fetched?.username || fetched?.from?.username;
+          const fetchedId = metaScalarId(fetched?.from?.id);
+          if (fetchedUsername) fromUsername = fetchedUsername;
+          if (fetchedId) resolvedFromId = fetchedId;
+          if (!resolvedText && fetched?.text) resolvedText = fetched.text;
+        } catch (err) {
+          log.warn('Instagram comment lookup failed', {
+            field,
+            entryId: commentEntryId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (
+        isOwnInstagramComment({
+          fromId: resolvedFromId,
+          entryId: commentEntryId,
+          fromUsername,
+          businessUsername: channel.name,
+        })
+      ) {
         log.info('Instagram comment webhook skipped — from the business account', {
           field,
           entryId: commentEntryId,
+          fromId: resolvedFromId ?? null,
+          fromUsername: fromUsername ?? null,
         });
         continue;
       }
@@ -862,7 +946,7 @@ export async function dispatchInstagramWebhookFields(
       const mediaRaw = value.media;
       const media =
         mediaRaw && typeof mediaRaw === 'object' ? (mediaRaw as { id?: unknown }) : {};
-      const text = typeof value.text === 'string' ? value.text : '';
+      const text = resolvedText;
       const commentedAt = parseMetaTimestamp(
         value.created_time ?? value.timestamp ?? value.comment_timestamp ?? entry.time
       );
@@ -880,7 +964,7 @@ export async function dispatchInstagramWebhookFields(
             channelId: channel.id,
             igCommentId: commentId,
             igMediaId: metaScalarId(media.id),
-            fromId,
+            fromId: resolvedFromId,
             fromUsername,
             text,
             commentedAt,

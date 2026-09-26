@@ -6,7 +6,7 @@ import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { emitToOrg } from '../../realtime';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
-import { messengerWindowOpen } from './messenger-ingest';
+import { messengerWindowOpen, refreshMessengerContactName } from './messenger-ingest';
 import { sendPageTextMessage } from './page-client';
 import {
   attachChannelInboxActions,
@@ -169,6 +169,20 @@ router.get(
     const conversation = await loadMessengerConversation(orgId, channel.id, String(req.params.id));
     if (!conversation) throw new AppError(404, 'Conversation not found');
 
+    const identity = await prisma.contactPlatformIdentity.findFirst({
+      where: { organizationId: orgId, contactId: conversation.contactId, platform: 'FB' },
+      select: { externalId: true },
+    });
+    if (identity?.externalId) {
+      const name = await refreshMessengerContactName({
+        organizationId: orgId,
+        channelId: channel.id,
+        contactId: conversation.contactId,
+        psid: identity.externalId,
+      });
+      if (name && conversation.contact) conversation.contact.name = name;
+    }
+
     sendSuccess(res, {
       ...conversation,
       serviceWindow: serviceWindowDto(conversation.cs24hWindowOpensAt),
@@ -213,7 +227,10 @@ router.post(
       .object({
         content: z.string().trim().max(2000).optional(),
         mediaUrl: z.string().trim().optional(),
-        kind: z.enum(['image', 'video', 'file']).optional(),
+        mediaPath: z.string().trim().optional(),
+        filename: z.string().trim().max(255).optional(),
+        mimeType: z.string().trim().max(120).optional(),
+        kind: z.enum(['image', 'video', 'audio', 'file']).optional(),
       })
       .refine((row) => Boolean(row.content) || Boolean(row.mediaUrl), { message: 'Message or media is required' })
       .parse(req.body);
@@ -241,16 +258,19 @@ router.post(
       throw new AppError(400, 'Messenger identity missing for this contact');
     }
     if (body.mediaUrl) {
-      await deliverChannelMedia({
+      const message = await deliverChannelMedia({
         organizationId: orgId,
         platform: 'FB',
         channelId: channel.id,
         recipientId: identity.externalId,
         conversationId: conversation.id,
         mediaUrl: body.mediaUrl,
+        mediaPath: body.mediaPath,
+        filename: body.filename,
+        mimeType: body.mimeType,
         kind: body.kind || 'image',
       });
-      sendSuccess(res, { ok: true });
+      sendSuccess(res, message);
       return;
     }
     if (!body.content) throw new AppError(400, 'Message is required');
@@ -440,6 +460,33 @@ router.post(
       include: { user: { select: { id: true, name: true } } },
     });
     sendSuccess(res, note);
+  })
+);
+
+router.delete(
+  '/notes/:noteId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const noteId = String(req.params.noteId);
+    const channel = await activeFbChannel(orgId);
+    if (!channel) throw new AppError(404, 'Connect a Facebook Page in Settings first');
+
+    const note = await prisma.internalNote.findFirst({
+      where: {
+        id: noteId,
+        conversation: { organizationId: orgId, channelId: channel.id },
+      },
+    });
+    if (!note) throw new AppError(404, 'Note not found');
+
+    const isAuthor = note.userId === req.user!.userId;
+    const isAdmin = req.orgRole === 'ADMIN' || req.orgRole === 'OWNER';
+    if (!isAuthor && !isAdmin) {
+      throw new AppError(403, 'Only the note author or an admin can delete this note');
+    }
+
+    await prisma.internalNote.delete({ where: { id: note.id } });
+    res.status(204).end();
   })
 );
 

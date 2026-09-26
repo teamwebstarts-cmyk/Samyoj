@@ -1,11 +1,32 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ExternalLink, Eye, Facebook, FileText, Info, Loader2, MousePointer2, Target, UserRound } from 'lucide-react';
+import {
+  ChevronDown,
+  CircleHelp,
+  ExternalLink,
+  Eye,
+  Facebook,
+  FileText,
+  Info,
+  MousePointer2,
+  Search,
+  Target,
+  UserRound,
+} from 'lucide-react';
+import FacebookAdsMetricsSkeleton from '../components/facebook/FacebookAdsMetricsSkeleton';
 import PageShell from '../components/ui/PageShell';
 import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
 import { facebookApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
 import './facebook-ads.css';
+import { useMetaMock } from '../contexts/MetaMockContext';
+import MetaMockNotice from '../components/meta/MetaMockNotice';
+import {
+  getFacebookAdsMockAccounts,
+  getFacebookAdsMockCampaigns,
+  getFacebookAdsMockSnapshot,
+  type MockAdsCampaign,
+} from '../utils/metaMockData';
 
 type AdsPayload = Awaited<ReturnType<typeof facebookApi.adsSummary>>['data']['data'];
 type AdsAccountsPayload = Awaited<ReturnType<typeof facebookApi.adsAccounts>>['data']['data'];
@@ -75,18 +96,97 @@ function Guide({
   );
 }
 
+function MockCampaignsTable({ campaigns }: { campaigns: MockAdsCampaign[] }) {
+  const [query, setQuery] = useState('');
+  const rows = campaigns.filter((row) => row.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <section className="fads-card mt-3 overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4 sm:px-5">
+        <div>
+          <h3 className="text-[15px] font-bold text-[var(--fads-ink)]">Recent ad performance</h3>
+          <p className="mt-0.5 text-[12px] text-[var(--fads-muted)]">
+            Sample campaigns for preview. Account totals above still come from Meta when connected.
+          </p>
+        </div>
+        <label className="relative">
+          <span className="sr-only">Search campaign name</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--fads-muted)]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search campaign name…"
+            className="h-9 w-56 rounded-xl border border-[var(--fads-line)] bg-white pl-8 pr-3 text-[13px] outline-none focus:border-[#1877F2]"
+          />
+        </label>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="fads-table">
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Amount spent</th>
+              <th>Impressions</th>
+              <th>Clicks</th>
+              <th>Leads (Meta)</th>
+              <th>Cost per lead</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-[var(--fads-muted)]">No sample campaign matches that name.</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <div className="flex items-center gap-2.5">
+                      <span className="fads-thumb" style={{ background: row.hue }}>{row.name.slice(0, 1)}</span>
+                      <span>
+                        <span className="block font-semibold">{row.name}</span>
+                        <span className="mt-0.5 flex items-center gap-1 text-[12px] text-[var(--fads-muted)]">
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{
+                              background:
+                                row.status === 'Active' ? '#1F9D55' : row.status === 'Learning' ? '#F59E0B' : '#9CA3AF',
+                            }}
+                          />
+                          {row.status}
+                        </span>
+                      </span>
+                    </div>
+                  </td>
+                  <td>{row.spend}</td>
+                  <td>{row.impressions}</td>
+                  <td>{row.clicks}</td>
+                  <td>{row.leads}</td>
+                  <td>{row.cpl}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function PerformanceBoard({
   period,
   attribution,
   metrics,
   accountControl,
   pageName,
+  showMockCampaigns,
 }: {
   period: string;
   attribution: string;
   metrics: Array<{ label: string; value: string; icon: typeof FileText; tint: string }>;
   accountControl: ReactNode;
   pageName: string | null;
+  showMockCampaigns?: boolean;
 }) {
   return (
     <>
@@ -139,6 +239,7 @@ function PerformanceBoard({
           </div>
         ) : null}
       </section>
+      {showMockCampaigns ? <MockCampaignsTable campaigns={getFacebookAdsMockCampaigns()} /> : null}
     </>
   );
 }
@@ -167,6 +268,7 @@ export default function FacebookAdsPage() {
   const [loading, setLoading] = useState(true);
   const [selectingAccount, setSelectingAccount] = useState(false);
   const { canConnect, busy, startFacebookConnect } = useMetaChannelConnect();
+  const { enabled: mockEnabled } = useMetaMock();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -182,14 +284,27 @@ export default function FacebookAdsPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, mockEnabled]);
 
-  const snap = data?.status === 'ready' ? data.snapshot : null;
+  const realSnap = data?.status === 'ready' ? data.snapshot : null;
+  const snap = realSnap ?? (mockEnabled ? getFacebookAdsMockSnapshot() : null);
+  const mockMetricsOnly = Boolean(snap && !realSnap && mockEnabled);
   const period = data?.periodLabel || 'Last 7 days';
   const attribution = data?.attributionLabel || '7-day click / 1-day view';
   const subtitle = `${period} · ${attribution}. This spend is Meta’s. It is not added to your Samyoj plan, and this page cannot create or pause an ad.`;
-  const accountRows = accounts?.accounts || [];
-  const selectedId = accounts?.selectedAccountId || snap?.adAccountId || '';
+  const mockAccounts = mockEnabled ? getFacebookAdsMockAccounts() : null;
+  const accountRows =
+    accounts?.accounts?.length ? accounts.accounts : mockEnabled ? mockAccounts?.accounts || [] : [];
+  const selectedId =
+    accounts?.selectedAccountId || snap?.adAccountId || mockAccounts?.selectedAccountId || '';
+  const adsManagerHref =
+    data?.adsManagerUrl ||
+    (mockEnabled
+      ? 'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=123456789012345'
+      : '');
+  const displayPageName = pageName || (mockEnabled ? 'Samyoj' : null);
+  const showPerformance = Boolean(snap) && (!loading || mockEnabled);
+  const useMockAccountUi = mockEnabled && !accounts?.accounts?.length;
 
   const metrics = snap
     ? [
@@ -229,27 +344,53 @@ export default function FacebookAdsPage() {
   return (
     <PageShell>
       <div className="fads-page mx-auto w-full max-w-6xl px-1 pb-8">
-        <header className={`flex items-start justify-between gap-4 ${snap ? 'fads-header px-4 py-4 sm:px-5' : ''}`}>
+        <header className={`flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start ${snap ? 'fads-header px-4 py-4 sm:px-5' : ''}`}>
           <div className="flex min-w-0 items-start gap-3">
             <span className="fads-mark mt-0.5 shrink-0">
               <Facebook className="h-4 w-4" strokeWidth={2} />
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#1877F2]">Facebook · read only</p>
-              <h2 className="mt-0.5 text-[22px] font-extrabold tracking-[-0.03em] text-[var(--fads-ink)]">Ads performance</h2>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                <h2 className="text-[22px] font-extrabold tracking-[-0.03em] text-[var(--fads-ink)]">Ads performance</h2>
+                {mockMetricsOnly ? (
+                  <span className="rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[11px] font-bold text-[#1877F2]">Sample metrics</span>
+                ) : null}
+              </div>
               <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-[var(--fads-muted)]">{subtitle}</p>
             </div>
           </div>
-          {snap && data?.adsManagerUrl ? <AdsManagerLink href={data.adsManagerUrl} /> : null}
+          {snap && adsManagerHref ? <AdsManagerLink href={adsManagerHref} /> : null}
         </header>
+        <MetaMockNotice />
 
-        {loading && (
-          <div className="flex justify-center py-16 text-[var(--fads-muted)]">
-            <Loader2 className="h-5 w-5 animate-spin" />
+        <details className="fads-card fads-disclosure mt-4">
+          <summary className="fads-disclosure-trigger">
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span className="fads-disclosure-mark" aria-hidden>
+                <CircleHelp className="h-4 w-4" strokeWidth={1.75} />
+              </span>
+              <span className="text-[14px] font-bold text-[var(--fads-ink)]">What you can do here</span>
+            </span>
+            <ChevronDown className="fads-disclosure-chevron h-4 w-4 shrink-0 text-[var(--fads-muted)]" strokeWidth={2} />
+          </summary>
+          <div className="fads-disclosure-body px-4 py-3.5 text-[13px] leading-relaxed text-[var(--fads-muted)] sm:px-5">
+            <ul className="list-disc space-y-1.5 pl-4 text-[var(--fads-ink)]">
+              <li>Read spend, impressions, clicks, and Meta-reported leads for the connected ad account.</li>
+              <li>Open Ads Manager to create, edit, or pause campaigns (Samyoj does not change ads).</li>
+              <li>Switch ad accounts when your Page has access to more than one.</li>
+            </ul>
+            <p className="mt-3 font-semibold text-[var(--fads-ink)]">Not available in Samyoj</p>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              <li>Creating ads, budgets, or audiences inside this app.</li>
+              <li>Billing — Meta invoices ad spend separately from your Samyoj plan.</li>
+            </ul>
           </div>
-        )}
+        </details>
 
-        {!loading && !snap && data?.status === 'no_page' && (
+        {loading && !showPerformance ? <FacebookAdsMetricsSkeleton /> : null}
+
+        {!loading && !snap && !mockEnabled && data?.status === 'no_page' && (
           <Guide
             title="Connect a Facebook Page first"
             body="Ads numbers come from the Page you connect. This screen never creates or pauses an ad."
@@ -271,7 +412,7 @@ export default function FacebookAdsPage() {
           />
         )}
 
-        {!loading && !snap && data?.status === 'needs_permission' && (
+        {!loading && !snap && !mockEnabled && data?.status === 'needs_permission' && (
           <Guide
             title="Ads read is not granted yet"
             body="Meta has not given this app permission to read Ads Manager. WhatsApp keeps working. This page does not invent ₹0 spend."
@@ -293,7 +434,7 @@ export default function FacebookAdsPage() {
           />
         )}
 
-        {!loading && !snap && (data?.status === 'error' || !data) && (
+        {!loading && !snap && !mockEnabled && (data?.status === 'error' || !data) && (
           <Guide
             title="Could not read Ads Manager"
             body="The last read failed. Numbers stay hidden until a fresh read succeeds."
@@ -310,7 +451,7 @@ export default function FacebookAdsPage() {
           />
         )}
 
-        {!loading && !snap && data?.status === 'no_account' && (
+        {!loading && !snap && !mockEnabled && data?.status === 'no_account' && (
           <Guide
             title="No ad account is shared with this Page"
             body="Until Insights returns a number, this page stays empty on purpose."
@@ -333,7 +474,7 @@ export default function FacebookAdsPage() {
           />
         )}
 
-        {!loading && !snap && data?.adsManagerUrl ? (
+        {!loading && !snap && !mockEnabled && data?.adsManagerUrl ? (
           <div className="mt-4">
             <AdsManagerLink
               href={data.adsManagerUrl}
@@ -342,14 +483,31 @@ export default function FacebookAdsPage() {
           </div>
         ) : null}
 
-        {!loading && snap && (
+        {showPerformance && (
           <PerformanceBoard
             period={period}
             attribution={attribution}
             metrics={metrics}
-            pageName={pageName}
+            pageName={displayPageName}
+            showMockCampaigns={mockEnabled}
             accountControl={
-              accountRows.length > 1 ? (
+              useMockAccountUi && accountRows.length > 1 ? (
+                <select
+                  className="w-full rounded-xl border border-[var(--fads-line)] bg-white px-3 py-2.5 text-[13px] font-medium text-[var(--fads-ink)] outline-none focus:border-[#1877F2]"
+                  value={selectedId}
+                  disabled
+                >
+                  {accountRows.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {accountLabel(account)}
+                    </option>
+                  ))}
+                </select>
+              ) : useMockAccountUi ? (
+                <p className="rounded-xl border border-[var(--fads-line)] px-3 py-2.5 text-[13px] font-medium text-[var(--fads-ink)]">
+                  {accountRows[0] ? accountLabel(accountRows[0]) : 'Samyoj Marketing (123456789012345)'}
+                </p>
+              ) : accountRows.length > 1 ? (
                 <label className="block">
                   <span className="sr-only">Ad account</span>
                   <select
@@ -380,7 +538,7 @@ export default function FacebookAdsPage() {
                 </label>
               ) : (
                 <p className="rounded-xl border border-[var(--fads-line)] px-3 py-2.5 text-[13px] font-medium text-[var(--fads-ink)]">
-                  {accountRows[0] ? accountLabel(accountRows[0]) : snap.adAccountId.replace(/^act_/, '')}
+                  {accountRows[0] ? accountLabel(accountRows[0]) : (snap?.adAccountId || '').replace(/^act_/, '')}
                 </p>
               )
             }

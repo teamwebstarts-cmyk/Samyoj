@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { StickyNote, Trash2 } from 'lucide-react';
+import { StickyNote, X } from 'lucide-react';
+import { softLabelPillCloseClassName } from './details/DetailsSectionCard';
 import AppTextarea from '../ui/AppTextarea';
 import {
   DetailsSectionCard,
@@ -88,6 +89,7 @@ interface ConversationNotesSectionProps {
   currentUserId?: string;
   conversationId?: string | null;
   onAddNote?: (content: string) => Promise<InternalNote>;
+  onDeleteNote?: (noteId: string) => Promise<void>;
   allowDeleteNotes?: boolean;
 }
 
@@ -97,6 +99,7 @@ export default function ConversationNotesSection({
   currentUserId,
   conversationId,
   onAddNote,
+  onDeleteNote,
   allowDeleteNotes = true,
 }: ConversationNotesSectionProps) {
   const tipFor = useGlassTipProps();
@@ -140,7 +143,11 @@ export default function ConversationNotesSection({
   const handleDeleteNote = async (noteId: string) => {
     setDeletingNoteId(noteId);
     try {
-      await inboxApi.deleteNote(noteId);
+      if (onDeleteNote) {
+        await onDeleteNote(noteId);
+      } else {
+        await inboxApi.deleteNote(noteId);
+      }
       onNotesChange(notes.filter((n) => n.id !== noteId));
     } catch {
       toastError('Could not delete note');
@@ -215,23 +222,21 @@ export default function ConversationNotesSection({
             return (
               <div
                 key={note.id}
-                className="rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 dark:border-neutral-700/60 dark:bg-neutral-900/55"
+                className="relative rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 pr-9 dark:border-neutral-700/60 dark:bg-neutral-900/55"
               >
-                <div className="flex items-start gap-2">
-                  <CollapsibleNoteText content={body} />
-                  {canDelete && (
-                    <button
-                      type="button"
-                      disabled={deletingNoteId === note.id}
-                      onClick={() => void handleDeleteNote(note.id)}
-                      aria-label="Delete note"
-                      {...tipFor('Delete note')}
-                      className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/70 hover:text-red-600 disabled:opacity-50 dark:hover:bg-neutral-800"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
+                {canDelete && (
+                  <button
+                    type="button"
+                    disabled={deletingNoteId === note.id}
+                    onClick={() => void handleDeleteNote(note.id)}
+                    aria-label="Delete note"
+                    {...tipFor('Delete note')}
+                    className={`absolute right-2 top-2 ${softLabelPillCloseClassName} text-slate-500 disabled:opacity-50`}
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </button>
+                )}
+                <CollapsibleNoteText content={body} />
                 <p className="mt-1.5 text-[10.5px] font-medium text-theme-muted">
                   {formatNoteMeta(note)}
                 </p>

@@ -1,4 +1,8 @@
-type HeroImageId = 'inbox-empty-hero' | 'calls-empty-hero';
+type HeroImageId =
+  | 'inbox-empty-hero'
+  | 'instagram-inbox-empty-hero'
+  | 'messenger-inbox-empty-hero'
+  | 'calls-empty-hero';
 
 interface EmptyStateHeroImageProps {
   id: HeroImageId;

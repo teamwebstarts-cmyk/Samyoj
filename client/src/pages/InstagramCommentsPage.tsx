@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   Check,
+  ChevronDown,
+  CircleHelp,
   EyeOff,
   Inbox,
   Instagram,
@@ -9,14 +12,17 @@ import {
   UserRound,
   Loader2,
   MessageSquare,
-  MoreHorizontal,
+  RefreshCw,
   Search,
   SendHorizontal,
   Settings2,
+  Trash2,
+  Play,
   X,
   Zap,
 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
+import Pagination from '../components/ui/Pagination';
 import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
 import { instagramApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -24,16 +30,53 @@ import { getErrorMessage } from '../utils/errors';
 import { useSocket } from '../hooks/useSocket';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import './instagram-comments.css';
+import { useMetaMock } from '../contexts/MetaMockContext';
+import MetaMockNotice from '../components/meta/MetaMockNotice';
+import InstagramCommentsListSkeleton from '../components/instagram/InstagramCommentsListSkeleton';
+import { getInstagramMockComments, isMetaMockId, mergeById } from '../utils/metaMockData';
+import { useFocusTrap } from '../hooks/inboxA11y';
+
+function lockAppBackgroundScroll(): () => void {
+  const main = document.querySelector('.app-main-scroll') as HTMLElement | null;
+  const prevBody = document.body.style.overflow;
+  const prevMain = main?.style.overflow ?? '';
+  const prevTouch = main?.style.touchAction ?? '';
+  document.body.style.overflow = 'hidden';
+  if (main) {
+    main.style.overflow = 'hidden';
+    main.style.touchAction = 'none';
+  }
+  return () => {
+    document.body.style.overflow = prevBody;
+    if (main) {
+      main.style.overflow = prevMain;
+      main.style.touchAction = prevTouch;
+    }
+  };
+}
+
+type CommentMedia = {
+  igMediaId?: string;
+  mediaType?: string | null;
+  thumbnailUrl?: string | null;
+  permalink?: string | null;
+  caption?: string | null;
+};
 
 type CommentRow = {
   id: string;
   igCommentId?: string;
   igMediaId?: string | null;
+  media?: CommentMedia | null;
   fromUsername: string | null;
   text: string;
   commentedAt: string;
   hidden: boolean;
   privateReplySentAt: string | null;
+  privateReplyText?: string | null;
+  publicReplySentAt?: string | null;
+  publicReplyText?: string | null;
+  inboxConversationId?: string | null;
   privateReplyOpen: boolean;
 };
 
@@ -73,10 +116,73 @@ function avatarColor(name: string | null): string {
   return AVATAR_COLORS[hash];
 }
 
+function isVideoMedia(mediaType: string | null | undefined): boolean {
+  const t = (mediaType || '').toUpperCase();
+  return t === 'VIDEO' || t === 'REEL' || t === 'REELS';
+}
+
+function IgMediaThumb({
+  media,
+  igMediaId,
+  size = 'sm',
+  link = true,
+}: {
+  media?: CommentMedia | null;
+  igMediaId?: string | null;
+  size?: 'sm' | 'lg' | 'detail';
+  link?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const dims = size === 'detail' ? 'h-24 w-24' : size === 'lg' ? 'h-12 w-12' : 'h-10 w-10';
+  const url = media?.thumbnailUrl;
+  const show = igMediaId || url;
+  if (!show) return null;
+
+  const fallback = (
+    <span
+      className={`flex ${dims} items-center justify-center ${size === 'detail' ? 'rounded-xl' : 'rounded-lg'} bg-gradient-to-br from-[#F9CE34] via-[#EE2A7B] to-[#6228D7] text-white`}
+    >
+      <Instagram className={size === 'lg' || size === 'detail' ? 'h-5 w-5' : 'h-4 w-4'} />
+    </span>
+  );
+
+  const thumb =
+    url && !failed ? (
+      <span className={`relative block ${dims} overflow-hidden ${size === 'detail' ? 'rounded-xl' : 'rounded-lg'} bg-neutral-100`}>
+        <img
+          src={url}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
+        {isVideoMedia(media?.mediaType) ? (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25">
+            <Play className="h-4 w-4 fill-white text-white" />
+          </span>
+        ) : null}
+      </span>
+    ) : (
+      fallback
+    );
+
+  if (link && media?.permalink) {
+    return (
+      <a href={media.permalink} target="_blank" rel="noopener noreferrer" title="Open on Instagram" className="shrink-0">
+        {thumb}
+      </a>
+    );
+  }
+  return <span className="shrink-0">{thumb}</span>;
+}
+
+const COMMENT_PAGE_SIZE = 25;
+
 const FACTS = [
   { title: 'Who can open this', line: 'Anyone signed in to this organization.', icon: UserRound, tint: 'bg-sky-50 text-sky-600' },
   { title: 'Hide & reply use', line: 'The Facebook Page linked to Instagram.', icon: Link2, tint: 'bg-indigo-50 text-indigo-500' },
-  { title: 'Private reply', line: 'One message within 7 days. Then the chat is in DMs.', icon: MessageSquare, tint: 'bg-violet-50 text-violet-500' },
+  { title: 'Private reply', line: 'One message within 7 days. It also shows in Instagram Inbox.', icon: MessageSquare, tint: 'bg-violet-50 text-violet-500' },
 ] as const;
 
 export default function InstagramCommentsPage() {
@@ -87,21 +193,32 @@ export default function InstagramCommentsPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [page, setPage] = useState(1);
+  const [syncing, setSyncing] = useState(false);
+  const [newerOnFirstPage, setNewerOnFirstPage] = useState(false);
   const debouncedQ = useDebouncedValue(q);
   const [draft, setDraft] = useState('');
+  const [publicDraft, setPublicDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [focusReply, setFocusReply] = useState(0);
-  const [menuId, setMenuId] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
+  const [mockCommentPatch, setMockCommentPatch] = useState<Record<string, Partial<CommentRow>>>({});
   const [, setTick] = useState(0);
   const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
+  const { enabled: mockEnabled } = useMetaMock();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = {
+        page: String(page),
+        limit: String(COMMENT_PAGE_SIZE),
+      };
       if (debouncedQ.trim()) params.q = debouncedQ.trim();
+      if (filter !== 'all') params.status = filter === 'sent' ? 'sent' : filter;
       const { data } = await instagramApi.comments.list(params);
       const payload = data.data as {
         connected?: boolean;
@@ -109,7 +226,7 @@ export default function InstagramCommentsPage() {
         comments?: CommentRow[];
         total?: number;
       };
-      setConnected(Boolean(payload.connected));
+      setConnected(Boolean(payload.connected) || (mockEnabled && getInstagramMockComments().length > 0));
       setAccountName(payload.account?.name || null);
       setComments(payload.comments || []);
       setTotal(payload.total || 0);
@@ -120,7 +237,7 @@ export default function InstagramCommentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedQ]);
+  }, [debouncedQ, filter, mockEnabled, page]);
 
   useEffect(() => {
     void load();
@@ -128,6 +245,7 @@ export default function InstagramCommentsPage() {
 
   useSocket((event) => {
     if (event !== 'instagram:comment') return;
+    if (page > 1) setNewerOnFirstPage(true);
     void load();
   });
 
@@ -142,9 +260,14 @@ export default function InstagramCommentsPage() {
     }
   }, [comments, selectedId]);
 
-  const source = comments;
+  const source = useMemo(() => {
+    const base = mockEnabled ? mergeById(comments, getInstagramMockComments()) : comments;
+    if (!mockEnabled) return base;
+    return base.map((row) => (mockCommentPatch[row.id] ? { ...row, ...mockCommentPatch[row.id] } : row));
+  }, [comments, mockEnabled, mockCommentPatch]);
 
   const visible = useMemo(() => {
+    if (!mockEnabled) return source;
     const query = debouncedQ.trim().toLowerCase();
     return source.filter((comment) => {
       if (query && !`${comment.fromUsername || ''} ${comment.text}`.toLowerCase().includes(query)) return false;
@@ -153,19 +276,45 @@ export default function InstagramCommentsPage() {
       if (filter === 'open') return comment.privateReplyOpen && !comment.hidden;
       return true;
     });
-  }, [source, filter, debouncedQ]);
+  }, [source, filter, debouncedQ, mockEnabled]);
+
+  const syncOlder = async () => {
+    setSyncing(true);
+    try {
+      const { data } = await instagramApi.comments.sync();
+      const inserted = Number((data.data as { inserted?: number }).inserted || 0);
+      toastSuccess(inserted > 0 ? `Added ${inserted} older comments` : 'No older comments to add');
+      setNewerOnFirstPage(false);
+      if (page === 1) await load();
+      else setPage(1);
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not load older comments');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const selected = visible.find((c) => c.id === selectedId) || source.find((c) => c.id === selectedId) || null;
 
   useEffect(() => {
     setDraft('');
-    setMenuId(null);
+    setPublicDraft('');
   }, [selectedId]);
 
   const sendReply = async (id: string) => {
     const text = draft.trim();
     if (!text) return;
     setBusyId(id);
+    if (isMetaMockId(id)) {
+      setMockCommentPatch((prev) => ({
+        ...prev,
+        [id]: { privateReplySentAt: new Date().toISOString(), privateReplyOpen: false },
+      }));
+      setDraft('');
+      toastSuccess('Sample comment — reply not sent to Instagram');
+      setBusyId(null);
+      return;
+    }
     try {
       const { data } = await instagramApi.comments.privateReply(id, text);
       setComments((prev) =>
@@ -180,9 +329,44 @@ export default function InstagramCommentsPage() {
     }
   };
 
-  const hide = async (id: string, next: boolean) => {
-    setMenuId(null);
+  const sendPublic = async (id: string) => {
+    const text = publicDraft.trim();
+    if (!text) return;
     setBusyId(id);
+    if (isMetaMockId(id)) {
+      setMockCommentPatch((prev) => ({
+        ...prev,
+        [id]: { publicReplySentAt: new Date().toISOString(), publicReplyText: text },
+      }));
+      setPublicDraft('');
+      toastSuccess('Sample comment — reply not posted on Instagram');
+      setBusyId(null);
+      return;
+    }
+    try {
+      const { data } = await instagramApi.comments.publicReply(id, text);
+      setComments((prev) => prev.map((c) => (c.id === id ? { ...c, ...(data.data as CommentRow) } : c)));
+      setPublicDraft('');
+      toastSuccess('Reply posted on the comment');
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not reply on the post');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const sendBoth = async (id: string) => {
+    if (publicDraft.trim()) await sendPublic(id);
+    if (draft.trim()) await sendReply(id);
+  };
+
+  const hide = async (id: string, next: boolean) => {
+    setBusyId(id);
+    if (isMetaMockId(id)) {
+      setMockCommentPatch((prev) => ({ ...prev, [id]: { hidden: next } }));
+      setBusyId(null);
+      return;
+    }
     try {
       const { data } = await instagramApi.comments.hide(id, next);
       setComments((prev) =>
@@ -195,13 +379,54 @@ export default function InstagramCommentsPage() {
     }
   };
 
+  useEffect(() => {
+    setCheckedIds((prev) => {
+      const onPage = new Set(visible.map((c) => c.id));
+      const next = new Set([...prev].filter((id) => onPage.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visible]);
+
+  const toggleChecked = (id: string) => {
+    if (isMetaMockId(id)) return;
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllOnPage = () => {
+    setCheckedIds(new Set(visible.filter((c) => !isMetaMockId(c.id)).map((c) => c.id)));
+  };
+
+  const clearChecked = () => setCheckedIds(new Set());
+
+  const deleteChecked = async () => {
+    const ids = [...checkedIds];
+    if (ids.length === 0 || deleteBusy) return;
+    if (!window.confirm(`Remove ${ids.length} comment${ids.length === 1 ? '' : 's'} from Samyoj? Instagram is unchanged.`)) {
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      const { data } = await instagramApi.comments.remove(ids);
+      const deleted = Number((data.data as { deleted?: number }).deleted || 0);
+      setCheckedIds(new Set());
+      if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+      toastSuccess(deleted > 0 ? `Removed ${deleted} from Samyoj` : 'Nothing removed');
+      await load();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not remove comments');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const openComment = (id: string, focus = false) => {
     setSelectedId(id);
     if (focus) setFocusReply((n) => n + 1);
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedId((current) => (current === id ? null : id));
   };
 
   const chips: Array<{ id: Filter; label: string }> = [
@@ -212,34 +437,30 @@ export default function InstagramCommentsPage() {
   ];
 
   const handle = accountName ? `@${accountName.replace(/^@/, '')}` : null;
-  const showList = !loading && visible.length > 0;
-  const showEmpty = !loading && comments.length === 0 && !debouncedQ.trim();
-  const showSearchEmpty = !loading && comments.length === 0 && Boolean(debouncedQ.trim());
+  const showCommentsSkeleton = loading && source.length === 0;
+  const showList = visible.length > 0 && !showCommentsSkeleton;
+  const showEmpty =
+    !loading && source.length === 0 && !debouncedQ.trim() && filter === 'all' && page === 1;
+  const showFilteredEmpty = !loading && source.length === 0 && !showEmpty;
 
   return (
     <PageShell>
-      <div className="igc-page pb-8">
-        <div className={`flex items-start gap-4 ${selected ? 'xl:items-start' : ''}`}>
+      <div className="igc-page pb-8 max-sm:pb-24">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
           <div className="min-w-0 flex-1">
-            <header className="igc-header flex items-start justify-between gap-3">
+            <header className="igc-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="igc-ig igc-header-mark flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]">
                   <Instagram className="h-[22px] w-[22px]" strokeWidth={1.75} />
                 </span>
-                <div className="min-w-0 pt-0.5">
-                  <p className="text-[22px] font-extrabold leading-none tracking-[-0.03em] text-[var(--igc-ink)]">
-                    Comments
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="igc-ig flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold">
-                      {(accountName || 'IG').slice(0, 1).toUpperCase()}
-                    </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     {handle ? (
                       <span className="text-[14px] font-bold leading-none text-[var(--igc-ink)]">{handle}</span>
                     ) : null}
                     {connected ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#E9F9EF] px-2 py-0.5 text-[11px] font-bold leading-none text-[#178A48]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#1F9D55]" />
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF0F6] px-2 py-0.5 text-[11px] font-bold leading-none text-[#C13584]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#E1306C]" />
                         Connected
                       </span>
                     ) : null}
@@ -249,37 +470,61 @@ export default function InstagramCommentsPage() {
                   </p>
                 </div>
               </div>
-              <Link
-                to="/settings?tab=instagram"
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[var(--igc-line)] bg-white px-3 text-[12.5px] font-semibold text-[var(--igc-ink)]"
-              >
-                <Settings2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Instagram in Settings
-              </Link>
-            </header>
-
-            <section className="igc-card mt-4 px-4 py-3.5 sm:px-5">
-              <h3 className="text-[14px] font-bold text-[var(--igc-ink)]">How comments work</h3>
-              <div className="mt-3 grid gap-3 md:grid-cols-3 md:gap-0">
-                {FACTS.map((fact, index) => {
-                  const Icon = fact.icon;
-                  return (
-                    <div
-                      key={fact.title}
-                      className={`flex gap-3 md:px-4 ${index > 0 ? 'md:border-l md:border-[var(--igc-line)]' : 'md:pl-0'}`}
-                    >
-                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${fact.tint}`}>
-                        <Icon className="h-4 w-4" strokeWidth={1.75} />
-                      </span>
-                      <div>
-                        <p className="text-[13px] font-bold text-[var(--igc-ink)]">{fact.title}</p>
-                        <p className="mt-0.5 text-[12px] leading-snug text-[var(--igc-muted)]">{fact.line}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="igc-header-actions grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end">
+                {connected ? (
+                  <button
+                    type="button"
+                    disabled={syncing}
+                    onClick={() => void syncOlder()}
+                    className="inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--igc-line)] bg-white px-2.5 text-[12px] font-semibold text-[var(--igc-ink)] disabled:opacity-50 sm:px-3 sm:text-[12.5px]"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${syncing ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+                    <span className="truncate">{syncing ? 'Loading…' : 'Load older'}</span>
+                  </button>
+                ) : null}
+                <Link
+                  to="/settings?tab=instagram"
+                  className="inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--igc-line)] bg-white px-2.5 text-[12px] font-semibold text-[var(--igc-ink)] sm:px-3 sm:text-[12.5px]"
+                >
+                  <Settings2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                  <span className="truncate">Settings</span>
+                </Link>
               </div>
-            </section>
+            </header>
+            <MetaMockNotice />
+
+            <details className="igc-card igc-disclosure mt-4">
+              <summary className="igc-disclosure-trigger">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="igc-disclosure-mark" aria-hidden>
+                    <CircleHelp className="h-4 w-4" strokeWidth={1.75} />
+                  </span>
+                  <span className="text-[14px] font-bold text-[var(--igc-ink)]">How comments work</span>
+                </span>
+                <ChevronDown className="igc-disclosure-chevron h-4 w-4 shrink-0 text-[var(--igc-muted)]" strokeWidth={2} />
+              </summary>
+              <div className="igc-disclosure-body px-4 py-3.5 sm:px-5">
+                <div className="grid gap-3 md:grid-cols-3 md:gap-0">
+                  {FACTS.map((fact, index) => {
+                    const Icon = fact.icon;
+                    return (
+                      <div
+                        key={fact.title}
+                        className={`flex gap-3 md:px-4 ${index > 0 ? 'md:border-l md:border-[var(--igc-line)]' : 'md:pl-0'}`}
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${fact.tint}`}>
+                          <Icon className="h-4 w-4" strokeWidth={1.75} />
+                        </span>
+                        <div>
+                          <p className="text-[13px] font-bold text-[var(--igc-ink)]">{fact.title}</p>
+                          <p className="mt-0.5 text-[12px] leading-snug text-[var(--igc-muted)]">{fact.line}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
 
             <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
               <label className="relative min-w-0 flex-1">
@@ -288,22 +533,31 @@ export default function InstagramCommentsPage() {
                 <input
                   id="instagram-comment-search"
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Search name or text"
                   className="h-10 w-full rounded-xl border border-[var(--igc-line)] bg-white pl-9 pr-3 text-[13.5px] text-[var(--igc-ink)] outline-none placeholder:text-neutral-400 focus:border-[var(--igc-green)]"
                 />
               </label>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="igc-filter-scroll flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] lg:flex-wrap lg:overflow-visible [&::-webkit-scrollbar]:hidden">
                 {chips.map((chip) => {
                   const active = filter === chip.id;
                   return (
                     <button
                       key={chip.id}
                       type="button"
-                      onClick={() => setFilter(chip.id)}
-                      className={`h-9 rounded-full px-3.5 text-[12.5px] font-semibold ${
+                      onClick={() => {
+                        setFilter(chip.id);
+                        setPage(1);
+                        setNewerOnFirstPage(false);
+                      }}
+                      className={`igc-filter-chip h-9 shrink-0 rounded-xl px-3.5 text-[12.5px] font-semibold igc-filter-chip--${chip.id} ${
                         active
-                          ? 'bg-[var(--igc-green)] text-white'
+                          ? `igc-filter-chip--active text-white shadow-sm ${
+                              chip.id === 'all' ? 'bg-[var(--igc-green)]' : ''
+                            }`
                           : 'border border-[var(--igc-line)] bg-white text-[var(--igc-ink)]'
                       }`}
                     >
@@ -319,11 +573,34 @@ export default function InstagramCommentsPage() {
               ) : null}
             </div>
 
-            {loading && (
-              <div className="igc-card mt-3 flex justify-center py-16 text-[var(--igc-muted)]">
-                <Loader2 className="h-5 w-5 animate-spin" />
+            {checkedIds.size > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--igc-line)] bg-white px-3 py-2.5">
+                <span className="text-[12.5px] font-semibold text-[var(--igc-ink)]">
+                  {checkedIds.size} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={selectAllOnPage}
+                  className="text-[12px] font-bold text-[var(--igc-green-deep)]"
+                >
+                  Select page
+                </button>
+                <button type="button" onClick={clearChecked} className="text-[12px] font-semibold text-[var(--igc-muted)]">
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteBusy}
+                  onClick={() => void deleteChecked()}
+                  className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-[12px] font-bold text-red-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  {deleteBusy ? 'Removing…' : 'Remove from Samyoj'}
+                </button>
               </div>
-            )}
+            ) : null}
+
+            {showCommentsSkeleton ? <InstagramCommentsListSkeleton /> : null}
 
             {showEmpty && (
               <EmptyState
@@ -334,9 +611,22 @@ export default function InstagramCommentsPage() {
               />
             )}
 
-            {(showSearchEmpty || (!loading && source.length > 0 && visible.length === 0)) && (
+            {newerOnFirstPage && page > 1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPage(1);
+                  setNewerOnFirstPage(false);
+                }}
+                className="mt-3 w-full rounded-xl border border-[var(--igc-line)] bg-white px-3 py-2 text-[12.5px] font-semibold text-[var(--igc-green-deep)]"
+              >
+                New comments are on the first page
+              </button>
+            ) : null}
+
+            {showFilteredEmpty && (
               <p className="igc-card mt-3 px-4 py-10 text-center text-[13px] text-[var(--igc-muted)]">
-                None here.
+                None on this page. Try another filter, or load older comments from Instagram.
               </p>
             )}
 
@@ -346,46 +636,70 @@ export default function InstagramCommentsPage() {
                   <CommentListRow
                     key={comment.id}
                     comment={comment}
-                    selected={selectedId === comment.id}
+                    detailOpen={selectedId === comment.id}
+                    checked={checkedIds.has(comment.id)}
                     busy={busyId === comment.id}
-                    menuOpen={menuId === comment.id}
                     onOpen={() => openComment(comment.id)}
-                    onToggle={() => toggleSelect(comment.id)}
+                    onCheck={() => toggleChecked(comment.id)}
                     onReply={() => openComment(comment.id, true)}
-                    onToggleMenu={() => setMenuId((id) => (id === comment.id ? null : comment.id))}
                     onHide={(next) => void hide(comment.id, next)}
-                    onCopyId={() => {
-                      const value = comment.igCommentId || comment.id;
-                      void navigator.clipboard?.writeText(value).then(
-                        () => toastSuccess('Comment ID copied'),
-                        () => toastError('Could not copy comment ID')
-                      );
-                      setMenuId(null);
-                    }}
                   />
                 ))}
               </ul>
             )}
 
             {showList ? (
-              <p className="mt-3 text-[12px] text-[var(--igc-muted)]">
-                Showing 1 to {visible.length} of {Math.max(total, source.length)}
-              </p>
+              <Pagination
+                className="mt-3 overflow-hidden rounded-2xl"
+                page={page}
+                pageSize={COMMENT_PAGE_SIZE}
+                total={Math.max(total, source.length)}
+                itemLabel="comments"
+                variant="numbered"
+                onPageChange={(next) => {
+                  setPage(next);
+                  if (next === 1) setNewerOnFirstPage(false);
+                }}
+              />
             ) : null}
           </div>
 
           {selected ? (
-            <CommentDetails
-              key={selected.id}
-              comment={selected}
-              draft={draft}
-              busy={busyId === selected.id}
-              onDraft={setDraft}
-              onClose={() => setSelectedId(null)}
-              onHide={(next) => void hide(selected.id, next)}
-              focusReply={focusReply}
-              onSend={() => void sendReply(selected.id)}
-            />
+            <>
+              <div className="hidden xl:block igc-detail-stick">
+                <CommentDetails
+                  comment={selected}
+                  draft={draft}
+                  publicDraft={publicDraft}
+                  busy={busyId === selected.id}
+                  onDraft={setDraft}
+                  onPublicDraft={setPublicDraft}
+                  onClose={() => setSelectedId(null)}
+                  onHide={(next) => void hide(selected.id, next)}
+                  focusReply={focusReply}
+                  onSend={() => void sendReply(selected.id)}
+                  onSendPublic={() => void sendPublic(selected.id)}
+                  onSendBoth={() => void sendBoth(selected.id)}
+                />
+              </div>
+              <div className="xl:hidden">
+                <CommentDetails
+                  comment={selected}
+                  draft={draft}
+                  publicDraft={publicDraft}
+                  busy={busyId === selected.id}
+                  onDraft={setDraft}
+                  onPublicDraft={setPublicDraft}
+                  onClose={() => setSelectedId(null)}
+                  onHide={(next) => void hide(selected.id, next)}
+                  focusReply={focusReply}
+                  onSend={() => void sendReply(selected.id)}
+                  onSendPublic={() => void sendPublic(selected.id)}
+                  onSendBoth={() => void sendBoth(selected.id)}
+                  mobileSheet
+                />
+              </div>
+            </>
           ) : null}
         </div>
       </div>
@@ -482,55 +796,52 @@ function EmptyState({
 }
 
 function statusPill(status: RowStatus) {
-  if (status === 'open') {
-    return <span className="rounded-full bg-[#FDE8EE] px-2.5 py-1 text-[11px] font-bold text-[#E11D48]">Need reply</span>;
-  }
-  if (status === 'sent') {
-    return <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-[var(--igc-green-deep)]">Replied</span>;
-  }
-  if (status === 'hidden') {
-    return <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold text-neutral-500">Hidden</span>;
-  }
-  return <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold text-neutral-500">Closed</span>;
+  const map: Record<RowStatus, { className: string; label: string }> = {
+    open: { className: 'igc-pill igc-pill--open', label: 'Need reply' },
+    sent: { className: 'igc-pill igc-pill--sent', label: 'Replied' },
+    hidden: { className: 'igc-pill igc-pill--hidden', label: 'Hidden' },
+    closed: { className: 'igc-pill igc-pill--closed', label: 'Closed' },
+  };
+  const { className, label } = map[status];
+  return <span className={className}>{label}</span>;
 }
 
 function CommentListRow({
   comment,
-  selected,
+  detailOpen,
+  checked,
   busy,
-  menuOpen,
   onOpen,
-  onToggle,
+  onCheck,
   onReply,
-  onToggleMenu,
   onHide,
-  onCopyId,
 }: {
   comment: CommentRow;
-  selected: boolean;
+  detailOpen: boolean;
+  checked: boolean;
   busy: boolean;
-  menuOpen: boolean;
   onOpen: () => void;
-  onToggle: () => void;
+  onCheck: () => void;
   onReply: () => void;
-  onToggleMenu: () => void;
   onHide: (next: boolean) => void;
-  onCopyId: () => void;
 }) {
   const status = rowStatus(comment);
   const name = comment.fromUsername || 'unknown';
 
   return (
-    <li className={selected ? 'bg-[#F3FBF6]' : 'bg-white'}>
+    <li className={detailOpen ? 'bg-[#FFF8FB]' : checked ? 'bg-[#FFF0F6]/40' : 'bg-white'}>
       <div className="igc-row">
         <button
           type="button"
           role="checkbox"
-          aria-checked={selected}
+          aria-checked={checked}
           aria-label={`Select comment from @${name}`}
-          onClick={onToggle}
-          className={`mx-auto flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border transition ${
-            selected ? 'border-[#1F9D55] bg-[#1F9D55] text-white' : 'border-neutral-300 bg-white text-transparent'
+          onClick={(e) => {
+            e.stopPropagation();
+            onCheck();
+          }}
+          className={`igc-row-check mx-auto flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border transition ${
+            checked ? 'border-[#C13584] bg-[#C13584] text-white' : 'border-neutral-300 bg-white text-transparent'
           }`}
         >
           <Check className="h-3 w-3" strokeWidth={3} />
@@ -538,44 +849,36 @@ function CommentListRow({
         <button
           type="button"
           onClick={onOpen}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-bold text-white"
+          className="igc-row-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--igc-line)] text-[11px] font-bold text-white"
           style={{ background: avatarColor(name) }}
           aria-label={`Open @${name}`}
         >
           {initials(name)}
         </button>
-        <button type="button" onClick={onOpen} className="min-w-0 text-left">
-          <span className="flex items-baseline gap-2">
-            <span className="truncate text-[13px] font-bold text-[var(--igc-ink)]">{name}</span>
-            <span className="shrink-0 text-[12px] text-[var(--igc-muted)]">{relativeTime(comment.commentedAt)}</span>
-          </span>
-          <span className="mt-0.5 block truncate text-[13.5px] text-[var(--igc-ink)]">{comment.text || '—'}</span>
-        </button>
-        <span className="igc-row-thumb hidden h-10 w-10 sm:block">
-          {comment.igMediaId ? (
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[#F9CE34] via-[#EE2A7B] to-[#6228D7] text-white">
-              <Instagram className="h-4 w-4" />
+        <button type="button" onClick={onOpen} className="igc-row-main min-w-0 text-left">
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-[13px] font-bold text-[var(--igc-ink)]">@{name.replace(/^@/, '')}</span>
+            <span className="shrink-0 text-[11px] text-[var(--igc-muted)] sm:text-[12px]">
+              {relativeTime(comment.commentedAt)}
             </span>
-          ) : null}
+          </span>
+          <span className="igc-row-preview mt-1 block text-[13px] leading-snug text-[var(--igc-ink)] sm:mt-0.5 sm:truncate sm:text-[13.5px]">
+            {comment.text || '—'}
+          </span>
+        </button>
+        <span className="igc-row-thumb h-10 w-10 shrink-0">
+          <IgMediaThumb media={comment.media} igMediaId={comment.igMediaId} size="sm" />
         </span>
         <span className="igc-row-status igc-status">{statusPill(status)}</span>
         <div className="igc-row-actions">
           {status === 'open' ? (
-            <button
-              type="button"
-              onClick={onReply}
-              className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white text-[12px] font-bold text-[var(--igc-green-deep)]"
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
+            <button type="button" onClick={onReply} className="igc-btn-action igc-btn-action--dm">
+              <MessageSquare className="h-3.5 w-3.5" strokeWidth={2.25} />
               Reply in DM
             </button>
           ) : status === 'sent' ? (
-            <button
-              type="button"
-              onClick={onOpen}
-              className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white text-[12px] font-bold text-[var(--igc-green-deep)]"
-            >
-              <Check className="h-3.5 w-3.5" />
+            <button type="button" onClick={onOpen} className="igc-btn-action igc-btn-action--view">
+              <Check className="h-3.5 w-3.5" strokeWidth={2.25} />
               View reply
             </button>
           ) : (
@@ -585,32 +888,11 @@ function CommentListRow({
             type="button"
             disabled={busy}
             onClick={() => onHide(!comment.hidden)}
-            className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg text-[12px] font-semibold text-[var(--igc-muted)] hover:bg-neutral-50"
+            className="igc-btn-hide inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg text-[12px] font-semibold text-[var(--igc-muted)] hover:bg-neutral-50"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />}
             {comment.hidden ? 'Unhide' : 'Hide'}
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="More actions"
-              onClick={onToggleMenu}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--igc-muted)] hover:bg-neutral-50"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {menuOpen ? (
-              <div className="absolute right-0 z-10 mt-1 w-40 rounded-xl border border-[var(--igc-line)] bg-white p-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={onCopyId}
-                  className="block w-full rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-[var(--igc-ink)] hover:bg-[var(--igc-wash)]"
-                >
-                  Copy comment ID
-                </button>
-              </div>
-            ) : null}
-          </div>
         </div>
       </div>
     </li>
@@ -620,94 +902,169 @@ function CommentListRow({
 function CommentDetails({
   comment,
   draft,
+  publicDraft,
   busy,
   focusReply,
   onDraft,
+  onPublicDraft,
   onClose,
   onHide,
   onSend,
+  onSendPublic,
+  onSendBoth,
+  mobileSheet = false,
 }: {
   comment: CommentRow;
   draft: string;
+  publicDraft: string;
   busy: boolean;
   focusReply: number;
   onDraft: (value: string) => void;
+  onPublicDraft: (value: string) => void;
   onClose: () => void;
   onHide: (next: boolean) => void;
   onSend: () => void;
+  onSendPublic: () => void;
+  onSendBoth: () => void;
+  mobileSheet?: boolean;
 }) {
   const status = rowStatus(comment);
   const name = comment.fromUsername || 'unknown';
   const canReply = status === 'open';
   const replyRef = useRef<HTMLTextAreaElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+
+  useFocusTrap({
+    ref: sheetRef,
+    active: mobileSheet,
+    onEscape: onClose,
+  });
+
+  useEffect(() => {
+    if (!mobileSheet) return;
+    const unlock = lockAppBackgroundScroll();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      unlock();
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [mobileSheet, onClose]);
 
   useEffect(() => {
     if (!canReply || focusReply === 0) return;
     replyRef.current?.focus();
   }, [canReply, focusReply, comment.id]);
 
-  return (
-    <aside className="igc-card igc-panel fixed inset-x-3 bottom-3 z-30 max-h-[85dvh] overflow-y-auto p-4 shadow-xl xl:static xl:inset-auto xl:z-auto xl:mt-0 xl:w-[360px] xl:max-h-[calc(100dvh-8rem)] xl:shrink-0 xl:shadow-sm">
+  const panelClassName = mobileSheet
+    ? 'igc-card igc-panel igc-detail-sheet relative z-10 max-h-[min(88dvh,900px)] w-full overflow-y-auto overscroll-contain rounded-t-2xl border-b-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl'
+    : 'igc-card igc-panel w-full overflow-y-auto p-4 shadow-sm';
+
+  const panelBody = (
+    <aside
+      ref={sheetRef}
+      className={panelClassName}
+      role={mobileSheet ? 'dialog' : undefined}
+      aria-modal={mobileSheet ? true : undefined}
+      aria-labelledby={mobileSheet ? 'igc-detail-title' : undefined}
+      tabIndex={mobileSheet ? -1 : undefined}
+    >
       <div className="flex items-center justify-between">
-        <h3 className="text-[15px] font-extrabold text-[var(--igc-ink)]">Comment details</h3>
+        <h3 id="igc-detail-title" className="text-[15px] font-extrabold text-[var(--igc-ink)]">Comment details</h3>
         <button type="button" onClick={onClose} aria-label="Close comment details" className="rounded-lg p-1 text-[var(--igc-muted)] hover:bg-neutral-50">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="mt-4 flex items-center gap-2.5">
-        <span
-          className="flex h-10 w-10 items-center justify-center rounded-full text-[12px] font-bold text-white"
-          style={{ background: avatarColor(name) }}
-        >
-          {initials(name)}
-        </span>
-        <div>
-          <p className="text-[13.5px] font-bold text-[var(--igc-ink)]">{name}</p>
-          <p className="text-[12px] text-[var(--igc-muted)]">{relativeTime(comment.commentedAt)}</p>
-        </div>
-      </div>
-
-      <p className="mt-3 text-[14px] leading-relaxed text-[var(--igc-ink)]">{comment.text || '—'}</p>
-
-      {comment.igMediaId ? (
-        <div className="mt-3 flex items-center gap-3 rounded-xl border border-[var(--igc-line)] bg-[var(--igc-wash)] p-2.5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#F9CE34] via-[#EE2A7B] to-[#6228D7] text-white">
-            <Instagram className="h-5 w-5" />
+      <div className="mt-4 flex items-start gap-3">
+        <div className="flex min-w-0 flex-1 gap-2.5">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--igc-line)] text-[12px] font-bold text-white"
+            style={{ background: avatarColor(name) }}
+          >
+            {initials(name)}
           </span>
           <div className="min-w-0">
-            <p className="text-[13px] font-bold text-[var(--igc-ink)]">Post</p>
-            <p className="truncate text-[11px] text-[var(--igc-muted)]">Instagram</p>
+            <p className="text-[13.5px] font-bold text-[var(--igc-ink)]">{name}</p>
+            <p className="text-[12px] text-[var(--igc-muted)]">{relativeTime(comment.commentedAt)}</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--igc-ink)]">{comment.text || '—'}</p>
+            <div className="mt-2">{statusPill(status)}</div>
           </div>
         </div>
-      ) : null}
+        {comment.igMediaId ? (
+          comment.media?.permalink ? (
+            <a
+              href={comment.media.permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open post on Instagram"
+              aria-label="Open post on Instagram"
+              className="shrink-0 overflow-hidden rounded-xl border border-[var(--igc-line)] transition hover:border-[#F3D0E0] hover:shadow-sm"
+            >
+              <IgMediaThumb media={comment.media} igMediaId={comment.igMediaId} size="detail" link={false} />
+            </a>
+          ) : (
+            <span className="shrink-0 overflow-hidden rounded-xl border border-[var(--igc-line)]">
+              <IgMediaThumb media={comment.media} igMediaId={comment.igMediaId} size="detail" link={false} />
+            </span>
+          )
+        ) : null}
+      </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--igc-line)] pt-3 text-[12px]">
-        <div>
-          <dt className="text-[var(--igc-muted)]">Status</dt>
-          <dd className="mt-1">{statusPill(status)}</dd>
-        </div>
-        <div className="min-w-0 text-right">
-          <dt className="text-[var(--igc-muted)]">ID</dt>
-          <dd className="mt-1 truncate font-mono text-[11px] text-[var(--igc-ink)]">
-            {comment.igCommentId || comment.id}
-          </dd>
-        </div>
-      </dl>
+      <div className="mt-4 border-t border-[var(--igc-line)] pt-3">
+        <p className="text-[13px] font-bold text-[var(--igc-ink)]">Reply on the post</p>
+        <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">Public reply under their comment. One time only.</p>
+        {comment.publicReplySentAt ? (
+          <p className="mt-3 rounded-xl bg-[#FFF0F6] px-3 py-2 text-[12.5px] text-[var(--igc-ink)]">
+            {comment.publicReplyText || 'Reply posted on the comment.'}
+          </p>
+        ) : (
+          <>
+            <textarea
+              value={publicDraft}
+              onChange={(e) => onPublicDraft(e.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="e.g. Check your DMs"
+              aria-label={`Public reply to @${name}`}
+              className="mt-3 w-full resize-none rounded-xl border border-[var(--igc-line)] px-3 py-2 text-[13px] text-[var(--igc-ink)] outline-none focus:border-[var(--igc-green)]"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                disabled={busy || !publicDraft.trim()}
+                onClick={onSendPublic}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[var(--igc-line)] bg-white px-3.5 text-[12.5px] font-bold text-[var(--igc-ink)] disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
+                Post reply
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
-      <div className="mt-3 border-t border-[var(--igc-line)] pt-3">
-        <p className="text-[13px] font-bold text-[var(--igc-ink)]">Send private reply</p>
-        <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">One DM, within 7 days.</p>
-        {status === 'sent' ? (
-          <p className="mt-3 rounded-xl bg-[#FDE8EE] px-3 py-2 text-[12.5px] font-bold text-[#E11D48]">Reply sent. Waiting in DMs.</p>
+      <div className="mt-4 border-t border-[var(--igc-line)] pt-3">
+        <p className="text-[13px] font-bold text-[var(--igc-ink)]">Reply in DM</p>
+        <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">Private message in Instagram Inbox. Within 7 days.</p>
+        {comment.privateReplySentAt ? (
+          <div className="mt-3 space-y-2">
+            <p className="rounded-xl bg-[#FDE8EE] px-3 py-2 text-[12.5px] text-[var(--igc-ink)]">
+              {comment.privateReplyText || 'Reply sent. Waiting in DMs.'}
+            </p>
+            {comment.inboxConversationId ? (
+              <Link
+                to={`/instagram/inbox?thread=${comment.inboxConversationId}`}
+                className="inline-flex text-[12px] font-bold text-[var(--igc-green-deep)]"
+              >
+                Open in Instagram Inbox
+              </Link>
+            ) : null}
+          </div>
         ) : canReply ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              onSend();
-            }}
-            className="mt-3"
-          >
+          <>
             <textarea
               ref={replyRef}
               value={draft}
@@ -716,10 +1073,21 @@ function CommentDetails({
               maxLength={1000}
               placeholder="Private reply in their DMs"
               aria-label={`Private reply to @${name}`}
-              className="w-full resize-none rounded-xl border border-[var(--igc-line)] px-3 py-2 text-[13px] text-[var(--igc-ink)] outline-none focus:border-[var(--igc-green)]"
+              className="mt-3 w-full resize-none rounded-xl border border-[var(--igc-line)] px-3 py-2 text-[13px] text-[var(--igc-ink)] outline-none focus:border-[var(--igc-green)]"
             />
-            <p className="mt-1 text-right text-[11px] text-[var(--igc-muted)]">{draft.length}/1000</p>
-          </form>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-[var(--igc-muted)]">{draft.length}/1000</p>
+              <button
+                type="button"
+                disabled={busy || !draft.trim()}
+                onClick={onSend}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--igc-green)] px-3.5 text-[12.5px] font-bold text-white disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
+                Send DM
+              </button>
+            </div>
+          </>
         ) : (
           <p className="mt-3 text-[12px] font-semibold text-[var(--igc-muted)]">The 7-day window is closed.</p>
         )}
@@ -727,7 +1095,7 @@ function CommentDetails({
 
       <Link
         to="/automations"
-        className="mt-3 flex items-center justify-between rounded-xl border border-emerald-100 bg-[#F3FBF6] px-3 py-2.5"
+        className="mt-3 flex items-center justify-between rounded-xl border border-[#F3D0E0] bg-[#FFF8FB] px-3 py-2.5"
       >
         <span>
           <span className="flex items-center gap-2 text-[12.5px] font-bold text-[var(--igc-green-deep)]">
@@ -739,31 +1107,50 @@ function CommentDetails({
         <span className="text-[12px] font-bold text-[var(--igc-green-deep)]">Automations</span>
       </Link>
 
-      <div className="mt-3 flex items-center justify-end gap-2 border-t border-[var(--igc-line)] pt-3">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--igc-line)] pt-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onHide(!comment.hidden)}
+            className="inline-flex h-9 items-center gap-1 rounded-xl border border-[var(--igc-line)] px-3 text-[12.5px] font-semibold text-[var(--igc-ink)]"
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+            {comment.hidden ? 'Unhide' : 'Hide comment'}
+          </button>
+          {canReply && !comment.publicReplySentAt && !comment.privateReplySentAt && draft.trim() && publicDraft.trim() ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onSendBoth}
+              className="inline-flex h-9 items-center gap-1 rounded-xl border border-[#F3D0E0] bg-[#FFF8FB] px-3 text-[12.5px] font-bold text-[var(--igc-green-deep)] disabled:opacity-40"
+            >
+              Send public + DM
+            </button>
+          ) : null}
+        </div>
         <button type="button" onClick={onClose} className="h-9 rounded-xl px-3 text-[12.5px] font-semibold text-[var(--igc-muted)]">
           Close
         </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onHide(!comment.hidden)}
-          className="inline-flex h-9 items-center gap-1 rounded-xl border border-[var(--igc-line)] px-3 text-[12.5px] font-semibold text-[var(--igc-ink)]"
-        >
-          <EyeOff className="h-3.5 w-3.5" />
-          {comment.hidden ? 'Unhide' : 'Hide comment'}
-        </button>
-        {canReply ? (
-          <button
-            type="button"
-            disabled={busy || !draft.trim()}
-            onClick={onSend}
-            className="inline-flex h-9 items-center gap-1 rounded-xl bg-[var(--igc-green)] px-3 text-[12.5px] font-bold text-white disabled:opacity-40"
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
-            Send reply
-          </button>
-        ) : null}
       </div>
     </aside>
   );
+
+  if (mobileSheet) {
+    if (typeof document === 'undefined') return null;
+    return createPortal(
+      <div className="igc-detail-overlay fixed inset-0 z-[60] flex flex-col justify-end" role="presentation">
+        <button
+          type="button"
+          className="modal-backdrop modal-backdrop--enter absolute inset-0 touch-none"
+          onClick={onClose}
+          aria-label="Close comment details"
+        />
+        {panelBody}
+      </div>,
+      document.body
+    );
+  }
+
+  return panelBody;
 }

@@ -127,6 +127,26 @@ export default function ServiceWindowBanner({
   );
 }
 
+function tonePillClass(tone: WindowTone, variant: ServiceWindowBannerProps['variant']): string {
+  if (tone === 'calm' && variant === 'instagram') {
+    return 'border-fuchsia-400/30 bg-fuchsia-500/[0.1] text-fuchsia-950 shadow-[0_1px_4px_rgba(192,38,132,0.12),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md dark:border-fuchsia-400/22 dark:bg-fuchsia-400/10 dark:text-fuchsia-100 dark:shadow-[0_1px_6px_rgba(192,38,132,0.14),inset_0_1px_0_rgba(255,255,255,0.06)]';
+  }
+  if (tone === 'calm' && variant === 'messenger') {
+    return 'border-sky-400/35 bg-sky-500/[0.12] text-sky-950 shadow-[0_1px_4px_rgba(14,165,233,0.14),inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-100 dark:shadow-[0_1px_6px_rgba(14,165,233,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]';
+  }
+  return TONE_PILL[tone];
+}
+
+function toneIconClass(tone: WindowTone, variant: ServiceWindowBannerProps['variant']): string {
+  if (tone === 'calm' && variant === 'instagram') {
+    return 'text-fuchsia-600 dark:text-fuchsia-300';
+  }
+  if (tone === 'calm' && variant === 'messenger') {
+    return 'text-sky-600 dark:text-sky-300';
+  }
+  return TONE_ICON[tone];
+}
+
 export function ServiceWindowBadge({
   serviceWindow,
   variant = 'whatsapp',
@@ -147,9 +167,9 @@ export function ServiceWindowBadge({
       <div
         role="status"
         {...tipFor(closedTip)}
-        className={`${BADGE_BASE} ${TONE_PILL.closed} ${TONE_PULSE.closed}`}
+        className={`${BADGE_BASE} ${tonePillClass('closed', variant)} ${TONE_PULSE.closed}`}
       >
-        <Lock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON.closed}`} strokeWidth={2.25} aria-hidden />
+        <Lock className={`h-3.5 w-3.5 shrink-0 ${toneIconClass('closed', variant)}`} strokeWidth={2.25} aria-hidden />
         <span className="truncate text-[12.5px] font-semibold leading-none tracking-wide">
           {closedLabel}
         </span>
@@ -170,9 +190,9 @@ export function ServiceWindowBadge({
     <div
       role="status"
       {...tipFor(openTip)}
-      className={`${BADGE_BASE} ${TONE_PILL[tone]} ${TONE_PULSE[tone]}`}
+      className={`${BADGE_BASE} ${tonePillClass(tone, variant)} ${TONE_PULSE[tone]}`}
     >
-      <Clock className={`h-3.5 w-3.5 shrink-0 ${TONE_ICON[tone]}`} strokeWidth={2.25} aria-hidden />
+      <Clock className={`h-3.5 w-3.5 shrink-0 ${toneIconClass(tone, variant)}`} strokeWidth={2.25} aria-hidden />
       <span className="min-w-0 truncate text-[12.5px] font-semibold tabular-nums leading-none tracking-wide">
         {label}
       </span>

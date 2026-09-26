@@ -223,6 +223,8 @@ export interface MessageMetadata {
   filename?: string;
   caption?: string;
   mediaPath?: string;
+  /** Messenger/Instagram CDN URL. Shown via our media proxy, never as bubble text. */
+  externalUrl?: string;
   size?: number;
   isSticker?: boolean;
   /** True when inbound/outbound media is a GIF (incl. WhatsApp GIF-as-video). */

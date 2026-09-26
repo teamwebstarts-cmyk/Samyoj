@@ -142,11 +142,15 @@ describe('Phase 0 Meta webhook object router', () => {
       attachments: [{ type: 'image', payload: { url: 'https://cdn.example/image.jpg' } }],
     })).toEqual({
       type: 'IMAGE',
-      content: 'https://cdn.example/image.jpg',
+      content: '[image]',
       metadata: {
         attachments: [{ type: 'image', payload: { url: 'https://cdn.example/image.jpg' } }],
+        externalUrl: 'https://cdn.example/image.jpg',
       },
     });
+    expect(channelMessageAttachment({
+      attachments: [{ type: 'image', payload: { url: 'https://cdn.example/anim.gif?oe=1' } }],
+    }).metadata).toMatchObject({ isGif: true, mimeType: 'image/gif' });
     expect(channelMessageAttachment({ attachments: [{ type: 'file', payload: {} }] })).toEqual({
       type: 'DOCUMENT',
       content: '[DOCUMENT]',

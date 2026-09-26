@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import { MetaMockProvider } from './contexts/MetaMockContext';
 import { WhatsAppNumberProvider } from './contexts/WhatsAppNumberContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { TypographyProvider } from './contexts/TypographyContext';
@@ -58,6 +59,7 @@ export default function App() {
         <CardSpacingProvider>
         <PageGutterProvider>
         <AuthProvider>
+          <MetaMockProvider>
           <WhatsAppNumberProvider>
             <AppToaster />
             <BrowserRouter>
@@ -129,6 +131,7 @@ export default function App() {
               </Routes>
             </BrowserRouter>
           </WhatsAppNumberProvider>
+          </MetaMockProvider>
         </AuthProvider>
         </PageGutterProvider>
         </CardSpacingProvider>

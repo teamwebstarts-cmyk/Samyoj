@@ -582,11 +582,297 @@
   }
 
   .inbox-shell--messenger {
-    box-shadow: inset 3px 0 0 #1877F2;
+    box-shadow: none;
+    border-left: 3px solid #1877f2;
+    background:
+      linear-gradient(#fff, #fff) padding-box,
+      linear-gradient(180deg, #e8f1ff 0%, #1877f2 100%) border-box;
+  }
+
+  .dark .inbox-shell--messenger {
+    border-left-color: #3b82f6;
+    background: linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+      linear-gradient(180deg, #1e3a5f 0%, #2563eb 100%) border-box;
+  }
+
+  /* Messenger DMs: white canvas, gray incoming, Messenger blue outgoing — not WhatsApp green. */
+  .inbox-shell--messenger .inbox-chat-bg,
+  .dark .inbox-shell--messenger .inbox-chat-bg {
+    background-color: #ffffff;
+    background-image: none;
+  }
+
+  .dark .inbox-shell--messenger .inbox-chat-bg {
+    background-color: #0c0c0e;
+  }
+
+  .inbox-shell--messenger {
+    --chat-accent: rgba(255, 255, 255, 0.92);
+  }
+
+  .inbox-shell--messenger .wa-bubble-sent {
+    background-color: #0084ff;
+    background-image: none;
+    color: #ffffff;
+    border-radius: 22px;
+    box-shadow: 0 1px 2px rgba(0, 132, 255, 0.2);
+    --wa-msg-fade: #0084ff;
+  }
+
+  .inbox-shell--messenger .wa-bubble-sent .wa-accent-text {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .inbox-shell--messenger .wa-bubble-sent mark {
+    background-color: rgba(255, 255, 255, 0.28);
+    color: inherit;
+  }
+
+  .inbox-shell--messenger .wa-bubble-sent .wa-sender-label {
+    display: none;
+  }
+
+  .inbox-shell--messenger [role='separator'] > span {
+    background: #e8f1ff;
+    color: #1565d8;
+    border: 1px solid #cfe0fc;
+    box-shadow: 0 1px 2px rgba(24, 119, 242, 0.08);
+  }
+
+  .dark .inbox-shell--messenger [role='separator'] > span {
+    background: rgba(30, 58, 95, 0.5);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.25);
+  }
+
+  .inbox-shell--messenger .wa-bubble-received {
+    background-color: #e4e6eb;
+    background-image: none;
+    color: #050505;
+    border-radius: 22px;
+    --wa-msg-fade: #e4e6eb;
+  }
+
+  .dark .inbox-shell--messenger .wa-bubble-received {
+    background-color: #262626;
+    color: #f5f5f5;
+    --wa-msg-fade: #262626;
+  }
+
+  .inbox-shell--messenger .wa-bubble-sent .wa-timestamp,
+  .inbox-shell--messenger .wa-bubble-sent .wa-tick {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .inbox-shell--messenger .wa-bubble-received .wa-timestamp {
+    color: #65676b;
+  }
+
+  .inbox-shell--messenger .bg-emerald-50\/90 {
+    background-color: #eff6ff;
+  }
+
+  .inbox-shell--messenger .ring-emerald-200\/70 {
+    --tw-ring-color: #bfdbfe;
+  }
+
+  .inbox-shell--messenger .bg-emerald-500 {
+    background-color: #1877f2;
+    background-image: none;
+  }
+
+  .inbox-shell--messenger .text-emerald-600,
+  .inbox-shell--messenger .text-emerald-700,
+  .inbox-shell--messenger .text-emerald-800 {
+    color: #1877f2;
+  }
+
+  .inbox-shell--messenger .bg-emerald-100,
+  .inbox-shell--messenger .bg-emerald-50 {
+    background-color: #e8f1ff;
+  }
+
+  .inbox-shell--messenger .text-whatsapp-700,
+  .inbox-shell--messenger .text-whatsapp-800 {
+    color: #1877f2;
+  }
+
+  .inbox-shell--messenger .border-whatsapp-500\/50 {
+    border-color: rgb(24 119 242 / 0.45);
+  }
+
+  .inbox-shell--messenger .bg-whatsapp-500\/10 {
+    background-color: rgb(24 119 242 / 0.1);
+  }
+
+  .dark .inbox-shell--messenger .dark\:text-whatsapp-400 {
+    color: #60a5fa;
+  }
+
+  .inbox-shell--messenger .bg-whatsapp-600,
+  .inbox-shell--messenger .from-whatsapp-500,
+  .inbox-shell--messenger .to-whatsapp-600 {
+    background-color: #1877f2;
+    background-image: none;
+  }
+
+  .inbox-shell--messenger .from-whatsapp-400.to-whatsapp-600 {
+    background-image: linear-gradient(to bottom right, #60a5fa, #1877f2);
+  }
+
+  .inbox-shell--messenger .text-whatsapp-600 {
+    color: #1877f2;
+  }
+
+  .inbox-shell--messenger button[aria-current='true'] {
+    background-color: #eff6ff;
+    box-shadow: inset 0 0 0 1px #bfdbfe;
+  }
+
+  .dark .inbox-shell--messenger button[aria-current='true'] {
+    background-color: rgba(30, 58, 95, 0.35);
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
   }
 
   .inbox-shell--instagram {
-    box-shadow: inset 3px 0 0 #E4405F;
+    box-shadow: none;
+    border-left: 3px solid transparent;
+    background:
+      linear-gradient(#fff, #fff) padding-box,
+      linear-gradient(180deg, #feda75 0%, #fa7e1e 22%, #d62976 52%, #962fbf 78%, #4f5bd5 100%) border-box;
+  }
+
+  /* Instagram DMs: white canvas, gray incoming, gradient outgoing — not WhatsApp green. */
+  .inbox-shell--instagram .inbox-chat-bg,
+  .dark .inbox-shell--instagram .inbox-chat-bg {
+    background-color: #ffffff;
+    background-image: none;
+  }
+
+  .dark .inbox-shell--instagram .inbox-chat-bg {
+    background-color: #0c0c0e;
+  }
+
+  .inbox-shell--instagram {
+    --chat-accent: rgba(255, 255, 255, 0.9);
+  }
+
+  .inbox-shell--instagram .wa-bubble-sent {
+    background-color: transparent;
+    background-image: linear-gradient(
+      125deg,
+      #a855c8 0%,
+      #c13584 42%,
+      #e1306c 78%,
+      #f09433 100%
+    );
+    color: #ffffff;
+    border-radius: 22px;
+    box-shadow: 0 1px 2px rgba(193, 53, 132, 0.16);
+    --wa-msg-fade: #c13584;
+  }
+
+  .inbox-shell--instagram .wa-bubble-sent .wa-accent-text {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .inbox-shell--instagram .wa-bubble-sent mark {
+    background-color: rgba(255, 255, 255, 0.32);
+    color: inherit;
+  }
+
+  .inbox-shell--instagram .wa-bubble-sent .wa-sender-label {
+    display: none;
+  }
+
+  .inbox-shell--instagram [role='separator'] > span {
+    background: linear-gradient(135deg, #fff5f8 0%, #fce7f3 100%);
+    color: #9d174d;
+    border: 1px solid #f9c6d6;
+    box-shadow: 0 1px 2px rgba(193, 53, 132, 0.08);
+  }
+
+  .dark .inbox-shell--instagram [role='separator'] > span {
+    background: rgba(38, 38, 42, 0.95);
+    color: #f9a8d4;
+    border-color: rgba(244, 114, 182, 0.25);
+  }
+
+  .inbox-shell--instagram .wa-bubble-received {
+    background-color: #efefef;
+    background-image: none;
+    color: #262626;
+    border-radius: 22px;
+    --wa-msg-fade: #efefef;
+  }
+
+  .dark .inbox-shell--instagram .wa-bubble-received {
+    background-color: #262626;
+    color: #f5f5f5;
+    --wa-msg-fade: #262626;
+  }
+
+  .inbox-shell--instagram .wa-bubble-sent .wa-timestamp,
+  .inbox-shell--instagram .wa-bubble-sent .wa-tick {
+    color: rgba(255, 255, 255, 0.86);
+  }
+
+  .inbox-shell--instagram .wa-bubble-received .wa-timestamp {
+    color: #8e8e8e;
+  }
+
+  .inbox-shell--instagram .bg-emerald-50\/90 {
+    background-color: #fff5f8;
+  }
+
+  .inbox-shell--instagram .ring-emerald-200\/70 {
+    --tw-ring-color: #f9c6d6;
+  }
+
+  .inbox-shell--instagram .bg-emerald-500 {
+    background-color: transparent;
+    background-image: linear-gradient(180deg, #feda75, #d62976, #4f5bd5);
+  }
+
+  .inbox-shell--instagram .text-emerald-600,
+  .inbox-shell--instagram .text-emerald-700,
+  .inbox-shell--instagram .text-emerald-800 {
+    color: #c13584;
+  }
+
+  .inbox-shell--instagram .bg-emerald-100,
+  .inbox-shell--instagram .bg-emerald-50 {
+    background-color: #fff0f6;
+  }
+
+  .inbox-shell--instagram .bg-whatsapp-600,
+  .inbox-shell--instagram .from-whatsapp-500,
+  .inbox-shell--instagram .to-whatsapp-600 {
+    background-color: #c13584;
+    background-image: linear-gradient(125deg, #a855c8, #c13584, #e1306c);
+  }
+
+  .inbox-shell--instagram .text-whatsapp-700,
+  .inbox-shell--instagram .text-whatsapp-800,
+  .inbox-shell--instagram .border-whatsapp-500\/50,
+  .inbox-shell--instagram .bg-whatsapp-500\/10 {
+    --tw-text-opacity: 1;
+  }
+
+  .inbox-shell--instagram .text-whatsapp-700 {
+    color: #c13584;
+  }
+
+  .dark .inbox-shell--instagram .dark\:text-whatsapp-400 {
+    color: #f472b6;
+  }
+
+  .inbox-shell--instagram .border-whatsapp-500\/50 {
+    border-color: rgb(193 53 132 / 0.45);
+  }
+
+  .inbox-shell--instagram .bg-whatsapp-500\/10 {
+    background-color: rgb(193 53 132 / 0.1);
   }
 
   /* Collapsed-rail flyout tip (replaces native black title tooltips) */

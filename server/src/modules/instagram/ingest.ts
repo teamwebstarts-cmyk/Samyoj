@@ -3,6 +3,7 @@ import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 import { computeSlaDueAt } from '../sla/service';
+import { instagramPlaceholderName, upgradeInstagramContactName } from './contact-name';
 
 const log = createModuleLogger('instagram-ingest');
 
@@ -35,6 +36,8 @@ export async function ingestInstagramTextMessage(opts: {
   timestampMs?: number;
   messageType?: InboundMessageType;
   metadata?: unknown;
+  direction?: 'INBOUND' | 'OUTBOUND';
+  contactName?: string;
 }): Promise<IngestInstagramResult> {
   const igsid = opts.igsid.trim();
   if (!igsid) {
@@ -47,6 +50,7 @@ export async function ingestInstagramTextMessage(opts: {
     };
   }
 
+  const outbound = opts.direction === 'OUTBOUND';
   const phone = instagramContactPhone(igsid);
   const receivedAt =
     opts.timestampMs && Number.isFinite(opts.timestampMs)
@@ -71,7 +75,7 @@ export async function ingestInstagramTextMessage(opts: {
         organizationId: opts.organizationId,
         phone,
         normalizedPhone: phone,
-        name: `Instagram ${igsid.slice(-6)}`,
+        name: opts.contactName?.replace(/^@/, '') || instagramPlaceholderName(igsid),
         source: 'INBOUND',
         whatsappNumberId: null,
       },
@@ -114,6 +118,10 @@ export async function ingestInstagramTextMessage(opts: {
     }
   }
 
+  if (contactId && opts.contactName) {
+    await upgradeInstagramContactName(contactId, opts.contactName);
+  }
+
   let conversation = await prisma.conversation.findFirst({
     where: {
       organizationId: opts.organizationId,
@@ -135,9 +143,9 @@ export async function ingestInstagramTextMessage(opts: {
           whatsappNumberId: null,
           status: 'OPEN',
           lastMessageAt: receivedAt,
-          cs24hWindowOpensAt: receivedAt,
-          slaDueAt: computeSlaDueAt(receivedAt),
-          unreadCount: 1,
+          cs24hWindowOpensAt: outbound ? null : receivedAt,
+          slaDueAt: outbound ? null : computeSlaDueAt(receivedAt),
+          unreadCount: outbound ? 0 : 1,
         },
         select: { id: true, unreadCount: true },
       });
@@ -189,10 +197,10 @@ export async function ingestInstagramTextMessage(opts: {
     data: {
       conversationId: conversation.id,
       metaMessageId: opts.metaMessageId || undefined,
-      direction: 'INBOUND',
+      direction: outbound ? 'OUTBOUND' : 'INBOUND',
       type: opts.messageType || 'TEXT',
       content: opts.text,
-      status: 'DELIVERED',
+      status: outbound ? 'SENT' : 'DELIVERED',
       metadata: opts.metadata as object | undefined,
       createdAt: receivedAt,
     },
@@ -202,9 +210,13 @@ export async function ingestInstagramTextMessage(opts: {
     where: { id: conversation.id },
     data: {
       lastMessageAt: receivedAt,
-      cs24hWindowOpensAt: receivedAt,
-      unreadCount: createdConversation ? 1 : { increment: 1 },
       status: 'OPEN',
+      ...(outbound
+        ? {}
+        : {
+            cs24hWindowOpensAt: receivedAt,
+            unreadCount: createdConversation ? 1 : { increment: 1 },
+          }),
     },
     select: { id: true, lastMessageAt: true, unreadCount: true, channelId: true },
   });
@@ -223,7 +235,7 @@ export async function ingestInstagramTextMessage(opts: {
     conversation: updated,
   });
 
-  log.info('Instagram inbound stored', {
+  log.info(outbound ? 'Instagram outbound stored' : 'Instagram inbound stored', {
     organizationId: opts.organizationId,
     channelId: opts.channelId,
     conversationId: conversation.id,

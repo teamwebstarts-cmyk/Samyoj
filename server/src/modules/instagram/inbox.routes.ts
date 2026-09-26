@@ -9,6 +9,7 @@ import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 import { instagramWindowOpen } from './ingest';
 import { sendInstagramTextMessage } from '../facebook/page-client';
 import { findParentPageChannel } from '../facebook/parent-page';
+import { refreshInstagramContactNameIfNeeded } from './contact-name';
 import {
   attachChannelInboxActions,
   channelListScope,
@@ -167,8 +168,22 @@ router.get(
     const channel = await activeIgChannel(orgId);
     if (!channel) throw new AppError(404, 'Connect Instagram in Settings first');
 
-    const conversation = await loadInstagramConversation(orgId, channel.id, String(req.params.id));
+    let conversation = await loadInstagramConversation(orgId, channel.id, String(req.params.id));
     if (!conversation) throw new AppError(404, 'Conversation not found');
+
+    if (conversation.contact?.id) {
+      const refreshed = await refreshInstagramContactNameIfNeeded({
+        organizationId: orgId,
+        channelId: channel.id,
+        contactId: conversation.contact.id,
+      });
+      if (refreshed && refreshed !== conversation.contact.name) {
+        conversation = {
+          ...conversation,
+          contact: { ...conversation.contact, name: refreshed },
+        };
+      }
+    }
 
     sendSuccess(res, {
       ...conversation,
@@ -214,7 +229,10 @@ router.post(
       .object({
         content: z.string().trim().max(1000).optional(),
         mediaUrl: z.string().trim().optional(),
-        kind: z.enum(['image', 'video', 'file']).optional(),
+        mediaPath: z.string().trim().optional(),
+        filename: z.string().trim().max(255).optional(),
+        mimeType: z.string().trim().max(120).optional(),
+        kind: z.enum(['image', 'video', 'audio', 'file']).optional(),
       })
       .refine((row) => Boolean(row.content) || Boolean(row.mediaUrl), { message: 'Message or media is required' })
       .parse(req.body);
@@ -242,16 +260,19 @@ router.post(
       throw new AppError(400, 'Instagram identity missing for this contact');
     }
     if (body.mediaUrl) {
-      await deliverChannelMedia({
+      const message = await deliverChannelMedia({
         organizationId: orgId,
         platform: 'IG',
         channelId: channel.id,
         recipientId: identity.externalId,
         conversationId: conversation.id,
         mediaUrl: body.mediaUrl,
+        mediaPath: body.mediaPath,
+        filename: body.filename,
+        mimeType: body.mimeType,
         kind: body.kind || 'image',
       });
-      sendSuccess(res, { ok: true });
+      sendSuccess(res, message);
       return;
     }
     if (!body.content) throw new AppError(400, 'Message is required');
@@ -448,6 +469,33 @@ router.post(
       include: { user: { select: { id: true, name: true } } },
     });
     sendSuccess(res, note);
+  })
+);
+
+router.delete(
+  '/notes/:noteId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const noteId = String(req.params.noteId);
+    const channel = await activeIgChannel(orgId);
+    if (!channel) throw new AppError(404, 'Connect Instagram in Settings first');
+
+    const note = await prisma.internalNote.findFirst({
+      where: {
+        id: noteId,
+        conversation: { organizationId: orgId, channelId: channel.id },
+      },
+    });
+    if (!note) throw new AppError(404, 'Note not found');
+
+    const isAuthor = note.userId === req.user!.userId;
+    const isAdmin = req.orgRole === 'ADMIN' || req.orgRole === 'OWNER';
+    if (!isAuthor && !isAdmin) {
+      throw new AppError(403, 'Only the note author or an admin can delete this note');
+    }
+
+    await prisma.internalNote.delete({ where: { id: note.id } });
+    res.status(204).end();
   })
 );
 

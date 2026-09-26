@@ -1130,6 +1130,7 @@ model Channel {
   leads         Lead[]
   conversations Conversation[]
   instagramComments InstagramComment[]
+  instagramMediaCache InstagramMediaCache[]
   metaAdsSnapshots  MetaAdsSnapshot[]
 
   @@unique([organizationId, platform, platformAccountId])
@@ -1149,7 +1150,10 @@ model InstagramComment {
   text               String    @default("")
   commentedAt        DateTime  @map("commented_at")
   hidden             Boolean   @default(false)
+  privateReplyText   String?   @map("private_reply_text")
   privateReplySentAt DateTime? @map("private_reply_sent_at")
+  publicReplyText    String?   @map("public_reply_text")
+  publicReplySentAt  DateTime? @map("public_reply_sent_at")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
@@ -1159,6 +1163,26 @@ model InstagramComment {
   @@unique([organizationId, igCommentId])
   @@index([organizationId, channelId, commentedAt])
   @@map("instagram_comments")
+}
+
+/// Cached IG media preview (thumbnail, permalink) keyed by channel + Meta media id.
+model InstagramMediaCache {
+  id           String   @id @default(uuid())
+  channelId    String   @map("channel_id")
+  igMediaId    String   @map("ig_media_id")
+  mediaType    String?  @map("media_type")
+  thumbnailUrl String?  @map("thumbnail_url")
+  permalink    String?
+  caption      String?
+  fetchedAt    DateTime @map("fetched_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, igMediaId])
+  @@index([channelId])
+  @@map("instagram_media_cache")
 }
 
 /// Latest Meta Ads Insights read for one org. Not Samyoj revenue and not a billing plan.

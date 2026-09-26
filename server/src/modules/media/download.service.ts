@@ -11,6 +11,8 @@ export interface MessageMediaMetadata {
   filename?: string;
   caption?: string;
   mediaPath?: string;
+  /** Meta CDN / attachment URL when we have no local file yet (IG/Messenger inbound). */
+  externalUrl?: string;
   size?: number;
   /** True when inbound media is a sticker (keep full fidelity — never recompress). */
   isSticker?: boolean;
@@ -111,14 +113,29 @@ export async function getMessageMediaBuffer(options: {
     }
   }
 
-  if (!metadata.mediaPath) {
-    throw new Error('Media file not available');
+  if (metadata.mediaPath && (await mediaFileExists(metadata.mediaPath))) {
+    const buffer = await readMediaFile(metadata.mediaPath);
+    return {
+      buffer,
+      mimeType: metadata.mimeType || 'application/octet-stream',
+      filename: metadata.filename,
+    };
   }
 
-  const buffer = await readMediaFile(metadata.mediaPath);
-  return {
-    buffer,
-    mimeType: metadata.mimeType || 'application/octet-stream',
-    filename: metadata.filename,
-  };
+  const remote = metadata.externalUrl?.trim();
+  if (remote && /^https:\/\//i.test(remote)) {
+    const res = await fetch(remote, {
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    if (!res.ok) throw new Error(`Remote media fetch failed (${res.status})`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const mimeType =
+      metadata.mimeType ||
+      res.headers.get('content-type')?.split(';')[0]?.trim() ||
+      'application/octet-stream';
+    return { buffer, mimeType, filename: metadata.filename };
+  }
+
+  throw new Error('Media file not available');
 }

@@ -367,8 +367,11 @@ export async function deliverChannelMedia(opts: {
   recipientId: string;
   conversationId: string;
   mediaUrl: string;
-  kind: 'image' | 'video' | 'file';
-}): Promise<void> {
+  mediaPath?: string;
+  filename?: string;
+  mimeType?: string;
+  kind: 'image' | 'video' | 'audio' | 'file';
+}) {
   const url = httpsMediaUrl(opts.mediaUrl);
   if (!url) throw new AppError(400, 'Media URL must be https');
   // Same rule as text: the conversation's own channel decides the Page (S-02 / G-02).
@@ -393,13 +396,32 @@ export async function deliverChannelMedia(opts: {
     url,
     instagram: opts.platform === 'IG',
   });
-  await prisma.message.create({
+  const msgType =
+    opts.kind === 'image'
+      ? 'IMAGE'
+      : opts.kind === 'video'
+        ? 'VIDEO'
+        : opts.kind === 'audio'
+          ? 'AUDIO'
+          : 'DOCUMENT';
+  const bodyLabel =
+    opts.filename?.trim() ||
+    (opts.kind === 'file' ? 'Document' : opts.kind === 'image' ? 'Photo' : opts.kind === 'video' ? 'Video' : 'Audio');
+  const message = await prisma.message.create({
     data: {
       conversationId: opts.conversationId,
       direction: 'OUTBOUND',
-      type: opts.kind === 'image' ? 'IMAGE' : opts.kind === 'video' ? 'VIDEO' : 'DOCUMENT',
-      content: url,
+      type: msgType,
+      content: bodyLabel,
       status: 'SENT',
+      metadata: {
+        mediaPath: opts.mediaPath,
+        externalUrl: opts.mediaPath ? undefined : url,
+        mimeType:
+          opts.mimeType ||
+          (opts.kind === 'file' ? 'application/pdf' : undefined),
+        filename: opts.filename,
+      },
     },
   });
   try {
@@ -408,4 +430,5 @@ export async function deliverChannelMedia(opts: {
   } catch {
     /* SLA bookkeeping must never fail a message that Meta already accepted. */
   }
+  return message;
 }

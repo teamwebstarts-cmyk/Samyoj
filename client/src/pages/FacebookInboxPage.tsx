@@ -11,6 +11,10 @@ import ChatComposer from '../components/inbox/ChatComposer';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import ThreadSkeleton from '../components/inbox/ThreadSkeleton';
 import GroupedThreadMessages from '../components/inbox/GroupedThreadMessages';
+import {
+  META_CHANNEL_ATTACH,
+  validateMetaDmAttachment,
+} from '../components/inbox/metaMessagingLimits';
 import SearchInChatBar from '../components/inbox/SearchInChatBar';
 import InboxDetailsPanel, { type ChannelLabelsBridge } from '../components/inbox/InboxDetailsPanel';
 import { useChannelDetailsToggle } from '../components/inbox/useChannelDetailsToggle';
@@ -28,6 +32,15 @@ import type {
   TeamAgent,
 } from '../types';
 import { PAGE_SIZE_OPTIONS, type PageSize } from '../components/inbox/useConversationList';
+import { useMetaMock } from '../contexts/MetaMockContext';
+import MetaMockNotice from '../components/meta/MetaMockNotice';
+import {
+  getFacebookMockInboxConversations,
+  getMockInboxConversation,
+  getMockInboxMessages,
+  isMetaMockId,
+  mergeInboxConversations,
+} from '../utils/metaMockData';
 
 type FbConversation = Conversation & { serviceWindow?: ServiceWindowInfo };
 
@@ -35,6 +48,7 @@ const TICKET_IDS = new Set<string>();
 
 export default function FacebookInboxPage() {
   const { user } = useAuth();
+  const { enabled: mockEnabled } = useMetaMock();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<FbConversation[]>([]);
   const [total, setTotal] = useState(0);
@@ -85,10 +99,15 @@ export default function FacebookInboxPage() {
       if (agentFilter) params.assignedTo = agentFilter;
       const { data } = await facebookApi.inbox.list(params);
       const payload = data.data;
-      setConnected(Boolean(payload.connected));
-      setConversations(payload.conversations || []);
-      setTotal(payload.total || 0);
-      setUnreadTotal(payload.unreadTotal || 0);
+      const real = payload.conversations || [];
+      const merged = mockEnabled ? mergeInboxConversations(real, getFacebookMockInboxConversations()) : real;
+      const mockOnly = merged.filter((c) => isMetaMockId(c.id));
+      setConnected(Boolean(payload.connected) || (mockEnabled && mockOnly.length > 0));
+      setConversations(merged);
+      setTotal((payload.total || 0) + (mockEnabled ? mockOnly.length : 0));
+      setUnreadTotal(
+        (payload.unreadTotal || 0) + mockOnly.reduce((n, c) => n + (c.unreadCount || 0), 0)
+      );
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not load Messenger inbox');
       setConnected(false);
@@ -96,7 +115,7 @@ export default function FacebookInboxPage() {
     } finally {
       setLoading(false);
     }
-  }, [agentFilter, chip, debouncedSearch, page, pageSize]);
+  }, [agentFilter, chip, debouncedSearch, mockEnabled, page, pageSize]);
 
   useEffect(() => {
     void loadList();
@@ -118,6 +137,17 @@ export default function FacebookInboxPage() {
     setThreadLoading(true);
     setChatSearchOpen(false);
     setChatSearch('');
+    if (isMetaMockId(id)) {
+      const conv = getMockInboxConversation(id);
+      if (conv) {
+        setSelected(conv);
+        setNotes([]);
+        setMessages(getMockInboxMessages(id));
+        setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)));
+      }
+      setThreadLoading(false);
+      return;
+    }
     try {
       const [{ data: convRes }, { data: msgRes }, labelsRes] = await Promise.all([
         facebookApi.inbox.get(id),
@@ -173,18 +203,53 @@ export default function FacebookInboxPage() {
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedId || !draft.trim() || sending) return;
+    if (!selectedId || !draft.trim()) return;
+    if (isMetaMockId(selectedId)) {
+      const content = draft.trim();
+      const msg: Message = {
+        id: `${selectedId}-local-${Date.now()}`,
+        conversationId: selectedId,
+        direction: 'OUTBOUND',
+        type: 'text',
+        content,
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, msg]);
+      setDraft('');
+      toastSuccess('Sample thread — not sent to Messenger');
+      return;
+    }
     if (!windowOpen) {
       toastError('Wait for the customer to message again.');
       return;
     }
+    const text = draft.trim().slice(0, 1000);
+    const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: Message = {
+      id: optimisticId,
+      conversationId: selectedId,
+      direction: 'OUTBOUND',
+      type: 'text',
+      content: text,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft('');
     setSending(true);
     try {
-      const { data } = await facebookApi.inbox.send(selectedId, draft.trim());
-      setMessages((prev) => [...prev, data.data as Message]);
-      setDraft('');
+      const { data } = await facebookApi.inbox.send(selectedId, text);
+      const confirmed = data.data as Message;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticId ? confirmed : m))
+      );
       void loadList();
     } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m))
+      );
+      setDraft(text);
       toastError(getErrorMessage(err) || 'Send failed');
     } finally {
       setSending(false);
@@ -245,8 +310,32 @@ export default function FacebookInboxPage() {
   };
 
   const onAttach = async (file: File) => {
-    if (!selectedId) return;
-    const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+    if (!selectedId || !windowOpen) {
+      if (!windowOpen) toastError('Wait for the customer to message again.');
+      return;
+    }
+    if (isMetaMockId(selectedId)) {
+      toastSuccess('Sample thread — attachments are not sent in mock mode');
+      return;
+    }
+    const checked = validateMetaDmAttachment(file, 'messenger');
+    if (!checked.ok) {
+      toastError(checked.message);
+      return;
+    }
+    const kind = checked.kind;
+    const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: Message = {
+      id: optimisticId,
+      conversationId: selectedId,
+      direction: 'OUTBOUND',
+      type: kind === 'image' ? 'IMAGE' : kind === 'video' ? 'VIDEO' : kind === 'audio' ? 'AUDIO' : 'DOCUMENT',
+      content: file.name || `[${kind}]`,
+      status: 'PENDING',
+      metadata: { filename: file.name, mimeType: file.type || undefined },
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
     const data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
@@ -254,13 +343,26 @@ export default function FacebookInboxPage() {
       reader.readAsDataURL(file);
     });
     try {
-      const { data: up } = await inboxApi.uploadMedia({ mimeType: file.type || 'application/octet-stream', data, filename: file.name });
-      const mediaUrl = (up.data as { publicUrl?: string }).publicUrl;
+      const { data: up } = await inboxApi.uploadMedia({
+        mimeType: file.type || 'application/octet-stream',
+        data,
+        filename: file.name,
+      });
+      const uploaded = up.data as { publicUrl?: string; mediaPath?: string };
+      const mediaUrl = uploaded.publicUrl;
       if (!mediaUrl) throw new Error('Upload did not return a URL');
-      await facebookApi.inbox.sendMedia(selectedId, mediaUrl, kind);
-      toastSuccess('Sent');
-      void openThread(selectedId);
+      const { data: sent } = await facebookApi.inbox.sendMedia(selectedId, {
+        mediaUrl,
+        kind,
+        mediaPath: uploaded.mediaPath,
+        filename: file.name,
+        mimeType: file.type || undefined,
+      });
+      const confirmed = sent.data as Message;
+      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? confirmed : m)));
+      void loadList();
     } catch (err) {
+      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m)));
       toastError(getErrorMessage(err) || 'Could not send the file');
     }
   };
@@ -303,7 +405,7 @@ export default function FacebookInboxPage() {
   const rangeEnd = Math.min(page * pageSize, total);
 
   const channelLabels = useMemo((): ChannelLabelsBridge | undefined => {
-    if (!selectedId) return undefined;
+    if (!selectedId || isMetaMockId(selectedId)) return undefined;
     const inbox = facebookApi.inbox;
     const id = selectedId;
     return {
@@ -355,6 +457,7 @@ export default function FacebookInboxPage() {
                 selected ? 'hidden md:flex' : 'flex'
               }`}
             >
+              <MetaMockNotice />
               <InboxListHeader
                 variant="messenger"
                 search={search}
@@ -498,12 +601,18 @@ export default function FacebookInboxPage() {
                       />
                     )}
                     {!windowOpen && (
-                      <div className="border-t border-rose-200/80 bg-rose-50/95 px-4 py-3 text-center text-[13px] font-semibold text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
-                        Wait for the customer to message again.
+                      <div className="border-t border-[#cfe0fc] bg-[#e8f1ff]/95 px-4 py-3 text-center text-[13px] font-semibold text-[#0d47a1] dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+                        24-hour window closed — wait for them to message your Page again.
                       </div>
+                    )}
+                    {windowOpen && (
+                      <p className="border-t border-[#cfe0fc]/80 px-4 py-2 text-center text-[11px] leading-relaxed text-[#65676b] dark:border-neutral-800 dark:text-neutral-400">
+                        Replies stay in this 24-hour window. WhatsApp templates and sponsored messages are not used here.
+                      </p>
                     )}
                     <ChatComposer
                       platform="facebook"
+                      attachCapabilities={META_CHANNEL_ATTACH}
                       value={draft}
                       onChange={setDraft}
                       onSubmit={(e) => void onSend(e)}
@@ -533,12 +642,18 @@ export default function FacebookInboxPage() {
                     onOverlayClose={detailsToggle.close}
                     channelLabels={channelLabels}
                     featureFlags={channelDetailsFlags}
-                    allowDeleteNotes={false}
                     onAddNoteOverride={
                       selectedId
                         ? async (content) => {
                             const { data } = await facebookApi.inbox.addNote(selectedId, content);
                             return data.data as InternalNote;
+                          }
+                        : undefined
+                    }
+                    onDeleteNoteOverride={
+                      selectedId && !isMetaMockId(selectedId)
+                        ? async (noteId) => {
+                            await facebookApi.inbox.deleteNote(noteId);
                           }
                         : undefined
                     }

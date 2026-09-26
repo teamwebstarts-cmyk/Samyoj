@@ -91,6 +91,7 @@ function AgentAvatarButton({
   avatarKey,
   gradientKey,
   active,
+  activeRingClass,
   onClick,
   tipFor,
 }: {
@@ -99,10 +100,14 @@ function AgentAvatarButton({
   /** Stable unique key for color (e.g. agent id) — avoids same gradient for different people. */
   gradientKey?: string;
   active: boolean;
+  activeRingClass?: string;
   onClick: () => void;
   tipFor: (label: string) => Record<string, unknown>;
 }) {
   const colorKey = gradientKey || avatarKey || label;
+  const ringWhenActive =
+    activeRingClass ??
+    'ring-whatsapp-500 ring-offset-1 ring-offset-white dark:ring-offset-neutral-950';
   return (
     <button
       type="button"
@@ -112,7 +117,7 @@ function AgentAvatarButton({
       {...tipFor(`Filter by ${label}`)}
       className={`relative z-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition hover:z-20 ${FOCUS_RING_CLASS} ${
         active
-          ? 'z-10 ring-2 ring-whatsapp-500 ring-offset-1 ring-offset-white dark:ring-offset-neutral-950'
+          ? `z-10 ring-2 ${ringWhenActive}`
           : 'ring-2 ring-white dark:ring-neutral-950'
       }`}
     >
@@ -153,11 +158,30 @@ export default function InboxListHeader({
   const { hasConnectedNumber, loading: numberLoading, disconnectedNumbers } = useWhatsAppNumber();
 
   const isMessenger = variant === 'messenger' || variant === 'instagram';
+  const isInstagram = variant === 'instagram';
+  const isFbMessenger = variant === 'messenger';
   const chips = isMessenger ? MESSENGER_FILTER_CHIPS : FILTER_CHIPS;
+  const chipActiveClass = isInstagram
+    ? 'bg-gradient-to-r from-[#9b4dc4] via-[#c13584] to-[#e1306c] text-white shadow-[0_1px_3px_rgba(193,53,132,0.32)]'
+    : isFbMessenger
+      ? 'bg-[#1877F2] text-white shadow-[0_1px_3px_rgba(24,119,242,0.32)]'
+      : 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)] dark:bg-whatsapp-500';
+  const agentRingActiveClass = isInstagram
+    ? 'ring-[#c13584] ring-offset-1 ring-offset-white dark:ring-offset-neutral-950'
+    : isFbMessenger
+      ? 'ring-[#1877F2] ring-offset-1 ring-offset-white dark:ring-offset-neutral-950'
+      : 'ring-whatsapp-500 ring-offset-1 ring-offset-white dark:ring-offset-neutral-950';
+  const agentMenuActive = isInstagram
+    ? 'bg-[#c13584]/15 text-[#9b2c6f] ring-[#c13584]/40 dark:text-[#f472b6]'
+    : isFbMessenger
+      ? 'bg-[#1877F2]/15 text-[#1565d8] ring-[#1877F2]/40 dark:text-[#60a5fa]'
+      : 'bg-whatsapp-500/15 text-whatsapp-700 ring-whatsapp-500/40 dark:text-whatsapp-400';
   const isConnected = hasConnectedNumber && !numberLoading;
   const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers, {
     task: 'open chats and receive replies',
   });
+  const listTitle = isInstagram ? 'Instagram' : isFbMessenger ? 'Messenger' : 'Inbox';
+  const searchPlaceholder = isInstagram ? 'Search DMs' : isFbMessenger ? 'Search Messenger' : 'Search inbox';
   const countLine = isMessenger
     ? `24h reply window · ${formatCountLine(conversationTotal, unreadTotal)}`
     : formatCountLine(conversationTotal, unreadTotal);
@@ -292,7 +316,7 @@ export default function InboxListHeader({
       <div className={`${selectionMode ? 'flex' : 'hidden'} items-start justify-between gap-2 md:flex`}>
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-2">
-            <h2 className="text-[18px] font-bold tracking-tight text-theme-fg">Inbox</h2>
+            <h2 className="text-[18px] font-bold tracking-tight text-theme-fg">{listTitle}</h2>
             {!isMessenger && (
               <InboundStatusDot
                 isConnected={isConnected}
@@ -354,7 +378,7 @@ export default function InboxListHeader({
             ref={searchInputRef}
             value={search}
             onChange={onSearchChange}
-            placeholder="Search inbox"
+            placeholder={searchPlaceholder}
             className="min-w-0 flex-1 [&_input]:!h-8 [&_input]:rounded-lg [&_input]:!bg-theme-surface [&_input]:!text-[14px] [&_input]:!shadow-none [&_svg]:left-2.5 [&_svg]:!h-3.5 [&_svg]:!w-3.5 [&_input]:!pl-8"
           />
 
@@ -368,6 +392,7 @@ export default function InboxListHeader({
                     avatarKey={agent.avatarKey}
                     gradientKey={agent.value}
                     active={agentFilter === agent.value}
+                    activeRingClass={agentRingActiveClass}
                     onClick={() => toggleAgentFilter(agent.value)}
                     tipFor={tipFor}
                   />
@@ -385,7 +410,7 @@ export default function InboxListHeader({
                   {...tipFor('All agents')}
                   className={`relative z-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-2 ring-white transition hover:z-20 dark:ring-neutral-950 ${FOCUS_RING_CLASS} ${
                     agentsMenuOpen || hiddenActiveFilter
-                      ? 'bg-whatsapp-500/15 text-whatsapp-700 ring-whatsapp-500/40 dark:text-whatsapp-400'
+                      ? agentMenuActive
                       : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                   }`}
                 >
@@ -475,7 +500,7 @@ export default function InboxListHeader({
                 onClick={() => onChipChange(item.chip)}
                 className={`inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2 text-[12px] font-semibold leading-none transition ${FOCUS_RING_CLASS} ${
                   active
-                    ? 'bg-whatsapp-600 text-white shadow-[0_1px_2px_rgba(37,211,102,0.28)] dark:bg-whatsapp-500'
+                    ? chipActiveClass
                     : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                 }`}
               >

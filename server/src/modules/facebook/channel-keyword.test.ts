@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchChannelKeyword, matchChannelRule } from './channel-keyword';
+import { matchChannelKeyword, matchChannelRule, matchInstagramCommentReplies } from './channel-keyword';
 
 describe('matchChannelKeyword', () => {
   const rows = [
@@ -13,6 +13,17 @@ describe('matchChannelKeyword', () => {
 
   it('does not use a WhatsApp-shaped rule', () => {
     expect(matchChannelKeyword([{ config: { keyword: 'PRICE', response: 'WA' } }], 'IG', 'PRICE')).toBeNull();
+  });
+
+  it('takes the oldest private text and the oldest public text', () => {
+    const replies = matchInstagramCommentReplies(
+      [
+        { triggerType: 'KEYWORD', config: { platform: 'IG', keyword: 'PRICE', publicMessage: 'Check your DMs' } },
+        { triggerType: 'KEYWORD', config: { platform: 'IG', keyword: 'PRICE', message: '₹999' } },
+      ],
+      'PRICE please'
+    );
+    expect(replies).toEqual({ privateText: '₹999', publicText: 'Check your DMs' });
   });
 
   it('uses the Facebook welcome on a new chat and not the Instagram welcome', () => {

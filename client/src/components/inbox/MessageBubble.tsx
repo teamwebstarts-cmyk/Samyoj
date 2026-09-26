@@ -18,7 +18,13 @@ import {
   SmilePlus,
   Trash2,
 } from 'lucide-react';
-import { formatMessageTime, fillTemplateMessageContent, getAutomationDividerLabel, messageHasMedia } from './inboxUtils';
+import {
+  formatBubbleClockTime,
+  formatMessageTime,
+  fillTemplateMessageContent,
+  getAutomationDividerLabel,
+  messageHasMedia,
+} from './inboxUtils';
 import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverPosition';
 import {
   AuthenticatedAudio,
@@ -106,7 +112,7 @@ function highlightText(text: string, query?: string): ReactNode {
     parts.push(
       <mark
         key={key++}
-        className="rounded-[3px] bg-amber-300/80 px-0.5 text-inherit dark:bg-amber-500/50"
+        className="chat-search-mark rounded-[3px] bg-amber-300/80 px-0.5 text-inherit dark:bg-amber-500/50"
       >
         {text.slice(idx, idx + needle.length)}
       </mark>
@@ -424,7 +430,7 @@ export default function MessageBubble({
   const isAmbiguous = isOutbound && tickStatus === 'ambiguous';
   const sendFailure = isFailed ? explainWhatsAppSendFailureFromMessage(message) : null;
   const canRetryFailed = Boolean(isFailed && onRetry && sendFailure?.retryHelps !== false);
-  const time = grouping.last ? formatMessageTime(message.createdAt) : undefined;
+  const time = grouping.last ? formatBubbleClockTime(message.createdAt) : undefined;
   const replyPreview = message.metadata?.replyPreview;
   const reactions = message.metadata?.reactions || [];
 
@@ -736,8 +742,8 @@ export default function MessageBubble({
   // duplicating "AI Bot" here. Keep a subtle "You · time" only for agent outbound.
   const senderHeader =
     isOutbound && grouping.first && !isAutomation ? (
-      <p className="mb-0.5 text-[11px] font-semibold leading-none wa-accent-text">
-        You{time ? ` · ${time}` : ''}
+      <p className="wa-sender-label mb-0.5 text-[11px] font-semibold leading-none wa-accent-text">
+        You
       </p>
   ) : null;
 
@@ -768,7 +774,7 @@ export default function MessageBubble({
             body={message.content}
             buttons={buttons}
             direction={isOutbound ? 'outbound' : 'inbound'}
-            time={time ?? formatMessageTime(message.createdAt)}
+            time={time ?? formatBubbleClockTime(message.createdAt)}
             status={isOutbound ? tickStatus : undefined}
             isButtonReply={isButtonReply}
               replyPreview={isButtonReply ? replyPreview : undefined}
@@ -795,7 +801,7 @@ export default function MessageBubble({
             {quoteStrip}
           <WhatsAppBubble
             direction={isOutbound ? 'outbound' : 'inbound'}
-            time={time ?? formatMessageTime(message.createdAt)}
+            time={time ?? formatBubbleClockTime(message.createdAt)}
             status={isOutbound ? tickStatus : undefined}
           >
               <div className="rounded-lg bg-white px-3 py-2.5 shadow-sm dark:bg-neutral-900">
@@ -830,7 +836,7 @@ export default function MessageBubble({
           <WhatsAppBubble
             direction={isOutbound ? 'outbound' : 'inbound'}
             content={message.content}
-            time={time ?? formatMessageTime(message.createdAt)}
+            time={time ?? formatBubbleClockTime(message.createdAt)}
             status={isOutbound ? tickStatus : undefined}
           >
               <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-neutral-900">
@@ -893,7 +899,9 @@ export default function MessageBubble({
       (['IMAGE', 'VIDEO', 'AUDIO'].includes(type || '') &&
         !message.metadata?.caption &&
         /\.(png|jpe?g|gif|webp|bmp|svg|mp4|mov|webm|ogg|mp3|m4a|aac|pdf)$/i.test(body));
-    if (placeholders.has(body.toLowerCase()) || isFilenameOnly) {
+    const external = message.metadata?.externalUrl?.trim();
+    const isBareUrl = body === external || /^https?:\/\/\S+$/i.test(body);
+    if (placeholders.has(body.toLowerCase()) || isFilenameOnly || isBareUrl) {
       caption = undefined;
     } else if (type === 'DOCUMENT' && filename && body === filename) {
       caption = undefined;

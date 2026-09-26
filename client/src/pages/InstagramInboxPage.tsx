@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PageShell from '../components/ui/PageShell';
 import { cannedRepliesApi, inboxApi, instagramApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -11,6 +12,10 @@ import ChatComposer from '../components/inbox/ChatComposer';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import ThreadSkeleton from '../components/inbox/ThreadSkeleton';
 import GroupedThreadMessages from '../components/inbox/GroupedThreadMessages';
+import {
+  META_CHANNEL_ATTACH,
+  validateMetaDmAttachment,
+} from '../components/inbox/metaMessagingLimits';
 import SearchInChatBar from '../components/inbox/SearchInChatBar';
 import InboxDetailsPanel, { type ChannelLabelsBridge } from '../components/inbox/InboxDetailsPanel';
 import { useChannelDetailsToggle } from '../components/inbox/useChannelDetailsToggle';
@@ -28,6 +33,15 @@ import type {
   TeamAgent,
 } from '../types';
 import { PAGE_SIZE_OPTIONS, type PageSize } from '../components/inbox/useConversationList';
+import { useMetaMock } from '../contexts/MetaMockContext';
+import MetaMockNotice from '../components/meta/MetaMockNotice';
+import {
+  getInstagramMockInboxConversations,
+  getMockInboxConversation,
+  getMockInboxMessages,
+  isMetaMockId,
+  mergeInboxConversations,
+} from '../utils/metaMockData';
 
 type FbConversation = Conversation & { serviceWindow?: ServiceWindowInfo };
 
@@ -35,6 +49,8 @@ const TICKET_IDS = new Set<string>();
 
 export default function InstagramInboxPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { enabled: mockEnabled } = useMetaMock();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<FbConversation[]>([]);
   const [total, setTotal] = useState(0);
@@ -85,10 +101,15 @@ export default function InstagramInboxPage() {
       if (agentFilter) params.assignedTo = agentFilter;
       const { data } = await instagramApi.inbox.list(params);
       const payload = data.data;
-      setConnected(Boolean(payload.connected));
-      setConversations(payload.conversations || []);
-      setTotal(payload.total || 0);
-      setUnreadTotal(payload.unreadTotal || 0);
+      const real = payload.conversations || [];
+      const merged = mockEnabled ? mergeInboxConversations(real, getInstagramMockInboxConversations()) : real;
+      const mockOnly = merged.filter((c) => isMetaMockId(c.id));
+      setConnected(Boolean(payload.connected) || (mockEnabled && mockOnly.length > 0));
+      setConversations(merged);
+      setTotal((payload.total || 0) + (mockEnabled ? mockOnly.length : 0));
+      setUnreadTotal(
+        (payload.unreadTotal || 0) + mockOnly.reduce((n, c) => n + (c.unreadCount || 0), 0)
+      );
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not load Instagram inbox');
       setConnected(false);
@@ -96,7 +117,7 @@ export default function InstagramInboxPage() {
     } finally {
       setLoading(false);
     }
-  }, [agentFilter, chip, debouncedSearch, page, pageSize]);
+  }, [agentFilter, chip, debouncedSearch, mockEnabled, page, pageSize]);
 
   useEffect(() => {
     void loadList();
@@ -118,6 +139,17 @@ export default function InstagramInboxPage() {
     setThreadLoading(true);
     setChatSearchOpen(false);
     setChatSearch('');
+    if (isMetaMockId(id)) {
+      const conv = getMockInboxConversation(id);
+      if (conv) {
+        setSelected(conv);
+        setNotes([]);
+        setMessages(getMockInboxMessages(id));
+        setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)));
+      }
+      setThreadLoading(false);
+      return;
+    }
     try {
       const [{ data: convRes }, { data: msgRes }, labelsRes] = await Promise.all([
         instagramApi.inbox.get(id),
@@ -143,6 +175,11 @@ export default function InstagramInboxPage() {
       setThreadLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const thread = searchParams.get('thread');
+    if (thread) void openThread(thread);
+  }, [openThread, searchParams]);
 
   useSocket((event, raw) => {
     const payload = raw as {
@@ -173,19 +210,53 @@ export default function InstagramInboxPage() {
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedId || !draft.trim() || sending) return;
+    if (!selectedId || !draft.trim()) return;
+    if (isMetaMockId(selectedId)) {
+      const content = draft.trim().slice(0, 1000);
+      const msg: Message = {
+        id: `${selectedId}-local-${Date.now()}`,
+        conversationId: selectedId,
+        direction: 'OUTBOUND',
+        type: 'text',
+        content,
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, msg]);
+      setDraft('');
+      toastSuccess('Sample thread — not sent to Instagram');
+      return;
+    }
     if (!windowOpen) {
       toastError('Wait for the customer to message again.');
       return;
     }
     const text = draft.trim().slice(0, 1000);
+    const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: Message = {
+      id: optimisticId,
+      conversationId: selectedId,
+      direction: 'OUTBOUND',
+      type: 'text',
+      content: text,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft('');
     setSending(true);
     try {
       const { data } = await instagramApi.inbox.send(selectedId, text);
-      setMessages((prev) => [...prev, data.data as Message]);
-      setDraft('');
+      const confirmed = data.data as Message;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticId ? confirmed : m))
+      );
       void loadList();
     } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m))
+      );
+      setDraft(text);
       toastError(getErrorMessage(err) || 'Send failed');
     } finally {
       setSending(false);
@@ -246,8 +317,32 @@ export default function InstagramInboxPage() {
   };
 
   const onAttach = async (file: File) => {
-    if (!selectedId) return;
-    const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+    if (!selectedId || !windowOpen) {
+      if (!windowOpen) toastError('Wait for the customer to message again.');
+      return;
+    }
+    if (isMetaMockId(selectedId)) {
+      toastSuccess('Sample thread — attachments are not sent in mock mode');
+      return;
+    }
+    const checked = validateMetaDmAttachment(file, 'instagram');
+    if (!checked.ok) {
+      toastError(checked.message);
+      return;
+    }
+    const kind = checked.kind;
+    const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: Message = {
+      id: optimisticId,
+      conversationId: selectedId,
+      direction: 'OUTBOUND',
+      type: kind === 'image' ? 'IMAGE' : kind === 'video' ? 'VIDEO' : kind === 'audio' ? 'AUDIO' : 'DOCUMENT',
+      content: file.name || `[${kind}]`,
+      status: 'PENDING',
+      metadata: { filename: file.name, mimeType: file.type || undefined },
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
     const data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
@@ -255,13 +350,26 @@ export default function InstagramInboxPage() {
       reader.readAsDataURL(file);
     });
     try {
-      const { data: up } = await inboxApi.uploadMedia({ mimeType: file.type || 'application/octet-stream', data, filename: file.name });
-      const mediaUrl = (up.data as { publicUrl?: string }).publicUrl;
+      const { data: up } = await inboxApi.uploadMedia({
+        mimeType: file.type || 'application/octet-stream',
+        data,
+        filename: file.name,
+      });
+      const uploaded = up.data as { publicUrl?: string; mediaPath?: string };
+      const mediaUrl = uploaded.publicUrl;
       if (!mediaUrl) throw new Error('Upload did not return a URL');
-      await instagramApi.inbox.sendMedia(selectedId, mediaUrl, kind);
-      toastSuccess('Sent');
-      void openThread(selectedId);
+      const { data: sent } = await instagramApi.inbox.sendMedia(selectedId, {
+        mediaUrl,
+        kind,
+        mediaPath: uploaded.mediaPath,
+        filename: file.name,
+        mimeType: file.type || undefined,
+      });
+      const confirmed = sent.data as Message;
+      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? confirmed : m)));
+      void loadList();
     } catch (err) {
+      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m)));
       toastError(getErrorMessage(err) || 'Could not send the file');
     }
   };
@@ -304,7 +412,7 @@ export default function InstagramInboxPage() {
   const rangeEnd = Math.min(page * pageSize, total);
 
   const channelLabels = useMemo((): ChannelLabelsBridge | undefined => {
-    if (!selectedId) return undefined;
+    if (!selectedId || isMetaMockId(selectedId)) return undefined;
     const inbox = instagramApi.inbox;
     const id = selectedId;
     return {
@@ -356,6 +464,7 @@ export default function InstagramInboxPage() {
                 selected ? 'hidden md:flex' : 'flex'
               }`}
             >
+              <MetaMockNotice />
               <InboxListHeader
                 variant="instagram"
                 search={search}
@@ -510,6 +619,7 @@ export default function InstagramInboxPage() {
                     )}
                     <ChatComposer
                       platform="instagram"
+                      attachCapabilities={META_CHANNEL_ATTACH}
                       value={draft}
                       onChange={setDraft}
                       onSubmit={(e) => void onSend(e)}
@@ -539,12 +649,18 @@ export default function InstagramInboxPage() {
                     onOverlayClose={detailsToggle.close}
                     channelLabels={channelLabels}
                     featureFlags={channelDetailsFlags}
-                    allowDeleteNotes={false}
                     onAddNoteOverride={
                       selectedId
                         ? async (content) => {
                             const { data } = await instagramApi.inbox.addNote(selectedId, content);
                             return data.data as InternalNote;
+                          }
+                        : undefined
+                    }
+                    onDeleteNoteOverride={
+                      selectedId && !isMetaMockId(selectedId)
+                        ? async (noteId) => {
+                            await instagramApi.inbox.deleteNote(noteId);
                           }
                         : undefined
                     }

@@ -13,6 +13,33 @@ function replyText(config: unknown): string {
   return (row.response || row.message || '').trim();
 }
 
+/** Oldest matching IG keyword supplies each text. Private stays `message`; public is optional. */
+export function matchInstagramCommentReplies(
+  rows: Rule[],
+  text: string
+): { privateText: string | null; publicText: string | null } {
+  let privateText: string | null = null;
+  let publicText: string | null = null;
+  for (const row of rows) {
+    if (row.triggerType && row.triggerType !== 'KEYWORD') continue;
+    const config = (row.config || {}) as {
+      platform?: string;
+      keyword?: string;
+      message?: string;
+      response?: string;
+      publicMessage?: string;
+    };
+    if (config.platform !== 'IG') continue;
+    if (!keywordMatches(text, { keyword: config.keyword })) continue;
+    const priv = (config.response || config.message || '').trim();
+    const pub = (config.publicMessage || '').trim();
+    if (!privateText && priv) privateText = priv;
+    if (!publicText && pub) publicText = pub;
+    if (privateText && publicText) break;
+  }
+  return { privateText, publicText };
+}
+
 export function matchChannelKeyword(rows: Rule[], platform: 'FB' | 'IG', text: string): string | null {
   const match = rows.find((row) => {
     if (row.triggerType && row.triggerType !== 'KEYWORD') return false;

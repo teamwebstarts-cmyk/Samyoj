@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { facebookApi } from '../../services/api';
+import { useMetaMock } from '../../contexts/MetaMockContext';
+import { getFacebookAdsMockSnapshot } from '../../utils/metaMockData';
 
 type Snap = NonNullable<Awaited<ReturnType<typeof facebookApi.adsSummary>>['data']['data']['snapshot']>;
 
@@ -16,6 +18,7 @@ function formatMoney(amount: string, currency: string): string {
 
 /** Same /facebook/ads-summary payload as Facebook → Ads. Hidden until a real snapshot exists. */
 export default function MetaAdsRecap() {
+  const { enabled: mockEnabled } = useMetaMock();
   const [snap, setSnap] = useState<Snap | null>(null);
   const [label, setLabel] = useState('');
 
@@ -29,13 +32,23 @@ export default function MetaAdsRecap() {
         if (body.status === 'ready' && body.snapshot) {
           setSnap(body.snapshot);
           setLabel(`${body.periodLabel} · ${body.attributionLabel}`);
+        } else if (mockEnabled) {
+          setSnap(getFacebookAdsMockSnapshot());
+          setLabel('Last 7 days · 7-day click / 1-day view');
+        } else {
+          setSnap(null);
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled && mockEnabled) {
+          setSnap(getFacebookAdsMockSnapshot());
+          setLabel('Last 7 days · 7-day click / 1-day view');
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mockEnabled]);
 
   if (!snap) return null;
 

@@ -17,8 +17,8 @@ export const PAGE_META: Record<string, PageMeta> = {
     description: 'Reply to your customers',
   },
   '/facebook/inbox': {
-    title: 'Facebook Inbox',
-    description: 'Messenger conversations for your Page',
+    title: 'Messenger Inbox',
+    description: 'Page messages · 24-hour reply window',
   },
   '/facebook/ads': {
     title: 'Ads performance',

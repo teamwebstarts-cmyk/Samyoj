@@ -18,6 +18,7 @@ import type { CannedReply } from '../../types';
 import { VOICE_MAX_SECONDS } from './mediaLimits';
 import { emitChatNotice } from './chatNoticeBus';
 import { composerTipProps, useInboxGlassTip } from './ComposerGlassTip';
+import { META_DM_LIMITS } from './metaMessagingLimits';
 
 function useMinWidth(minPx: number) {
   const [matches, setMatches] = useState(
@@ -146,6 +147,12 @@ interface ChatComposerProps {
   contactName?: string | null;
   agentName?: string | null;
   platform?: 'whatsapp' | 'facebook' | 'instagram';
+  attachCapabilities?: {
+    photo?: boolean;
+    video?: boolean;
+    pdf?: boolean;
+    voice?: boolean;
+  };
 }
 
 function formatFileSize(bytes: number) {
@@ -193,7 +200,15 @@ export default function ChatComposer({
   contactName,
   agentName,
   platform = 'whatsapp',
+  attachCapabilities,
 }: ChatComposerProps) {
+  const attach = {
+    photo: attachCapabilities?.photo ?? true,
+    video: attachCapabilities?.video ?? true,
+    pdf: attachCapabilities?.pdf ?? true,
+    voice: attachCapabilities?.voice ?? true,
+  };
+  const showAttachMenu = Boolean(onAttach && (attach.photo || attach.video || attach.pdf));
   // `sending` intentionally unused for locking — optimistic send clears draft and
   // shows PENDING on the bubble; keeping the Send spinner made WhatsApp UX feel broken.
   void _sending;
@@ -246,6 +261,8 @@ export default function ChatComposer({
     typeof window !== 'undefined' &&
     typeof MediaRecorder !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia;
+  const showVoice = Boolean(onAttach && attach.voice && canRecord);
+  const isMetaDm = platform === 'facebook' || platform === 'instagram';
   const canSend = canSendMessages && Boolean(value.trim() || attachment);
   const isVoiceAttachment =
     attachment?.type === 'AUDIO' &&
@@ -765,7 +782,7 @@ export default function ChatComposer({
         </ComposerPortalMenu>
       )}
 
-      {onAttach ? (
+      {showAttachMenu ? (
       <ComposerPortalMenu
         open={attachMenuOpen}
         anchorRef={attachMenuAnchorRef}
@@ -773,24 +790,29 @@ export default function ChatComposer({
         widthClass="w-48"
         onClose={() => setAttachMenuOpen(false)}
       >
+        {attach.photo ? (
         <button
           type="button"
           role="menuitem"
-          onClick={() => openFilePicker('image/*')}
+          onClick={() => openFilePicker('image/png,image/jpeg,.png,.jpg,.jpeg')}
           className={menuItem}
         >
           <Image size={16} className="text-chat-accent" />
           Photo
         </button>
+        ) : null}
+        {attach.video ? (
         <button
           type="button"
           role="menuitem"
-          onClick={() => openFilePicker('video/*')}
+          onClick={() => openFilePicker('video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm')}
           className={menuItem}
         >
           <Image size={16} className="text-chat-accent" />
           Video
         </button>
+        ) : null}
+        {attach.pdf ? (
         <button
           type="button"
           role="menuitem"
@@ -800,6 +822,7 @@ export default function ChatComposer({
           <FileText size={16} className="text-chat-accent" />
           PDF
         </button>
+        ) : null}
         {onInteractive && (
           <button
             type="button"
@@ -818,7 +841,7 @@ export default function ChatComposer({
       ) : null}
 
       <div className="flex items-end gap-1.5 md:block">
-        {onAttach ? (
+        {showAttachMenu ? (
         <button
           ref={attachBtnMobileRef}
           type="button"
@@ -844,6 +867,7 @@ export default function ChatComposer({
             rows={1}
             value={value}
             disabled={!canSendMessages}
+            maxLength={isMetaDm ? META_DM_LIMITS.TEXT_CHARS : undefined}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={attachment ? 'Add a caption (optional)...' : 'Type a message...'}
@@ -869,7 +893,7 @@ export default function ChatComposer({
               </button>
 
               <div className="relative">
-                {onAttach ? (
+                {showAttachMenu ? (
                 <button
                   ref={attachBtnDesktopRef}
                   type="button"
@@ -901,7 +925,7 @@ export default function ChatComposer({
               >
                 <Zap size={16} strokeWidth={2} />
               </button>
-              {canRecord && onAttach && (
+              {showVoice && (
                 <button
                   type="button"
                   className={`${toolBtn} ${recording ? 'text-red-600' : ''}`}
@@ -961,7 +985,7 @@ export default function ChatComposer({
               >
                 <SendHorizontal size={18} strokeWidth={2.25} />
               </button>
-            ) : canRecord && onAttach ? (
+            ) : showVoice ? (
               <button
                 type="button"
                 className={sendBtnClass(

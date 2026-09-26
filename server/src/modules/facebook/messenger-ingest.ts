@@ -3,12 +3,53 @@ import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 import { computeSlaDueAt } from '../sla/service';
+import { MetaWhatsAppService } from '../whatsapp/meta.service';
+import { fetchMessengerProfileName } from './page-client';
 
 const log = createModuleLogger('facebook-messenger-ingest');
 
 /** Placeholder phone so Contact.phone stays required without inventing a dialable WA number. */
 export function messengerContactPhone(psid: string): string {
   return `messenger:${psid}`;
+}
+
+export function isMessengerPlaceholderName(name: string | null | undefined): boolean {
+  if (!name?.trim()) return true;
+  return /^Messenger\s+\S+$/i.test(name.trim());
+}
+
+/** Best-effort Graph profile name. Never throws — Inbox still works as Messenger ######. */
+export async function refreshMessengerContactName(opts: {
+  organizationId: string;
+  channelId: string;
+  contactId: string;
+  psid: string;
+}): Promise<string | null> {
+  const contact = await prisma.contact.findUnique({
+    where: { id: opts.contactId },
+    select: { name: true },
+  });
+  if (!isMessengerPlaceholderName(contact?.name)) return contact?.name || null;
+
+  const channel = await prisma.channel.findFirst({
+    where: { id: opts.channelId, organizationId: opts.organizationId },
+    select: { accessToken: true },
+  });
+  if (!channel?.accessToken) return contact?.name || null;
+
+  try {
+    const token = MetaWhatsAppService.decryptToken(channel.accessToken);
+    const name = await fetchMessengerProfileName(opts.psid, token);
+    if (!name) return contact?.name || null;
+    await prisma.contact.update({ where: { id: opts.contactId }, data: { name } });
+    return name;
+  } catch (err) {
+    log.warn('Messenger profile name lookup failed', {
+      organizationId: opts.organizationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return contact?.name || null;
+  }
 }
 
 export function messengerWindowOpen(cs24hWindowOpensAt: Date | null | undefined, now = new Date()): boolean {
@@ -214,10 +255,17 @@ export async function ingestMessengerTextMessage(opts: {
     select: { id: true, lastMessageAt: true, unreadCount: true, channelId: true },
   });
 
+  const displayName = await refreshMessengerContactName({
+    organizationId: opts.organizationId,
+    channelId: opts.channelId,
+    contactId,
+    psid,
+  });
   const contact = await prisma.contact.findUnique({
     where: { id: contactId },
     select: { id: true, name: true, phone: true },
   });
+  if (contact && displayName) contact.name = displayName;
 
   emitToOrg(opts.organizationId, 'message:new', {
     conversationId: conversation.id,

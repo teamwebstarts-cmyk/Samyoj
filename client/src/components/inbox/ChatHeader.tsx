@@ -19,6 +19,13 @@ import type { PresenceViewer } from './useConversationPresence';
 import type { AiBot, Conversation, ServiceWindowInfo, TeamAgent } from '../../types';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { waitingForLabel } from '../../utils/flow-waiting';
+import {
+  formatInstagramContactTitle,
+  formatMessengerContactTitle,
+  instagramProfileUrlFromContact,
+  isInstagramPlaceholderContactName,
+  isMessengerPlaceholderContactName,
+} from './inboxUtils';
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -138,6 +145,18 @@ export default function ChatHeader({
   hideFavorite = false,
   windowVariant = 'whatsapp',
 }: ChatHeaderProps) {
+  const assignAccentClass =
+    windowVariant === 'instagram'
+      ? 'text-fuchsia-600 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-950/40'
+      : windowVariant === 'messenger'
+        ? 'text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40'
+        : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40';
+  const assignOpenClass =
+    windowVariant === 'instagram'
+      ? 'border-fuchsia-500/50 bg-fuchsia-500/10'
+      : windowVariant === 'messenger'
+        ? 'border-sky-500/50 bg-sky-500/10'
+        : 'border-whatsapp-500/50 bg-whatsapp-500/10';
   const tipFor = useGlassTipProps();
   const [botMenuOpen, setBotMenuOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -188,18 +207,21 @@ export default function ChatHeader({
     onToggleFavorite();
   };
 
-  return (
-    <div className="inbox-chat-header relative z-30 flex shrink-0 items-center gap-1.5 border-b border-neutral-100/80 px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3 md:gap-3 md:px-4 md:py-3.5 dark:border-neutral-800/80">
-      <button
-        type="button"
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-theme-fg md:hidden ${FOCUS_RING_CLASS}`}
-        onClick={onBack}
-        aria-label="Back to conversations"
-        {...tipFor('Back', 'right')}
-      >
-        <ArrowLeft size={17} strokeWidth={2.25} />
-      </button>
+  const isInstagram = windowVariant === 'instagram';
+  const isMessenger = windowVariant === 'messenger';
+  const contactTitle = isInstagram
+    ? formatInstagramContactTitle(contact)
+    : isMessenger
+      ? formatMessengerContactTitle(contact)
+      : contact.name || contact.phone || '';
+  const instagramProfileUrl = isInstagram ? instagramProfileUrlFromContact(contact) : null;
+  const showInstagramSubtitle =
+    isInstagram && !instagramProfileUrl && isInstagramPlaceholderContactName(contact.name);
+  const showMessengerSubtitle =
+    isMessenger && isMessengerPlaceholderContactName(contact.name);
 
+  const identityBlock = (
+    <>
       <ContactAvatar
         name={contact.name}
         phone={contact.phone}
@@ -212,7 +234,7 @@ export default function ChatHeader({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1">
           <p className="truncate text-[14px] font-bold tracking-tight text-theme-fg sm:text-[15px]">
-            {contact.name || contact.phone}
+            {contactTitle}
           </p>
           {isFavorite && (
             <span
@@ -247,13 +269,21 @@ export default function ChatHeader({
             )}
           </span>
         )}
-        <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
-          {windowVariant === 'instagram'
-            ? 'Instagram'
-            : windowVariant === 'messenger'
-              ? 'Facebook Messenger'
-              : contact.phone}
-        </p>
+        {!isInstagram && !isMessenger && (
+          <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
+            {contact.phone}
+          </p>
+        )}
+        {showMessengerSubtitle && (
+          <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
+            Facebook Messenger
+          </p>
+        )}
+        {showInstagramSubtitle && (
+          <p className="hidden truncate text-[12.5px] font-medium text-theme-muted sm:block">
+            Instagram
+          </p>
+        )}
         {waitingForLabel(conversation.activeFlow?.waitingFor) && (
           <p className="truncate text-[11px] font-medium text-violet-700 dark:text-violet-300">
             {waitingForLabel(conversation.activeFlow?.waitingFor)}
@@ -261,6 +291,35 @@ export default function ChatHeader({
         )}
         <PresenceRow viewers={viewers} />
       </div>
+    </>
+  );
+
+  return (
+    <div className="inbox-chat-header relative z-30 flex shrink-0 items-center gap-1.5 border-b border-neutral-100/80 px-2 py-2.5 sm:gap-2 sm:px-3 sm:py-3 md:gap-3 md:px-4 md:py-3.5 dark:border-neutral-800/80">
+      <button
+        type="button"
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-theme-fg md:hidden ${FOCUS_RING_CLASS}`}
+        onClick={onBack}
+        aria-label="Back to conversations"
+        {...tipFor('Back', 'right')}
+      >
+        <ArrowLeft size={17} strokeWidth={2.25} />
+      </button>
+
+      {instagramProfileUrl ? (
+        <a
+          href={instagramProfileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-xl py-0.5 pr-1 transition hover:bg-neutral-50/90 sm:gap-2 dark:hover:bg-neutral-800/50 ${FOCUS_RING_CLASS}`}
+          aria-label={`Open ${contactTitle} on Instagram`}
+          {...tipFor('View on Instagram')}
+        >
+          {identityBlock}
+        </a>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">{identityBlock}</div>
+      )}
 
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 md:gap-1.5">
         {onOpenDetails && (
@@ -408,8 +467,8 @@ export default function ChatHeader({
                 ? `Assign · ${conversation.assignedAgent.name}`
                 : 'Assign agent'
             )}
-            className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-emerald-950/40 md:h-9 md:w-9 ${FOCUS_RING_CLASS} ${
-              assignOpen ? 'border-whatsapp-500/50 bg-whatsapp-500/10' : ''
+            className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-theme-border bg-theme-surface transition disabled:cursor-not-allowed disabled:opacity-45 md:h-9 md:w-9 ${FOCUS_RING_CLASS} ${assignAccentClass} ${
+              assignOpen ? assignOpenClass : ''
             }`}
           >
             <UserPlus className="h-4 w-4" strokeWidth={2.1} />

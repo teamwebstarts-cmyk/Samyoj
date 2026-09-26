@@ -95,6 +95,7 @@ interface InboxDetailsPanelProps {
   channelLabels?: ChannelLabelsBridge;
   featureFlags?: InboxDetailsFeatureFlags;
   onAddNoteOverride?: (content: string) => Promise<InternalNote>;
+  onDeleteNoteOverride?: (noteId: string) => Promise<void>;
   allowDeleteNotes?: boolean;
 }
 
@@ -118,6 +119,7 @@ export default function InboxDetailsPanel({
   channelLabels,
   featureFlags,
   onAddNoteOverride,
+  onDeleteNoteOverride,
   allowDeleteNotes = true,
 }: InboxDetailsPanelProps) {
   const tipFor = useGlassTipProps();
@@ -145,6 +147,13 @@ export default function InboxDetailsPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const labelsSectionRef = useRef<HTMLDivElement>(null);
+  const newLabelInputRef = useRef<HTMLInputElement>(null);
+
+  const openLabelsPicker = () => {
+    setLabelsPickerOpen(true);
+    setShowNewLabel(true);
+    requestAnimationFrame(() => newLabelInputRef.current?.focus());
+  };
 
   const closeLabelsPicker = () => {
     setLabelsPickerOpen(false);
@@ -481,6 +490,7 @@ export default function InboxDetailsPanel({
               onNotesChange={onNotesChange}
               currentUserId={currentUserId}
               onAddNote={onAddNoteOverride}
+              onDeleteNote={onDeleteNoteOverride}
               allowDeleteNotes={allowDeleteNotes}
             />
           </div>
@@ -513,7 +523,7 @@ export default function InboxDetailsPanel({
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setLabelsPickerOpen(true)}
+                        onClick={openLabelsPicker}
                         className={detailsAddLinkClassName()}
                       >
                         + Add label
@@ -585,6 +595,7 @@ export default function InboxDetailsPanel({
                     {showNewLabel ? (
                       <div className="flex items-center gap-1.5">
                         <AppInput
+                          ref={newLabelInputRef}
                           value={newLabelName}
                           onChange={(e) => setNewLabelName(e.target.value)}
                           placeholder="Label name"

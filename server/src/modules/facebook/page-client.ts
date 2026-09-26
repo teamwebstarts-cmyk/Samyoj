@@ -260,7 +260,7 @@ export async function sendPageAttachment(opts: {
   pageId: string;
   pageAccessToken: string;
   recipientId: string;
-  kind: 'image' | 'video' | 'file';
+  kind: 'image' | 'video' | 'audio' | 'file';
   url: string;
   instagram?: boolean;
 }): Promise<{ messageId?: string }> {
@@ -307,6 +307,24 @@ export async function sendPageTextMessage(opts: {
   return { messageId };
 }
 
+export async function fetchInstagramUserProfile(
+  igsid: string,
+  pageAccessToken: string
+): Promise<{ name?: string | null; username?: string | null } | null> {
+  try {
+    return await graphGet<{ name?: string | null; username?: string | null }>(
+      `/${encodeURIComponent(igsid)}?fields=name,username`,
+      pageAccessToken
+    );
+  } catch (err) {
+    log.warn('Instagram user profile lookup failed', {
+      igsid,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
 export async function fetchPageInstagramAccount(
   pageId: string,
   pageAccessToken: string
@@ -337,6 +355,17 @@ export async function sendInstagramTextMessage(opts: {
         ? (data as { messageId: string }).messageId
         : undefined;
   return { messageId };
+}
+
+/** Public reply under the same Instagram comment. */
+export async function replyToInstagramComment(opts: {
+  commentId: string;
+  pageAccessToken: string;
+  text: string;
+}): Promise<void> {
+  await graphPost(`/${opts.commentId}/replies`, opts.pageAccessToken, {
+    message: opts.text,
+  });
 }
 
 /** One private reply to a comment — POST /{PAGE_ID}/messages with comment_id. */
@@ -444,8 +473,10 @@ export async function subscribeInstagramAccount(
   pageAccessToken: string
 ): Promise<void> {
   try {
+    // comments is the required field. live_comments is optional: a rejection there
+    // used to fail the whole subscribe, including post comments.
     await graphPost(`/${igUserId}/subscribed_apps`, pageAccessToken, {
-      subscribed_fields: 'messages,comments,live_comments',
+      subscribed_fields: 'messages,comments',
     });
   } catch (err) {
     log.warn('IG webhook subscribe failed', {
@@ -454,6 +485,115 @@ export async function subscribeInstagramAccount(
     });
     throw err;
   }
+  try {
+    await graphPost(`/${igUserId}/subscribed_apps`, pageAccessToken, {
+      subscribed_fields: 'messages,comments,live_comments',
+    });
+  } catch (err) {
+    log.warn('IG live_comments subscribe skipped', {
+      igUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export type InstagramGraphComment = {
+  id?: string;
+  text?: string;
+  username?: string;
+  timestamp?: string;
+  from?: { id?: string; username?: string };
+};
+
+type GraphPage<T> = { data?: T[]; paging?: { cursors?: { after?: string } } };
+
+function graphAfter(paging?: { cursors?: { after?: string } }): string | undefined {
+  const after = paging?.cursors?.after;
+  return after || undefined;
+}
+
+export async function fetchMessengerProfileName(
+  psid: string,
+  pageAccessToken: string
+): Promise<string | null> {
+  try {
+    const data = await graphGet<{ name?: string; first_name?: string; last_name?: string }>(
+      `/${psid}?fields=name,first_name,last_name`,
+      pageAccessToken
+    );
+    const name = (data.name || [data.first_name, data.last_name].filter(Boolean).join(' ')).trim();
+    return name || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchInstagramComment(
+  commentId: string,
+  pageAccessToken: string
+): Promise<InstagramGraphComment | null> {
+  const data = await graphGet<InstagramGraphComment>(
+    `/${commentId}?fields=id,text,timestamp,username,from`,
+    pageAccessToken
+  );
+  return data?.id ? data : null;
+}
+
+export type InstagramGraphMedia = {
+  id?: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  caption?: string;
+};
+
+export function instagramMediaThumbnailUrl(media: InstagramGraphMedia): string | null {
+  const type = (media.media_type || '').toUpperCase();
+  if (type === 'VIDEO' || type === 'REEL' || type === 'REELS') {
+    return media.thumbnail_url || media.media_url || null;
+  }
+  return media.media_url || media.thumbnail_url || null;
+}
+
+export async function fetchInstagramMedia(
+  mediaId: string,
+  pageAccessToken: string
+): Promise<InstagramGraphMedia | null> {
+  const data = await graphGet<InstagramGraphMedia>(
+    `/${mediaId}?fields=id,media_type,media_url,thumbnail_url,permalink,caption`,
+    pageAccessToken
+  );
+  return data?.id ? data : null;
+}
+
+export async function listInstagramMediaIds(
+  igUserId: string,
+  pageAccessToken: string,
+  after?: string
+): Promise<{ ids: string[]; next?: string }> {
+  const cursor = after ? `&after=${encodeURIComponent(after)}` : '';
+  const data = await graphGet<GraphPage<{ id?: string }>>(
+    `/${igUserId}/media?fields=id&limit=25${cursor}`,
+    pageAccessToken
+  );
+  return {
+    ids: (data.data || []).map((row) => row.id).filter((id): id is string => Boolean(id)),
+    next: graphAfter(data.paging),
+  };
+}
+
+export async function listMediaComments(
+  mediaId: string,
+  pageAccessToken: string,
+  after?: string
+): Promise<{ comments: InstagramGraphComment[]; next?: string }> {
+  const cursor = after ? `&after=${encodeURIComponent(after)}` : '';
+  const data = await graphGet<GraphPage<InstagramGraphComment>>(
+    `/${mediaId}/comments?fields=id,text,timestamp,username,from&limit=50${cursor}`,
+    pageAccessToken
+  );
+  return { comments: data.data || [], next: graphAfter(data.paging) };
 }
 
 export function mapLeadgenFields(fieldData: LeadgenField[] | undefined): {

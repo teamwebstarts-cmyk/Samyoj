@@ -22,6 +22,36 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
       button: 'border-[#E4405F]/35 text-[#d6335a] hover:border-[#E4405F]/55 hover:bg-[#E4405F]/5 dark:border-[#E4405F]/30 dark:text-[#ff7b99] dark:hover:bg-[#E4405F]/15',
     },
   }[platform];
+  const heroId =
+    platform === 'instagram'
+      ? 'instagram-inbox-empty-hero'
+      : platform === 'facebook'
+        ? 'messenger-inbox-empty-hero'
+        : 'inbox-empty-hero';
+  const heroSize =
+    platform === 'instagram'
+      ? { width: 1536, height: 1024 }
+      : platform === 'facebook'
+        ? { width: 1280, height: 853 }
+        : { width: 1280, height: 853 };
+  const copy = {
+    whatsapp: {
+      title: 'Your inbox is ready!',
+      body: 'All your conversations, AI replies and automations in one smart place.',
+      hint: 'Select a conversation to begin replying',
+    },
+    facebook: {
+      title: 'Messenger inbox is ready',
+      body: 'Page messages, 24-hour reply window, photos, video, PDF, and audio — same rules as Meta Messenger.',
+      hint: 'Pick a chat on the left to reply',
+    },
+    instagram: {
+      title: 'Instagram DMs are ready',
+      body: 'DMs from your professional account — reply, automate, and keep notes in one place.',
+      hint: 'Select a conversation to begin replying',
+    },
+  }[platform];
+
   return (
     <div
       className="inbox-placeholder-bg relative flex h-full min-h-0 flex-1 flex-col overflow-hidden"
@@ -41,7 +71,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
       <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
         <div className="inbox-placeholder-enter flex h-full min-h-0 w-full max-w-[42rem] flex-col items-center justify-center mx-auto">
           <div className="flex min-h-0 w-full max-w-[38rem] flex-[1.15] items-center justify-center">
-            <EmptyStateHeroImage id="inbox-empty-hero" width={1280} height={853} />
+            <EmptyStateHeroImage id={heroId} width={heroSize.width} height={heroSize.height} />
           </div>
 
           <div className="flex w-full shrink-0 flex-col items-center text-center">
@@ -49,14 +79,14 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
               className="inbox-placeholder-card text-[18px] font-bold leading-tight tracking-tight text-[#1e293b] dark:text-white sm:text-[21px]"
               style={{ animationDelay: '60ms' }}
             >
-              Your inbox is ready!
+              {copy.title}
             </h2>
 
             <p
-              className="inbox-placeholder-card mt-1.5 max-w-[17.5rem] text-[11.5px] font-medium leading-snug text-slate-500 dark:text-slate-400 sm:mt-2 sm:max-w-[19rem] sm:text-[12.5px]"
+              className="inbox-placeholder-card mt-1.5 max-w-[17.5rem] text-[11.5px] font-medium leading-snug text-slate-500 dark:text-slate-400 sm:mt-2 sm:max-w-[22rem] sm:text-[12.5px]"
               style={{ animationDelay: '120ms' }}
             >
-              All your conversations, AI replies and automations in one smart place.
+              {copy.body}
             </p>
 
             <div
@@ -72,7 +102,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
               className="inbox-placeholder-card text-[11.5px] font-medium text-slate-400 dark:text-slate-500 sm:text-[12px]"
               style={{ animationDelay: '240ms' }}
             >
-              Select a conversation to begin replying
+              {copy.hint}
             </p>
 
             {onNewChat ? (

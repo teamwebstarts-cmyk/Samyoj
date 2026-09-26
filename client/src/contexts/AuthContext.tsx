@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
-import { authApi, teamApi } from '../services/api';
+import { authApi, ensureFreshAccessToken, teamApi } from '../services/api';
 import type { AgentAvailability, User, Organization, OrgRole } from '../types';
 import {
   clearAuthBackup,
   clearAuthTokens,
+  clearClientSessionCookies,
   hasAuthSessionHint,
   isRequestAborted,
   restoreAuthBackupIfNeeded,
@@ -44,6 +45,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+let hydrateMeInFlight: Promise<boolean> | null = null;
+
 function applySession(
   setUser: (user: User | null) => void,
   setOrganization: (org: Organization | null) => void,
@@ -80,27 +83,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const hydrateFromMe = useCallback(async () => {
-    const { data } = await authApi.me();
-    const org = data.data.organizations?.[0];
-    applySession(
-      setUser,
-      setOrganization,
-      setAvailabilityState,
-      setTwoFactorEnabled,
-      data.data,
-      org
-        ? {
-            id: org.id,
-            companyName: org.companyName,
-            role: org.role,
-          }
-        : null,
-      data.data.availability,
-      data.data.twoFactorEnabled
-    );
-    clearAuthBackup();
-    return true;
+  const hydrateFromMe = useCallback(async (): Promise<boolean> => {
+    if (hydrateMeInFlight) return hydrateMeInFlight;
+
+    hydrateMeInFlight = (async () => {
+      const loadMe = async () => {
+        const res = await authApi.me();
+        if (res.status === 401) return null;
+        return res.data;
+      };
+
+      let payload = await loadMe();
+      if (!payload) {
+        const refreshed = await ensureFreshAccessToken();
+        if (!refreshed) {
+          clearAuthTokens();
+          clearClientSessionCookies();
+          return false;
+        }
+        payload = await loadMe();
+        if (!payload) {
+          clearAuthTokens();
+          clearClientSessionCookies();
+          return false;
+        }
+      }
+
+      const org = payload.data.organizations?.[0];
+      applySession(
+        setUser,
+        setOrganization,
+        setAvailabilityState,
+        setTwoFactorEnabled,
+        payload.data,
+        org
+          ? {
+              id: org.id,
+              companyName: org.companyName,
+              role: org.role,
+            }
+          : null,
+        payload.data.availability,
+        payload.data.twoFactorEnabled
+      );
+      clearAuthBackup();
+      return true;
+    })().finally(() => {
+      hydrateMeInFlight = null;
+    });
+
+    return hydrateMeInFlight;
   }, []);
 
   useEffect(() => {
@@ -116,13 +148,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        await hydrateFromMe();
+        const ok = await hydrateFromMe();
+        if (!ok) {
+          applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
+        }
       } catch (err) {
         if (isRequestAborted(err)) {
           setLoading(false);
           return;
         }
         clearAuthTokens();
+        clearClientSessionCookies();
         clearAuthBackup();
         applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
       } finally {
@@ -180,7 +216,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async () => {
     try {
-      await hydrateFromMe();
+      const ok = await hydrateFromMe();
+      if (!ok) return false;
       heartbeat();
       return true;
     } catch {
@@ -220,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     void authApi.logout();
     clearAuthTokens();
+    clearClientSessionCookies();
     clearAuthBackup();
     applySession(setUser, setOrganization, setAvailabilityState, setTwoFactorEnabled, null, null);
   };

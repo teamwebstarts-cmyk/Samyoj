@@ -282,6 +282,7 @@ export default function ConversationList({
                   checked={selectedIds.has(conv.id)}
                   onToggleSelect={() => onToggleSelect(conv.id)}
                   currentUserId={currentUserId}
+                  listVariant={emptyVariant}
                 />
               </div>
             );

@@ -85,6 +85,14 @@ export function getAvatarGradient(key: string) {
   return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
+/** Clock time only — date belongs on thread dividers, not in every bubble. */
+export function formatBubbleClockTime(dateStr: string) {
+  const date = new Date(dateStr);
+  return date
+    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    .replace(/\s+(AM|PM)/i, '\u202F$1');
+}
+
 export function formatMessageTime(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
@@ -93,10 +101,7 @@ export function formatMessageTime(dateStr: string) {
   yesterday.setDate(yesterday.getDate() - 1);
   const isYesterday = date.toDateString() === yesterday.toDateString();
 
-  // Narrow no-break space keeps "02:12 PM" on one line in tight bubbles.
-  const time = date
-    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    .replace(/\s+(AM|PM)/i, '\u202F$1');
+  const time = formatBubbleClockTime(dateStr);
 
   if (isToday) return time;
   if (isYesterday) return `Yesterday ${time}`;
@@ -315,9 +320,10 @@ export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | '
 
 export function messageHasMedia(message: Pick<Message, 'type' | 'metadata'>) {
   const type = message.type?.toUpperCase();
+  const meta = message.metadata as { mediaId?: string; mediaPath?: string; externalUrl?: string } | null;
   return (
     ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type) &&
-    Boolean(message.metadata?.mediaId || message.metadata?.mediaPath)
+    Boolean(meta?.mediaId || meta?.mediaPath || meta?.externalUrl)
   );
 }
 
@@ -334,4 +340,57 @@ const HANDOFF_REASON_LABELS: Record<string, string> = {
 export function formatHandoffReason(reason?: string | null) {
   if (!reason) return '';
   return HANDOFF_REASON_LABELS[reason] || 'Sent to team';
+}
+
+/** Matches server `isInstagramPlaceholderContactName` — e.g. `Instagram 579468`. */
+export function isInstagramPlaceholderContactName(name: string | null | undefined): boolean {
+  if (!name?.trim()) return true;
+  return /^Instagram\s+\S+$/i.test(name.trim());
+}
+
+export function instagramHandleFromContact(contact: {
+  name?: string | null;
+  phone?: string | null;
+}): string | null {
+  const name = contact.name?.trim();
+  if (!name || isInstagramPlaceholderContactName(name)) return null;
+  const handle = name.replace(/^@/, '').trim();
+  return handle || null;
+}
+
+export function formatInstagramContactTitle(contact: {
+  name?: string | null;
+  phone?: string | null;
+}): string {
+  const handle = instagramHandleFromContact(contact);
+  if (handle) return `@${handle}`;
+  if (contact.name?.trim()) return contact.name.trim();
+  if (contact.phone?.trim()) return contact.phone.trim();
+  return 'Instagram';
+}
+
+export function instagramProfileUrlFromContact(contact: {
+  name?: string | null;
+  phone?: string | null;
+}): string | null {
+  const handle = instagramHandleFromContact(contact);
+  if (!handle || !/^[a-zA-Z0-9._]+$/.test(handle)) return null;
+  return `https://www.instagram.com/${encodeURIComponent(handle)}/`;
+}
+
+/** Matches server Messenger fallback — e.g. `Messenger 579468`. */
+export function isMessengerPlaceholderContactName(name: string | null | undefined): boolean {
+  if (!name?.trim()) return true;
+  return /^Messenger\s+\S+$/i.test(name.trim());
+}
+
+export function formatMessengerContactTitle(contact: {
+  name?: string | null;
+  phone?: string | null;
+}): string {
+  const name = contact.name?.trim();
+  if (name && !isMessengerPlaceholderContactName(name)) return name;
+  if (contact.phone?.trim()) return contact.phone.trim();
+  if (name) return name;
+  return 'Messenger';
 }
