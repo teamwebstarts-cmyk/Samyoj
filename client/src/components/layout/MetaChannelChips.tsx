@@ -141,7 +141,7 @@ export default function MetaChannelChips({
         >
           <Facebook className="h-3.5 w-3.5 shrink-0 text-[#1877F2]" strokeWidth={2.25} />
           <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">Facebook</span>
-          <span className="shrink-0 text-[10px] font-semibold text-emerald-600">Connected</span>
+          <span className="shrink-0 text-[10px] font-semibold text-[#1877F2]">Connected</span>
         </Link>
       ) : (
         <button
@@ -167,7 +167,7 @@ export default function MetaChannelChips({
         >
           <Instagram className="h-3.5 w-3.5 shrink-0 text-[#E4405F]" strokeWidth={2.25} />
           <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">Instagram</span>
-          <span className="shrink-0 text-[10px] font-semibold text-emerald-600">Connected</span>
+          <span className="shrink-0 text-[10px] font-semibold text-[#E4405F]">Connected</span>
         </Link>
       ) : (
         <button

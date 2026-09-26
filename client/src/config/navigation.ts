@@ -71,7 +71,7 @@ export const NAV_SECTIONS: NavSection[] = [
     dropdown: true,
     icon: Facebook,
     items: [
-      { to: '/facebook/inbox', icon: MessageSquare, label: 'Inbox' },
+      { to: '/facebook/inbox', icon: MessageSquare, label: 'Messenger' },
       { to: '/facebook/ads', icon: BarChart3, label: 'Ads' },
     ],
   },
@@ -134,7 +134,7 @@ export const MOBILE_BOTTOM_NAV: NavItem[] = [
 export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/facebook/inbox', icon: Facebook, label: 'Facebook Inbox' },
+  { to: '/facebook/inbox', icon: Facebook, label: 'Messenger Inbox' },
   { to: '/facebook/ads', icon: BarChart3, label: 'Facebook Ads' },
   { to: '/instagram/inbox', icon: Instagram, label: 'Instagram Inbox' },
   { to: '/instagram/comments', icon: Hash, label: 'Instagram Comments' },

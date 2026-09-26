@@ -17,4 +17,14 @@ describe('Meta navigation', () => {
     expect(paths).toContain('/facebook/inbox');
     expect(paths).toContain('/instagram/inbox');
   });
+
+  it('uses Messenger-native labels for Facebook inbox navigation', () => {
+    const mobile = getVisibleMobileMoreItems('OWNER').find((item) => item.to === '/facebook/inbox');
+    expect(mobile?.label).toBe('Messenger Inbox');
+
+    const sections = getVisibleNavSections('OWNER');
+    const facebook = sections.find((s) => s.accent === 'facebook');
+    const messenger = facebook?.items.find((item) => item.to === '/facebook/inbox');
+    expect(messenger?.label).toBe('Messenger');
+  });
 });

@@ -1,4 +1,5 @@
 import prisma from '../../config/database';
+import { emitToOrg } from '../../realtime';
 import logger from '../../utils/logger';
 import { keywordMatches } from '../flows/trigger-match';
 import { getOrgBusinessHours, isWithinBusinessHours } from '../settings/business-hours';
@@ -201,7 +202,7 @@ async function deliverChannelText(
     });
   }
   if (!opts.conversationId) return true;
-  await prisma.message.create({
+  const message = await prisma.message.create({
     data: {
       conversationId: opts.conversationId,
       direction: 'OUTBOUND',
@@ -209,6 +210,16 @@ async function deliverChannelText(
       content: reply,
       status: 'SENT',
     },
+  });
+  await prisma.conversation.update({
+    where: { id: opts.conversationId },
+    data: { lastMessageAt: new Date() },
+  });
+  emitToOrg(opts.organizationId, 'message:new', {
+    conversationId: opts.conversationId,
+    channelId: conversation.channelId,
+    platform: opts.platform,
+    message,
   });
   return true;
 }

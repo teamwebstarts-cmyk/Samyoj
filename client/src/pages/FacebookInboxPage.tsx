@@ -362,8 +362,15 @@ export default function FacebookInboxPage() {
       setMessages((prev) => prev.map((m) => (m.id === optimisticId ? confirmed : m)));
       void loadList();
     } catch (err) {
-      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m)));
-      toastError(getErrorMessage(err) || 'Could not send the file');
+      const reason = getErrorMessage(err) || 'Could not send the file';
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticId
+            ? { ...m, status: 'FAILED', metadata: { ...m.metadata, error: reason, metaErrorHint: reason } }
+            : m
+        )
+      );
+      toastError(reason);
     }
   };
 

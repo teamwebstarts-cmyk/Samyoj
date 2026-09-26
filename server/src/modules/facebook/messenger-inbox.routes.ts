@@ -6,7 +6,11 @@ import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { emitToOrg } from '../../realtime';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
-import { messengerWindowOpen, refreshMessengerContactName } from './messenger-ingest';
+import {
+  isMessengerPlaceholderName,
+  messengerWindowOpen,
+  refreshMessengerContactName,
+} from './messenger-ingest';
 import { sendPageTextMessage } from './page-client';
 import {
   attachChannelInboxActions,
@@ -141,6 +145,20 @@ router.get(
       prisma.conversation.count({ where }),
       prisma.conversation.count({ where: unreadWhere }),
     ]);
+
+    await Promise.all(
+      rows.map(async (row) => {
+        const phone = row.contact?.phone || '';
+        if (!phone.startsWith('messenger:') || !isMessengerPlaceholderName(row.contact?.name)) return;
+        const name = await refreshMessengerContactName({
+          organizationId: orgId,
+          channelId: channel.id,
+          contactId: row.contactId,
+          psid: phone.slice('messenger:'.length),
+        });
+        if (name && row.contact) row.contact.name = name;
+      })
+    );
 
     sendSuccess(res, {
       connected: true,

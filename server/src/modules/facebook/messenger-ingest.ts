@@ -40,7 +40,10 @@ export async function refreshMessengerContactName(opts: {
   try {
     const token = MetaWhatsAppService.decryptToken(channel.accessToken);
     const name = await fetchMessengerProfileName(opts.psid, token);
-    if (!name) return contact?.name || null;
+    if (!name) {
+      log.warn('Messenger profile returned no name', { organizationId: opts.organizationId });
+      return contact?.name || null;
+    }
     await prisma.contact.update({ where: { id: opts.contactId }, data: { name } });
     return name;
   } catch (err) {

@@ -70,23 +70,43 @@ export function channelMessageAttachment(message: Record<string, unknown>): {
     rawType === 'animated_image_share' ||
     urlPath.endsWith('.gif');
   const isSticker = rawType === 'sticker';
+  const isVideo = rawType === 'video' || rawType === 'ig_reel' || rawType === 'reel' || urlPath.endsWith('.mp4');
+  const isAudio = rawType === 'audio' || rawType === 'voice';
   const type: InboundChannelMessageType =
     rawType === 'image' || isGif || isSticker
       ? 'IMAGE'
-      : rawType === 'video'
+      : isVideo
         ? 'VIDEO'
-        : rawType === 'audio'
+        : isAudio
           ? 'AUDIO'
           : 'DOCUMENT';
   const content =
     type === 'IMAGE' ? '[image]' : type === 'VIDEO' ? '[video]' : type === 'AUDIO' ? '[audio]' : '[document]';
+  const filename = urlPath.split('/').pop() || '';
+  const mimeType = isGif
+    ? 'image/gif'
+    : urlPath.endsWith('.pdf')
+      ? 'application/pdf'
+      : urlPath.endsWith('.mp4')
+        ? 'video/mp4'
+        : urlPath.endsWith('.png')
+          ? 'image/png'
+          : urlPath.endsWith('.jpg') || urlPath.endsWith('.jpeg')
+            ? 'image/jpeg'
+            : urlPath.endsWith('.webp')
+              ? 'image/webp'
+              : urlPath.endsWith('.mp3')
+                ? 'audio/mpeg'
+                : undefined;
   return {
     type,
     content: url ? content : `[${type}]`,
     metadata: {
       attachments,
       ...(url ? { externalUrl: url } : {}),
-      ...(isGif ? { isGif: true, mimeType: 'image/gif' } : {}),
+      ...(filename.includes('.') ? { filename: filename.slice(0, 180) } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      ...(isGif ? { isGif: true } : {}),
       ...(isSticker ? { isSticker: true } : {}),
     },
   };

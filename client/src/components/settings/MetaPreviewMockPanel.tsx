@@ -8,7 +8,7 @@ export default function MetaPreviewMockPanel() {
   return (
     <SettingsPanel
       title="Meta preview data"
-      description="Sample rows on Facebook Inbox, Ads (KPIs + campaigns), Instagram Inbox, and Comments. Live Meta data still loads and appears together."
+      description="Sample rows on Messenger Inbox, Ads (KPIs + campaigns), Instagram Inbox, and Comments. Live Meta data still loads and appears together."
       icon={FlaskConical}
     >
       <div className="flex flex-wrap gap-2">

@@ -369,8 +369,15 @@ export default function InstagramInboxPage() {
       setMessages((prev) => prev.map((m) => (m.id === optimisticId ? confirmed : m)));
       void loadList();
     } catch (err) {
-      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m)));
-      toastError(getErrorMessage(err) || 'Could not send the file');
+      const reason = getErrorMessage(err) || 'Could not send the file';
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticId
+            ? { ...m, status: 'FAILED', metadata: { ...m.metadata, error: reason, metaErrorHint: reason } }
+            : m
+        )
+      );
+      toastError(reason);
     }
   };
 
@@ -613,8 +620,8 @@ export default function InstagramInboxPage() {
                       </div>
                     )}
                     {windowOpen && (
-                      <p className="border-t border-theme-border px-4 py-2 text-center text-[11px] leading-relaxed text-theme-muted">
-                        Replies stay in this 24-hour window. WhatsApp templates are not used here.
+                      <p className="border-t border-rose-200/60 px-4 py-2 text-center text-[11px] leading-relaxed text-[#65676b] dark:border-rose-900/40 dark:text-neutral-400">
+                        Replies stay in this 24-hour window. WhatsApp templates and sponsored messages are not used here.
                       </p>
                     )}
                     <ChatComposer

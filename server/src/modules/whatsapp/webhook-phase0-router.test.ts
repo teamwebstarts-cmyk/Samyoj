@@ -146,11 +146,30 @@ describe('Phase 0 Meta webhook object router', () => {
       metadata: {
         attachments: [{ type: 'image', payload: { url: 'https://cdn.example/image.jpg' } }],
         externalUrl: 'https://cdn.example/image.jpg',
+        filename: 'image.jpg',
+        mimeType: 'image/jpeg',
       },
     });
     expect(channelMessageAttachment({
       attachments: [{ type: 'image', payload: { url: 'https://cdn.example/anim.gif?oe=1' } }],
-    }).metadata).toMatchObject({ isGif: true, mimeType: 'image/gif' });
+    })).toMatchObject({
+      type: 'IMAGE',
+      content: '[image]',
+      metadata: { isGif: true, mimeType: 'image/gif' },
+    });
+    expect(channelMessageAttachment({
+      attachments: [{ type: 'video', payload: { url: 'https://cdn.example/clip.mp4' } }],
+    })).toMatchObject({ type: 'VIDEO', content: '[video]' });
+    expect(channelMessageAttachment({
+      attachments: [{ type: 'file', payload: { url: 'https://cdn.example/quote.pdf' } }],
+    })).toMatchObject({
+      type: 'DOCUMENT',
+      content: '[document]',
+      metadata: { mimeType: 'application/pdf', filename: 'quote.pdf' },
+    });
+    expect(channelMessageAttachment({
+      attachments: [{ type: 'ig_reel', payload: { url: 'https://cdn.example/reel.mp4' } }],
+    })).toMatchObject({ type: 'VIDEO', content: '[video]' });
     expect(channelMessageAttachment({ attachments: [{ type: 'file', payload: {} }] })).toEqual({
       type: 'DOCUMENT',
       content: '[DOCUMENT]',

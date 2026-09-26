@@ -7,7 +7,8 @@ import { emitToOrg } from '../../realtime';
 import { nextUnreadCount } from '../inbox/unread';
 import { deleteConversationKeepingHistory } from '../inbox/delete-conversation';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { httpsMediaUrl, markPageSeen, sendPageAttachment } from './page-client';
+import { httpsMediaUrl, markPageSeen, sendPageAttachment, sendPageAttachmentId, uploadPageMessageFile } from './page-client';
+import { readMediaFile } from '../media/storage';
 import { findParentPageChannel } from './parent-page';
 
 type Row = {
@@ -373,7 +374,6 @@ export async function deliverChannelMedia(opts: {
   kind: 'image' | 'video' | 'audio' | 'file';
 }) {
   const url = httpsMediaUrl(opts.mediaUrl);
-  if (!url) throw new AppError(400, 'Media URL must be https');
   // Same rule as text: the conversation's own channel decides the Page (S-02 / G-02).
   const page =
     opts.platform === 'IG'
@@ -388,14 +388,50 @@ export async function deliverChannelMedia(opts: {
           select: { platformAccountId: true, accessToken: true },
         });
   if (!page?.accessToken) throw new AppError(400, 'Connect a Facebook Page in Settings first');
-  await sendPageAttachment({
-    pageId: page.platformAccountId,
-    pageAccessToken: MetaWhatsAppService.decryptToken(page.accessToken),
-    recipientId: opts.recipientId,
-    kind: opts.kind,
-    url,
-    instagram: opts.platform === 'IG',
-  });
+  const pageAccessToken = MetaWhatsAppService.decryptToken(page.accessToken);
+  try {
+    if (opts.mediaPath) {
+      let buffer: Buffer;
+      try {
+        buffer = await readMediaFile(opts.mediaPath);
+      } catch {
+        throw new AppError(400, 'That file is no longer on the server. Attach it again.');
+      }
+      const attachmentId = await uploadPageMessageFile({
+        pageId: page.platformAccountId,
+        pageAccessToken,
+        kind: opts.kind,
+        buffer,
+        filename: opts.filename || 'file',
+        mimeType: opts.mimeType || 'application/octet-stream',
+      });
+      await sendPageAttachmentId({
+        pageId: page.platformAccountId,
+        pageAccessToken,
+        recipientId: opts.recipientId,
+        kind: opts.kind,
+        attachmentId,
+        instagram: opts.platform === 'IG',
+      });
+    } else if (url) {
+      await sendPageAttachment({
+        pageId: page.platformAccountId,
+        pageAccessToken,
+        recipientId: opts.recipientId,
+        kind: opts.kind,
+        url,
+        instagram: opts.platform === 'IG',
+      });
+    } else {
+      throw new AppError(
+        400,
+        'This file is not on a public https link. Attach it again so Samyoj can send it to Facebook.'
+      );
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(502, err instanceof Error ? err.message : 'Facebook could not send this file');
+  }
   const msgType =
     opts.kind === 'image'
       ? 'IMAGE'

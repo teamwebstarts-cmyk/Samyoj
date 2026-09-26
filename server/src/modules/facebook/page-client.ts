@@ -256,6 +256,58 @@ export function httpsMediaUrl(value: string): string | null {
   }
 }
 
+export async function uploadPageMessageFile(opts: {
+  pageId: string;
+  pageAccessToken: string;
+  kind: 'image' | 'video' | 'audio' | 'file';
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+}): Promise<string> {
+  const boundary = `Samyoj${Date.now().toString(16)}`;
+  const safeName = (opts.filename || 'file').replace(/["\r\n]/g, '');
+  const mime = opts.mimeType || 'application/octet-stream';
+  const head = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="message"\r\n\r\n${JSON.stringify({
+      attachment: { type: opts.kind, payload: { is_reusable: true } },
+    })}\r\n--${boundary}\r\nContent-Disposition: form-data; name="filedata"; filename="${safeName}"\r\nContent-Type: ${mime}\r\n\r\n`
+  );
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  const res = await fetch(`${graphBase()}/${opts.pageId}/message_attachments`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${opts.pageAccessToken}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body: Buffer.concat([head, opts.buffer, tail]),
+  });
+  const data = (await res.json()) as { attachment_id?: string } & GraphError;
+  if (!res.ok || !data.attachment_id) {
+    throw new Error(data.error?.message || `Facebook could not accept this file (${res.status})`);
+  }
+  return data.attachment_id;
+}
+
+export async function sendPageAttachmentId(opts: {
+  pageId: string;
+  pageAccessToken: string;
+  recipientId: string;
+  kind: 'image' | 'video' | 'audio' | 'file';
+  attachmentId: string;
+  instagram?: boolean;
+}): Promise<{ messageId?: string }> {
+  const message = {
+    attachment: { type: opts.kind, payload: { attachment_id: opts.attachmentId } },
+  };
+  const body: Record<string, string> = {
+    recipient: JSON.stringify({ id: opts.recipientId }),
+    message: JSON.stringify(message),
+  };
+  if (!opts.instagram) body.messaging_type = 'RESPONSE';
+  const data = await graphPost(`/${opts.pageId}/messages`, opts.pageAccessToken, body);
+  return { messageId: typeof data.message_id === 'string' ? data.message_id : undefined };
+}
+
 export async function sendPageAttachment(opts: {
   pageId: string;
   pageAccessToken: string;
@@ -516,16 +568,13 @@ export async function fetchMessengerProfileName(
   psid: string,
   pageAccessToken: string
 ): Promise<string | null> {
-  try {
-    const data = await graphGet<{ name?: string; first_name?: string; last_name?: string }>(
-      `/${psid}?fields=name,first_name,last_name`,
-      pageAccessToken
-    );
-    const name = (data.name || [data.first_name, data.last_name].filter(Boolean).join(' ')).trim();
-    return name || null;
-  } catch {
-    return null;
-  }
+  // Messenger User Profile has first_name/last_name. `name` makes Graph reject the whole call.
+  const data = await graphGet<{ first_name?: string; last_name?: string }>(
+    `/${psid}?fields=first_name,last_name`,
+    pageAccessToken
+  );
+  const name = [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+  return name || null;
 }
 
 export async function fetchInstagramComment(
