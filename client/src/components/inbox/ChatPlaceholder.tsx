@@ -29,11 +29,9 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
         ? 'messenger-inbox-empty-hero'
         : 'inbox-empty-hero';
   const heroSize =
-    platform === 'instagram'
+    platform === 'instagram' || platform === 'facebook'
       ? { width: 1536, height: 1024 }
-      : platform === 'facebook'
-        ? { width: 1280, height: 853 }
-        : { width: 1280, height: 853 };
+      : { width: 1280, height: 853 };
   const copy = {
     whatsapp: {
       title: 'Your inbox is ready!',
