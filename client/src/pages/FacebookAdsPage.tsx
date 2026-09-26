@@ -41,9 +41,17 @@ function formatMoney(amount: string, currency: string): string {
   }
 }
 
-function accountLabel(account: { id: string; name: string | null }): string {
+function accountLabel(account: {
+  id: string;
+  name: string | null;
+  availability?: 'active' | 'restricted' | 'disabled' | 'closed';
+}): string {
   const id = account.id.replace(/^act_/, '');
-  return account.name ? `${account.name} (${id})` : id;
+  const base = account.name ? `${account.name} (${id})` : id;
+  if (account.availability === 'restricted') return `${base} · Restricted`;
+  if (account.availability === 'disabled') return `${base} · Disabled`;
+  if (account.availability === 'closed') return `${base} · Closed`;
+  return base;
 }
 
 function EmptyArt() {
@@ -396,7 +404,7 @@ export default function FacebookAdsPage() {
             body="Ads numbers come from the Page you connect. This screen never creates or pauses an ad."
             steps={[
               'Connect the Page with the button below.',
-              'Share an ad account with that Page in Meta Business Settings.',
+              'Reconnect uses the same Facebook login that can see Ads Manager.',
               'Come back here. Numbers appear only after Meta returns them.',
             ]}
             action={
@@ -453,23 +461,22 @@ export default function FacebookAdsPage() {
 
         {!loading && !snap && !mockEnabled && data?.status === 'no_account' && (
           <Guide
-            title="No ad account is shared with this Page"
-            body="Until Insights returns a number, this page stays empty on purpose."
+            title="No ad account on this Facebook login"
+            body="Ads are listed from the Facebook user who connected the Page, not from a Page-to-ad-account link in Business Settings."
             steps={[
-              'In Meta Business Settings, share an ad account with this Page.',
-              'The account needs to be active.',
-              'Open this page again.',
+              'Reconnect the Page with the same login that opens Ads Manager.',
+              'On Facebook’s permission screen, allow Ads read.',
+              'If more than one account appears, pick the one you want. Zeros are a real read when no ads ran.',
             ]}
             action={
-              <a
-                href="https://business.facebook.com/settings/ad-accounts"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#E8F1FF] px-4 text-[13px] font-semibold text-[#1877F2]"
+              <button
+                type="button"
+                disabled={!canConnect || busy === 'fb'}
+                onClick={() => void startFacebookConnect()}
+                className="inline-flex h-9 items-center rounded-full bg-[#1877F2] px-4 text-[13px] font-semibold text-white disabled:opacity-60"
               >
-                Open Business Settings
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+                {busy === 'fb' ? 'Connecting…' : canConnect ? 'Reconnect Page' : 'Ask an admin'}
+              </button>
             }
           />
         )}

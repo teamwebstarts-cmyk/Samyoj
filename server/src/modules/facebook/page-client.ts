@@ -446,6 +446,9 @@ export type GraphAdAccount = {
   name: string | null;
   currency: string | null;
   accountStatus: number | null;
+  disableReason: number | null;
+  businessId: string | null;
+  businessName: string | null;
 };
 
 function mapAdAccount(row: Record<string, unknown>): GraphAdAccount | null {
@@ -456,45 +459,49 @@ function mapAdAccount(row: Record<string, unknown>): GraphAdAccount | null {
     name: typeof row.name === 'string' ? row.name : null,
     currency: typeof row.currency === 'string' ? row.currency : null,
     accountStatus: typeof row.account_status === 'number' ? row.account_status : null,
+    disableReason: typeof row.disable_reason === 'number' ? row.disable_reason : null,
+    businessId:
+      row.business && typeof row.business === 'object' && typeof (row.business as { id?: unknown }).id === 'string'
+        ? (row.business as { id: string }).id
+        : null,
+    businessName:
+      row.business && typeof row.business === 'object' && typeof (row.business as { name?: unknown }).name === 'string'
+        ? (row.business as { name: string }).name
+        : null,
   };
 }
 
-/** Page token first, then /me/adaccounts. Read-only. First non-empty list wins. */
-export async function listAdAccountsForPage(
+/** User token + ads_read. Page tokens make /me the Page, so that list stays empty. */
+export async function listAdAccounts(accessToken: string): Promise<GraphAdAccount[]> {
+  try {
+    const data = await graphGet<{ data?: Array<Record<string, unknown>> }>(
+      `/me/adaccounts?fields=id,name,currency,account_status,disable_reason,business{id,name}&limit=50`,
+      accessToken
+    );
+    return (data.data || [])
+      .map((row) => mapAdAccount(row))
+      .filter((row): row is GraphAdAccount => Boolean(row));
+  } catch (err) {
+    const code = (err as { metaCode?: number }).metaCode;
+    if (code === 100) return [];
+    throw err;
+  }
+}
+
+/** Page token. Used to prefer ad accounts in the same business as the connected Page. */
+export async function fetchPageBusinessId(
   pageId: string,
   pageAccessToken: string
-): Promise<GraphAdAccount[]> {
-  const paths = [
-    `/${pageId}/assigned_ad_accounts?fields=id,name,currency,account_status&limit=10`,
-    `/me/adaccounts?fields=id,name,currency,account_status&limit=10`,
-  ];
-  let successEmpty = false;
-  let permissionErr: unknown;
-  for (const path of paths) {
-    try {
-      const data = await graphGet<{ data?: Array<Record<string, unknown>> }>(path, pageAccessToken);
-      const rows = (data.data || [])
-        .map((row) => mapAdAccount(row))
-        .filter((row): row is GraphAdAccount => Boolean(row));
-      if (rows.length) return rows;
-      successEmpty = true;
-    } catch (err) {
-      const code = (err as { metaCode?: number }).metaCode;
-      if (code === 100) continue;
-      if (code === 10 || code === 200 || code === 190) {
-        permissionErr = err;
-        continue;
-      }
-      const message = err instanceof Error ? err.message : '';
-      if (/permission|ads_read/i.test(message)) {
-        permissionErr = err;
-        continue;
-      }
-      throw err;
-    }
+): Promise<string | null> {
+  try {
+    const data = await graphGet<{ business?: { id?: string } }>(
+      `/${pageId}?fields=business{id}`,
+      pageAccessToken
+    );
+    return typeof data.business?.id === 'string' ? data.business.id : null;
+  } catch {
+    return null;
   }
-  if (!successEmpty && permissionErr) throw permissionErr;
-  return [];
 }
 
 /** Account-level Insights. Attribution is 7-day click / 1-day view. Period is last 7 days. */

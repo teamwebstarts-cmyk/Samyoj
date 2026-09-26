@@ -15,7 +15,7 @@
 
 ## 1. Product story (one paragraph)
 
-Samyoj shows **read-only Meta Ads Manager numbers** for the ad account linked to the **Facebook Page** the business already connected. Agents and owners see **last 7 days** spend, impressions, clicks, **Meta-reported lead actions**, and **cost per lead** for that window — with attribution labeled **7-day click / 1-day view**. Money spent on Meta is **Meta’s invoice**, not Samyoj subscription revenue. To change ads, users leave Samyoj via **Open Ads Manager**. **Instant Form leads** that land in the CRM are a **separate** path (webhook → Contacts pipeline, source **Meta Ads**); this page does not list those individual leads.
+Samyoj shows **read-only Meta Ads Manager numbers** for an ad account the connected Facebook **login** can read (`ads_read`). Agents and owners see **last 7 days** spend, impressions, clicks, **Meta-reported lead actions**, and **cost per lead** for that window — with attribution labeled **7-day click / 1-day view**. Money spent on Meta is **Meta’s invoice**, not Samyoj subscription revenue. To change ads, users leave Samyoj via **Open Ads Manager**. **Instant Form leads** that land in the CRM are a **separate** path (webhook → Contacts pipeline, source **Meta Ads**); this page does not list those individual leads.
 
 ---
 
@@ -40,7 +40,7 @@ The summary API returns `status` plus optional `snapshot`. The UI shows the **me
 |--------|---------------------|-----------------|
 | **`no_page`** | No active `Channel` with `platform: FB` (or no Page token) | Guide: **“Connect a Facebook Page first”** + numbered steps + **Connect Page** / **Ask an admin**. |
 | **`needs_permission`** | Graph denied `ads_read` (or token/permission errors mapped as permission) | Guide: **“Ads read is not granted yet”** — add Ads read on Meta app, reconnect Page. Explicit: WhatsApp still works; page does not show fake ₹0. |
-| **`no_account`** | Page connected but no ad account returned for the Page token | Guide: **“No ad account is shared with this Page”** + Business Settings steps + **Open Business Settings** external link. |
+| **`no_account`** | Page connected but `/me/adaccounts` on the **user** Ads-read token returned nothing | Guide: **“No ad account on this Facebook login”** — reconnect Page with the Ads Manager login. Explicit: WhatsApp still works; page does not show fake ₹0. |
 | **`error`** | Refresh failed and no usable cached snapshot | Guide: **“Could not read Ads Manager”** + **Try again** (reloads summary + accounts). |
 | **`ready`** | Snapshot stored and returned | Spend hero + four fact tiles + footer (account picker if needed) + **Open Ads Manager**. |
 
@@ -146,9 +146,9 @@ Same endpoint — not a second calculation.
 ```text
 Owner/admin connects Facebook Page (OAuth includes ads_read)
         ↓
-Meta shares at least one ad account with that Page (Business Settings)
+Samyoj stores the encrypted user token and lists GET /me/adaccounts
         ↓
-Samyoj lists accounts via Page token → picks preferred or saved adsAccountId
+Picks preferred or saved adsAccountId
         ↓
 Insights poll (on page load if stale, daily worker, after account change)
         ↓
@@ -218,7 +218,7 @@ User edits campaigns in Ads Manager (outside Samyoj)
 | API client | `client/src/services/api.ts` → `facebookApi.adsSummary`, `adsAccounts`, `selectAdsAccount` |
 | Routes | `server/src/modules/facebook/routes.ts` |
 | Snapshot logic | `server/src/modules/facebook/ads-insights.ts` |
-| Graph Insights + account list | `server/src/modules/facebook/page-client.ts` → `listAdAccountsForPage`, `fetchAdAccountInsights` |
+| Graph Insights + account list | `server/src/modules/facebook/page-client.ts` → `listAdAccounts` (`GET /me/adaccounts`), `fetchAdAccountInsights` |
 | DB model | `MetaAdsSnapshot` in `server/prisma/schema.prisma` |
 | Worker poll | `server/src/workers/index.ts` → `pollMetaAdsSnapshots` |
 | Phase product rules | `docs/meta-ecosystem/phases/05-ads-read.md` |

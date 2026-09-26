@@ -27,11 +27,32 @@ async function assertActiveChannelOwnership(
   }
 }
 
+async function patchOrgMeta(
+  organizationId: string,
+  patch: Record<string, unknown | null>
+): Promise<void> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const settings = (org?.settings as Record<string, unknown>) || {};
+  const meta = { ...((settings.meta as Record<string, unknown>) || {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) delete meta[key];
+    else meta[key] = value;
+  }
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { settings: { ...settings, meta } as object },
+  });
+}
+
 export async function saveFacebookPageChannel(opts: {
   organizationId: string;
   pageId: string;
   pageName: string;
   pageAccessToken: string;
+  userAccessToken?: string;
 }): Promise<{ channelId: string; pageId: string; pageName: string; subscribed: boolean; subscribeError?: string }> {
   const encrypted = MetaWhatsAppService.encryptToken(opts.pageAccessToken);
 
@@ -95,6 +116,12 @@ export async function saveFacebookPageChannel(opts: {
       organizationId: opts.organizationId,
       pageId: opts.pageId,
       error: subscribeError,
+    });
+  }
+
+  if (opts.userAccessToken) {
+    await patchOrgMeta(opts.organizationId, {
+      adsReadToken: MetaWhatsAppService.encryptToken(opts.userAccessToken),
     });
   }
 
@@ -237,4 +264,5 @@ export async function disconnectFacebookPageChannel(
     },
     data: { isActive: false },
   });
+  await patchOrgMeta(organizationId, { adsReadToken: null, adsAccountId: null });
 }

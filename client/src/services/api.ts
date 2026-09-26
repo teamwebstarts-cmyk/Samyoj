@@ -544,6 +544,7 @@ export const facebookApi = {
           name: string | null;
           currency: string | null;
           accountStatus: number | null;
+          availability?: 'active' | 'restricted' | 'disabled' | 'closed';
         }>;
       };
     }>('/facebook/ads-accounts'),

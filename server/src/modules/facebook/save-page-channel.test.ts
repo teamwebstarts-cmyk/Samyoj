@@ -12,6 +12,10 @@ vi.mock('../../config/database', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    organization: {
+      findUnique: vi.fn().mockResolvedValue({ settings: {} }),
+      update: vi.fn().mockResolvedValue({}),
+    },
   },
 }));
 
@@ -119,6 +123,43 @@ describe('saveFacebookPageChannel', () => {
           isActive: true,
         },
         data: { isActive: false },
+      })
+    );
+    expect(prisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          settings: expect.objectContaining({
+            meta: expect.not.objectContaining({ adsReadToken: expect.anything() }),
+          }),
+        }),
+      })
+    );
+  });
+
+  it('stores the encrypted user token for Ads read', async () => {
+    channelMock.findFirst.mockResolvedValue(null as never);
+    channelMock.create.mockResolvedValue({
+      id: 'ch-fb-new',
+      organizationId: 'org-b',
+      platformAccountId: 'page_1',
+    } as never);
+    channelMock.updateMany.mockResolvedValue({ count: 0 } as never);
+
+    await saveFacebookPageChannel({
+      organizationId: 'org-b',
+      pageId: 'page_1',
+      pageName: 'Acme',
+      pageAccessToken: 'page-tok',
+      userAccessToken: 'user-tok',
+    });
+
+    expect(prisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          settings: expect.objectContaining({
+            meta: expect.objectContaining({ adsReadToken: 'enc:user-tok' }),
+          }),
+        }),
       })
     );
   });

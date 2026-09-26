@@ -1,7 +1,7 @@
 import prisma from '../../config/database';
 import { createModuleLogger } from '../../utils/logger';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { fetchAdAccountInsights, listAdAccountsForPage, type GraphAdAccount } from './page-client';
+import { fetchAdAccountInsights, fetchPageBusinessId, listAdAccounts, type GraphAdAccount } from './page-client';
 import { AppError } from '../../utils/response';
 
 const log = createModuleLogger('facebook-ads');
@@ -71,23 +71,53 @@ export function parseInsightsBody(body: { data?: unknown } | null | undefined): 
   };
 }
 
-/** ponytail: first ACTIVE account; a picker when an org runs more than one. */
-export function pickAdAccount<T extends { id: string; accountStatus: number | null }>(
-  rows: T[],
-  preferredId?: string | null
-): T | null {
+/** Strip act_ so saved ids and Graph ids still match. */
+export function adAccountKey(id: string): string {
+  return id.replace(/^act_/i, '');
+}
+
+export function adAccountAvailability(
+  accountStatus: number | null,
+  disableReason: number | null
+): 'active' | 'restricted' | 'disabled' | 'closed' {
+  if (disableReason && disableReason > 0) return 'restricted';
+  if (accountStatus === 2) return 'disabled';
+  if (accountStatus === 100 || accountStatus === 101) return 'closed';
+  return 'active';
+}
+
+/** Preferred id wins. Else the Page's business. Else first ACTIVE. */
+export function pickAdAccount<
+  T extends { id: string; accountStatus: number | null; businessId?: string | null },
+>(rows: T[], preferredId?: string | null, pageBusinessId?: string | null): T | null {
   if (!rows.length) return null;
   if (preferredId) {
-    const preferred = rows.find((row) => row.id === preferredId);
+    const key = adAccountKey(preferredId);
+    const preferred = rows.find((row) => adAccountKey(row.id) === key);
     if (preferred) return preferred;
   }
-  return rows.find((row) => row.accountStatus === 1) || rows[0];
+  const sameBusiness = pageBusinessId
+    ? rows.filter((row) => row.businessId && row.businessId === pageBusinessId)
+    : [];
+  const pool = sameBusiness.length ? sameBusiness : rows;
+  return pool.find((row) => row.accountStatus === 1) || pool[0];
 }
 
 export function adsManagerUrl(adAccountId?: string | null): string {
   const base = 'https://adsmanager.facebook.com/adsmanager/manage/campaigns';
   if (!adAccountId) return base;
   return `${base}?act=${encodeURIComponent(adAccountId.replace(/^act_/, ''))}`;
+}
+
+function adsAccessToken(
+  pageTokenEncrypted: string,
+  settings: Record<string, unknown>
+): string {
+  const meta = (settings.meta as Record<string, unknown>) || {};
+  if (typeof meta.adsReadToken === 'string' && meta.adsReadToken) {
+    return MetaWhatsAppService.decryptToken(meta.adsReadToken);
+  }
+  return MetaWhatsAppService.decryptToken(pageTokenEncrypted);
 }
 
 function isPermission(err: unknown): boolean {
@@ -112,17 +142,19 @@ export async function refreshOrgAdsSnapshot(organizationId: string): Promise<Ads
     return 'no_page';
   }
 
-  const token = MetaWhatsAppService.decryptToken(channel.accessToken);
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { settings: true },
   });
   const settings = (org?.settings as Record<string, unknown>) || {};
   const meta = (settings.meta as Record<string, unknown>) || {};
+  const pageToken = MetaWhatsAppService.decryptToken(channel.accessToken);
+  const token = adsAccessToken(channel.accessToken, settings);
   const preferredAccountId = typeof meta.adsAccountId === 'string' ? meta.adsAccountId : null;
+  const pageBusinessId = await fetchPageBusinessId(channel.platformAccountId, pageToken);
   let accounts: GraphAdAccount[];
   try {
-    accounts = await listAdAccountsForPage(channel.platformAccountId, token);
+    accounts = await listAdAccounts(token);
   } catch (err) {
     if (isPermission(err)) {
       await clearSnapshot(organizationId);
@@ -131,7 +163,7 @@ export async function refreshOrgAdsSnapshot(organizationId: string): Promise<Ads
     throw err;
   }
 
-  const account = pickAdAccount(accounts, preferredAccountId);
+  const account = pickAdAccount(accounts, preferredAccountId, pageBusinessId);
   if (!account) {
     await clearSnapshot(organizationId);
     return 'no_account';
@@ -174,44 +206,47 @@ export async function refreshOrgAdsSnapshot(organizationId: string): Promise<Ads
 export async function listOrgAdsAccounts(organizationId: string) {
   const channel = await prisma.channel.findFirst({
     where: { organizationId, platform: 'FB', isActive: true },
-    select: { platformAccountId: true, accessToken: true },
+    select: { accessToken: true, platformAccountId: true },
     orderBy: { updatedAt: 'desc' },
   });
   if (!channel?.accessToken) {
     return { status: 'no_page' as const, accounts: [], selectedAccountId: null };
   }
 
-  const token = MetaWhatsAppService.decryptToken(channel.accessToken);
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const settings = (org?.settings as Record<string, unknown>) || {};
+  const token = adsAccessToken(channel.accessToken, settings);
+  const pageToken = MetaWhatsAppService.decryptToken(channel.accessToken);
+  const pageBusinessId = await fetchPageBusinessId(channel.platformAccountId, pageToken);
   let accounts: GraphAdAccount[];
   try {
-    accounts = await listAdAccountsForPage(channel.platformAccountId, token);
+    accounts = await listAdAccounts(token);
   } catch (err) {
     if (isPermission(err)) {
       return { status: 'needs_permission' as const, accounts: [], selectedAccountId: null };
     }
     throw err;
   }
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { settings: true },
-  });
-  const settings = (org?.settings as Record<string, unknown>) || {};
   const meta = (settings.meta as Record<string, unknown>) || {};
   const saved = typeof meta.adsAccountId === 'string' ? meta.adsAccountId : null;
-  const selectedAccountId = accounts.some((account) => account.id === saved)
-    ? saved
-    : pickAdAccount(accounts)?.id || null;
+  const selectedAccountId = pickAdAccount(accounts, saved, pageBusinessId)?.id || null;
   return {
     status: accounts.length ? ('ready' as const) : ('no_account' as const),
-    accounts,
+    accounts: accounts.map((account) => ({
+      ...account,
+      availability: adAccountAvailability(account.accountStatus, account.disableReason),
+    })),
     selectedAccountId,
   };
 }
 
 export async function selectOrgAdsAccount(organizationId: string, adAccountId: string) {
   const available = await listOrgAdsAccounts(organizationId);
-  if (!available.accounts.some((account) => account.id === adAccountId)) {
-    throw new AppError(400, 'That ad account is not available to the connected Page.');
+  if (!available.accounts.some((account) => adAccountKey(account.id) === adAccountKey(adAccountId))) {
+    throw new AppError(400, 'That ad account is not available to this Facebook login.');
   }
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -277,10 +312,17 @@ export async function readAdsSummary(organizationId: string) {
     await clearSnapshot(organizationId);
     return toSummary('no_page', null);
   }
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const meta = ((org?.settings as Record<string, unknown>)?.meta as Record<string, unknown>) || {};
+  const hasExplicitAccount = typeof meta.adsAccountId === 'string' && meta.adsAccountId.length > 0;
   const stale =
     !existing ||
     existing.channelId !== channel.id ||
-    Date.now() - existing.fetchedAt.getTime() > STALE_MS;
+    Date.now() - existing.fetchedAt.getTime() > STALE_MS ||
+    !hasExplicitAccount;
   let status: AdsStatus = existing?.channelId === channel.id ? 'ready' : 'no_account';
   if (stale) {
     try {

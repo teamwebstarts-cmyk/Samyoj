@@ -182,6 +182,7 @@ router.post(
         pageId: pages[0].id,
         pageName: pages[0].name,
         pageAccessToken: pages[0].accessToken,
+        userAccessToken: userToken,
       });
       return sendSuccess(res, {
         requiresSelection: false,
@@ -238,6 +239,7 @@ router.post(
       pageId: selected.id,
       pageName: selected.name,
       pageAccessToken: selected.accessToken,
+      userAccessToken: pending.accessToken,
     });
 
     sendSuccess(res, {
