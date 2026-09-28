@@ -24,6 +24,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTopbarExtras } from '../../contexts/TopbarContext';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
+import {
+  dashboardDescription,
+  isWhatsAppSurface,
+  topbarConnectionBadge,
+  topbarLiveTitle,
+  topbarNotConnectedTitle,
+} from '../../utils/workspaceChannels';
+import { useMetaChannelStatus } from './MetaChannelChips';
 import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
@@ -105,6 +113,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const { orgRole, availability, setAvailability } = useAuth();
   const { extras: topbarExtras } = useTopbarExtras();
   const { hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
+  const { facebook, instagram } = useMetaChannelStatus();
   const { title, description } = getPageMeta(pathname);
   const isCampaignWizard = isCampaignWizardRoute(pathname);
   const isTemplateWizard = isTemplateWizardRoute(pathname);
@@ -125,11 +134,24 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const isApple = useIsApplePlatform();
   const isDashboard = pathname === '/' || pathname === '';
-  // Live = WhatsApp number linked (after numbers finish loading). Not a socket
-  // heartbeat — topbar has no inbox socket; match NumberSwitcher / Inbox header.
-  const showLive = !numbersLoading && hasConnectedNumber;
-  const showNotConnected = !numbersLoading && !hasConnectedNumber;
+  const metaReady = facebook !== null && instagram !== null;
+  const channels = {
+    whatsapp: hasConnectedNumber,
+    facebook: facebook?.connected === true,
+    instagram: instagram?.connected === true,
+  };
+  const connectionBadge = topbarConnectionBadge(pathname, channels, {
+    numbersReady: !numbersLoading,
+    metaReady,
+  });
+  const showLive = connectionBadge === 'live';
+  const showNotConnected = connectionBadge === 'not-connected';
   const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers);
+  const notConnectedBadgeText =
+    isWhatsAppSurface(pathname) && disconnectedCopy.disconnected ? 'Disconnected' : 'Not connected';
+  const notConnectedTitle = isWhatsAppSurface(pathname)
+    ? disconnectedCopy.description
+    : topbarNotConnectedTitle(pathname);
 
   useGlobalSearchShortcut(() => setSearchOpen(true));
 
@@ -179,8 +201,8 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   }, [userMenuOpen]);
 
   const subtitle = (
-    isDashboard && showNotConnected
-      ? "Let's get you started with WhatsApp Business"
+    isDashboard
+      ? dashboardDescription(channels)
       : isTemplateWizard
         ? topbarExtras.subtitle || ''
         : description || ''
@@ -356,16 +378,16 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   {showLive ? (
                     <span
                       className="hidden h-5 items-center rounded-full bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 sm:inline-flex dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 motion-reduce:animate-none"
-                      title="WhatsApp connected — live updates available"
+                      title={topbarLiveTitle(pathname)}
                     >
                       Live
                     </span>
                   ) : showNotConnected ? (
                     <span
                       className="hidden h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 sm:inline-flex dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
-                      title={disconnectedCopy.description}
+                      title={notConnectedTitle}
                     >
-                      {disconnectedCopy.disconnected ? 'Disconnected' : 'Not connected'}
+                      {notConnectedBadgeText}
                     </span>
                   ) : null}
                 </div>
@@ -395,16 +417,16 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                   {showLive ? (
                     <span
                       className="hidden h-5 items-center rounded-full bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-emerald-700 ring-1 ring-emerald-100/90 sm:inline-flex dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 motion-reduce:animate-none"
-                      title="WhatsApp connected — live updates available"
+                      title={topbarLiveTitle(pathname)}
                     >
                       Live
                     </span>
                   ) : showNotConnected ? (
                     <span
                       className="hidden h-5 items-center rounded-full bg-[#FFF1E8] px-2.5 text-[11px] font-bold text-[#E67E22] ring-1 ring-[#FFD8BF]/90 sm:inline-flex dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/25"
-                      title={disconnectedCopy.description}
+                      title={notConnectedTitle}
                     >
-                      {disconnectedCopy.disconnected ? 'Disconnected' : 'Not connected'}
+                      {notConnectedBadgeText}
                     </span>
                   ) : null}
                 </div>

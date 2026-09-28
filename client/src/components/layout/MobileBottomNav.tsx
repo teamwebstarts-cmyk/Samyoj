@@ -1,20 +1,32 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { MoreHorizontal } from 'lucide-react';
-import { MOBILE_BOTTOM_NAV } from '../../config/navigation';
+import { getMobileBottomNav } from '../../config/navigation';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
+import { useMetaChannelStatus } from './MetaChannelChips';
 
 interface MobileBottomNavProps {
   onMoreOpen: () => void;
 }
 
-function isMoreRouteActive(pathname: string): boolean {
-  const primaryPaths = MOBILE_BOTTOM_NAV.map((t) => t.to);
-  if (primaryPaths.some((p) => pathname.startsWith(p))) return false;
+function isMoreRouteActive(pathname: string, primaryPaths: string[]): boolean {
+  if (primaryPaths.some((p) => p !== '/' && pathname.startsWith(p))) return false;
+  if (primaryPaths.includes('/') && (pathname === '/' || pathname === '')) return false;
   return true;
 }
 
 export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
   const { pathname } = useLocation();
-  const moreActive = isMoreRouteActive(pathname);
+  const { hasConnectedNumber } = useWhatsAppNumber();
+  const { facebook, instagram } = useMetaChannelStatus();
+  const tabs = getMobileBottomNav({
+    whatsapp: hasConnectedNumber,
+    facebook: facebook?.connected === true,
+    instagram: instagram?.connected === true,
+  });
+  const moreActive = isMoreRouteActive(
+    pathname,
+    tabs.map((t) => t.to)
+  );
 
   return (
     <nav
@@ -23,12 +35,13 @@ export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
       aria-label="Primary navigation"
     >
       <div className="flex h-16 items-stretch">
-        {MOBILE_BOTTOM_NAV.map(({ to, icon: Icon, label }) => {
-          const isActive = pathname.startsWith(to);
+        {tabs.map(({ to, icon: Icon, label, end }) => {
+          const isActive = end ? pathname === to : pathname.startsWith(to);
           return (
             <NavLink
               key={to}
               to={to}
+              end={end}
               className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 px-1 transition active:scale-[0.98] ${
                 isActive
                   ? 'text-whatsapp-600 dark:text-whatsapp-400'
