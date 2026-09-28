@@ -415,6 +415,9 @@ export default function InstagramPostsPage() {
 
   /* ---------------- automation ---------------- */
 
+  /** Inline composer fields carry into savePostAutomation via these states. */
+  const inlineAutomationReady = Boolean(autoKeyword.trim() && (autoPublic.trim() || autoDm.trim()));
+
   const loadPostAutomation = async (igMediaId: string | null, postId?: string) => {
     setAutoKeyword('');
     setAutoPublic('');
@@ -515,6 +518,14 @@ export default function InstagramPostsPage() {
       toastError('This is a sample post. Create a real one to publish.');
       return;
     }
+    if (inlineAutomationReady && !autoKeyword.trim()) {
+      toastError('Add the automation word.');
+      return;
+    }
+    if (Boolean(autoKeyword.trim()) && !autoPublic.trim() && !autoDm.trim()) {
+      toastError('Add a public reply or a private DM for the automation.');
+      return;
+    }
     const body = buildBody();
     if (mediaType === 'IMAGE' && !body.imageUrl) {
       toastError('Add an image first.');
@@ -575,6 +586,10 @@ export default function InstagramPostsPage() {
         toastSuccess(mode === 'schedule' ? 'Post scheduled' : 'Post saved as draft');
       }
       setSelectedId(created.id);
+      // Inline automation set while composing → save it with the post.
+      if (autoKeyword.trim() && (autoPublic.trim() || autoDm.trim())) {
+        await persistPostAutomation(created.id, published?.data?.data?.igMediaId ?? created.igMediaId ?? null);
+      }
       await load();
     } catch (err) {
       toastError(getErrorMessage(err) || (mode === 'now' ? 'Could not publish post' : 'Could not save post'));
