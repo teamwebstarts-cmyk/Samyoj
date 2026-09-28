@@ -2,6 +2,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { listInstagramMediaIds, listMediaComments } from '../facebook/page-client';
 import { isOwnInstagramComment, metaScalarId } from '../whatsapp/webhook-dispatcher';
 import { ingestInstagramComment } from './comment-ingest';
+import { instagramCommentRetentionCutoff } from './comment-retention';
 
 const log = createModuleLogger('instagram-comment-sync');
 
@@ -21,6 +22,7 @@ export async function syncInstagramComments(opts: {
 }): Promise<{ inserted: number; scanned: number }> {
   const maxMedia = opts.maxMedia ?? 40;
   const maxScan = opts.maxScan ?? 1000;
+  const retentionCutoff = instagramCommentRetentionCutoff();
   let inserted = 0;
   let scanned = 0;
   let mediaSeen = 0;
@@ -53,6 +55,10 @@ export async function syncInstagramComments(opts: {
           ) {
             continue;
           }
+          const commentedAt = comment.timestamp ? new Date(comment.timestamp) : undefined;
+          if (commentedAt && commentedAt < retentionCutoff) {
+            continue;
+          }
           const stored = await ingestInstagramComment({
             organizationId: opts.organizationId,
             channelId: opts.channelId,
@@ -61,7 +67,7 @@ export async function syncInstagramComments(opts: {
             fromId,
             fromUsername,
             text: comment.text || '',
-            commentedAt: comment.timestamp ? new Date(comment.timestamp) : undefined,
+            commentedAt,
             skipAutomation: true,
           });
           if (stored.created) {
