@@ -82,6 +82,7 @@ export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'instagram_basic',
   'instagram_manage_messages',
   'instagram_manage_comments',
+  'instagram_content_publish',
   'ads_read',
 ].join(',');
 
