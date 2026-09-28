@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { resolveSidebarAccent } from '../utils/sidebarChannelAccent';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useInboxUnreadTotal } from '../hooks/useInboxUnreadTotal';
@@ -24,7 +25,9 @@ export default function Layout() {
   const { user, organization, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
+  const sidebarAccent = resolveSidebarAccent(pathname, search);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileDrawerRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const { collapsed, toggle } = useSidebarCollapsed();
   const breakpoint = useBreakpoint();
@@ -60,6 +63,18 @@ export default function Layout() {
   }, [pathname]);
 
   useEffect(() => {
+    const drawer = mobileDrawerRef.current;
+    if (!drawer) return;
+    if (mobileOpen) {
+      drawer.removeAttribute('inert');
+      return;
+    }
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && drawer.contains(active)) active.blur();
+    drawer.setAttribute('inert', '');
+  }, [mobileOpen]);
+
+  useEffect(() => {
     void refreshInboxUnread();
   }, [pathname, refreshInboxUnread]);
 
@@ -73,6 +88,7 @@ export default function Layout() {
       <TopbarProvider>
       <div className="flex h-[100dvh] overflow-hidden platform-gradient">
         <aside
+          data-sidebar-accent={sidebarAccent}
           className={`sidebar-glass hidden shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
             effectiveCollapsed ? 'w-[var(--density-sidebar-collapsed)]' : 'w-[var(--density-sidebar-width)]'
           }`}
@@ -85,7 +101,9 @@ export default function Layout() {
           />
         </aside>
 
+        {isMobile ? (
         <div
+          ref={mobileDrawerRef}
           className={`fixed inset-0 z-50 md:hidden ${mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
           aria-hidden={!mobileOpen}
         >
@@ -98,6 +116,7 @@ export default function Layout() {
             aria-label="Close menu overlay"
           />
           <aside
+            data-sidebar-accent={sidebarAccent}
             className={`sidebar-glass absolute left-0 top-0 h-full w-[min(320px,90vw)] overflow-hidden transition-transform duration-[250ms] ease-out ${
               mobileOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
@@ -105,6 +124,7 @@ export default function Layout() {
             <Sidebar {...sidebarProps} showClose onClose={() => setMobileOpen(false)} />
           </aside>
         </div>
+        ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {!hideTopbar && (

@@ -23,6 +23,7 @@ import FacebookInboxPage from './pages/FacebookInboxPage';
 import FacebookAdsPage from './pages/FacebookAdsPage';
 import InstagramInboxPage from './pages/InstagramInboxPage';
 import InstagramCommentsPage from './pages/InstagramCommentsPage';
+import InstagramPostsPage from './pages/InstagramPostsPage';
 import AutomationsPage from './pages/AutomationsPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
 import MetaFlowBuilder from './pages/MetaFlowBuilder';
@@ -93,6 +94,7 @@ export default function App() {
                       <Route path="/facebook/ads" element={<FacebookAdsPage />} />
                       <Route path="/instagram/inbox" element={<InstagramInboxPage />} />
                       <Route path="/instagram/comments" element={<InstagramCommentsPage />} />
+                      <Route path="/instagram/posts" element={<InstagramPostsPage />} />
                       <Route path="/calls" element={<CallsPage />} />
                       <Route path="/calls/:callId" element={<CallsPage />} />
                       <Route path="/automations" element={<AutomationsPage />} />
