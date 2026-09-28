@@ -14,24 +14,36 @@ function replyText(config: unknown): string {
   return (row.response || row.message || '').trim();
 }
 
-/** Oldest matching IG keyword supplies each text. Private stays `message`; public is optional. */
+type IgCommentConfig = {
+  platform?: string;
+  keyword?: string;
+  message?: string;
+  response?: string;
+  publicMessage?: string;
+  igMediaId?: string;
+};
+
+/** Post-specific keyword rules beat account-wide rules. A rule for another post never fires. */
 export function matchInstagramCommentReplies(
   rows: Rule[],
-  text: string
+  text: string,
+  igMediaId?: string | null
 ): { privateText: string | null; publicText: string | null } {
-  let privateText: string | null = null;
-  let publicText: string | null = null;
+  const hits: IgCommentConfig[] = [];
   for (const row of rows) {
     if (row.triggerType && row.triggerType !== 'KEYWORD') continue;
-    const config = (row.config || {}) as {
-      platform?: string;
-      keyword?: string;
-      message?: string;
-      response?: string;
-      publicMessage?: string;
-    };
+    const config = (row.config || {}) as IgCommentConfig;
     if (config.platform !== 'IG') continue;
     if (!keywordMatches(text, { keyword: config.keyword })) continue;
+    const scoped = config.igMediaId?.trim();
+    if (scoped && scoped !== igMediaId) continue;
+    hits.push(config);
+  }
+  const specific = igMediaId ? hits.filter((row) => row.igMediaId?.trim() === igMediaId) : [];
+  const pool = specific.length > 0 ? specific : hits.filter((row) => !row.igMediaId?.trim());
+  let privateText: string | null = null;
+  let publicText: string | null = null;
+  for (const config of pool) {
     const priv = (config.response || config.message || '').trim();
     const pub = (config.publicMessage || '').trim();
     if (!privateText && priv) privateText = priv;
