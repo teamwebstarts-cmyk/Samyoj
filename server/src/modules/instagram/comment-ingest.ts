@@ -6,6 +6,7 @@ import { sendInstagramPrivateReply, replyToInstagramComment } from '../facebook/
 import { findParentPageChannel } from '../facebook/parent-page';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { matchInstagramCommentReplies } from '../facebook/channel-keyword';
+import { instagramCommentRetentionCutoff } from './comment-retention';
 
 const log = createModuleLogger('instagram-comment-ingest');
 
@@ -79,6 +80,9 @@ export async function ingestInstagramComment(opts: {
         channelId: opts.channelId,
         commentRowId: row.id,
         igCommentId,
+        igMediaId: opts.igMediaId,
+        fromId: opts.fromId,
+        fromUsername: opts.fromUsername,
         text: opts.text || '',
         commentedAt,
       });
@@ -93,15 +97,69 @@ export async function ingestInstagramComment(opts: {
   return { commentRowId: row.id, created: true, automationSent };
 }
 
+/** First comment per author on a post may trigger keyword automation; repeats are stored only. */
+export async function shouldSkipCommentKeywordAutomation(opts: {
+  organizationId: string;
+  channelId: string;
+  igMediaId?: string | null;
+  fromId?: string | null;
+  fromUsername?: string | null;
+  excludeCommentId: string;
+}): Promise<boolean> {
+  const mediaId = opts.igMediaId?.trim();
+  if (!mediaId) return false;
+  const author =
+    opts.fromId?.trim()
+      ? { fromId: opts.fromId.trim() }
+      : opts.fromUsername?.trim()
+        ? { fromUsername: opts.fromUsername.trim() }
+        : null;
+  if (!author) return false;
+
+  const prior = await prisma.instagramComment.findFirst({
+    where: {
+      organizationId: opts.organizationId,
+      channelId: opts.channelId,
+      igMediaId: mediaId,
+      ...author,
+      id: { not: opts.excludeCommentId },
+    },
+    select: { id: true },
+    orderBy: { commentedAt: 'asc' },
+  });
+  return Boolean(prior);
+}
+
 async function maybeSendCommentKeywordReply(opts: {
   organizationId: string;
   channelId: string;
   commentRowId: string;
   igCommentId: string;
+  igMediaId?: string | null;
+  fromId?: string;
+  fromUsername?: string;
   text: string;
   commentedAt: Date;
 }): Promise<boolean> {
   if (!opts.text.trim()) return false;
+
+  const skipDuplicate = await shouldSkipCommentKeywordAutomation({
+    organizationId: opts.organizationId,
+    channelId: opts.channelId,
+    igMediaId: opts.igMediaId,
+    fromId: opts.fromId,
+    fromUsername: opts.fromUsername,
+    excludeCommentId: opts.commentRowId,
+  });
+  if (skipDuplicate) {
+    log.info('Instagram comment automation skipped (repeat author on post)', {
+      organizationId: opts.organizationId,
+      channelId: opts.channelId,
+      commentRowId: opts.commentRowId,
+      igMediaId: opts.igMediaId,
+    });
+    return false;
+  }
 
   const automations = await prisma.automation.findMany({
     where: {
@@ -115,7 +173,11 @@ async function maybeSendCommentKeywordReply(opts: {
   });
 
   // Comments stay keyword-only — no welcome/lead-capture/away fallbacks.
-  const { privateText, publicText } = matchInstagramCommentReplies(automations, opts.text);
+  const { privateText, publicText } = matchInstagramCommentReplies(
+    automations,
+    opts.text,
+    opts.igMediaId
+  );
   if (!privateText && !publicText) return false;
 
   let sent = false;
@@ -304,9 +366,12 @@ export function instagramCommentListWhere(opts: {
 }): Prisma.InstagramCommentWhereInput {
   const q = opts.q?.trim();
   const now = opts.now || new Date();
+  const retentionCutoff = instagramCommentRetentionCutoff(now);
+  const privateReplyCutoff = new Date(now.getTime() - PRIVATE_REPLY_MS);
   const where: Prisma.InstagramCommentWhereInput = {
     organizationId: opts.organizationId,
     channelId: opts.channelId,
+    commentedAt: { gte: retentionCutoff },
     ...(q
       ? {
           OR: [
@@ -321,7 +386,9 @@ export function instagramCommentListWhere(opts: {
   else if (opts.status === 'open') {
     where.hidden = false;
     where.privateReplySentAt = null;
-    where.commentedAt = { gt: new Date(now.getTime() - PRIVATE_REPLY_MS) };
+    where.commentedAt = {
+      gte: new Date(Math.max(retentionCutoff.getTime(), privateReplyCutoff.getTime())),
+    };
   }
   return where;
 }
