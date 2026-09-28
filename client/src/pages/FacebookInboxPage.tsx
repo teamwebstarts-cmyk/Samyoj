@@ -12,6 +12,10 @@ import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
 import ThreadSkeleton from '../components/inbox/ThreadSkeleton';
 import GroupedThreadMessages from '../components/inbox/GroupedThreadMessages';
 import {
+  deleteChannelInboxMessages,
+  removeMessagesFromState,
+} from '../components/inbox/metaChannelMessageDelete';
+import {
   META_CHANNEL_ATTACH,
   validateMetaDmAttachment,
 } from '../components/inbox/metaMessagingLimits';
@@ -200,6 +204,23 @@ export default function FacebookInboxPage() {
 
   const serviceWindow = selected?.serviceWindow;
   const windowOpen = Boolean(serviceWindow?.open);
+
+  const onDeleteMessage = useCallback(
+    (message: Message) => {
+      if (!selectedId) return;
+      void deleteChannelInboxMessages({
+        conversationId: selectedId,
+        messageIds: [message.id],
+        channelName: 'Messenger',
+        mock: isMetaMockId(selectedId) || isMetaMockId(message.id),
+        deleteApi: (id, ids) => facebookApi.inbox.deleteMessages(id, ids),
+        onRemoved: (ids) => {
+          removeMessagesFromState(ids, setMessages, setConversations, selectedId);
+        },
+      });
+    },
+    [selectedId]
+  );
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault();
@@ -605,6 +626,7 @@ export default function FacebookInboxPage() {
                         activeMatchId={chatMatches[chatMatchIndex]}
                         scrollClassName="inbox-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4"
                         endRef={messagesEndRef}
+                        onDelete={onDeleteMessage}
                       />
                     )}
                     {!windowOpen && (
