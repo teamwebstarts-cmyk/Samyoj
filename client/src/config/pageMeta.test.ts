@@ -17,4 +17,11 @@ describe('inbox shell routes', () => {
     expect(getPageMeta('/facebook/inbox').title).toBe('Messenger Inbox');
     expect(getPageMeta('/facebook/inbox').description).toContain('24-hour');
   });
+
+  it('does not lock Dashboard, Settings, or AI Bots copy to WhatsApp only', () => {
+    expect(getPageMeta('/').description).toBe('Your workspace at a glance');
+    expect(getPageMeta('/settings').description).toBe('Connect channels and set up your workspace');
+    expect(getPageMeta('/ai-bot').description).not.toMatch(/WhatsApp/);
+    expect(getPageMeta('/onboarding').description).toBe('Set up your workspace');
+  });
 });
