@@ -9,6 +9,7 @@ import PreConnectDashboard, {
   PreConnectSkeleton,
 } from '../components/dashboard/PreConnectDashboard';
 import { DEFAULT_METRICS_PERIOD, metricsPeriodToParams, type MetricsPeriod } from '../utils/metricsPeriod';
+import DashboardAllChannels from '../components/dashboard/DashboardAllChannels';
 import DashboardChannelHome from '../components/dashboard/DashboardChannelHome';
 import DashboardChannelTabs from '../components/dashboard/DashboardChannelTabs';
 import DashboardKpiRow from '../components/dashboard/DashboardKpiRow';
@@ -52,6 +53,10 @@ function pickUpcoming(campaigns: Campaign[]): Campaign[] {
     .filter((c) => c.status === 'DRAFT')
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   return [...upcomingScheduled, ...drafts].slice(0, 3);
+}
+
+function countActiveCampaigns(campaigns: Campaign[]): number {
+  return campaigns.filter((c) => ['RUNNING', 'SCHEDULED', 'PAUSED'].includes(String(c.status).toUpperCase())).length;
 }
 
 function extractCampaigns(payload: unknown): Campaign[] {
@@ -111,11 +116,16 @@ export default function DashboardPage() {
       ? 'facebook'
       : requestedChannel === 'instagram' && channels.instagram
         ? 'instagram'
-        : channels.whatsapp
+        : requestedChannel === 'whatsapp' && channels.whatsapp
           ? 'whatsapp'
-          : channels.facebook
-            ? 'facebook'
-            : 'instagram';
+          : requestedChannel === 'all' || !requestedChannel
+            ? 'all'
+            : channels.whatsapp
+              ? 'whatsapp'
+              : channels.facebook
+                ? 'facebook'
+                : 'instagram';
+  const showAll = activeChannel === 'all';
   const showWhatsApp = activeChannel === 'whatsapp' && channels.whatsapp;
 
   const loadStats = useCallback(() => {
@@ -284,6 +294,29 @@ export default function DashboardPage() {
           facebookLabel={facebook?.label}
           instagramLabel={instagram?.label}
         />
+        {showAll ? (
+          <DashboardAllChannels
+            channels={channels}
+            stats={stats}
+            steps={onboarding?.steps ?? null}
+            period={metricsPeriod}
+            onPeriodChange={setMetricsPeriod}
+            whatsappLabel={activeNumber?.phoneNumber}
+            facebookLabel={facebook?.label}
+            instagramLabel={instagram?.label}
+            onboarding={
+              hasOnboarding && onboarding
+                ? {
+                    steps: onboarding.steps,
+                    completedCount: onboarding.completedCount,
+                    totalSteps: onboarding.totalSteps,
+                  }
+                : null
+            }
+            onboardingError={onboardingError}
+            onRetryOnboarding={() => loadSideData()}
+          />
+        ) : null}
         {showWhatsApp ? (
           <DashboardConnectionHero
             onStatusChange={onWaStatusChange}
@@ -304,7 +337,7 @@ export default function DashboardPage() {
         {showWhatsApp && stats ? (
           <div className={`dashboard-board ${refreshing ? 'opacity-70 transition-opacity' : ''}`}>
             <div className="dashboard-metrics min-w-0">
-              <DashboardKpiRow stats={stats} />
+              <DashboardKpiRow stats={stats} activeCampaigns={countActiveCampaigns(campaigns)} campaigns={campaigns} />
             </div>
             <DashboardContentRows
               stats={stats}
@@ -331,7 +364,7 @@ export default function DashboardPage() {
             />
           </div>
         ) : null}
-        {(channels.facebook || channels.instagram) ? (
+        {(channels.facebook || channels.instagram) && !showAll ? (
           <div className={showWhatsApp ? 'hidden' : 'contents'} aria-hidden={showWhatsApp}>
             <DashboardChannelHome
               activeChannel={activeChannel === 'facebook' ? 'facebook' : 'instagram'}

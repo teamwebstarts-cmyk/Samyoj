@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Lock } from 'lucide-react';
-import { formatWindowExpiry } from './inboxUtils';
+import { formatWindowExpiry, serviceWindowIsLive } from './inboxUtils';
 import { useGlassTipProps } from './ComposerGlassTip';
 import type { ServiceWindowInfo } from '../../types';
 
@@ -12,29 +12,30 @@ interface ServiceWindowBannerProps {
   variant?: 'whatsapp' | 'messenger' | 'instagram';
 }
 
-const COUNTDOWN_TICK_MS = 60_000;
 const MS_IN_HOUR = 1000 * 60 * 60;
 
-/**
- * Forces a re-render every 60s so the "Nh Nm left" countdown in
- * `formatWindowExpiry` stays accurate while the user is on the Inbox page
- * without depending on a new serviceWindow payload.
- */
-function useCountdownTick(active: boolean) {
-  const [, setTick] = useState(0);
+/** Re-render on the real clock. Near expiry the tick is 1s so the window closes on time. */
+export function useLiveServiceWindow(
+  serviceWindow: { open?: boolean; expiresAt?: string | null } | null | undefined,
+): boolean {
+  const [now, setNow] = useState(() => Date.now());
+  const expiresAt = serviceWindow?.expiresAt ?? null;
+  const openFlag = Boolean(serviceWindow?.open);
   useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => {
-      setTick((n) => n + 1);
-    }, COUNTDOWN_TICK_MS);
-    return () => clearInterval(id);
-  }, [active]);
+    if (!openFlag || !expiresAt) return;
+    const expires = new Date(expiresAt).getTime();
+    if (Number.isNaN(expires) || expires <= Date.now()) return;
+    const delay = expires - Date.now() < 2 * 60 * 1000 ? 1000 : 15_000;
+    const id = window.setTimeout(() => setNow(Date.now()), delay);
+    return () => window.clearTimeout(id);
+  }, [openFlag, expiresAt, now]);
+  return serviceWindowIsLive(serviceWindow, now);
 }
 
 type WindowTone = 'calm' | 'mid' | 'urgent' | 'closed';
 
-function getWindowTone(serviceWindow: ServiceWindowInfo): WindowTone {
-  if (!serviceWindow.open) return 'closed';
+function getWindowTone(serviceWindow: ServiceWindowInfo, liveOpen = serviceWindow.open): WindowTone {
+  if (!liveOpen) return 'closed';
   if (!serviceWindow.expiresAt) return 'calm';
   const remainingMs = new Date(serviceWindow.expiresAt).getTime() - Date.now();
   if (remainingMs <= 0) return 'closed';
@@ -77,8 +78,8 @@ export default function ServiceWindowBanner({
   compact,
   variant = 'whatsapp',
 }: ServiceWindowBannerProps) {
-  useCountdownTick(true);
-  if (serviceWindow.open) return null;
+  const liveOpen = useLiveServiceWindow(serviceWindow);
+  if (liveOpen) return null;
 
   if (variant === 'messenger' || variant === 'instagram') {
     return (
@@ -151,9 +152,9 @@ export function ServiceWindowBadge({
   serviceWindow,
   variant = 'whatsapp',
 }: ServiceWindowBannerProps) {
-  useCountdownTick(serviceWindow.open);
+  const liveOpen = useLiveServiceWindow(serviceWindow);
   const tipFor = useGlassTipProps();
-  const tone = getWindowTone(serviceWindow);
+  const tone = getWindowTone(serviceWindow, liveOpen);
 
   const isMeta = variant === 'messenger' || variant === 'instagram';
   if (tone === 'closed') {

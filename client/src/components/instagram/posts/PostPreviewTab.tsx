@@ -122,9 +122,10 @@ export default function PostPreviewTab({
             aria-selected={view === 'feed'}
             className={view === 'feed' ? 'on' : ''}
             onClick={() => setView('feed')}
+            title="Feed view"
+            aria-label="Feed view"
           >
-            <Home className="h-3 w-3" />
-            Feed View
+            <Home className="h-4 w-4" strokeWidth={2} />
           </button>
           <button
             type="button"
@@ -132,20 +133,27 @@ export default function PostPreviewTab({
             aria-selected={view === 'grid'}
             className={view === 'grid' ? 'on' : ''}
             onClick={() => setView('grid')}
+            title="Grid view"
+            aria-label="Grid view"
           >
-            <Grid3x3 className="h-3 w-3" />
-            Grid View
+            <Grid3x3 className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
       </div>
 
       <div className="igp-preview__cols">
         <div className="igp-preview__left">
+          <div className="igp-phone-stage">
           {view === 'feed' ? (
             <div className="igp-phone" aria-label="Phone preview of the Instagram feed post">
+              <div className="igp-phone__island" aria-hidden />
               <div className="igp-phone__status">
                 <span>9:41</span>
-                <span aria-hidden>●●● ▮</span>
+                <span className="igp-phone__status-icons" aria-hidden>
+                  <span className="igp-phone__signal" />
+                  <span className="igp-phone__wifi" />
+                  <span className="igp-phone__battery" />
+                </span>
               </div>
               <div className="igp-phone__igbar">
                 <span className="igp-phone__iglogo">Instagram</span>
@@ -193,7 +201,9 @@ export default function PostPreviewTab({
                 </span>
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </div>
-              <div className="igp-phone__media">
+              <div
+                className={`igp-phone__media ${data.mediaType === 'REELS' ? 'igp-phone__media--reel' : ''}`}
+              >
                 {data.previewUrl ? (
                   data.mediaType === 'REELS' ? (
                     <video src={data.previewUrl} muted playsInline loop autoPlay />
@@ -247,22 +257,46 @@ export default function PostPreviewTab({
               </div>
             </div>
           ) : (
-            <div className="igp-minigrid" aria-label="Profile grid preview">
-              {gridItems.slice(0, 9).map((item) => (
-                <span
-                  key={item.id}
-                  className={`igp-minigrid__cell ${item.active ? 'igp-minigrid__cell--on' : ''}`}
-                >
-                  {item.url ? <img src={item.url} alt="" /> : null}
+            <div className="igp-phone igp-phone--profile" aria-label="Profile grid preview">
+              <div className="igp-phone__island" aria-hidden />
+              <div className="igp-phone__status">
+                <span>9:41</span>
+                <span className="igp-phone__status-icons" aria-hidden>
+                  <span className="igp-phone__signal" />
+                  <span className="igp-phone__wifi" />
+                  <span className="igp-phone__battery" />
                 </span>
-              ))}
-              {Array.from({ length: Math.max(0, 9 - gridItems.length) }).map((_, index) => (
-                <span key={`empty-${index}`} className="igp-minigrid__cell igp-minigrid__cell--empty">
-                  <PlusSquare className="h-4 w-4" />
-                </span>
-              ))}
+              </div>
+              <div className="igp-phone__profile">
+                <span className="igp-phone__avatar igp-phone__avatar--lg">{handleInitials(handle)}</span>
+                <p className="igp-phone__profile-handle">{displayHandle}</p>
+                <p className="igp-phone__profile-meta">Posts · Followers · Following</p>
+              </div>
+              <div className="igp-minigrid">
+                {gridItems.slice(0, 9).map((item) => (
+                  <span
+                    key={item.id}
+                    className={`igp-minigrid__cell ${item.active ? 'igp-minigrid__cell--on' : ''}`}
+                  >
+                    {item.url ? <img src={item.url} alt="" /> : null}
+                  </span>
+                ))}
+                {Array.from({ length: Math.max(0, 9 - gridItems.length) }).map((_, index) => (
+                  <span key={`empty-${index}`} className="igp-minigrid__cell igp-minigrid__cell--empty">
+                    <PlusSquare className="h-3.5 w-3.5" />
+                  </span>
+                ))}
+              </div>
+              <div className="igp-phone__nav" aria-hidden>
+                <Home className="h-4 w-4" />
+                <Search className="h-4 w-4" />
+                <PlusSquare className="h-4 w-4" />
+                <Clapperboard className="h-4 w-4" />
+                <User className="h-4 w-4" />
+              </div>
             </div>
           )}
+          </div>
         </div>
 
         <div className="igp-preview__right">
@@ -392,18 +426,20 @@ export default function PostPreviewTab({
               ) : null}
             </div>
             <div className="igp-autosummary">
-              <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--igp-accent)]" />
-              <div>
-                <strong>Auto reply to comments</strong>
-                <span>Reply with a custom message when someone comments on this post.</span>
+              <div className="igp-autosummary__row">
+                <MessageCircle className="h-3.5 w-3.5 shrink-0 text-[var(--igp-accent)]" aria-hidden />
+                <strong className="igp-autosummary__title">Auto reply to comments</strong>
+                <span
+                  className={`igp-autosummary__state ${
+                    automationConfigured ? 'igp-autosummary__state--on' : 'igp-autosummary__state--off'
+                  }`}
+                >
+                  {automationConfigured ? 'Configured' : 'Not set up'}
+                </span>
               </div>
-              <span
-                className={`igp-autosummary__state ${
-                  automationConfigured ? 'igp-autosummary__state--on' : 'igp-autosummary__state--off'
-                }`}
-              >
-                {automationConfigured ? 'Configured' : 'Not set up'}
-              </span>
+              <p className="igp-autosummary__hint">
+                Custom reply when someone comments on this post.
+              </p>
             </div>
           </section>
         </div>

@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Type as TypeIcon,
 } from 'lucide-react';
+import CommentAutomationFields from './CommentAutomationFields';
 import { statusLabel, statusModifier, type MediaType } from './types';
 
 type AutomationTabProps = {
@@ -106,7 +107,9 @@ export default function PostAutomationTab({
           ) : null}
         </div>
         {!ready && pendingOk ? (
-          <p className="igp-auto__sub">Saves now · runs when the post is live</p>
+          <p className="igp-auto__sub">Saves now · runs when the post is live on Instagram</p>
+        ) : ready ? (
+          <p className="igp-auto__sub">Keyword on this post → public comment reply and/or private DM via Meta</p>
         ) : null}
       </div>
 
@@ -144,46 +147,18 @@ export default function PostAutomationTab({
           </p>
         ) : null}
 
-        <div className={`igp-field ${keywordError ? 'igp-field--error' : ''}`}>
-          <label htmlFor="igp-auto-keyword">Keyword</label>
-          <input
-            id="igp-auto-keyword"
-            value={keyword}
-            disabled={!canEdit || saving}
-            placeholder="PRICE, OFFER, LINK…"
-            onChange={(event) => onKeywordChange(event.target.value)}
-          />
-          {keywordError ? (
-            <span className="igp-field__error">Add the word to match in comments.</span>
-          ) : null}
-        </div>
-
-        <div className={`igp-field ${replyError ? 'igp-field--error' : ''}`}>
-          <label htmlFor="igp-auto-public">Public reply</label>
-          <textarea
-            id="igp-auto-public"
-            rows={2}
-            value={publicReply}
-            disabled={!canEdit || saving}
-            placeholder="Shown under their comment (optional if you send a DM)"
-            onChange={(event) => onPublicReplyChange(event.target.value)}
-          />
-        </div>
-
-        <div className={`igp-field ${replyError ? 'igp-field--error' : ''}`}>
-          <label htmlFor="igp-auto-dm">Private DM</label>
-          <textarea
-            id="igp-auto-dm"
-            rows={2}
-            value={dm}
-            disabled={!canEdit || saving}
-            placeholder="One DM to the commenter (optional if you post a public reply)"
-            onChange={(event) => onDmChange(event.target.value)}
-          />
-          {replyError ? (
-            <span className="igp-field__error">Add a public reply, a DM, or both.</span>
-          ) : null}
-        </div>
+        <CommentAutomationFields
+          idPrefix="igp-auto"
+          keyword={keyword}
+          onKeywordChange={onKeywordChange}
+          publicReply={publicReply}
+          onPublicReplyChange={onPublicReplyChange}
+          dm={dm}
+          onDmChange={onDmChange}
+          disabled={!canEdit || saving}
+          keywordError={keywordError}
+          replyError={replyError}
+        />
 
         {isMock ? (
           <p className="igp-tip igp-tip--compact">

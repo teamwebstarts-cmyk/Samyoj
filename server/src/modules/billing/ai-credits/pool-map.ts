@@ -10,6 +10,7 @@ const CHAT_ACTIONS = new Set([
   'call_summary',
   'support_help',
   'content_studio',
+  'instagram_caption',
 ]);
 
 const CALLING_ACTIONS = new Set(['calling_llm', 'stt', 'tts']);

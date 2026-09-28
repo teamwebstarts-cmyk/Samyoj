@@ -1760,8 +1760,11 @@ export class MetaWhatsAppService {
   }
 }
 
-export function isWithin24HourWindow(windowOpensAt: Date | null | undefined): boolean {
-  if (!windowOpensAt) return false;
-  const hoursSince = (Date.now() - windowOpensAt.getTime()) / (1000 * 60 * 60);
-  return hoursSince < 24;
+export function isWithin24HourWindow(windowOpensAt: Date | null | undefined, now = new Date()): boolean {
+  if (!windowOpensAt || Number.isNaN(windowOpensAt.getTime())) return false;
+  const skewMs = 2 * 60 * 1000;
+  const windowMs = 24 * 60 * 60 * 1000;
+  if (windowOpensAt.getTime() > now.getTime() + skewMs) return false;
+  const anchor = windowOpensAt.getTime() > now.getTime() ? now : windowOpensAt;
+  return now.getTime() - anchor.getTime() < windowMs;
 }

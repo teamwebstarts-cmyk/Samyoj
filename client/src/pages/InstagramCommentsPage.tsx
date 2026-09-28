@@ -13,6 +13,7 @@ import {
   Loader2,
   MessageSquare,
   Timer,
+  Info,
   RefreshCw,
   Search,
   SendHorizontal,
@@ -182,6 +183,15 @@ function IgMediaThumb({
 const COMMENT_PAGE_SIZE = 25;
 
 const DEFAULT_RETENTION_DAYS = 2;
+const IG_RETENTION_TIP_STORAGE_KEY = 'samyoj_ig_comments_retention_tip_v1';
+
+function readRetentionTipDismissed(): boolean {
+  try {
+    return localStorage.getItem(IG_RETENTION_TIP_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 const FACTS = [
   { title: 'Who can open this', line: 'Anyone signed in to this organization.', icon: UserRound, tint: 'bg-sky-50 text-sky-600' },
@@ -218,6 +228,7 @@ export default function InstagramCommentsPage() {
   const [focusReply, setFocusReply] = useState(0);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS);
+  const [retentionTipOpen, setRetentionTipOpen] = useState(() => !readRetentionTipDismissed());
   const [mockCommentPatch, setMockCommentPatch] = useState<Record<string, Partial<CommentRow>>>({});
   const [, setTick] = useState(0);
   const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
@@ -459,6 +470,15 @@ export default function InstagramCommentsPage() {
     { id: 'hidden', label: 'Hidden' },
   ];
 
+  const dismissRetentionTip = useCallback(() => {
+    setRetentionTipOpen(false);
+    try {
+      localStorage.setItem(IG_RETENTION_TIP_STORAGE_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const handle = accountName ? `@${accountName.replace(/^@/, '')}` : null;
   const showCommentsSkeleton = loading && source.length === 0;
   const showList = visible.length > 0 && !showCommentsSkeleton;
@@ -494,6 +514,9 @@ export default function InstagramCommentsPage() {
                 </div>
               </div>
               <div className="igc-header-actions grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end">
+                {connected && !retentionTipOpen ? (
+                  <CommentsRetentionInfo days={retentionDays} />
+                ) : null}
                 {connected ? (
                   <button
                     type="button"
@@ -516,7 +539,9 @@ export default function InstagramCommentsPage() {
             </header>
             <MetaMockNotice />
 
-            {connected ? <CommentsRetentionInfograph days={retentionDays} /> : null}
+            {connected && retentionTipOpen ? (
+              <CommentsRetentionInfograph days={retentionDays} onDismiss={dismissRetentionTip} />
+            ) : null}
 
             <details className="igc-card igc-disclosure mt-4">
               <summary className="igc-disclosure-trigger">
@@ -735,18 +760,20 @@ export default function InstagramCommentsPage() {
   );
 }
 
-function CommentsRetentionInfograph({ days }: { days: number }) {
+function CommentsRetentionTitle({ days }: { days: number }) {
   return (
-    <aside
-      className="igc-retention-corner"
-      aria-label={`Comments are stored for ${days} days`}
-    >
-      <div className="igc-retention-corner__head">
-        <Timer className="h-4 w-4 shrink-0 text-[#B45309]" strokeWidth={2} />
-        <span className="text-[12px] font-extrabold leading-tight text-[var(--igc-ink)]">
-          {days}-day comment storage
-        </span>
-      </div>
+    <div className="igc-retention-corner__head">
+      <Timer className="h-4 w-4 shrink-0 text-[#B45309]" strokeWidth={2} />
+      <span className="text-[12px] font-extrabold leading-tight text-[var(--igc-ink)]">
+        {days}-day comment storage
+      </span>
+    </div>
+  );
+}
+
+function CommentsRetentionBody({ days, compact }: { days: number; compact?: boolean }) {
+  return (
+    <>
       <div className="igc-retention-flow" aria-hidden>
         <div className="igc-retention-step">
           <span className="igc-retention-dot igc-retention-dot--live" />
@@ -763,11 +790,55 @@ function CommentsRetentionInfograph({ days }: { days: number }) {
           <span className="igc-retention-label">Auto-delete</span>
         </div>
       </div>
-      <p className="igc-retention-corner__copy">
+      <p className={`igc-retention-corner__copy ${compact ? 'text-[10.5px]' : ''}`}>
         After {days} days, comment rows are removed from Samyoj. Instagram on the post is unchanged. Keyword automation
         runs once per person per post.
       </p>
+    </>
+  );
+}
+
+function CommentsRetentionInfograph({ days, onDismiss }: { days: number; onDismiss: () => void }) {
+  return (
+    <aside className="igc-retention-corner" aria-label={`Comments are stored for ${days} days`}>
+      <div className="igc-retention-corner__toolbar">
+        <CommentsRetentionTitle days={days} />
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="igc-retention-corner__close"
+          aria-label="Dismiss comment storage info"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2.25} />
+        </button>
+      </div>
+      <CommentsRetentionBody days={days} />
     </aside>
+  );
+}
+
+function CommentsRetentionInfo({ days }: { days: number }) {
+  return (
+    <div className="igc-retention-info group relative col-span-2 sm:col-span-1">
+      <button
+        type="button"
+        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-200/90 bg-amber-50/80 px-2.5 text-[12px] font-semibold text-amber-900 transition hover:bg-amber-50 sm:w-auto sm:px-3 sm:text-[12.5px]"
+        aria-describedby="igc-retention-info-popover"
+      >
+        <Info className="h-3.5 w-3.5 shrink-0 text-amber-700" strokeWidth={2} />
+        <span className="truncate">Storage ({days}d)</span>
+      </button>
+      <div
+        id="igc-retention-info-popover"
+        role="tooltip"
+        className="igc-retention-info-popover pointer-events-none invisible absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(280px,calc(100vw-2rem))] opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100"
+      >
+        <div className="igc-retention-info-panel">
+          <CommentsRetentionTitle days={days} />
+          <CommentsRetentionBody days={days} compact />
+        </div>
+      </div>
+    </div>
   );
 }
 

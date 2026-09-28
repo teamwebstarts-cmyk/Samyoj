@@ -736,6 +736,11 @@ export const instagramApi = {
         '/instagram/posts/media',
         body
       ),
+    captionAi: (body: { mode: 'polish' | 'generate'; text: string }) =>
+      api.post<{ data: { caption: string; mode: 'polish' | 'generate' } }>(
+        '/instagram/posts/caption',
+        body
+      ),
   },
 };
 

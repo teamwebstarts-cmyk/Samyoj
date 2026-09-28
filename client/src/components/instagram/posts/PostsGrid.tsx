@@ -1,5 +1,6 @@
 import { CalendarClock, Clapperboard, ImagePlus, Layers, MessageSquare, Plus, Sparkles, Wand2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { resolvePublicMediaUrl } from '../../../utils/publicMediaUrl';
 import {
   postDisplayDate,
   statusLabel,
@@ -25,10 +26,11 @@ const KIND_META: Partial<Record<MediaType, { label: string; icon: typeof Clapper
 };
 
 function tileThumb(post: PostRow): string {
-  if (post.mediaType === 'REELS' && post.mediaPayload[0]?.kind === 'video') {
-    return post.imageUrl;
-  }
-  return post.imageUrl;
+  const raw =
+    post.mediaType === 'REELS' && post.mediaPayload[0]?.url
+      ? post.mediaPayload[0].url
+      : post.imageUrl || post.mediaPayload.find((item) => item.kind === 'image')?.url || '';
+  return resolvePublicMediaUrl(raw);
 }
 
 /** Skeleton tiles shown while the first page of posts loads. */
@@ -209,6 +211,7 @@ export function PostsGrid({
     <div className="igp-grid">
       {posts.map((post) => {
         const date = postDisplayDate(post);
+        const thumb = tileThumb(post);
         return (
           <button
             key={post.id}
@@ -218,7 +221,13 @@ export function PostsGrid({
             aria-label={`${statusLabel(post.status)} post${date ? `, ${date}` : ''}`}
           >
             <span className="igp-tile__frame">
-              <img src={tileThumb(post)} alt="" loading="lazy" />
+              {thumb ? (
+                <img src={thumb} alt="" loading="lazy" />
+              ) : (
+                <span className="igp-tile__media-fallback" aria-hidden>
+                  <ImagePlus className="h-8 w-8 opacity-40" strokeWidth={1.5} />
+                </span>
+              )}
               <span className={`igp-status igp-status--${statusModifier(post.status)}`}>
                 {statusLabel(post.status)}
               </span>
@@ -299,7 +308,7 @@ export function PostsLibrary({ items, loading, error, selectedId, onOpen, onRefr
               onClick={() => onOpen(item)}
               aria-label="Open live Instagram post"
             >
-              <img src={item.thumbnailUrl} alt="" loading="lazy" />
+              <img src={resolvePublicMediaUrl(item.thumbnailUrl)} alt="" loading="lazy" />
               <span className="igp-lib__live">Live</span>
               <span className="igp-lib__ig" aria-hidden>
                 <ImagePlus className="h-3 w-3" strokeWidth={2.4} />

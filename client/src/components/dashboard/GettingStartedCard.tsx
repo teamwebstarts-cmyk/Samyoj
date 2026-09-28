@@ -16,17 +16,19 @@ interface GettingStartedCardProps {
   steps: GettingStartedStep[];
   completedCount: number;
   totalSteps: number;
+  className?: string;
 }
 
 export default function GettingStartedCard({
   steps,
   completedCount,
   totalSteps,
+  className = '',
 }: GettingStartedCardProps) {
   const allDone = totalSteps > 0 && completedCount >= totalSteps;
 
   return (
-    <section className="dashboard-card flex h-full flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-2xl">
+    <section className={`dashboard-card flex h-full flex-col justify-between rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-2xl ${className}`}>
       {/* Card Header: Icon + Title + Progress Badge */}
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
@@ -49,8 +51,8 @@ export default function GettingStartedCard({
       </div>
 
       {/* Card Body: Left Checklist Items + Right Illustration */}
-      <div className="mt-2 flex min-h-0 flex-1 items-center justify-between gap-2 sm:mt-2.5 sm:gap-3">
-        <ul className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
+      <div className="mt-2 flex min-h-0 flex-1 items-start justify-between gap-2 sm:mt-3 sm:gap-3">
+        <ul className="min-w-0 flex-1 space-y-1 sm:space-y-1.5">
           {steps.map((step) => {
             const Row = (
               <div

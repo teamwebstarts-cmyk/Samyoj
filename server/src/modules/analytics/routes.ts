@@ -34,6 +34,12 @@ function pctDelta(current: number, previous: number): number | null {
   return Number((((current - previous) / previous) * 100).toFixed(1));
 }
 
+/** Period growth for dashboard cards. A first-time count (0 → n) reads as +100%. */
+function growthPct(current: number, previous: number): number {
+  if (previous === 0) return current === 0 ? 0 : 100;
+  return pctDelta(current, previous) ?? 0;
+}
+
 function ratePointDelta(current: number, previous: number): number | null {
   if (previous === 0 && current === 0) return 0;
   if (previous === 0) return null;
@@ -85,6 +91,11 @@ router.get(
       activeConversations,
       closedConversations,
       totalContacts,
+      newContacts,
+      newContactsPrev,
+      newConversations,
+      activeConversationsPrev,
+      periodContacts,
       periodMessages,
       cswConversations,
       activePhone,
@@ -138,6 +149,38 @@ router.get(
       }),
       prisma.contact.count({
         where: { organizationId: orgId, ...contactsForNumberFilter(numberId) },
+      }),
+      prisma.contact.count({
+        where: {
+          organizationId: orgId,
+          ...contactsForNumberFilter(numberId),
+          createdAt: { gte: since, lte: until },
+        },
+      }),
+      compareEnabled
+        ? prisma.contact.count({
+            where: {
+              organizationId: orgId,
+              ...contactsForNumberFilter(numberId),
+              createdAt: { gte: previousSince, lte: previousUntil },
+            },
+          })
+        : Promise.resolve(0),
+      prisma.conversation.count({
+        where: { ...convScope, createdAt: { gte: since, lte: until } },
+      }),
+      compareEnabled
+        ? prisma.conversation.count({
+            where: { ...convScope, createdAt: { gte: previousSince, lte: previousUntil } },
+          })
+        : Promise.resolve(0),
+      prisma.contact.findMany({
+        where: {
+          organizationId: orgId,
+          ...contactsForNumberFilter(numberId),
+          createdAt: { gte: since, lte: until },
+        },
+        select: { createdAt: true },
       }),
       prisma.message.findMany({
         where: {
@@ -215,6 +258,9 @@ router.get(
       const dayDeliveryRate = daySent ? Number(((dayDelivered / daySent) * 100).toFixed(1)) : 0;
       const dayReadRate = daySent ? Number(((dayRead / daySent) * 100).toFixed(1)) : 0;
       const dayActiveConvs = new Set(msgsInBucket.map((m) => m.conversationId)).size;
+      const dayNewContacts = periodContacts.filter(
+        (contact) => contact.createdAt >= bucket.dayStart && contact.createdAt <= bucket.dayEnd
+      ).length;
 
       dailySeries.push({
         date: bucket.dateLabel,
@@ -225,6 +271,7 @@ router.get(
         deliveryRate: dayDeliveryRate,
         readRate: dayReadRate,
         activeConversations: dayActiveConvs,
+        newContacts: dayNewContacts,
       });
     }
 
@@ -249,11 +296,13 @@ router.get(
       closedConversations,
       totalContacts,
       deltas: {
-        messagesSent: compareEnabled ? pctDelta(messagesSent, messagesSentPrev) : null,
+        messagesSent: compareEnabled ? growthPct(messagesSent, messagesSentPrev) : null,
         inboundMessages: compareEnabled ? pctDelta(inboundMessages, inboundMessagesPrev) : null,
         deliveryRate: compareEnabled ? ratePointDelta(deliveryRate, prevDeliveryRate) : null,
         readRate: compareEnabled ? ratePointDelta(readRate, prevReadRate) : null,
         failedMessages: compareEnabled ? pctDelta(messagesFailed, messagesFailedPrev) : null,
+        activeConversations: compareEnabled ? growthPct(newConversations, activeConversationsPrev) : null,
+        totalContacts: compareEnabled ? growthPct(newContacts, newContactsPrev) : null,
       },
       dailySeries,
       qualityRating: activePhone?.qualityRating || 'UNKNOWN',

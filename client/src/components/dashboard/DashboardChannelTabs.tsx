@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Layers } from 'lucide-react';
 import FacebookGlyph from './icons/FacebookGlyph';
 import InstagramGlyph from './icons/InstagramGlyph';
 import MailGlyph from './icons/MailGlyph';
@@ -7,7 +8,7 @@ import type { WorkspaceChannels } from '../../utils/workspaceChannels';
 
 interface DashboardChannelTabsProps {
   channels: WorkspaceChannels;
-  activeChannel?: keyof WorkspaceChannels;
+  activeChannel?: keyof WorkspaceChannels | 'all';
   whatsappLabel?: string;
   facebookLabel?: string;
   instagramLabel?: string;
@@ -32,11 +33,31 @@ export default function DashboardChannelTabs({
     instagram: instagramLabel || 'Business account',
   };
 
+  const allActive = activeChannel === 'all';
+
   return (
     <nav className="dashboard-channel-tabs" aria-label="Connected channels">
+      <Link
+        to="/?channel=all"
+        className="dashboard-channel-tab dashboard-channel-tab--all"
+        data-channel="all"
+        data-active={allActive}
+      >
+        <span className="dashboard-channel-tab__icon bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-[0_4px_10px_rgba(56,189,248,0.32)]">
+          <Layers className="h-[17px] w-[17px]" strokeWidth={2.2} />
+        </span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[12px] font-extrabold text-neutral-900 sm:text-[13px]">All Channels</span>
+          </span>
+          <span className="dashboard-channel-tab__sub mt-0.5 block truncate text-[10.5px] font-medium text-neutral-500">
+            WhatsApp, Facebook, Instagram
+          </span>
+        </span>
+      </Link>
       {CHANNELS.map((channel) => {
         const connected = channels[channel.key];
-        const active = channel.key === (activeChannel ?? 'whatsapp') && connected;
+        const active = channel.key === activeChannel && connected;
         const Icon =
           channel.key === 'whatsapp'
             ? WhatsAppGlyph

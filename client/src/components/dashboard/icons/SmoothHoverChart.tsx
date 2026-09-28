@@ -11,6 +11,7 @@ interface SmoothHoverChartProps {
   labels: string[];
   series: HoverSeries[];
   height?: number;
+  compactTooltip?: boolean;
 }
 
 function niceMax(value: number) {
@@ -19,7 +20,12 @@ function niceMax(value: number) {
   return Math.ceil(raw / step) * step;
 }
 
-export default function SmoothHoverChart({ labels, series, height = 190 }: SmoothHoverChartProps) {
+export default function SmoothHoverChart({
+  labels,
+  series,
+  height = 190,
+  compactTooltip = false,
+}: SmoothHoverChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const uid = useId().replace(/:/g, '');
@@ -74,12 +80,16 @@ export default function SmoothHoverChart({ labels, series, height = 190 }: Smoot
   return (
     <div ref={box} className="relative w-full" style={{ height }}>
       <div
-        className={`dash-tip pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-[10px] border border-[#e6ebf2] bg-white px-3 py-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.10)] ${shown ? 'opacity-100' : 'opacity-0'}`}
+        className={`dash-tip pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-[10px] border border-[#e6ebf2] bg-white shadow-[0_10px_24px_rgba(15,23,42,0.10)] ${
+          compactTooltip ? 'max-w-[76px] rounded-[7px] px-1.5 py-1' : 'px-3 py-1.5'
+        } ${shown ? 'opacity-100' : 'opacity-0'}`}
         style={{ left: marker?.x || 0, top: (marker?.y || 0) - 10 }}
       >
-        <p className="text-[10.5px] font-medium text-slate-500">{labels[active] || ''}</p>
+        <p className={compactTooltip ? 'truncate text-[8px] font-medium text-slate-500' : 'text-[10.5px] font-medium text-slate-500'}>
+          {labels[active] || ''}
+        </p>
         {series.map((item) => (
-          <p key={item.name} className="text-[12px] font-extrabold text-slate-950">
+          <p key={item.name} className={compactTooltip ? 'truncate text-[8.5px] font-extrabold text-slate-950' : 'text-[12px] font-extrabold text-slate-950'}>
             {(item.values[active] || 0).toLocaleString()} <span className="font-semibold text-slate-700">{item.name}</span>
           </p>
         ))}

@@ -1,7 +1,7 @@
 import prisma from '../../config/database';
 import { emitToOrg } from '../../realtime';
 import { createModuleLogger } from '../../utils/logger';
-import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
+import { messagingEventInstant, windowStillOpen } from '../inbox/service-window';
 import { computeSlaDueAt } from '../sla/service';
 import { instagramPlaceholderName, upgradeInstagramContactName } from './contact-name';
 
@@ -12,8 +12,7 @@ export function instagramContactPhone(igsid: string): string {
 }
 
 export function instagramWindowOpen(cs24hWindowOpensAt: Date | null | undefined, now = new Date()): boolean {
-  if (!cs24hWindowOpensAt) return false;
-  return now.getTime() - cs24hWindowOpensAt.getTime() < CUSTOMER_SERVICE_WINDOW_MS;
+  return windowStillOpen(cs24hWindowOpensAt, now);
 }
 
 export type IngestInstagramResult = {
@@ -52,10 +51,7 @@ export async function ingestInstagramTextMessage(opts: {
 
   const outbound = opts.direction === 'OUTBOUND';
   const phone = instagramContactPhone(igsid);
-  const receivedAt =
-    opts.timestampMs && Number.isFinite(opts.timestampMs)
-      ? new Date(opts.timestampMs)
-      : new Date();
+  const receivedAt = messagingEventInstant(opts.timestampMs);
 
   let identity = await prisma.contactPlatformIdentity.findUnique({
     where: {

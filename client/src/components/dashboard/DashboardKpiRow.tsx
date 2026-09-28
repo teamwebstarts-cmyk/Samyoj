@@ -7,6 +7,8 @@ import KpiSparkline from './icons/KpiSparkline';
 
 interface DashboardKpiRowProps {
   stats: AnalyticsOverview;
+  activeCampaigns: number;
+  campaigns?: Array<{ status?: string; createdAt?: string }>;
 }
 
 interface KpiCardProps {
@@ -20,9 +22,10 @@ interface KpiCardProps {
   icon: ReactNode;
   dataPoints: number[];
   emptyHint?: string;
+  href: string;
 }
 
-function deltaBadge(delta: number | null | undefined) {
+export function deltaBadge(delta: number | null | undefined) {
   if (delta == null || !Number.isFinite(delta)) return null;
   const rounded = Math.round(delta);
   if (rounded === 0) {
@@ -45,13 +48,14 @@ function KpiCard({
   icon,
   dataPoints,
   emptyHint,
+  href,
 }: KpiCardProps) {
   const hasTrend = dataPoints.some((point) => point > 0);
   const trend = deltaBadge(delta);
   const isEmpty = value <= 0 && !hasTrend;
-  return (
-    <article className="dashboard-kpi-card">
-      <div className="relative z-10 min-w-0 max-w-[62%]">
+  const body = (
+    <>
+      <div className={`relative z-10 min-w-0 pr-1 ${hasTrend ? 'max-w-[62%]' : 'max-w-[88%]'}`}>
         <IconWell accent={accent} size="sm" round={false}>
           {icon}
         </IconWell>
@@ -60,13 +64,13 @@ function KpiCard({
         >
           {value.toLocaleString()}
         </p>
-        <p className="mt-1 truncate text-[11px] font-semibold text-neutral-500">{label}</p>
+        <p className="mt-1 text-[11px] font-semibold leading-snug text-neutral-500">{label}</p>
         {trend ? (
           <span className={`mt-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums ${trend.className}`}>
             {trend.text}
           </span>
         ) : isEmpty ? (
-          <p className="mt-2 truncate text-[10px] font-semibold text-neutral-400">{emptyHint ?? 'No data yet'}</p>
+          <p className="mt-2 text-[10px] font-semibold leading-snug text-neutral-400">{emptyHint ?? 'No data yet'}</p>
         ) : null}
       </div>
       {hasTrend ? (
@@ -78,7 +82,16 @@ function KpiCard({
           className="absolute bottom-0 right-0 h-[54%] w-[62%]"
         />
       ) : null}
-    </article>
+    </>
+  );
+  return (
+    <Link
+      to={href}
+      aria-label={`${label}: ${value.toLocaleString()}`}
+      className="dashboard-kpi-card block transition hover:border-emerald-200/90 hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -158,7 +171,40 @@ function series(stats: AnalyticsOverview, key: keyof DailyAnalyticsPoint) {
   return (stats.dailySeries ?? []).map((point) => Number(point[key] ?? 0));
 }
 
-export default function DashboardKpiRow({ stats }: DashboardKpiRowProps) {
+function growthPct(current: number, previous: number): number {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+/** New items per day in the current window, plus the count from the window before it. */
+function recentDayCounts(dates: Array<string | undefined>, dayCount: number) {
+  const days = Math.max(1, Math.min(dayCount || 7, 31));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const current = Array.from({ length: days }, () => 0);
+  let previous = 0;
+  for (const iso of dates) {
+    if (!iso) continue;
+    const created = new Date(iso);
+    if (Number.isNaN(created.getTime())) continue;
+    created.setHours(0, 0, 0, 0);
+    const diff = Math.round((today.getTime() - created.getTime()) / 86400000);
+    if (diff >= 0 && diff < days) current[days - 1 - diff] += 1;
+    else if (diff >= days && diff < days * 2) previous += 1;
+  }
+  return { current, previous };
+}
+
+export default function DashboardKpiRow({ stats, activeCampaigns, campaigns = [] }: DashboardKpiRowProps) {
+  const dayCount = stats.days ?? stats.dailySeries?.length ?? 7;
+  const activeRows = campaigns.filter((row) =>
+    ['RUNNING', 'SCHEDULED', 'PAUSED'].includes(String(row.status || '').toUpperCase()),
+  );
+  const campaignBuckets = recentDayCounts(
+    activeRows.map((row) => row.createdAt),
+    dayCount,
+  );
+  const campaignDelta = activeCampaigns > 0 ? growthPct(campaignBuckets.current.reduce((sum, value) => sum + value, 0), campaignBuckets.previous) : null;
   return (
     <div className="dashboard-kpi-row">
       <KpiCard
@@ -171,9 +217,10 @@ export default function DashboardKpiRow({ stats }: DashboardKpiRowProps) {
         gradientTo="#ECFDF5"
         icon={<MessageCircle className="h-4 w-4" />}
         dataPoints={series(stats, 'messagesSent')}
+        href="/billing?tab=usage"
       />
       <KpiCard
-        label="Unique customers"
+        label="Contacts"
         value={stats.totalContacts}
         delta={stats.deltas?.totalContacts}
         accent="sky"
@@ -181,7 +228,8 @@ export default function DashboardKpiRow({ stats }: DashboardKpiRowProps) {
         gradientFrom="#93C5FD"
         gradientTo="#EFF6FF"
         icon={<Users className="h-4 w-4" />}
-        dataPoints={series(stats, 'totalContacts')}
+        dataPoints={series(stats, 'newContacts')}
+        href="/contacts"
       />
       <KpiCard
         label="Active chats"
@@ -193,18 +241,20 @@ export default function DashboardKpiRow({ stats }: DashboardKpiRowProps) {
         gradientTo="#FAF5FF"
         icon={<Zap className="h-4 w-4" />}
         dataPoints={series(stats, 'activeConversations')}
+        href="/inbox"
       />
       <KpiCard
-        label="Campaign messages"
-        value={stats.promoConversations ?? 0}
-        delta={null}
+        label="Active campaigns"
+        value={activeCampaigns}
+        delta={campaignDelta}
         accent="amber"
         color="#F59E0B"
         gradientFrom="#FCD34D"
         gradientTo="#FFFBEB"
         icon={<Send className="h-4 w-4" />}
-        dataPoints={(stats.promoConversations ?? 0) > 0 ? series(stats, 'messagesSent') : []}
-        emptyHint="No campaigns in this period"
+        dataPoints={campaignBuckets.current}
+        emptyHint="No active campaigns"
+        href="/campaigns"
       />
       <StatusCard stats={stats} />
     </div>

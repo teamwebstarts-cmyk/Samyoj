@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { resolvePublicMediaUrl } from '../../utils/publicMediaUrl';
 import {
   ArrowRight,
   BarChart3,
@@ -7,6 +8,7 @@ import {
   CalendarDays,
   ExternalLink,
   Facebook,
+  ImagePlus,
   Instagram,
   MessageCircle,
   MessageSquare,
@@ -103,8 +105,8 @@ function FacebookHero({
         }
         description="Manage your Messenger conversations and view your Meta Ads performance."
       />
-      <div className="pointer-events-none absolute left-[64%] top-[58%] hidden h-[178px] w-[min(720px,58%)] -translate-x-1/2 -translate-y-1/2 lg:block" aria-hidden>
-        <svg viewBox="0 0 270 120" className="h-[172px] w-full overflow-visible">
+      <div className="dashboard-channel-hero-decor dashboard-channel-hero-decor--facebook" aria-hidden>
+        <svg viewBox="0 0 270 120" className="w-full overflow-visible">
           <defs>
             <linearGradient id="fbTile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#4c9bff" /><stop offset="0.55" stopColor="#1877f2" /><stop offset="1" stopColor="#0a55c8" /></linearGradient>
             <linearGradient id="fbSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0d5fd4" /><stop offset="1" stopColor="#0845a3" /></linearGradient>
@@ -169,7 +171,7 @@ function FbOverview({
                 {stat.value === '—' ? '0' : stat.value}
               </strong>
               <p className="mt-1 truncate text-[12px] font-medium text-slate-500">{stat.label}</p>
-              {stat.extra ? <div className="mt-1.5 flex min-h-[22px] items-center">{stat.extra}</div> : null}
+              {stat.extra ? <div className="mt-1">{stat.extra}</div> : null}
             </div>
           ))}
         </div>
@@ -178,7 +180,13 @@ function FbOverview({
   );
 }
 
-function MessengerCard({ conversations, total }: { conversations: Conversation[]; total: number }) {
+function MessengerCard({
+  conversations,
+  total,
+}: {
+  conversations: Conversation[];
+  total: number;
+}) {
   const unique = new Set(conversations.map((row) => row.contact?.id || row.contact?.name || row.id)).size;
   return (
     <FbOverview
@@ -188,17 +196,8 @@ function MessengerCard({ conversations, total }: { conversations: Conversation[]
       href="/facebook/inbox"
       stats={[
         { value: total.toLocaleString(), label: 'Conversations' },
-        { value: unique.toLocaleString(), label: 'Unique customers' },
-        {
-          value: '0',
-          label: 'Active automations',
-          extra: (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-              <Bot className="h-3 w-3 shrink-0" aria-hidden />
-              None active
-            </span>
-          ),
-        },
+        { value: unique.toLocaleString(), label: 'Contacts' },
+        { value: '0', label: 'Active automations' },
       ]}
       empty={total === 0 ? { title: 'No Messenger data yet', description: 'Your first customer message will appear here.', action: 'Open Messenger' } : undefined}
     />
@@ -461,7 +460,6 @@ function OverviewCard({
   subtitle,
   href,
   columns,
-  empty,
 }: {
   icon: ReactNode;
   iconClass: string;
@@ -469,11 +467,10 @@ function OverviewCard({
   subtitle: string;
   href: string;
   columns: ReactNode;
-  empty?: { title: string; description: string; action: string };
 }) {
   return (
-    <section className="flex flex-col justify-between rounded-[18px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_4px_12px_rgba(0,0,0,0.02)]">
-      <div className="mb-5 flex items-start justify-between gap-3">
+    <section className="flex h-full flex-col rounded-[18px] border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_4px_12px_rgba(0,0,0,0.02)]">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] ${iconClass}`}>{icon}</span>
           <span className="min-w-0">
@@ -485,39 +482,18 @@ function OverviewCard({
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
-      {empty ? (
-        <ChannelEmptyState
-          icon={icon}
-          title={empty.title}
-          description={empty.description}
-          to={href}
-          action={empty.action}
-          accent="instagram"
-          compact
-        />
-      ) : (
-        <div className="grid grid-cols-3 items-start gap-3">{columns}</div>
-      )}
+      <div className="mt-auto grid grid-cols-3 items-end gap-3 border-t border-slate-100 pt-3.5">{columns}</div>
     </section>
   );
 }
 
-function automationFoot() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-      <Bot className="h-3 w-3 shrink-0" aria-hidden />
-      None active
-    </span>
-  );
-}
-
-function StatCol({ value, label, foot }: { value: number | string; label: string; foot: ReactNode }) {
+function StatCol({ value, label, foot }: { value: number | string; label: string; foot?: ReactNode }) {
   const display = value === '—' ? 0 : value;
   return (
     <div className="flex min-w-0 flex-col">
       <strong className="block text-[23px] font-extrabold leading-none tabular-nums text-slate-950">{display}</strong>
       <p className="mt-1 truncate text-[11.5px] font-medium text-slate-500">{label}</p>
-      <div className="mt-1.5 flex min-h-[22px] items-center">{foot}</div>
+      {foot ? <div className="mt-1.5 flex items-center">{foot}</div> : null}
     </div>
   );
 }
@@ -611,6 +587,7 @@ function InstagramTrend({
       {dm.some((value) => value > 0) || notes.some((value) => value > 0) ? (
         <SmoothHoverChart
           labels={days.map((day) => day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}
+          compactTooltip
           series={[
             { name: 'DMs', color: '#f43f5e', values: dm },
             { name: 'comments', color: '#a855f7', values: notes },
@@ -664,18 +641,51 @@ function InstagramReview({ comments }: { comments: Array<Record<string, unknown>
   );
 }
 
+function InstagramTopPostCard({ post }: { post: { id: string; imageUrl: string; caption: string } }) {
+  const src = resolvePublicMediaUrl(post.imageUrl);
+  const [broken, setBroken] = useState(false);
+  const showImage = Boolean(src) && !broken;
+  const caption = (post.caption || '').trim();
+
+  return (
+    <Link
+      to="/instagram/posts"
+      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-orange-200 hover:shadow-sm"
+    >
+      <span className="relative block aspect-square w-full bg-gradient-to-br from-orange-50 to-rose-50">
+        {showImage ? (
+          <img
+            src={src}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center text-orange-300/80">
+            <ImagePlus className="h-8 w-8" strokeWidth={1.5} aria-hidden />
+          </span>
+        )}
+      </span>
+      <span className="line-clamp-2 px-2 py-1.5 text-[11px] font-semibold leading-snug text-slate-600">
+        {caption || 'Untitled post'}
+      </span>
+    </Link>
+  );
+}
+
 function InstagramTopPosts({ posts }: { posts: Array<{ id: string; imageUrl: string; caption: string }> }) {
+  const top = posts.slice(0, 4);
   return (
     <section className="rounded-[18px] border border-slate-200 bg-white px-5 py-4">
       <div className="mb-3 flex items-center justify-between"><h3 className="text-[15.5px] font-extrabold tracking-[-0.01em] text-orange-600">Top posts <span className="text-[12px] font-medium text-slate-500">(by engagement)</span></h3><Link to="/instagram/posts" className="text-[12px] font-bold text-blue-500">View all →</Link></div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {posts.slice(0, 4).map((post) => (
-          <Link key={post.id} to="/instagram/posts" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {post.imageUrl ? <img src={post.imageUrl} alt="" className="h-[86px] w-full object-cover" /> : <span className="block h-[86px] bg-orange-50" />}
-            <span className="line-clamp-2 min-h-[38px] px-2 py-1.5 text-[11px] font-semibold leading-snug text-slate-600">{post.caption || 'Post'}</span>
-          </Link>
-        ))}
-      </div>
+      {top.length ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-3">
+          {top.map((post) => (
+            <InstagramTopPostCard key={post.id} post={post} />
+          ))}
+        </div>
+      ) : null}
       {!posts.length ? (
         <ChannelEmptyState
           icon={<Plus className="h-4 w-4" />}
@@ -701,14 +711,24 @@ function InstagramQuickActions() {
   return (
     <section className="rounded-[18px] border border-slate-200 bg-white px-5 py-4">
       <h3 className="mb-3.5 flex items-center gap-2 text-[15.5px] font-extrabold tracking-[-0.01em]"><Bot className="h-4 w-4 text-violet-500" /> Quick actions</h3>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <div className="flex flex-col gap-2">
         {actions.map(([href, title, subtitle, Icon, tone]) => (
-          <Link key={title} to={href} className="group flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_16px_rgba(15,23,42,0.06)]">
-            <span className="flex min-w-0 items-center gap-2.5"><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition group-hover:scale-105 ${tone}`}><Icon className="h-4 w-4" /></span><span className="min-w-0"><strong className="block truncate text-[12px]">{title}</strong><small className="block truncate text-[10px] text-slate-500">{subtitle}</small></span></span>
-            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5" />
-            </Link>
+          <Link
+            key={title}
+            to={href}
+            className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 transition duration-300 hover:translate-x-[3px] hover:shadow-[0_6px_16px_rgba(15,23,42,0.06)]"
+          >
+            <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ${tone}`}>
+              <Icon className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-[12px]">{title}</strong>
+              <small className="block truncate text-[10.5px] text-slate-500">{subtitle}</small>
+            </span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400 transition group-hover:translate-x-[3px]" />
+          </Link>
         ))}
-          </div>
+      </div>
         </section>
   );
 }
@@ -762,10 +782,10 @@ function InstagramHome({
   return (
     <div className="flex flex-col gap-4">
       <InstagramHero label={label} period={period} onPeriodChange={onPeriodChange} />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <OverviewCard icon={<MessageCircle className="h-4 w-4" />} iconClass="bg-violet-50 text-violet-500" title="DM Inbox" subtitle="Reply to customers and automate conversations" href="/instagram/inbox" empty={inboxTotal === 0 ? { title: 'No DMs yet', description: 'Your first Instagram message will appear here.', action: 'Open Inbox' } : undefined} columns={<><StatCol value={inboxTotal} label="Total conversations" foot={<span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Live</span>} /><StatCol value={unreadTotal} label="New messages" foot={<span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Unread</span>} /><StatCol value={0} label="Active automations" foot={automationFoot()} /></>} />
-        <OverviewCard icon={<MessageSquare className="h-4 w-4" />} iconClass="bg-rose-50 text-rose-500" title="Comments" subtitle="View and reply to post comments" href="/instagram/comments" empty={commentTotal === 0 ? { title: 'No comments yet', description: 'Comments from your posts will appear here.', action: 'View Comments' } : undefined} columns={<><StatCol value={commentTotal} label="Total comments" foot={<span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Live</span>} /><StatCol value={comments.length} label="New comments" foot={<span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Loaded</span>} /><StatCol value={0} label="Active automations" foot={automationFoot()} /></>} />
-        <OverviewCard icon={<CalendarDays className="h-4 w-4" />} iconClass="bg-orange-50 text-orange-600" title="Posts" subtitle="Create, schedule and manage posts" href="/instagram/posts" empty={postCount === 0 ? { title: 'No posts yet', description: 'Create your first post to start your content library.', action: 'Create Post' } : undefined} columns={<><StatCol value={postCount} label="Total posts" foot={<span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Live</span>} /><StatCol value={scheduledCount} label="Scheduled" foot={<span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">Scheduled</span>} /><StatCol value={publishedCount} label="Published" foot={<span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Published</span>} /></>} />
+      <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-3">
+        <OverviewCard icon={<MessageCircle className="h-4 w-4" />} iconClass="bg-violet-50 text-violet-500" title="DM Inbox" subtitle="Reply to customers and automate conversations" href="/instagram/inbox" columns={<><StatCol value={inboxTotal} label="Total conversations" /><StatCol value={unreadTotal} label="New messages" /><StatCol value={0} label="Active automations" /></>} />
+        <OverviewCard icon={<MessageSquare className="h-4 w-4" />} iconClass="bg-rose-50 text-rose-500" title="Comments" subtitle="View and reply to post comments" href="/instagram/comments" columns={<><StatCol value={commentTotal} label="Total comments" /><StatCol value={comments.length} label="New comments" /><StatCol value={0} label="Active automations" /></>} />
+        <OverviewCard icon={<CalendarDays className="h-4 w-4" />} iconClass="bg-orange-50 text-orange-600" title="Posts" subtitle="Create, schedule and manage posts" href="/instagram/posts" columns={<><StatCol value={postCount} label="Total posts" /><StatCol value={scheduledCount} label="Scheduled" /><StatCol value={publishedCount} label="Published" /></>} />
       </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1.75fr_1fr]">
         <InstagramRecentActivity conversations={conversations} comments={comments} />
@@ -874,7 +894,16 @@ export default function DashboardChannelHome({
       }
       if (postsResult.status === 'fulfilled') {
         const rows = postsResult.value.data.data.posts || [];
-        next.posts = rows.map((post) => ({ id: post.id, imageUrl: post.imageUrl, caption: post.caption, status: post.status }));
+        next.posts = rows.map((post) => {
+          const payload = Array.isArray(post.mediaPayload) ? post.mediaPayload : [];
+          const fallbackUrl = payload.find((item) => item?.url)?.url ?? '';
+          return {
+            id: post.id,
+            imageUrl: resolvePublicMediaUrl(post.imageUrl || fallbackUrl),
+            caption: post.caption,
+            status: post.status,
+          };
+        });
         next.postCount = rows.length;
         next.scheduledCount = rows.filter((post) => post.status.toLowerCase() === 'scheduled').length;
         next.publishedCount = rows.filter((post) => post.status.toLowerCase() === 'published').length;

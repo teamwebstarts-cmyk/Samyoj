@@ -39,10 +39,10 @@ export default function InstagramHeroArt() {
   return (
     <div
       ref={stage}
-      className="ig3d-stage ig3d-stage--flat absolute left-[64%] top-[50%] hidden h-[136px] w-[min(580px,54%)] -translate-x-1/2 -translate-y-1/2 lg:block"
+      className="ig3d-stage ig3d-stage--flat dashboard-channel-hero-decor"
       aria-hidden
     >
-      <div ref={scene} className="ig3d-scene mx-auto h-full w-full max-h-[136px] max-w-full transition-transform duration-[250ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]">
+      <div ref={scene} className="ig3d-scene mx-auto h-full w-full max-h-[104px] max-w-full transition-transform duration-[250ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]">
         <svg viewBox="118 48 898 308" preserveAspectRatio="xMidYMid meet" className="h-full w-full overflow-visible">
           <defs>
             <linearGradient id="igxGrad" x1="0" y1="1" x2="1" y2="0">

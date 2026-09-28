@@ -24,14 +24,14 @@ export default function ChannelHeroLead({
   description: ReactNode;
 }) {
   return (
-    <div className="relative z-10 flex min-w-0 items-start gap-3 sm:gap-4">
+    <div className="channel-hero-lead relative z-10 flex min-w-0 items-start gap-3 sm:gap-4">
       <div className="mt-0.5 shrink-0">{icon}</div>
       <div className="min-w-0 flex-1">
         <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:mb-1 sm:gap-x-2.5">
           <h2 className="text-[17px] font-extrabold tracking-tight text-slate-950 sm:text-[21px]">{title}</h2>
           {badge}
         </div>
-        <p className="mb-1 flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-slate-800 sm:mb-2 sm:text-[14px]">
+        <p className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] font-semibold text-slate-800 sm:mb-2 sm:text-[14px]">
           {nameLine}
         </p>
         <div className="text-[11.5px] leading-snug text-slate-500 sm:text-[12.5px]">{description}</div>

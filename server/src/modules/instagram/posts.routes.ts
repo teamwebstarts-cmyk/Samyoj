@@ -23,6 +23,8 @@ import {
   listInstagramMediaIds,
 } from '../facebook/page-client';
 import { createModuleLogger } from '../../utils/logger';
+import { createChatCompletion, isAiConfigured } from '../ai/chat-completion.service';
+import { captionAiMessages, stripCaptionOutput, type CaptionAiMode } from './posts.caption-ai';
 
 const log = createModuleLogger('instagram-posts');
 
@@ -99,6 +101,22 @@ function postId(req: Request): string {
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
+function refreshPublicMediaUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    const marker = '/api/media/public/';
+    const idx = parsed.pathname.indexOf(marker);
+    if (idx < 0) return trimmed;
+    const relative = decodeURIComponent(parsed.pathname.slice(idx + marker.length));
+    if (!relative || relative.includes('..')) return trimmed;
+    return getPublicMediaUrl(relative);
+  } catch {
+    return trimmed;
+  }
+}
+
 function toDto(row: {
   id: string;
   status: string;
@@ -113,13 +131,17 @@ function toDto(row: {
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const mediaPayload = parseMediaPayload(row.mediaPayload).map((item) => ({
+    ...item,
+    url: refreshPublicMediaUrl(item.url),
+  }));
   return {
     id: row.id,
     status: row.status,
     mediaType: row.mediaType,
     caption: row.caption,
-    imageUrl: row.imageUrl,
-    mediaPayload: parseMediaPayload(row.mediaPayload),
+    imageUrl: refreshPublicMediaUrl(row.imageUrl),
+    mediaPayload,
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     igMediaId: row.igMediaId,
@@ -251,6 +273,46 @@ router.get(
       }
     }
     sendSuccess(res, { items });
+  })
+);
+
+const captionAiSchema = z.object({
+  mode: z.enum(['polish', 'generate']),
+  text: z.string().max(4000),
+});
+
+router.post(
+  '/caption',
+  editors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const { mode, text } = captionAiSchema.parse(req.body);
+    const input = text.trim();
+    if (mode === 'polish' && !input) {
+      throw new AppError(400, 'Write a caption first, then Magic can polish it.');
+    }
+    if (mode === 'generate' && !input) {
+      throw new AppError(400, 'Describe the post, then generate a caption.');
+    }
+    if (!(await isAiConfigured(orgId))) {
+      throw new AppError(503, 'AI is not configured for this organization');
+    }
+    const { system, user } = captionAiMessages(mode as CaptionAiMode, input);
+    const result = await createChatCompletion({
+      organizationId: orgId,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      maxTokens: 700,
+      temperature: mode === 'polish' ? 0.35 : 0.7,
+      usageAction: 'instagram_caption',
+    });
+    const caption = stripCaptionOutput(result.content);
+    if (!caption) {
+      throw new AppError(502, 'Could not write that caption. Try again.');
+    }
+    sendSuccess(res, { caption, mode });
   })
 );
 

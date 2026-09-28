@@ -194,6 +194,17 @@ export function getServiceWindowInfo(
   };
 }
 
+export function serviceWindowIsLive(
+  serviceWindow: { open?: boolean; expiresAt?: string | null } | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!serviceWindow?.open) return false;
+  if (!serviceWindow.expiresAt) return true;
+  const expires = new Date(serviceWindow.expiresAt).getTime();
+  if (Number.isNaN(expires)) return false;
+  return expires > now;
+}
+
 export function formatWindowExpiry(expiresAt: string | null): string {
   if (!expiresAt) return '';
   const diffMs = new Date(expiresAt).getTime() - Date.now();

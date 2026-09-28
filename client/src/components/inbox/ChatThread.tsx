@@ -26,6 +26,7 @@ import {
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useReducedMotion } from '../../hooks/inboxA11y';
 import { useGlassTipProps } from './ComposerGlassTip';
+import { useLiveServiceWindow } from './ServiceWindowBanner';
 import { inboxApi } from '../../services/api';
 import { waitingForLabel } from '../../utils/flow-waiting';
 import type { MediaViewerItem } from './MediaViewer';
@@ -192,7 +193,7 @@ export default function ChatThread({
     () => groupMessagesByDate(alignCallSummariesInThread(messages)),
     [messages]
   );
-  const windowOpen = serviceWindow?.open === true;
+  const windowOpen = useLiveServiceWindow(serviceWindow);
   const [interactiveMode, setInteractiveMode] = useState<InteractiveComposerMode>('reply');
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-const CAPTION_MAX = 2200;
+export const CAPTION_MAX = 2200;
 const HASHTAG_MAX = 30;
 const MIN_LEAD_MS = 10 * 60 * 1000;
 const MAX_LEAD_MS = 75 * 24 * 60 * 60 * 1000;

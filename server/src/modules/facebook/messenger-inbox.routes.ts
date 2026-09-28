@@ -5,7 +5,7 @@ import { authenticate, requireOrg, loadOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { emitToOrg } from '../../realtime';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
-import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
+import { windowExpiresAt } from '../inbox/service-window';
 import {
   isMessengerPlaceholderName,
   messengerWindowOpen,
@@ -38,14 +38,11 @@ async function activeFbChannel(orgId: string) {
 
 function serviceWindowDto(cs24hWindowOpensAt: Date | null) {
   const open = messengerWindowOpen(cs24hWindowOpensAt);
-  const expiresAt =
-    cs24hWindowOpensAt != null
-      ? new Date(cs24hWindowOpensAt.getTime() + CUSTOMER_SERVICE_WINDOW_MS).toISOString()
-      : null;
+  const expires = windowExpiresAt(cs24hWindowOpensAt);
   return {
     open,
     windowOpensAt: cs24hWindowOpensAt?.toISOString() ?? null,
-    expiresAt,
+    expiresAt: expires?.toISOString() ?? null,
     lastInboundAt: cs24hWindowOpensAt?.toISOString() ?? null,
   };
 }

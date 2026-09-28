@@ -7,6 +7,7 @@ import NewChatSlideOver from '../components/inbox/NewChatSlideOver';
 import ConversationList from '../components/inbox/ConversationList';
 import InboxListHeader, { type ListChip } from '../components/inbox/InboxListHeader';
 import ChatThread from '../components/inbox/ChatThread';
+import { useLiveServiceWindow } from '../components/inbox/ServiceWindowBanner';
 import InboxDetailsPanel, { type PanelSection } from '../components/inbox/InboxDetailsPanel';
 import CreateTicketModal from '../components/inbox/CreateTicketModal';
 import ExportChatDialog from '../components/inbox/ExportChatDialog';
@@ -129,6 +130,7 @@ export default function InboxPage() {
     loadEarlierMessages,
     markConversationRead,
   } = useConversationThread({ setConversations, refreshUnread });
+  const windowLive = useLiveServiceWindow(serviceWindow);
   useMobileThreadChrome(Boolean(selected));
 
   const [agents, setAgents] = useState<TeamAgent[]>([]);
@@ -454,11 +456,11 @@ export default function InboxPage() {
   // When the 24h window is closed, force Template tab (honest UX).
   useEffect(() => {
     if (!selected) return;
-    if (serviceWindow && serviceWindow.open === false) {
+    if (serviceWindow && windowLive === false) {
       setInteractiveOpen(false);
       setTemplateMode(true);
     }
-  }, [selected?.id, serviceWindow?.open]);
+  }, [selected?.id, windowLive, serviceWindow]);
 
   useEffect(() => {
     setDetailsOverlay({ open: false });

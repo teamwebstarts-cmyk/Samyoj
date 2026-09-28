@@ -4,6 +4,7 @@ import { cannedRepliesApi, facebookApi, inboxApi, teamApi } from '../services/ap
 import { toastError, toastSuccess } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
+import { useLiveServiceWindow } from '../components/inbox/ServiceWindowBanner';
 import InboxListHeader, { type ListChip } from '../components/inbox/InboxListHeader';
 import ConversationList from '../components/inbox/ConversationList';
 import ChatHeader from '../components/inbox/ChatHeader';
@@ -203,7 +204,7 @@ export default function FacebookInboxPage() {
   }, [messages, selectedId]);
 
   const serviceWindow = selected?.serviceWindow;
-  const windowOpen = Boolean(serviceWindow?.open);
+  const windowOpen = useLiveServiceWindow(serviceWindow);
 
   const onDeleteMessage = useCallback(
     (message: Message) => {

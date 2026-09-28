@@ -145,7 +145,7 @@ export default function MetricsPeriodPicker({
   period: MetricsPeriod;
   onPeriodChange?: (period: MetricsPeriod) => void;
   align?: 'left' | 'right';
-  variant?: 'text' | 'icon';
+  variant?: 'text' | 'icon' | 'hero';
 }) {
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState<string | null>(null);
@@ -275,10 +275,19 @@ export default function MetricsPeriodPicker({
             ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200/70'
             : 'border-sky-200/90 bg-gradient-to-b from-sky-50 to-white hover:border-sky-300 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/80'
         }`
-      : 'inline-flex max-w-[min(100vw-2rem,16rem)] items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white';
+      : variant === 'hero'
+        ? `inline-flex w-full min-h-9 items-center justify-between gap-2 rounded-[10px] border px-3 py-2 text-left text-[12px] font-semibold shadow-sm transition hover:-translate-y-px ${
+            open
+              ? 'border-emerald-300 bg-emerald-50/90 text-emerald-900 ring-2 ring-emerald-200/70'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.06)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/80'
+          }`
+        : 'inline-flex max-w-[min(100vw-2rem,16rem)] items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white';
+
+  const rootClass =
+    variant === 'hero' ? 'relative block w-full' : 'relative inline-flex';
 
   return (
-    <div ref={rootRef} className="relative inline-flex">
+    <div ref={rootRef} className={rootClass}>
       <button
         ref={triggerRef}
         type="button"
@@ -293,8 +302,10 @@ export default function MetricsPeriodPicker({
           <RealisticCalendarIcon className="h-[20px] w-[20px] drop-shadow-[0_1px_0_rgba(255,255,255,0.8)]" />
         ) : (
           <>
-            <Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-400 stroke-[2]" aria-hidden />
-            <span className="truncate">{label}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-400 stroke-[2]" aria-hidden />
+              <span className="truncate">{label}</span>
+            </span>
             <ChevronDown
               className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`}
               aria-hidden

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Eye, MessageSquare, Pencil, X } from 'lucide-react';
+import { Eye, MessageSquare, Pencil } from 'lucide-react';
 import { FOCUS_RING_CLASS, useFocusTrap } from '../../../hooks/inboxA11y';
 import type { PanelTab } from './types';
 
@@ -16,10 +16,10 @@ type PostPanelProps = {
   footer?: ReactNode;
 };
 
-const TABS: Array<{ id: PanelTab; label: string; icon: typeof Pencil }> = [
-  { id: 'create', label: 'Create Post', icon: Pencil },
-  { id: 'preview', label: 'Post Preview', icon: Eye },
-  { id: 'automation', label: 'Comment Automation', icon: MessageSquare },
+const TABS: Array<{ id: PanelTab; label: string; shortLabel: string; icon: typeof Pencil }> = [
+  { id: 'create', label: 'Create Post', shortLabel: 'Create', icon: Pencil },
+  { id: 'preview', label: 'Post Preview', shortLabel: 'Preview', icon: Eye },
+  { id: 'automation', label: 'Comment Automation', shortLabel: 'Automation', icon: MessageSquare },
 ];
 
 /**
@@ -99,11 +99,13 @@ export default function PostPanel({
                 type="button"
                 role="tab"
                 aria-selected={active}
+                aria-label={row.label}
+                title={row.label}
                 className={`igp-tab ${active ? 'igp-tab--on' : ''}`}
                 onClick={() => onTabChange(row.id)}
               >
-                <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
-                {row.label}
+                <Icon className="igp-tab__icon" strokeWidth={2.2} aria-hidden />
+                <span className="igp-tab__text">{row.shortLabel}</span>
                 {row.id === 'automation' && active && automationReady ? (
                   <span className="igp-tab__dot" aria-label="Configured" />
                 ) : null}
@@ -111,18 +113,17 @@ export default function PostPanel({
             );
           })}
         </div>
-        <button
-          type="button"
-          className={`igp-panel__close ${FOCUS_RING_CLASS}`}
-          onClick={onClose}
-          aria-label="Close panel"
-        >
-          <X className="h-4 w-4" />
-        </button>
       </header>
 
       <div className="igp-panel__body">{body}</div>
       {footer ? <footer className="igp-panel__foot">{footer}</footer> : null}
+      <button
+        type="button"
+        className={`igp-panel__done ${FOCUS_RING_CLASS}`}
+        onClick={onClose}
+      >
+        Done
+      </button>
     </aside>
   );
 }

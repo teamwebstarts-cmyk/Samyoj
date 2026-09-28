@@ -1418,6 +1418,7 @@ export interface DailyAnalyticsPoint {
   readRate: number;
   activeConversations: number;
   totalContacts: number;
+  newContacts?: number;
 }
 
 export interface AnalyticsOverview {

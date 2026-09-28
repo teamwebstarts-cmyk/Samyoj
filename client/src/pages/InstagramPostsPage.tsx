@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CalendarClock, FileText, RefreshCw, Send, Trash2 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { automationApi, contentStudioApi, instagramApi } from '../services/api';
 import { getInstagramMockPosts, isMetaMockId, mergeById } from '../utils/metaMockData';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
+import { resolvePublicMediaUrl } from '../utils/publicMediaUrl';
 import ConnectScreen from '../components/instagram/posts/ConnectScreen';
 import PostPanel from '../components/instagram/posts/PostPanel';
 import PostComposerTab, { type ScheduleError } from '../components/instagram/posts/PostComposerTab';
@@ -131,6 +132,7 @@ export default function InstagramPostsPage() {
   const [autoPublic, setAutoPublic] = useState('');
   const [autoDm, setAutoDm] = useState('');
   const [autoId, setAutoId] = useState<string | null>(null);
+  const automationLoadSeq = useRef(0);
 
   /* ---------------- data ---------------- */
 
@@ -254,6 +256,10 @@ export default function InstagramPostsPage() {
     setScheduleError(null);
     setMediaMeta(null);
     setStudioOpen(false);
+    setAutoKeyword('');
+    setAutoPublic('');
+    setAutoDm('');
+    setAutoId(null);
     setPanelTab(post.status === 'PUBLISHED' || post.status === 'PROCESSING' ? 'preview' : 'create');
     void loadPostAutomation(post.igMediaId, post.id);
   };
@@ -268,6 +274,10 @@ export default function InstagramPostsPage() {
     setMediaMeta(null);
     setScheduleLocal('');
     setScheduleError(null);
+    setAutoKeyword('');
+    setAutoPublic('');
+    setAutoDm('');
+    setAutoId(null);
     void loadPostAutomation(item.igMediaId);
   };
 
@@ -353,7 +363,7 @@ export default function InstagramPostsPage() {
           ? { ...current, label: 'Building preview…', progress: 100 }
           : { fileName: file.name, label: 'Building preview…', progress: 100 },
       );
-      const url = res.data.mediaUrl || res.data.imageUrl;
+      const url = resolvePublicMediaUrl(res.data.mediaUrl || res.data.imageUrl);
       const kind = res.data.kind || (isVideo ? 'video' : 'image');
       const meta = await readMediaMeta(file);
       await new Promise((resolve) => setTimeout(resolve, 320));
@@ -419,13 +429,11 @@ export default function InstagramPostsPage() {
   const inlineAutomationReady = Boolean(autoKeyword.trim() && (autoPublic.trim() || autoDm.trim()));
 
   const loadPostAutomation = async (igMediaId: string | null, postId?: string) => {
-    setAutoKeyword('');
-    setAutoPublic('');
-    setAutoDm('');
-    setAutoId(null);
+    const seq = ++automationLoadSeq.current;
     if (!igMediaId && !postId) return;
     try {
       const { data } = await automationApi.list({ limit: '100', triggerType: 'KEYWORD' });
+      if (seq !== automationLoadSeq.current) return;
       const rows =
         ((data as { data?: { automations?: Array<{ id: string; config: Record<string, string> }> } }).data
           ?.automations) || [];
@@ -446,8 +454,12 @@ export default function InstagramPostsPage() {
     }
   };
 
-  const savePostAutomation = async () => {
-    if (!automationMediaId && !selected) return;
+  const savePostAutomation = async (opts?: { postId?: string; igMediaId?: string | null }) => {
+    const igMediaId = opts?.igMediaId ?? automationMediaId;
+    const postId =
+      opts?.postId ??
+      (selectedId && selectedId !== 'new' && !isRemoteId(selectedId) ? selectedId : null);
+    if (!igMediaId && !postId) return;
     if (selected && isMetaMockId(selected.id)) {
       toastError('Sample posts do not save a real comment rule.');
       return;
@@ -462,12 +474,10 @@ export default function InstagramPostsPage() {
       message: autoDm.trim(),
       publicMessage: autoPublic.trim(),
     };
-    if (automationMediaId) {
-      // Live post — rule fires immediately for this media id.
-      config.igMediaId = automationMediaId;
-    } else if (selectedId && selectedId !== 'new' && !isRemoteId(selectedId)) {
-      // Draft/scheduled — pending until publish attaches the real media id.
-      config.igPostId = selectedId;
+    if (igMediaId) {
+      config.igMediaId = igMediaId;
+    } else if (postId) {
+      config.igPostId = postId;
     } else {
       return;
     }
@@ -492,7 +502,7 @@ export default function InstagramPostsPage() {
         if (created?.id) setAutoId(created.id);
       }
       toastSuccess(
-        automationMediaId ? 'Comment automation saved' : 'Saved — activates when the post publishes',
+        igMediaId ? 'Comment automation saved' : 'Saved — activates when the post publishes',
       );
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not save comment automation');
@@ -573,22 +583,23 @@ export default function InstagramPostsPage() {
         selectedId && selectedId !== 'new'
           ? (await instagramApi.posts.update(selectedId, payload)).data.data
           : (await instagramApi.posts.create(payload)).data.data;
+      let liveIgMediaId: string | null = created.igMediaId ?? null;
       if (mode === 'now') {
         const published = await instagramApi.posts.publish(created.id);
+        liveIgMediaId = published.data.data.igMediaId ?? liveIgMediaId;
         if (published.data.data.status === 'FAILED') {
           toastError(published.data.data.lastError || 'Could not publish post');
         } else {
           toastSuccess('Post published');
           setPanelTab('preview');
-          void loadPostAutomation(published.data.data.igMediaId);
+          void loadPostAutomation(liveIgMediaId, created.id);
         }
       } else {
         toastSuccess(mode === 'schedule' ? 'Post scheduled' : 'Post saved as draft');
       }
       setSelectedId(created.id);
-      // Inline automation set while composing → save it with the post.
       if (autoKeyword.trim() && (autoPublic.trim() || autoDm.trim())) {
-        await persistPostAutomation(created.id, published?.data?.data?.igMediaId ?? created.igMediaId ?? null);
+        await savePostAutomation({ postId: created.id, igMediaId: liveIgMediaId });
       }
       await load();
     } catch (err) {
@@ -652,18 +663,19 @@ export default function InstagramPostsPage() {
     });
   }, [posts, filter, query]);
 
-  const previewUrl =
+  const previewUrl = resolvePublicMediaUrl(
     mediaType === 'REELS'
       ? videoUrl
       : mediaType === 'CAROUSEL'
         ? imageUrl || mediaItems[0]?.url || ''
-        : imageUrl;
+        : imageUrl,
+  );
 
   const previewData: PreviewData = useMemo(() => {
     if (remoteItem) {
       return {
         mediaType: (remoteItem.mediaType === 'REELS' ? 'REELS' : remoteItem.mediaType === 'CAROUSEL' ? 'CAROUSEL' : 'IMAGE') as MediaType,
-        previewUrl: remoteItem.thumbnailUrl,
+        previewUrl: resolvePublicMediaUrl(remoteItem.thumbnailUrl),
         caption: remoteItem.caption,
         status: 'PUBLISHED',
         scheduledAt: null,
@@ -810,6 +822,7 @@ export default function InstagramPostsPage() {
 
     return (
       <PostComposerTab
+        key={selectedId ?? 'new'}
         mediaType={mediaType}
         onMediaTypeChange={(next) => {
           setMediaType(next);
@@ -839,6 +852,13 @@ export default function InstagramPostsPage() {
         onOpenStudio={() => void loadStudioImages()}
         onPickStudio={pickStudioImage}
         lastError={selected?.lastError ?? null}
+        autoKeyword={autoKeyword}
+        onAutoKeywordChange={setAutoKeyword}
+        autoPublic={autoPublic}
+        onAutoPublicChange={setAutoPublic}
+        autoDm={autoDm}
+        onAutoDmChange={setAutoDm}
+        autoConfigured={Boolean(autoId)}
       />
     );
   };
@@ -848,11 +868,16 @@ export default function InstagramPostsPage() {
   /* ---------------- render ---------------- */
 
   return (
-    <PageShell>
-      <div className="igc-page igp-page pb-8">
+    <PageShell list>
+      <div className="igc-page igp-page">
         <MetaMockNotice />
 
-        <PostBanner connected={connected} handle={handle} />
+        <PostBanner
+          connected={connected}
+          handle={handle}
+          canEdit={canEdit}
+          onNewPost={() => openNew('IMAGE')}
+        />
 
         {connected === false && !loading ? (
           loadFailed ? (
@@ -880,15 +905,10 @@ export default function InstagramPostsPage() {
           )
         ) : (
           <>
-            <PostStatsRow
-              counts={counts}
-              loading={loading}
-              canEdit={canEdit}
-              onNewPost={() => openNew('IMAGE')}
-            />
-
             <div className="igp-workspace">
               <div className="igp-feed">
+                <PostStatsRow counts={counts} loading={loading} />
+
                 <PostFilters
                   filter={filter}
                   onFilterChange={setFilter}

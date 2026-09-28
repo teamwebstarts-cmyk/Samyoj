@@ -38,7 +38,7 @@ import { NEW_CONTACT_CALLING_DEFAULTS } from '../contacts/contact-ai-defaults';
 import { pauseConversationAutomations, cancelFlowDelayJob } from '../flows/pause-automation';
 import { jumpConversationToFlowNode } from '../flows/jump';
 import type { FlowNode } from '../flows/types';
-import { resolveCs24hWindowOpensAt, conversationServiceWindowWhere, inboxListOrderBy } from './service-window';
+import { resolveCs24hWindowOpensAt, conversationServiceWindowWhere, inboxListOrderBy, windowExpiresAt } from './service-window';
 import { nextUnreadCount } from './unread';
 import { buildSignedMediaPath, verifyMediaSignature, MEDIA_URL_TTL_SECONDS } from './media-url';
 import { inboxStartCreateData, inboxStartMergeUpdate } from '../contacts/merge';
@@ -909,9 +909,7 @@ router.get(
 
     const windowOpensAt = await resolveCs24hWindowOpensAt(id, conversation.cs24hWindowOpensAt, false);
     const serviceWindowOpen = isWithin24HourWindow(windowOpensAt);
-    const expiresAt = windowOpensAt
-      ? new Date(windowOpensAt.getTime() + 24 * 60 * 60 * 1000)
-      : null;
+    const expiresAt = windowExpiresAt(windowOpensAt);
 
     // Unread is only cleared via POST /:id/read — GET stays side-effect free.
 

@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
-  AtSign,
-  BadgeCheck,
   CalendarClock,
   CheckCircle2,
   Clock3,
@@ -12,7 +10,6 @@ import {
   List,
   Lock,
   MessageSquare,
-  Pencil,
   Plus,
   Send,
   Smartphone,
@@ -22,10 +19,12 @@ import {
 type BannerProps = {
   connected: boolean | null;
   handle: string | null;
+  canEdit?: boolean;
+  onNewPost?: () => void;
 };
 
 /** Instagram profile banner — connected / not connected / loading. */
-export function PostBanner({ connected, handle }: BannerProps) {
+export function PostBanner({ connected, handle, canEdit = false, onNewPost }: BannerProps) {
   const isOff = connected === false;
   const handleHref =
     handle && handle.startsWith('@') ? `https://www.instagram.com/${handle.slice(1)}/` : null;
@@ -38,28 +37,25 @@ export function PostBanner({ connected, handle }: BannerProps) {
 
       <div className="igp-banner__main">
         <div className="igp-banner__titlerow">
-          <h1 className="igp-banner__title">Instagram Posts</h1>
+          <h1 className="igp-banner__title">
+            {handle ? (
+              handleHref ? (
+                <a href={handleHref} target="_blank" rel="noreferrer noopener" className="hover:underline">
+                  {handle}
+                </a>
+              ) : (
+                handle
+              )
+            ) : (
+              'Instagram Posts'
+            )}
+          </h1>
           {connected === true ? (
             <span className="igp-banner__badge">Connected</span>
           ) : isOff ? (
             <span className="igp-banner__badge igp-banner__badge--off">Not Connected</span>
           ) : null}
         </div>
-
-        {handle ? (
-          <p className="igp-banner__handle">
-            <AtSign className="h-3.5 w-3.5" />
-            {handleHref ? (
-              <a href={handleHref} target="_blank" rel="noreferrer noopener">
-                {handle.replace(/^@/, '')}
-              </a>
-            ) : (
-              handle.replace(/^@/, '')
-            )}
-            <Send className="h-3 w-3 -rotate-45 opacity-60" />
-            <BadgeCheck className="h-3.5 w-3.5 text-[#3897f0]" />
-          </p>
-        ) : null}
 
         <p className="igp-banner__copy">
           {isOff
@@ -68,48 +64,20 @@ export function PostBanner({ connected, handle }: BannerProps) {
         </p>
       </div>
 
-      <div className="igp-banner__art" aria-hidden>
-        <span className="igp-banner__plane">
-          <Send className="h-5 w-5" strokeWidth={2} />
-        </span>
-        <span className="igp-spark igp-spark--a" />
-        <span className="igp-spark igp-spark--b" />
-
-        {isOff ? (
-          <div className="igp-banner__card">
-            <strong>Plan Content</strong>
-            <span>Schedule posts</span>
-          </div>
-        ) : (
-          <div className="igp-banner__card">
-            <strong>Turn ideas into posts</strong>
-            <span>Generate images in AI Studio</span>
-            <Link className="igp-banner__cta" to="/content-studio">
-              <Sparkles className="h-3 w-3" />
-              Create with AI
-            </Link>
-          </div>
-        )}
-
-        {isOff ? (
-          <div className="igp-banner__card">
-            <strong>Grow Audience</strong>
-            <span>Track engagement</span>
-          </div>
-        ) : (
-          <div className="igp-banner__collage">
-            <span className="igp-banner__tile">
-              <ImagePlus className="h-5 w-5" />
-            </span>
-            <span className="igp-banner__tile">
-              <Send className="h-5 w-5" />
-            </span>
-            <span className="igp-banner__tile">
-              <Sparkles className="h-5 w-5" />
-            </span>
-          </div>
-        )}
-      </div>
+      {connected !== false ? (
+        <div className="igp-banner__actions">
+          <Link to="/content-studio" className="igp-btn igp-btn--soft">
+            <Sparkles className="h-3.5 w-3.5" />
+            Generate in AI Studio
+          </Link>
+          {canEdit && onNewPost ? (
+            <button type="button" className="igp-btn igp-btn--primary" onClick={onNewPost}>
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              New Post
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -125,20 +93,17 @@ export type PostCounts = {
 type StatsRowProps = {
   counts: PostCounts;
   loading: boolean;
-  canEdit: boolean;
-  onNewPost: () => void;
 };
 
 const STATS: Array<{ key: keyof PostCounts; label: string; icon: typeof FileText; tone: string }> = [
   { key: 'total', label: 'Total posts', icon: FileText, tone: 'pink' },
   { key: 'published', label: 'Published', icon: CheckCircle2, tone: 'green' },
   { key: 'scheduled', label: 'Scheduled', icon: Clock3, tone: 'blue' },
-  { key: 'drafts', label: 'Drafts', icon: Pencil, tone: 'amber' },
   { key: 'failed', label: 'Failed', icon: AlertCircle, tone: 'rose' },
 ];
 
-/** Five light KPI chips + primary page actions. Counts only — no invented trends. */
-export function PostStatsRow({ counts, loading, canEdit, onNewPost }: StatsRowProps) {
+/** Four KPI chips in the left feed. Drafts stay on the filter chips. */
+export function PostStatsRow({ counts, loading }: StatsRowProps) {
   return (
     <div className="igp-stats">
       {STATS.map((row) => {
@@ -168,19 +133,6 @@ export function PostStatsRow({ counts, loading, canEdit, onNewPost }: StatsRowPr
           </div>
         );
       })}
-
-      <div className="igp-stats__actions">
-        <Link to="/content-studio" className="igp-btn igp-btn--soft">
-          <Sparkles className="h-3.5 w-3.5" />
-          Generate in AI Studio
-        </Link>
-        {canEdit ? (
-          <button type="button" className="igp-btn igp-btn--primary" onClick={onNewPost}>
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-            New Post
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }

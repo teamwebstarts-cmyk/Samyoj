@@ -470,13 +470,52 @@
   box-shadow:
     0 12px 32px rgba(180, 83, 9, 0.12),
     0 1px 0 rgba(255, 255, 255, 0.9) inset;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.igc-retention-corner__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.igc-retention-corner__close {
+  display: inline-flex;
+  height: 28px;
+  width: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+  background: rgba(255, 255, 255, 0.85);
+  color: #92400e;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.igc-retention-corner__close:hover {
+  background: #fff;
+  color: #78350f;
 }
 
 .igc-retention-corner__head {
   display: flex;
+  min-width: 0;
+  flex: 1;
   align-items: center;
   gap: 8px;
+}
+
+.igc-retention-info-popover {
+  filter: drop-shadow(0 12px 28px rgba(180, 83, 9, 0.14));
+}
+
+.igc-retention-info-panel {
+  border-radius: 16px;
+  border: 1px solid #fde68a;
+  background: linear-gradient(165deg, #fffbeb 0%, #ffffff 55%, #fff8fb 100%);
+  padding: 12px 14px;
 }
 
 .igc-retention-flow {

@@ -4,7 +4,13 @@ import {
   extractMetaErrorFields,
   isWithin24HourWindow,
 } from '../whatsapp/meta.service';
-import { conversationServiceWindowWhere, inboxListOrderBy, latestWindowOpenAt } from './service-window';
+import {
+  conversationServiceWindowWhere,
+  inboxListOrderBy,
+  latestWindowOpenAt,
+  messagingEventInstant,
+  windowStillOpen,
+} from './service-window';
 import { nextUnreadCount } from './unread';
 
 describe('latestWindowOpenAt', () => {
@@ -40,6 +46,7 @@ describe('conversationServiceWindowWhere', () => {
       OR: [
         { cs24hWindowOpensAt: null },
         { cs24hWindowOpensAt: { lt: new Date('2026-08-28T12:00:00.000Z') } },
+        { cs24hWindowOpensAt: { gt: new Date('2026-08-29T12:02:00.000Z') } },
       ],
     });
   });
@@ -47,8 +54,30 @@ describe('conversationServiceWindowWhere', () => {
   it('requires opensAt within 24h for active', () => {
     const now = new Date('2026-08-29T12:00:00.000Z');
     expect(conversationServiceWindowWhere('open', now)).toEqual({
-      cs24hWindowOpensAt: { gte: new Date('2026-08-28T12:00:00.000Z') },
+      cs24hWindowOpensAt: {
+        gte: new Date('2026-08-28T12:00:00.000Z'),
+        lte: new Date('2026-08-29T12:02:00.000Z'),
+      },
     });
+  });
+});
+
+describe('window clock', () => {
+  it('closes a far-future anchor instead of keeping the window open', () => {
+    const now = new Date('2026-09-28T12:00:00.000Z');
+    expect(windowStillOpen(new Date('2090-01-01T00:00:00.000Z'), now)).toBe(false);
+    expect(isWithin24HourWindow(new Date('2090-01-01T00:00:00.000Z'), now)).toBe(false);
+  });
+
+  it('reads Messenger timestamps in milliseconds and WhatsApp-sized stamps in seconds', () => {
+    const now = new Date('2026-09-28T12:00:00.000Z');
+    expect(messagingEventInstant(1_700_000_000_000, now).toISOString()).toBe('2023-11-14T22:13:20.000Z');
+    expect(messagingEventInstant(1_700_000_000, now).toISOString()).toBe('2023-11-14T22:13:20.000Z');
+  });
+
+  it('does not store a future event time as the window start', () => {
+    const now = new Date('2026-09-28T12:00:00.000Z');
+    expect(messagingEventInstant(now.getTime() + 60 * 60 * 1000, now).toISOString()).toBe(now.toISOString());
   });
 });
 
