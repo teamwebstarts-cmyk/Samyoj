@@ -4,13 +4,9 @@ import {
   CheckCircle2,
   Inbox,
   Link2,
-  LogOut,
-  PhoneOff,
-  Settings2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppButton from '../ui/AppButton';
-import ConfirmDialog from '../ui/ConfirmDialog';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { billingApi, whatsappApi } from '../../services/api';
 import { useWhatsAppConnectPicker } from '../../hooks/useWhatsAppConnectPicker';
@@ -21,8 +17,11 @@ import WhatsAppGlyph from './icons/WhatsAppGlyph';
 import IconWell from './icons/IconWell';
 import { parseWhatsappNumbersPayload } from '../../utils/whatsappWorkspace';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
-import { whatsappDisconnectDialogCopy } from '../../utils/whatsappDisconnectCopy';
 import WhatsAppConnectModeModal from '../whatsapp/WhatsAppConnectModeModal';
+import ChannelHeroActions from './ChannelHeroActions';
+import ChannelHeroLead, { ChannelHeroConnectedBadge } from './ChannelHeroLead';
+import type { MetricsPeriod } from '../../utils/metricsPeriod';
+import WhatsAppHeroArt from './WhatsAppHeroArt';
 interface WhatsappNumberRow {
   id: string;
   phoneNumber: string;
@@ -70,18 +69,22 @@ export type WhatsAppGuideStatus = {
 
 interface WhatsAppConnectGuideProps {
   onStatusChange?: (status: WhatsAppGuideStatus) => void;
+  period: MetricsPeriod;
+  onPeriodChange: (period: MetricsPeriod) => void;
 }
 
-export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnectGuideProps = {}) {
-  const { activeNumber, refreshNumbers, disconnectedNumbers } = useWhatsAppNumber();
+export default function WhatsAppConnectGuide({
+  onStatusChange,
+  period,
+  onPeriodChange,
+}: WhatsAppConnectGuideProps) {
+  const { activeNumber, disconnectedNumbers } = useWhatsAppNumber();
   const [number, setNumber] = useState<WhatsappNumberRow | null>(null);
   const [qualityRating, setQualityRating] = useState<string | null>(null);
   const [webhookSubscribed, setWebhookSubscribed] = useState<boolean | null>(null);
   const [webhookCheckFailed, setWebhookCheckFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [disconnecting, setDisconnecting] = useState(false);
-  const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
   const [enablingIncoming, setEnablingIncoming] = useState(false);
 
   const emitStatus = useCallback(
@@ -220,36 +223,22 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
     }
   };
 
-  const disconnectDialogCopy = whatsappDisconnectDialogCopy(activeNumber);
-
-  const confirmDisconnect = async () => {
-    if (!number) return;
-    setDisconnecting(true);
-    try {
-      await whatsappApi.disconnect(number.id);
-      setDisconnectConfirmOpen(false);
-      setNumber(null);
-      setQualityRating(null);
-      setWebhookSubscribed(null);
-      setWebhookCheckFailed(false);
-      emitStatus(null, null, true);
-      await refreshNumbers({ silent: true });
-      load();
-      toastSuccess('WhatsApp disconnected');
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Failed to disconnect WhatsApp.';
-      toastError(msg);
-    } finally {
-      setDisconnecting(false);
-    }
-  };
-
   if (loading) {
     return (
       <section aria-label="WhatsApp connection">
-        <div className="dashboard-card h-[88px] animate-pulse rounded-2xl" />
+        <div className="dashboard-card relative flex h-[150px] items-center justify-between overflow-hidden rounded-[22px] border border-emerald-100/80 bg-emerald-50/30 p-[var(--card-pad)]">
+          <div className="flex items-center gap-3">
+            <span className="h-12 w-12 rounded-2xl bg-emerald-100/70" />
+            <span><span className="block h-4 w-36 rounded bg-emerald-100/70" /><span className="mt-2 block h-3 w-52 rounded bg-emerald-100/50" /></span>
+          </div>
+          <div className="wa3d-loading-art animate-pulse" aria-hidden>
+            <span className="wa3d-loading-art__mini wa3d-loading-art__mini--top" />
+            <span className="wa3d-loading-art__mini wa3d-loading-art__mini--left" />
+            <span className="wa3d-loading-art__cube" />
+            <span className="wa3d-loading-art__mini wa3d-loading-art__mini--right" />
+          </div>
+          <span className="relative z-10 h-10 w-40 rounded-lg bg-white/80" />
+        </div>
       </section>
     );
   }
@@ -298,15 +287,15 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
 
     let statusLine: string;
     if (incomingOff) {
-      statusLine = 'Connected · Customer replies are not reaching Inbox yet';
+      statusLine = 'Customer replies are not reaching Inbox yet';
     } else if (incomingUnknown) {
-      statusLine = 'Connected · WhatsApp is busy. Wait a minute, then refresh.';
+      statusLine = 'WhatsApp is busy. Wait a minute, then refresh.';
     } else if (incomingOn && qMeta?.hint) {
-      statusLine = `Live · ${qMeta.hint}`;
+      statusLine = qMeta.hint;
     } else if (incomingOn) {
-      statusLine = 'Live · Sending & receiving on this number';
+      statusLine = 'Sending & receiving on this number';
     } else {
-      statusLine = 'Connected · WhatsApp Business Cloud API';
+      statusLine = 'WhatsApp Business Cloud API';
     }
 
     return (
@@ -315,28 +304,28 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
         className="relative z-10"
       >
         <div
-          className={`dashboard-card flex flex-col gap-2 rounded-2xl p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-[var(--card-gap)] sm:p-[var(--card-pad)] ${cardClass}`}
+          className={`dashboard-card dashboard-channel-hero dashboard-connection-hero dashboard-channel-hero-layout relative overflow-hidden rounded-[22px] px-4 py-4 sm:px-7 sm:py-5 ${cardClass}`}
         >
-          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-            <div className="relative shrink-0">
-              <IconWell accent="whatsapp" size="md">
-                <WhatsAppGlyph className="h-4 w-4 sm:h-[22px] sm:w-[22px]" />
-              </IconWell>
-              {incomingOn && !needsAction && (
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white sm:h-4 sm:w-4"
-                  aria-hidden
-                >
-                  <CheckCircle2 className="h-2 w-2 sm:h-2.5 sm:w-2.5" strokeWidth={3} />
+          <ChannelHeroLead
+            icon={
+              <div className="relative">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white shadow-[0_10px_22px_rgba(37,211,102,0.35)]">
+                  <WhatsAppGlyph className="h-6 w-6" />
                 </span>
-              )}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-                <h2 className="max-w-[11rem] truncate text-[13px] font-extrabold tracking-tight text-neutral-900 sm:max-w-[14rem] sm:text-[15px] md:max-w-[12rem] lg:max-w-none">
-                  {phone}
-                </h2>
+                {incomingOn && !needsAction && (
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white"
+                    aria-hidden
+                  >
+                    <CheckCircle2 className="h-2 w-2" strokeWidth={3} />
+                  </span>
+                )}
+              </div>
+            }
+            title="WhatsApp"
+            badge={
+              <>
+                <ChannelHeroConnectedBadge />
                 {incomingOn && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
@@ -371,9 +360,11 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
                     {qMeta.label}
                   </span>
                 )}
-              </div>
-
-              <p className="mt-0.5 hidden text-[12.5px] font-medium leading-snug text-neutral-500 sm:block">
+              </>
+            }
+            nameLine={<span className="truncate">{phone}</span>}
+            description={
+              <>
                 {statusLine}
                 {incomingOff && (
                   <>
@@ -406,60 +397,33 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
                     </Link>
                   </>
                 )}
-              </p>
-            </div>
-          </div>
+              </>
+            }
+          />
 
-          <div className="relative z-20 flex w-full shrink-0 items-center gap-1.5 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2">
-            {incomingOff && (
-              <AppButton
-                type="button"
-                size="sm"
-                className="!h-8 !min-h-8 flex-1 px-2.5 text-[11px] sm:flex-none sm:!h-10 sm:!min-h-10 sm:px-4 sm:text-[13px]"
-                icon={<Inbox className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                onClick={() => void handleEnableIncoming()}
-                loading={enablingIncoming}
-                disabled={enablingIncoming || disconnecting}
-              >
-                <span className="sm:hidden">Enable</span>
-                <span className="hidden sm:inline">Enable incoming</span>
-              </AppButton>
-            )}
-
-            <Link
-              to="/settings?tab=whatsapp"
-              className="inline-flex h-8 min-h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:h-10 sm:min-h-10 sm:flex-none sm:rounded-xl sm:px-4 sm:text-[13px]"
-            >
-              <Settings2 className="hidden h-3.5 w-3.5 sm:block" />
-              Manage
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => setDisconnectConfirmOpen(true)}
-              disabled={disconnecting}
-              aria-label={disconnecting ? 'Disconnecting' : 'Disconnect'}
-              className="inline-flex h-8 min-h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 sm:h-10 sm:min-h-10 sm:flex-none sm:rounded-xl sm:px-4 sm:text-[13px]"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{disconnecting ? 'Disconnecting…' : 'Disconnect'}</span>
-            </button>
-          </div>
+          <ChannelHeroActions
+            manageHref="/settings?tab=whatsapp"
+            period={period}
+            onPeriodChange={onPeriodChange}
+            beforeManage={
+              incomingOff ? (
+                <AppButton
+                  type="button"
+                  size="sm"
+                  className="!h-9 !min-h-9 shrink-0 px-3 text-[12px] sm:!h-[37px] sm:!min-h-[37px] sm:px-3.5 sm:text-[12.5px]"
+                  icon={<Inbox className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                  onClick={() => void handleEnableIncoming()}
+                  loading={enablingIncoming}
+                  disabled={enablingIncoming}
+                >
+                  <span className="sm:hidden">Enable</span>
+                  <span className="hidden sm:inline">Enable incoming</span>
+                </AppButton>
+              ) : null
+            }
+          />
+          <WhatsAppHeroArt />
         </div>
-        <ConfirmDialog
-          open={disconnectConfirmOpen}
-          onClose={() => setDisconnectConfirmOpen(false)}
-          onConfirm={() => void confirmDisconnect()}
-          title="Disconnect WhatsApp number?"
-          description={disconnectDialogCopy.description}
-          highlight={formatPhoneDisplay(number.phoneNumber)}
-          details={disconnectDialogCopy.details}
-          confirmLabel="Disconnect number"
-          cancelLabel="Keep connected"
-          variant="danger"
-          icon={PhoneOff}
-          loading={disconnecting}
-        />
       </section>
     );
   }
@@ -478,7 +442,7 @@ export default function WhatsAppConnectGuide({ onStatusChange }: WhatsAppConnect
               <h2 className="text-[14px] font-bold text-neutral-900 sm:text-[15px]">
                 {disconnectedCopy.disconnected
                   ? disconnectedCopy.title
-                  : 'Connect WhatsApp to go live'}
+                  : 'Connect WhatsApp'}
               </h2>
               <p className="mt-0.5 text-[12.5px] text-neutral-600 sm:text-[13px]">
                 {disconnectedCopy.disconnected
