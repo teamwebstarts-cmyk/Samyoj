@@ -703,6 +703,76 @@ export function getMockInboxMessages(conversationId: string): Message[] {
   return stored ? [...stored] : [];
 }
 
+export type MockInstagramPost = {
+  id: string;
+  status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'FAILED';
+  mediaType: 'IMAGE' | 'REELS' | 'CAROUSEL';
+  caption: string;
+  imageUrl: string;
+  mediaPayload: Array<{ url: string; kind: 'image' | 'video' }>;
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  igMediaId: string | null;
+  lastError: string | null;
+};
+
+export function getInstagramMockPosts(): MockInstagramPost[] {
+  const soon = new Date(t0 + 3 * 60 * 60 * 1000).toISOString();
+  return [
+    {
+      id: `${META_MOCK_ID_PREFIX}ig-post-live`,
+      status: 'PUBLISHED',
+      mediaType: 'IMAGE',
+      caption: 'New drop is live. Comment PRICE and we will send the details in your DMs.',
+      imageUrl: 'https://picsum.photos/seed/samyoj-ig-live/800/800',
+      mediaPayload: [],
+      scheduledAt: null,
+      publishedAt: ago(80),
+      igMediaId: 'mock-media-live',
+      lastError: null,
+    },
+    {
+      id: `${META_MOCK_ID_PREFIX}ig-post-soon`,
+      status: 'SCHEDULED',
+      mediaType: 'CAROUSEL',
+      caption: 'Tomorrow morning: studio hours and a quiet carousel of the new shelf.',
+      imageUrl: 'https://picsum.photos/seed/samyoj-ig-soon/800/800',
+      mediaPayload: [
+        { url: 'https://picsum.photos/seed/samyoj-ig-soon/800/800', kind: 'image' },
+        { url: 'https://picsum.photos/seed/samyoj-ig-soon-b/800/800', kind: 'image' },
+      ],
+      scheduledAt: soon,
+      publishedAt: null,
+      igMediaId: null,
+      lastError: null,
+    },
+    {
+      id: `${META_MOCK_ID_PREFIX}ig-post-draft`,
+      status: 'DRAFT',
+      mediaType: 'REELS',
+      caption: 'Draft Reel — still choosing the hook.',
+      imageUrl: 'https://picsum.photos/seed/samyoj-ig-reel/800/800',
+      mediaPayload: [{ url: 'https://picsum.photos/seed/samyoj-ig-reel/800/800', kind: 'video' }],
+      scheduledAt: null,
+      publishedAt: null,
+      igMediaId: null,
+      lastError: null,
+    },
+    {
+      id: `${META_MOCK_ID_PREFIX}ig-post-fail`,
+      status: 'FAILED',
+      mediaType: 'IMAGE',
+      caption: 'This sample failed because the image URL was not public.',
+      imageUrl: 'https://picsum.photos/seed/samyoj-ig-fail/800/800',
+      mediaPayload: [],
+      scheduledAt: null,
+      publishedAt: null,
+      igMediaId: null,
+      lastError: 'Instagram could not fetch this image. Use a public HTTPS link.',
+    },
+  ];
+}
+
 export function getInstagramMockComments(): MockCommentRow[] {
   return IG_MOCK_COMMENTS.map((row) => {
     if (!row.igMediaId || row.media) return row;
