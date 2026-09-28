@@ -157,12 +157,13 @@ export function findAutomationConflicts(
     const configuredPlatform = (a.config as Record<string, unknown>).platform;
     const platform =
       configuredPlatform === 'IG' || configuredPlatform === 'FB' ? configuredPlatform : 'WA';
-    const key = `${platform}:${kw}`;
+    const media = String((a.config as Record<string, unknown>).igMediaId || '').trim();
+    const key = media ? `${platform}:${media}:${kw}` : `${platform}:${kw}`;
     keywordMap.set(key, [...(keywordMap.get(key) || []), a]);
   }
   for (const [key, rows] of keywordMap) {
     if (rows.length > 1) {
-      const kw = key.slice(key.indexOf(':') + 1);
+      const kw = String((rows[0].config as Record<string, unknown>).keyword || key);
       conflicts.push({
         type: 'duplicate_keyword',
         severity: 'error',
