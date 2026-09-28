@@ -33,7 +33,7 @@ export default function GettingStartedCard({
           <IconWell accent="emerald" size="sm" round>
             <ListChecks className="h-4 w-4 stroke-[2.2]" />
           </IconWell>
-          <h2 className="truncate text-[14px] sm:text-[15px] md:text-[16px] font-bold text-neutral-900 tracking-tight">
+          <h2 className="truncate text-[12px] font-extrabold tracking-tight text-neutral-900 sm:text-[12.5px]">
             Getting started checklist
           </h2>
         </div>
@@ -49,18 +49,18 @@ export default function GettingStartedCard({
       </div>
 
       {/* Card Body: Left Checklist Items + Right Illustration */}
-      <div className="mt-3 flex min-h-0 flex-1 items-center justify-between gap-3 sm:mt-3.5 sm:gap-4">
-        <ul className="min-w-0 flex-1 space-y-1 sm:space-y-1.5">
+      <div className="mt-2 flex min-h-0 flex-1 items-center justify-between gap-2 sm:mt-2.5 sm:gap-3">
+        <ul className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
           {steps.map((step) => {
             const Row = (
               <div
-                className={`flex items-center gap-2 sm:gap-2.5 rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5 transition-colors ${
+                className={`flex items-center gap-1.5 rounded-lg px-1 py-0.5 sm:px-1.5 sm:py-1 transition-colors ${
                   step.completed ? 'opacity-70' : 'hover:bg-neutral-50/80'
                 }`}
               >
                 <ChecklistMark completed={step.completed} className="h-4 w-4 shrink-0" />
                 <span
-                  className={`text-[12.5px] sm:text-[13px] md:text-[13.5px] font-semibold ${
+                    className={`min-w-0 truncate text-[11px] font-semibold ${
                     step.completed
                       ? 'text-neutral-500 line-through'
                       : 'text-neutral-900 group-hover:text-emerald-700'
@@ -84,8 +84,8 @@ export default function GettingStartedCard({
           })}
         </ul>
 
-        <div className="hidden md:flex shrink-0 items-center justify-center pl-1 lg:pl-2">
-          <ChecklistIllustrationSvg className="h-24 w-24 lg:h-28 lg:w-28 xl:h-32 xl:w-32" />
+        <div className="hidden shrink-0 items-center justify-center 2xl:flex">
+          <ChecklistIllustrationSvg className="h-16 w-16" />
         </div>
       </div>
     </section>

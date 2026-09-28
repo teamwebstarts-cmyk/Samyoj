@@ -37,7 +37,7 @@ function MetricRow({
     <Link
       to={to}
       title={subtitle}
-      className="flex flex-row items-center justify-between gap-2 rounded-xl border border-neutral-100/90 bg-white px-2.5 py-2 text-left transition hover:border-neutral-200 hover:bg-neutral-50/80 sm:px-3 sm:py-2.5"
+      className="flex flex-row items-center justify-between gap-2 rounded-lg border border-neutral-100/90 bg-white px-2 py-1.5 text-left transition hover:border-neutral-200 hover:bg-neutral-50/80 sm:px-2.5 sm:py-2"
     >
       <div className="flex min-w-0 items-center gap-2">
         <span
@@ -50,10 +50,10 @@ function MetricRow({
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="text-[12.5px] font-bold leading-snug text-neutral-900 sm:text-[13px]">
+          <p className="text-[10px] font-bold leading-snug text-neutral-900 sm:text-[10.5px]">
             {title}
           </p>
-          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 sm:text-[11px]">
+          <p className="mt-0.5 truncate text-[9px] font-medium leading-snug text-neutral-500 sm:text-[9.5px]">
             {subtitle}
           </p>
         </div>
@@ -84,16 +84,16 @@ function AlertRow({
     <Link
       to={to}
       title={subtitle}
-      className="flex items-center gap-2 rounded-xl border border-amber-100/80 bg-white px-2.5 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50/50 @[320px]:px-3 @[320px]:py-2.5"
+      className="flex items-center gap-2 rounded-lg border border-amber-100/80 bg-white px-2 py-1.5 text-left transition hover:border-amber-200 hover:bg-amber-50/50 @[320px]:px-2.5 @[320px]:py-2"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
         <WifiOff className="h-3.5 w-3.5 stroke-[2.2]" />
       </span>
       <div className="min-w-0">
-        <p className="text-[12.5px] font-bold leading-snug text-neutral-900 @[320px]:text-[13px]">
+        <p className="text-[10px] font-bold leading-snug text-neutral-900 @[320px]:text-[10.5px]">
           {title}
         </p>
-        <p className="mt-0.5 truncate text-[10.5px] font-medium leading-snug text-neutral-500 @[320px]:text-[11px]">
+        <p className="mt-0.5 truncate text-[9px] font-medium leading-snug text-neutral-500 @[320px]:text-[9.5px]">
           {subtitle}
         </p>
       </div>
@@ -102,7 +102,7 @@ function AlertRow({
 }
 
 const CARD =
-  'dashboard-card flex h-full flex-col rounded-2xl border p-[var(--card-pad)] shadow-xs sm:rounded-3xl';
+  'dashboard-card flex h-full flex-col rounded-xl border p-[var(--card-pad)] shadow-xs';
 
 export default function NeedsAttentionCard({
   openChats,
@@ -134,7 +134,7 @@ export default function NeedsAttentionCard({
             <ShieldCheck className="h-4 w-4 stroke-[2.2]" />
           </div>
           <div>
-            <h2 className="text-[14px] font-extrabold text-neutral-900 sm:text-[15px]">
+            <h2 className="text-[12px] font-extrabold text-neutral-900 sm:text-[12.5px]">
               Needs attention
             </h2>
             <p className="text-[11px] font-medium text-neutral-500">Checking connection status…</p>
@@ -189,7 +189,7 @@ export default function NeedsAttentionCard({
               )}
             </div>
             <div className="min-w-0">
-              <h2 className="text-[14px] font-extrabold tracking-tight text-neutral-900 sm:text-[15px]">
+              <h2 className="text-[12px] font-extrabold tracking-tight text-neutral-900 sm:text-[12.5px]">
                 Needs attention
               </h2>
               <p
