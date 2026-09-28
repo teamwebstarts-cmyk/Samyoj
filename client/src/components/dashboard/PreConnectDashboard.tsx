@@ -1,14 +1,10 @@
-import { useState, useCallback } from 'react';
 import PreConnectHero from './PreConnectHero';
 import PreConnectSteps from './PreConnectSteps';
-import PreConnectVideoModal from './PreConnectVideoModal';
 import { useWhatsAppConnectPicker } from '../../hooks/useWhatsAppConnectPicker';
+import { useMetaChannelConnect } from '../layout/MetaChannelChips';
 import WhatsAppConnectModeModal from '../whatsapp/WhatsAppConnectModeModal';
-import { getPreconnectVideoUrl } from '../../utils/preconnectVideos';
 
-const INTRO_VIDEO_URL = getPreconnectVideoUrl('intro');
-
-/** Full Dashboard body when WhatsApp is not connected. */
+/** Full Dashboard body when no WhatsApp, Facebook, or Instagram channel is connected. */
 export default function PreConnectDashboard() {
   const {
     pickerOpen,
@@ -18,21 +14,25 @@ export default function PreConnectDashboard() {
     connectCoexistence,
     connecting,
   } = useWhatsAppConnectPicker({ returnPath: '/' });
-  const [videoOpen, setVideoOpen] = useState(false);
-
-  const openVideo = useCallback(() => setVideoOpen(true), []);
-  const closeVideo = useCallback(() => setVideoOpen(false), []);
+  const { canConnect, busy, startFacebookConnect, startInstagramConnect } = useMetaChannelConnect();
 
   return (
     <div className="dashboard-stack pb-4 sm:pb-2">
-      <PreConnectHero connecting={connecting} onConnect={openPicker} onWatchVideo={INTRO_VIDEO_URL ? openVideo : undefined} />
-      <PreConnectSteps connecting={connecting} onConnect={openPicker} />
-
-      <PreConnectVideoModal
-        open={videoOpen}
-        title="Watch Setup Video"
-        videoUrl={INTRO_VIDEO_URL}
-        onClose={closeVideo}
+      <PreConnectHero
+        connecting={connecting}
+        facebookConnecting={busy === 'fb'}
+        instagramConnecting={busy === 'ig'}
+        onConnect={openPicker}
+        onConnectFacebook={canConnect ? () => void startFacebookConnect() : undefined}
+        onConnectInstagram={canConnect ? () => void startInstagramConnect() : undefined}
+      />
+      <PreConnectSteps
+        connecting={connecting}
+        facebookConnecting={busy === 'fb'}
+        instagramConnecting={busy === 'ig'}
+        onConnect={openPicker}
+        onConnectFacebook={canConnect ? () => void startFacebookConnect() : undefined}
+        onConnectInstagram={canConnect ? () => void startInstagramConnect() : undefined}
       />
 
       <WhatsAppConnectModeModal
