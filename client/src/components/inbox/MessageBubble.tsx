@@ -524,8 +524,15 @@ export default function MessageBubble({
   }, [menuOpen, reactOpen]);
 
   const copyText = async () => {
+    const text = templateBody || '';
+    if (!text.trim()) {
+      closeMenus();
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(templateBody || '');
+      await navigator.clipboard.writeText(text);
+      const { toastSuccess } = await import('../../utils/toast');
+      toastSuccess('Copied');
     } catch {
       /* ignore */
     }
