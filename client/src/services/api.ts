@@ -475,6 +475,13 @@ export const facebookApi = {
         mimeType?: string;
       }
     ) => api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, payload),
+    deleteMessages: (id: string, messageIds: string[]) =>
+      api.post<{ data: { deleted: number; messageIds: string[] } }>(
+        `/facebook/inbox/${id}/messages/delete`,
+        { messageIds }
+      ),
+    clearMessages: (id: string) =>
+      api.delete<{ data: { deleted: number } }>(`/facebook/inbox/${id}/messages`),
     bulk: (ids: string[], action: 'assign' | 'close' | 'delete', agentId?: string | null) =>
       api.post('/facebook/inbox/bulk', { ids, action, agentId }),
     setBot: (id: string, botActive: boolean) =>
@@ -552,6 +559,31 @@ export const facebookApi = {
     api.post<{ data: { selectedAccountId: string } }>('/facebook/ads-account', { adAccountId }),
 };
 
+type InstagramPostMediaItem = { url: string; kind: 'image' | 'video' };
+
+type InstagramPostRow = {
+  id: string;
+  status: string;
+  mediaType: 'IMAGE' | 'REELS' | 'CAROUSEL';
+  caption: string;
+  imageUrl: string;
+  mediaPayload: InstagramPostMediaItem[];
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  igMediaId: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type InstagramLibraryItem = {
+  igMediaId: string;
+  mediaType: string;
+  thumbnailUrl: string;
+  permalink: string | null;
+  caption: string;
+};
+
 export const instagramApi = {
   account: () =>
     api.get<{
@@ -605,6 +637,13 @@ export const instagramApi = {
         mimeType?: string;
       }
     ) => api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, payload),
+    deleteMessages: (id: string, messageIds: string[]) =>
+      api.post<{ data: { deleted: number; messageIds: string[] } }>(
+        `/instagram/inbox/${id}/messages/delete`,
+        { messageIds }
+      ),
+    clearMessages: (id: string) =>
+      api.delete<{ data: { deleted: number } }>(`/instagram/inbox/${id}/messages`),
     bulk: (ids: string[], action: 'assign' | 'close' | 'delete', agentId?: string | null) =>
       api.post('/instagram/inbox/bulk', { ids, action, agentId }),
     setBot: (id: string, botActive: boolean) =>
@@ -658,6 +697,45 @@ export const instagramApi = {
       api.post(`/instagram/comments/${id}/public-reply`, { content }),
     remove: (ids: string[]) => api.post<{ data: { deleted: number } }>('/instagram/comments/delete', { ids }),
     sync: () => api.post<{ data: { inserted: number; scanned: number } }>('/instagram/comments/sync'),
+  },
+  posts: {
+    list: (status?: string) =>
+      api.get<{
+        data: {
+          connected: boolean;
+          account: { username: string | null; igUserId: string } | null;
+          posts: InstagramPostRow[];
+        };
+      }>('/instagram/posts', { params: status && status !== 'all' ? { status } : undefined }),
+    library: () =>
+      api.get<{ data: { items: InstagramLibraryItem[] } }>('/instagram/posts/library'),
+    create: (body: {
+      caption: string;
+      mediaType?: InstagramPostRow['mediaType'];
+      imageUrl?: string;
+      videoUrl?: string;
+      mediaItems?: InstagramPostMediaItem[];
+      scheduledAt?: string | null;
+    }) => api.post<{ data: InstagramPostRow }>('/instagram/posts', body),
+    update: (
+      id: string,
+      body: {
+        caption?: string;
+        mediaType?: InstagramPostRow['mediaType'];
+        imageUrl?: string;
+        videoUrl?: string;
+        mediaItems?: InstagramPostMediaItem[];
+        scheduledAt?: string | null;
+      }
+    ) => api.patch<{ data: InstagramPostRow }>(`/instagram/posts/${id}`, body),
+    publish: (id: string) => api.post<{ data: InstagramPostRow }>(`/instagram/posts/${id}/publish`),
+    cancel: (id: string) => api.post<{ data: InstagramPostRow }>(`/instagram/posts/${id}/cancel`),
+    remove: (id: string) => api.delete(`/instagram/posts/${id}`),
+    upload: (body: { mimeType: string; data: string; filename?: string }) =>
+      api.post<{ data: { imageUrl: string; mediaUrl: string; kind: 'image' | 'video' } }>(
+        '/instagram/posts/media',
+        body
+      ),
   },
 };
 
