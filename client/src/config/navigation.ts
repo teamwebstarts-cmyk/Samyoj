@@ -5,10 +5,11 @@ import {
   ClipboardList,
   CreditCard,
   Facebook,
+  Hash,
+  ImagePlus,
   Instagram,
   LayoutDashboard,
   MessageSquare,
-  Hash,
   Package,
   Phone,
   Send,
@@ -21,6 +22,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { OrgRole } from '../types';
+import type { WorkspaceChannels } from '../utils/workspaceChannels';
 
 export interface NavItem {
   to: string;
@@ -32,6 +34,13 @@ export interface NavItem {
   hidden?: boolean;
 }
 
+/** Platform row with chevron (WhatsApp / Facebook / Instagram). */
+export type PlatformNavSection = NavSection & {
+  dropdown: true;
+  icon: LucideIcon;
+  accent: 'facebook' | 'whatsapp' | 'instagram';
+};
+
 export interface NavSection {
   label: string;
   items: NavItem[];
@@ -39,19 +48,14 @@ export interface NavSection {
   /** Dashboard-style row with chevron; children render under it. */
   dropdown?: boolean;
   icon?: LucideIcon;
+  /** Group heading with nested platform dropdowns (e.g. Channels). */
+  platforms?: PlatformNavSection[];
 }
 
 const ADMIN_ROLES: OrgRole[] = ['OWNER', 'ADMIN'];
 const SUPERVISOR_PLUS: OrgRole[] = ['OWNER', 'ADMIN', 'SUPERVISOR'];
 
-export const NAV_SECTIONS: NavSection[] = [
-  {
-    label: '',
-    items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-    ],
-  },
+const CHANNEL_PLATFORMS: PlatformNavSection[] = [
   {
     label: 'WhatsApp',
     accent: 'whatsapp',
@@ -60,8 +64,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
       { to: '/calls', icon: Phone, label: 'Calls' },
-      { to: '/templates', icon: ClipboardList, label: 'Templates' },
       { to: '/campaigns', icon: Send, label: 'Campaigns' },
+      { to: '/templates', icon: ClipboardList, label: 'Templates' },
       { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
     ],
   },
@@ -83,22 +87,39 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/instagram/inbox', icon: MessageSquare, label: 'Inbox' },
       { to: '/instagram/comments', icon: Hash, label: 'Comments' },
+      { to: '/instagram/posts', icon: ImagePlus, label: 'Posts' },
     ],
   },
+];
+
+export const NAV_SECTIONS: NavSection[] = [
   {
     label: '',
     items: [
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+    ],
+  },
+  {
+    label: 'Channels',
+    items: [],
+    platforms: CHANNEL_PLATFORMS,
+  },
+  {
+    label: 'AI Studio',
+    items: [
       { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
-      { to: '/contacts', icon: UserPlus, label: 'Contacts' },
       { to: '/automations', icon: Workflow, label: 'Automations' },
       {
         to: '/content-studio',
         icon: Sparkles,
         label: 'Content Studio',
         hideForRoles: ['AGENT'],
-        hidden: true,
       },
     ],
+  },
+  {
+    label: 'Contacts',
+    items: [{ to: '/contacts', icon: UserPlus, label: 'Contacts' }],
   },
   {
     label: 'Support',
@@ -131,15 +152,54 @@ export const MOBILE_BOTTOM_NAV: NavItem[] = [
   { to: '/automations', icon: Zap, label: 'Automate' },
 ];
 
+/** Phone tab bar follows the connected mix so Facebook/Instagram-only orgs are not sent to WhatsApp walls. */
+export function getMobileBottomNav(channels: WorkspaceChannels): NavItem[] {
+  if (channels.whatsapp) return MOBILE_BOTTOM_NAV;
+  const home: NavItem = { to: '/', icon: LayoutDashboard, label: 'Home', end: true };
+  const automate: NavItem = { to: '/automations', icon: Zap, label: 'Automate' };
+  if (channels.facebook && channels.instagram) {
+    return [
+      home,
+      { to: '/facebook/inbox', icon: Facebook, label: 'Messenger' },
+      { to: '/instagram/inbox', icon: Instagram, label: 'Inbox' },
+      automate,
+    ];
+  }
+  if (channels.facebook) {
+    return [
+      home,
+      { to: '/facebook/inbox', icon: Facebook, label: 'Messenger' },
+      { to: '/facebook/ads', icon: BarChart3, label: 'Ads' },
+      automate,
+    ];
+  }
+  if (channels.instagram) {
+    return [
+      home,
+      { to: '/instagram/inbox', icon: Instagram, label: 'Inbox' },
+      { to: '/instagram/comments', icon: Hash, label: 'Comments' },
+      automate,
+    ];
+  }
+  return [
+    home,
+    { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
+    { to: '/facebook/inbox', icon: Facebook, label: 'Messenger' },
+    automate,
+  ];
+}
+
 export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/facebook/inbox', icon: Facebook, label: 'Messenger Inbox' },
   { to: '/facebook/ads', icon: BarChart3, label: 'Facebook Ads' },
   { to: '/instagram/inbox', icon: Instagram, label: 'Instagram Inbox' },
   { to: '/instagram/comments', icon: Hash, label: 'Instagram Comments' },
+  { to: '/instagram/posts', icon: ImagePlus, label: 'Instagram Posts' },
   { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
+  { to: '/automations', icon: Workflow, label: 'Automations' },
+  { to: '/content-studio', icon: Sparkles, label: 'Content Studio', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },
   { to: '/tickets', icon: Ticket, label: 'Tickets' },
   { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
@@ -162,14 +222,33 @@ export function isNavItemVisible(
   return true;
 }
 
+function visiblePlatformSections(
+  platforms: PlatformNavSection[],
+  role: OrgRole | null,
+  hiddenModules?: string[]
+): PlatformNavSection[] {
+  return platforms
+    .map((platform) => ({
+      ...platform,
+      items: platform.items.filter((item) => isNavItemVisible(item, role, hiddenModules)),
+    }))
+    .filter((platform) => platform.items.length > 0);
+}
+
 export function getVisibleNavSections(
   role: OrgRole | null,
   hiddenModules?: string[]
 ): NavSection[] {
-  return NAV_SECTIONS.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => isNavItemVisible(item, role, hiddenModules)),
-  })).filter((section) => section.items.length > 0);
+  return NAV_SECTIONS.map((section) => {
+    const items = section.items.filter((item) => isNavItemVisible(item, role, hiddenModules));
+    const platforms = section.platforms
+      ? visiblePlatformSections(section.platforms, role, hiddenModules)
+      : undefined;
+    return { ...section, items, platforms };
+  }).filter((section) => {
+    if (section.platforms?.length) return true;
+    return section.items.length > 0;
+  });
 }
 
 export function getVisibleMobileMoreItems(
