@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   CalendarClock,
@@ -935,16 +935,6 @@ export default function CampaignsPage() {
                   >
                     New campaign
                   </AppButton>
-                  <Link to="/content-studio" className="max-sm:flex-1">
-                    <AppButton
-                      variant="secondary"
-                      size="sm"
-                      className="w-full max-sm:!min-h-9"
-                      icon={<LayoutTemplate size={14} />}
-                    >
-                      Content Studio
-                    </AppButton>
-                  </Link>
                 </div>
               ) : undefined
             }

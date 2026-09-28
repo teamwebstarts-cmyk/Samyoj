@@ -45,7 +45,7 @@ import RowActions from '../components/ui/RowActions';
 import SegmentedControl from '../components/ui/SegmentedControl';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
 import { TableTextButton } from '../components/ui/TableActions';
-import WhatsAppConnectionEmptyState from '../components/ui/WhatsAppConnectionEmptyState';
+import ChannelConnectionEmptyState from '../components/ui/ChannelConnectionEmptyState';
 import {
   CALLING_BOT_SPEAKERS,
   DEFAULT_GREETING,
@@ -54,6 +54,7 @@ import {
 import { aiBotApi, callingApi, settingsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
+import { useMetaChannelStatus } from '../components/layout/MetaChannelChips';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -178,7 +179,8 @@ function buildPersonalityIntent(input: {
 
 export default function AiBotPage() {
   const { organization } = useAuth();
-  const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
+  const { hasConnectedNumber, resolved } = useWhatsAppNumber();
+  const { facebook, instagram } = useMetaChannelStatus();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const [bots, setBots] = useState<AiBot[]>([]);
   const [answeringCallBotId, setAnsweringCallBotId] = useState<string | null>(null);
@@ -193,6 +195,13 @@ export default function AiBotPage() {
     setChannelFilter(next);
     setSearchParams({ tab: next.toLowerCase() }, { replace: true });
   };
+
+  useEffect(() => {
+    if (!hasConnectedNumber && channelFilter === 'CALL') {
+      setChannelFilter('CHAT');
+      setSearchParams({ tab: 'chat' }, { replace: true });
+    }
+  }, [hasConnectedNumber, channelFilter, setSearchParams]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [slideOpen, setSlideOpen] = useState(false);
@@ -231,8 +240,6 @@ export default function AiBotPage() {
   const [testLoading, setTestLoading] = useState(false);
   const [voicePreviewLoading, setVoicePreviewLoading] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  const activeNumberIdRef = useRef<string | null>(null);
-  activeNumberIdRef.current = activeNumber?.id ?? null;
   const requestGenerationRef = useRef(0);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [aggregateAnalytics, setAggregateAnalytics] = useState<AggregateAnalytics | null>(null);
@@ -252,36 +259,24 @@ export default function AiBotPage() {
       : null;
 
   const load = useCallback(async () => {
-    if (!resolved || !activeNumber) return;
-    const requestNumberId = activeNumber.id;
+    if (!resolved) return;
     const generation = ++requestGenerationRef.current;
     setLoading(true);
     try {
       const { data } = await aiBotApi.list();
-      if (
-        requestNumberId !== activeNumberIdRef.current ||
-        generation !== requestGenerationRef.current
-      )
-        return;
+      if (generation !== requestGenerationRef.current) return;
       setBots(data.data.bots || []);
       setAnsweringCallBotId(data.data.answeringCallBotId ?? null);
     } catch (err) {
-      if (
-        requestNumberId !== activeNumberIdRef.current ||
-        generation !== requestGenerationRef.current
-      )
-        return;
+      if (generation !== requestGenerationRef.current) return;
       console.error(err);
       toastError('Could not load AI bots');
     } finally {
-      if (
-        requestNumberId === activeNumberIdRef.current &&
-        generation === requestGenerationRef.current
-      ) {
+      if (generation === requestGenerationRef.current) {
         setLoading(false);
       }
     }
-  }, [activeNumber, resolved]);
+  }, [resolved]);
 
   useEffect(() => {
     load();
@@ -929,14 +924,14 @@ export default function AiBotPage() {
     ];
   }, [channelFilter, callingBots, chatBots, aggregateAnalytics]);
 
-  if (resolved && !hasConnectedNumber) {
+  const metaReady = facebook !== null && instagram !== null;
+  const facebookConnected = facebook?.connected === true;
+  const instagramConnected = instagram?.connected === true;
+
+  if (resolved && metaReady && !hasConnectedNumber && !facebookConnected && !instagramConnected) {
     return (
       <PageShell>
-        <WhatsAppConnectionEmptyState
-          disconnectedNumbers={disconnectedNumbers}
-          task="create AI assistants"
-          returnTask="Come back here to create an AI assistant"
-        />
+        <ChannelConnectionEmptyState task="create AI assistants" />
       </PageShell>
     );
   }
@@ -947,7 +942,7 @@ export default function AiBotPage() {
         <div className="space-y-[var(--density-stack-gap)]">
           <AiBotHero
             title="AI Agents"
-            description="Smart assistants for WhatsApp chat and phone calls — answer customers 24/7 and hand off to your team when needed."
+            description="Smart assistants for chat and calls on your connected channels — answer 24/7 and hand off to your team when needed."
             stats={heroStats}
           />
 
@@ -957,7 +952,9 @@ export default function AiBotPage() {
             onChange={(value) => handleTabChange(value as Channel)}
             options={[
               { value: 'CHAT', label: 'AI Chat Bot', shortLabel: 'Chat', icon: MessageSquare },
-              { value: 'CALL', label: 'AI Calling', shortLabel: 'Calling', icon: PhoneCall },
+              ...(hasConnectedNumber
+                ? [{ value: 'CALL' as const, label: 'AI Calling', shortLabel: 'Calling', icon: PhoneCall }]
+                : []),
             ]}
             ariaLabel="AI Bot channels"
           />

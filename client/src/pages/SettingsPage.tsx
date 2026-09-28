@@ -501,7 +501,7 @@ export default function SettingsPage() {
               badge="Settings"
               badgeIcon={Settings2}
               title="Workspace settings"
-              description="Business profile, WhatsApp numbers, and business hours."
+              description="Business profile, connected channels, and business hours."
               stats={heroStats}
               loading={refreshing}
             />

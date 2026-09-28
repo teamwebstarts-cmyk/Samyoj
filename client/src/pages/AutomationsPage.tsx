@@ -44,7 +44,7 @@ import Pagination from '../components/ui/Pagination';
 import RowActions from '../components/ui/RowActions';
 import { TableTextButton } from '../components/ui/TableActions';
 import SlideOver, { SlideOverFooter } from '../components/ui/SlideOver';
-import WhatsAppConnectionEmptyState from '../components/ui/WhatsAppConnectionEmptyState';
+import ChannelConnectionEmptyState from '../components/ui/ChannelConnectionEmptyState';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
@@ -197,7 +197,7 @@ const heroCopy: Record<AutomationTab, { title: string; description: string }> = 
 };
 
 export default function AutomationsPage() {
-  const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
+  const { activeNumber, hasConnectedNumber, resolved } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -560,11 +560,7 @@ export default function AutomationsPage() {
   if (resolved && !hasConnectedNumber && !facebookConnected && !instagramConnected) {
     return (
       <PageShell>
-        <WhatsAppConnectionEmptyState
-          disconnectedNumbers={disconnectedNumbers}
-          task="create automations"
-          returnTask="Come back here to create an automation"
-        />
+        <ChannelConnectionEmptyState task="create automations" />
       </PageShell>
     );
   }
@@ -982,7 +978,7 @@ export default function AutomationsPage() {
         open={slideOpen}
         onClose={closeSlide}
         title={editing ? 'Edit auto-reply' : 'New auto-reply'}
-        subtitle="Choose when to send, write your message, and preview it on WhatsApp"
+        subtitle="Choose when to send, write your message, and preview it"
         size="lg"
         accent="violet"
         footer={
