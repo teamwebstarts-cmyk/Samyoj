@@ -342,6 +342,7 @@ model Organization {
   channels                       Channel[]
   metaAdsSnapshot                MetaAdsSnapshot?
   instagramComments              InstagramComment[]
+  instagramPosts                 InstagramPost[]
   contactPlatformIdentities      ContactPlatformIdentity[]
   contacts                       Contact[]
   conversations                  Conversation[]
@@ -1130,6 +1131,7 @@ model Channel {
   leads         Lead[]
   conversations Conversation[]
   instagramComments InstagramComment[]
+  instagramPosts    InstagramPost[]
   instagramMediaCache InstagramMediaCache[]
   metaAdsSnapshots  MetaAdsSnapshot[]
 
@@ -1163,6 +1165,48 @@ model InstagramComment {
   @@unique([organizationId, igCommentId])
   @@index([organizationId, channelId, commentedAt])
   @@map("instagram_comments")
+}
+
+enum InstagramPostStatus {
+  DRAFT
+  SCHEDULED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum InstagramPostMediaType {
+  IMAGE
+  REELS
+  CAROUSEL
+}
+
+/// Org-authored Instagram feed / Reels / carousel posts.
+model InstagramPost {
+  id              String                 @id @default(uuid())
+  organizationId  String                 @map("organization_id")
+  channelId       String                 @map("channel_id")
+  createdByUserId String?                @map("created_by_user_id")
+  status          InstagramPostStatus    @default(DRAFT)
+  mediaType       InstagramPostMediaType @default(IMAGE) @map("media_type")
+  caption         String                 @default("") @db.Text
+  imageUrl        String                 @map("image_url")
+  mediaPayload    Json?                  @map("media_payload")
+  scheduledAt     DateTime?           @map("scheduled_at")
+  publishedAt     DateTime?           @map("published_at")
+  containerId     String?             @map("container_id")
+  igMediaId       String?             @map("ig_media_id")
+  lastError       String?             @map("last_error") @db.Text
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, channelId, status])
+  @@index([status, scheduledAt])
+  @@map("instagram_posts")
 }
 
 /// Cached IG media preview (thumbnail, permalink) keyed by channel + Meta media id.
