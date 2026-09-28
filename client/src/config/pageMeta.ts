@@ -6,7 +6,7 @@ export interface PageMeta {
 export const PAGE_META: Record<string, PageMeta> = {
   '/': {
     title: 'Dashboard',
-    description: "Here's your WhatsApp workspace at a glance",
+    description: 'Your workspace at a glance',
   },
   '/analytics': {
     title: 'Analytics',
@@ -32,6 +32,10 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Instagram Comments',
     description: 'One private reply per comment',
   },
+  '/instagram/posts': {
+    title: 'Instagram Posts',
+    description: 'Create, schedule and manage your Instagram posts',
+  },
   '/calls': {
     title: 'Calls',
     description: 'Voice calls handled by your AI bot',
@@ -42,7 +46,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/ai-bot': {
     title: 'AI Bots',
-    description: 'Smart auto-replies for WhatsApp',
+    description: 'Smart auto-replies for chat and calls',
   },
   '/campaigns': {
     title: 'Campaigns',
@@ -90,11 +94,11 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/settings': {
     title: 'Settings',
-    description: 'Connect WhatsApp and set up your workspace',
+    description: 'Connect channels and set up your workspace',
   },
   '/onboarding': {
     title: 'Getting Started',
-    description: 'Set up your WhatsApp workspace',
+    description: 'Set up your workspace',
   },
 };
 
