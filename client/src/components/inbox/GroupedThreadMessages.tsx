@@ -9,6 +9,7 @@ interface GroupedThreadMessagesProps {
   activeMatchId?: string;
   scrollClassName?: string;
   endRef?: Ref<HTMLDivElement>;
+  onDelete?: (message: Message) => void;
 }
 
 /** WhatsApp-style date groups + consecutive bubble spacing (matches ChatThread). */
@@ -18,6 +19,7 @@ export default function GroupedThreadMessages({
   activeMatchId,
   scrollClassName = 'inbox-chat-bg h-full min-h-0 overflow-y-auto px-3 py-3 sm:px-4',
   endRef,
+  onDelete,
 }: GroupedThreadMessagesProps) {
   const groups = useMemo(() => groupMessagesByDate(messages), [messages]);
 
@@ -41,6 +43,7 @@ export default function GroupedThreadMessages({
                     }}
                     highlightQuery={highlightQuery}
                     isActiveMatch={activeMatchId === msg.id}
+                    onDelete={onDelete}
                   />
                 </div>
               );
