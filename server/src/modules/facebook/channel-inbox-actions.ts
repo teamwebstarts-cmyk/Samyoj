@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import logger from '../../utils/logger';
@@ -10,6 +11,32 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { httpsMediaUrl, markPageSeen, sendPageAttachment, sendPageAttachmentId, uploadPageMessageFile } from './page-client';
 import { readMediaFile } from '../media/storage';
 import { findParentPageChannel } from './parent-page';
+import { deleteMediaObject } from '../media/storage-adapter';
+
+const deleteMessagesSchema = z.object({
+  messageIds: z.array(z.string().uuid()).min(1).max(200),
+});
+
+async function purgeStoredMessageMedia(
+  rows: Array<{ metadata: Prisma.JsonValue | null }>
+): Promise<void> {
+  for (const row of rows) {
+    const meta = row.metadata as { mediaPath?: string } | null;
+    if (meta?.mediaPath) await deleteMediaObject(meta.mediaPath);
+  }
+}
+
+async function syncChannelConversationPreview(conversationId: string) {
+  const latest = await prisma.message.findFirst({
+    where: { conversationId },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  return prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: latest?.createdAt ?? null },
+  });
+}
 
 type Row = {
   createdAt: Date;
@@ -344,6 +371,70 @@ export function attachChannelInboxActions(
         patch: { labels },
       });
       sendSuccess(res, { labels });
+    })
+  );
+
+  router.post(
+    '/:id/messages/delete',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { messageIds } = deleteMessagesSchema.parse(req.body);
+      const { orgId, channel, conversation } = await owned(req);
+      const rows = await prisma.message.findMany({
+        where: { conversationId: conversation.id, id: { in: messageIds } },
+        select: { id: true, metadata: true },
+      });
+      if (rows.length === 0) {
+        sendSuccess(res, { deleted: 0, messageIds: [] as string[] });
+        return;
+      }
+      await purgeStoredMessageMedia(rows);
+      await prisma.message.deleteMany({
+        where: { conversationId: conversation.id, id: { in: rows.map((r) => r.id) } },
+      });
+      await syncChannelConversationPreview(conversation.id);
+      const deletedIds = rows.map((r) => r.id);
+      emitToOrg(orgId, 'messages:deleted', {
+        conversationId: conversation.id,
+        messageIds: deletedIds,
+        channelId: channel.id,
+        platform: opts.platform,
+      });
+      emitToOrg(orgId, 'conversation:updated', {
+        conversationId: conversation.id,
+        channelId: channel.id,
+        platform: opts.platform,
+      });
+      sendSuccess(res, { deleted: deletedIds.length, messageIds: deletedIds });
+    })
+  );
+
+  router.delete(
+    '/:id/messages',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { orgId, channel, conversation } = await owned(req);
+      const rows = await prisma.message.findMany({
+        where: { conversationId: conversation.id },
+        select: { id: true, metadata: true },
+      });
+      await purgeStoredMessageMedia(rows);
+      const result = await prisma.message.deleteMany({ where: { conversationId: conversation.id } });
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: null, unreadCount: 0 },
+      });
+      emitToOrg(orgId, 'messages:cleared', {
+        conversationId: conversation.id,
+        deleted: result.count,
+        channelId: channel.id,
+        platform: opts.platform,
+      });
+      emitToOrg(orgId, 'conversation:updated', {
+        conversationId: conversation.id,
+        channelId: channel.id,
+        platform: opts.platform,
+        patch: { unreadCount: 0, lastMessageAt: null },
+      });
+      sendSuccess(res, { deleted: result.count });
     })
   );
 
