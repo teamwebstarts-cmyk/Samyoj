@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import AppButton from '../ui/AppButton';
+import RealisticCalendarIcon from './icons/RealisticCalendarIcon';
 import {
   METRICS_PRESET_OPTIONS,
   addDays,
@@ -117,8 +118,8 @@ function RangeCalendar({
               onClick={() => onSelectDay(iso)}
               className={[
                 'relative h-7 rounded-md text-[11px] font-semibold transition sm:h-9 sm:rounded-lg sm:text-[12px]',
-                !inMonth ? 'text-neutral-300' : 'text-neutral-800',
-                isFuture ? 'cursor-not-allowed opacity-35' : 'hover:bg-emerald-50',
+                !inMonth ? 'text-slate-300' : 'text-slate-600',
+                isFuture ? 'cursor-not-allowed opacity-35' : 'hover:bg-sky-50 hover:text-sky-800',
                 inRange && !isStart && !isEnd ? 'bg-emerald-50/80 text-emerald-900' : '',
                 isStart || isEnd
                   ? 'bg-emerald-600 text-white shadow-[0_4px_12px_rgba(16,185,129,0.35)] hover:bg-emerald-600'
@@ -139,10 +140,12 @@ export default function MetricsPeriodPicker({
   period,
   onPeriodChange,
   align = 'left',
+  variant = 'text',
 }: {
   period: MetricsPeriod;
   onPeriodChange?: (period: MetricsPeriod) => void;
   align?: 'left' | 'right';
+  variant?: 'text' | 'icon';
 }) {
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState<string | null>(null);
@@ -265,6 +268,15 @@ export default function MetricsPeriodPicker({
     );
   }
 
+  const triggerClass =
+    variant === 'icon'
+      ? `inline-flex h-[37px] w-[37px] items-center justify-center rounded-[10px] border shadow-sm transition hover:-translate-y-px hover:shadow-[0_8px_18px_rgba(14,165,233,0.12)] ${
+          open
+            ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200/70'
+            : 'border-sky-200/90 bg-gradient-to-b from-sky-50 to-white hover:border-sky-300 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/80'
+        }`
+      : 'inline-flex max-w-[min(100vw-2rem,16rem)] items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white';
+
   return (
     <div ref={rootRef} className="relative inline-flex">
       <button
@@ -272,16 +284,23 @@ export default function MetricsPeriodPicker({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="Metrics period"
+        aria-label={`Report period: ${label}`}
+        title={label}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[min(100vw-2rem,16rem)] items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-xs transition-colors hover:border-neutral-300 hover:bg-white"
+        className={triggerClass}
       >
-        <Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-400 stroke-[2]" aria-hidden />
-        <span className="truncate">{label}</span>
-        <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`}
-          aria-hidden
-        />
+        {variant === 'icon' ? (
+          <RealisticCalendarIcon className="h-[20px] w-[20px] drop-shadow-[0_1px_0_rgba(255,255,255,0.8)]" />
+        ) : (
+          <>
+            <Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-400 stroke-[2]" aria-hidden />
+            <span className="truncate">{label}</span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
+          </>
+        )}
       </button>
 
       {open && menuPos
@@ -291,10 +310,10 @@ export default function MetricsPeriodPicker({
               role="dialog"
               aria-label="Choose metrics period"
               style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
-              className="fixed z-[250] max-h-[min(72dvh,30rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.14)] sm:max-h-none sm:overflow-hidden"
+              className="fixed z-[250] max-h-[min(72dvh,30rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_20px_48px_rgba(15,23,42,0.1)] sm:max-h-none sm:overflow-hidden"
             >
               <div className="grid sm:grid-cols-[11.5rem_minmax(0,1fr)]">
-                <div className="border-b border-neutral-100 bg-neutral-50/70 p-1.5 sm:border-b-0 sm:border-r sm:p-2">
+                <div className="border-b border-slate-100 bg-slate-50/80 p-1.5 sm:border-b-0 sm:border-r sm:p-2">
                   <p className="px-1.5 pb-1 pt-0.5 text-[9px] font-extrabold uppercase tracking-[0.08em] text-neutral-500 sm:px-2 sm:pt-1 sm:text-[10px]">
                     Quick ranges
                   </p>
@@ -310,7 +329,7 @@ export default function MetricsPeriodPicker({
                         className={`flex items-center rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition sm:mt-0.5 sm:w-full sm:rounded-xl sm:px-3 sm:py-2 sm:text-[12px] ${
                           active
                             ? 'bg-emerald-100 text-emerald-800'
-                            : 'text-neutral-700 hover:bg-white'
+                            : 'text-slate-600 hover:bg-emerald-50/70 hover:text-emerald-900'
                         }`}
                       >
                         {option.label}
@@ -323,7 +342,7 @@ export default function MetricsPeriodPicker({
                     className={`flex items-center rounded-lg px-2 py-1 text-left text-[11px] font-semibold transition sm:mt-0.5 sm:w-full sm:rounded-xl sm:px-3 sm:py-2 sm:text-[12px] ${
                       period.kind === 'overall'
                         ? 'bg-emerald-100 text-emerald-800'
-                        : 'text-neutral-700 hover:bg-white'
+                        : 'text-slate-600 hover:bg-emerald-50/70 hover:text-emerald-900'
                     }`}
                   >
                     All time
@@ -348,7 +367,8 @@ export default function MetricsPeriodPicker({
                   <AppButton
                     type="button"
                     size="sm"
-                    className="mt-2 w-full !h-8 !min-h-8 sm:mt-3 sm:!h-9 sm:!min-h-[44px]"
+                    variant="secondary"
+                    className="mt-2 w-full !h-8 !min-h-8 border-emerald-200/80 !bg-emerald-600 !text-white hover:!border-emerald-300 hover:!bg-emerald-700 sm:mt-3 sm:!h-9 sm:!min-h-[44px]"
                     disabled={!draftFrom || !draftTo}
                     onClick={applyCustomRange}
                   >
