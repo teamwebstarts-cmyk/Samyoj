@@ -12,6 +12,7 @@ import {
   UserRound,
   Loader2,
   MessageSquare,
+  Timer,
   RefreshCw,
   Search,
   SendHorizontal,
@@ -29,6 +30,7 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
 import { useSocket } from '../hooks/useSocket';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import './instagram-comments.css';
 import { useMetaMock } from '../contexts/MetaMockContext';
 import MetaMockNotice from '../components/meta/MetaMockNotice';
@@ -179,11 +181,21 @@ function IgMediaThumb({
 
 const COMMENT_PAGE_SIZE = 25;
 
+const DEFAULT_RETENTION_DAYS = 2;
+
 const FACTS = [
   { title: 'Who can open this', line: 'Anyone signed in to this organization.', icon: UserRound, tint: 'bg-sky-50 text-sky-600' },
   { title: 'Hide & reply use', line: 'The Facebook Page linked to Instagram.', icon: Link2, tint: 'bg-indigo-50 text-indigo-500' },
-  { title: 'Private reply', line: 'One message within 7 days. It also shows in Instagram Inbox.', icon: MessageSquare, tint: 'bg-violet-50 text-violet-500' },
+  { title: 'Private reply', line: 'One DM per comment within 7 days. More messages → Instagram Inbox.', icon: MessageSquare, tint: 'bg-violet-50 text-violet-500' },
+  { title: 'Storage', line: `Comments stay in Samyoj for ${DEFAULT_RETENTION_DAYS} days, then are removed automatically.`, icon: Timer, tint: 'bg-amber-50 text-amber-600' },
 ] as const;
+
+function inboxHref(comment: CommentRow): string {
+  if (comment.inboxConversationId) {
+    return `/instagram/inbox?thread=${encodeURIComponent(comment.inboxConversationId)}`;
+  }
+  return '/instagram/inbox';
+}
 
 export default function InstagramCommentsPage() {
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -205,10 +217,14 @@ export default function InstagramCommentsPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [focusReply, setFocusReply] = useState(0);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
+  const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS);
   const [mockCommentPatch, setMockCommentPatch] = useState<Record<string, Partial<CommentRow>>>({});
   const [, setTick] = useState(0);
   const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
   const { enabled: mockEnabled } = useMetaMock();
+  const breakpoint = useBreakpoint();
+  /** Match xl:flex-row — portaled sheet must not mount on desktop (CSS display:none does not unmount portals). */
+  const commentDetailInSidebar = breakpoint === 'xl';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -225,7 +241,10 @@ export default function InstagramCommentsPage() {
         account?: { name?: string | null } | null;
         comments?: CommentRow[];
         total?: number;
+        retention?: { days?: number };
       };
+      const days = Number(payload.retention?.days) || DEFAULT_RETENTION_DAYS;
+      setRetentionDays(days);
       setConnected(Boolean(payload.connected) || (mockEnabled && getInstagramMockComments().length > 0));
       setAccountName(payload.account?.name || null);
       setComments(payload.comments || []);
@@ -283,7 +302,11 @@ export default function InstagramCommentsPage() {
     try {
       const { data } = await instagramApi.comments.sync();
       const inserted = Number((data.data as { inserted?: number }).inserted || 0);
-      toastSuccess(inserted > 0 ? `Added ${inserted} older comments` : 'No older comments to add');
+      toastSuccess(
+        inserted > 0
+          ? `Added ${inserted} comments from the last ${retentionDays} days`
+          : `No comments to add in the last ${retentionDays} days`
+      );
       setNewerOnFirstPage(false);
       if (page === 1) await load();
       else setPage(1);
@@ -479,7 +502,7 @@ export default function InstagramCommentsPage() {
                     className="inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--igc-line)] bg-white px-2.5 text-[12px] font-semibold text-[var(--igc-ink)] disabled:opacity-50 sm:px-3 sm:text-[12.5px]"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${syncing ? 'animate-spin' : ''}`} strokeWidth={1.75} />
-                    <span className="truncate">{syncing ? 'Loading…' : 'Load older'}</span>
+                    <span className="truncate">{syncing ? 'Syncing…' : `Sync (${retentionDays}d)`}</span>
                   </button>
                 ) : null}
                 <Link
@@ -492,6 +515,8 @@ export default function InstagramCommentsPage() {
               </div>
             </header>
             <MetaMockNotice />
+
+            {connected ? <CommentsRetentionInfograph days={retentionDays} /> : null}
 
             <details className="igc-card igc-disclosure mt-4">
               <summary className="igc-disclosure-trigger">
@@ -517,7 +542,11 @@ export default function InstagramCommentsPage() {
                         </span>
                         <div>
                           <p className="text-[13px] font-bold text-[var(--igc-ink)]">{fact.title}</p>
-                          <p className="mt-0.5 text-[12px] leading-snug text-[var(--igc-muted)]">{fact.line}</p>
+                          <p className="mt-0.5 text-[12px] leading-snug text-[var(--igc-muted)]">
+                            {fact.title === 'Storage'
+                              ? `Comments stay in Samyoj for ${retentionDays} days, then are removed automatically.`
+                              : fact.line}
+                          </p>
                         </div>
                       </div>
                     );
@@ -665,8 +694,8 @@ export default function InstagramCommentsPage() {
           </div>
 
           {selected ? (
-            <>
-              <div className="hidden xl:block igc-detail-stick">
+            commentDetailInSidebar ? (
+              <div className="igc-detail-stick">
                 <CommentDetails
                   comment={selected}
                   draft={draft}
@@ -682,28 +711,63 @@ export default function InstagramCommentsPage() {
                   onSendBoth={() => void sendBoth(selected.id)}
                 />
               </div>
-              <div className="xl:hidden">
-                <CommentDetails
-                  comment={selected}
-                  draft={draft}
-                  publicDraft={publicDraft}
-                  busy={busyId === selected.id}
-                  onDraft={setDraft}
-                  onPublicDraft={setPublicDraft}
-                  onClose={() => setSelectedId(null)}
-                  onHide={(next) => void hide(selected.id, next)}
-                  focusReply={focusReply}
-                  onSend={() => void sendReply(selected.id)}
-                  onSendPublic={() => void sendPublic(selected.id)}
-                  onSendBoth={() => void sendBoth(selected.id)}
-                  mobileSheet
-                />
-              </div>
-            </>
+            ) : (
+              <CommentDetails
+                comment={selected}
+                draft={draft}
+                publicDraft={publicDraft}
+                busy={busyId === selected.id}
+                onDraft={setDraft}
+                onPublicDraft={setPublicDraft}
+                onClose={() => setSelectedId(null)}
+                onHide={(next) => void hide(selected.id, next)}
+                focusReply={focusReply}
+                onSend={() => void sendReply(selected.id)}
+                onSendPublic={() => void sendPublic(selected.id)}
+                onSendBoth={() => void sendBoth(selected.id)}
+                mobileSheet
+              />
+            )
           ) : null}
         </div>
       </div>
     </PageShell>
+  );
+}
+
+function CommentsRetentionInfograph({ days }: { days: number }) {
+  return (
+    <aside
+      className="igc-retention-corner"
+      aria-label={`Comments are stored for ${days} days`}
+    >
+      <div className="igc-retention-corner__head">
+        <Timer className="h-4 w-4 shrink-0 text-[#B45309]" strokeWidth={2} />
+        <span className="text-[12px] font-extrabold leading-tight text-[var(--igc-ink)]">
+          {days}-day comment storage
+        </span>
+      </div>
+      <div className="igc-retention-flow" aria-hidden>
+        <div className="igc-retention-step">
+          <span className="igc-retention-dot igc-retention-dot--live" />
+          <span className="igc-retention-label">Arrives</span>
+        </div>
+        <span className="igc-retention-bar" />
+        <div className="igc-retention-step">
+          <span className="igc-retention-dot" />
+          <span className="igc-retention-label">Day {days}</span>
+        </div>
+        <span className="igc-retention-bar igc-retention-bar--fade" />
+        <div className="igc-retention-step">
+          <span className="igc-retention-dot igc-retention-dot--purge" />
+          <span className="igc-retention-label">Auto-delete</span>
+        </div>
+      </div>
+      <p className="igc-retention-corner__copy">
+        After {days} days, comment rows are removed from Samyoj. Instagram on the post is unchanged. Keyword automation
+        runs once per person per post.
+      </p>
+    </aside>
   );
 }
 
@@ -877,10 +941,10 @@ function CommentListRow({
               Reply in DM
             </button>
           ) : status === 'sent' ? (
-            <button type="button" onClick={onOpen} className="igc-btn-action igc-btn-action--view">
-              <Check className="h-3.5 w-3.5" strokeWidth={2.25} />
-              View reply
-            </button>
+            <Link to={inboxHref(comment)} className="igc-btn-action igc-btn-action--dm">
+              <Inbox className="h-3.5 w-3.5" strokeWidth={2.25} />
+              More in Inbox
+            </Link>
           ) : (
             <span />
           )}
@@ -1048,20 +1112,25 @@ function CommentDetails({
 
       <div className="mt-4 border-t border-[var(--igc-line)] pt-3">
         <p className="text-[13px] font-bold text-[var(--igc-ink)]">Reply in DM</p>
-        <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">Private message in Instagram Inbox. Within 7 days.</p>
+        <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">
+          One private reply per comment (7-day window). Automation uses the same slot — send any follow-up DMs from Inbox.
+        </p>
         {comment.privateReplySentAt ? (
           <div className="mt-3 space-y-2">
             <p className="rounded-xl bg-[#FDE8EE] px-3 py-2 text-[12.5px] text-[var(--igc-ink)]">
               {comment.privateReplyText || 'Reply sent. Waiting in DMs.'}
             </p>
-            {comment.inboxConversationId ? (
-              <Link
-                to={`/instagram/inbox?thread=${comment.inboxConversationId}`}
-                className="inline-flex text-[12px] font-bold text-[var(--igc-green-deep)]"
-              >
-                Open in Instagram Inbox
-              </Link>
-            ) : null}
+            <Link
+              to={inboxHref(comment)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[var(--igc-green)] px-3.5 text-[12.5px] font-bold text-white"
+            >
+              <Inbox className="h-3.5 w-3.5" />
+              Send another message in Inbox
+            </Link>
+            <p className="text-[11px] leading-snug text-[var(--igc-muted)]">
+              Meta allows one private reply from the comment. Ongoing chat belongs in Instagram Inbox (24h service window
+              rules apply).
+            </p>
           </div>
         ) : canReply ? (
           <>
@@ -1139,14 +1208,17 @@ function CommentDetails({
   if (mobileSheet) {
     if (typeof document === 'undefined') return null;
     return createPortal(
-      <div className="igc-detail-overlay fixed inset-0 z-[60] flex flex-col justify-end" role="presentation">
+      <div
+        className="igc-detail-overlay fixed inset-0 z-[60] flex flex-col justify-end sm:items-center sm:justify-end sm:p-4"
+        role="presentation"
+      >
         <button
           type="button"
           className="modal-backdrop modal-backdrop--enter absolute inset-0 touch-none"
           onClick={onClose}
           aria-label="Close comment details"
         />
-        {panelBody}
+        <div className="relative z-10 w-full max-w-lg sm:max-w-xl">{panelBody}</div>
       </div>,
       document.body
     );
