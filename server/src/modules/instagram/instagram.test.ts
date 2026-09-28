@@ -15,6 +15,7 @@ import {
   instagramCommentListWhere,
   privateReplyOpen,
   sendPrivateReplyForComment,
+  shouldSkipCommentKeywordAutomation,
 } from './comment-ingest';
 import { CUSTOMER_SERVICE_WINDOW_MS } from '../inbox/service-window';
 
@@ -538,6 +539,40 @@ describe('Phase 4 Instagram', () => {
     expect(sendInstagramPrivateReply).not.toHaveBeenCalled();
   });
 
+  it('skips keyword automation when the same author already commented on the post', async () => {
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({
+      id: 'row_2',
+      igCommentId: 'cmt_2',
+      commentedAt: new Date(),
+    } as never);
+    commentMock.findFirst.mockResolvedValue({ id: 'row_1' } as never);
+
+    const stored = await ingestInstagramComment({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igCommentId: 'cmt_2',
+      igMediaId: 'media_1',
+      fromId: 'igsid_1',
+      text: 'PRICE again',
+    });
+    expect(stored.created).toBe(true);
+    expect(stored.automationSent).toBe(false);
+    expect(automationMock.findMany).not.toHaveBeenCalled();
+  });
+
+  it('shouldSkipCommentKeywordAutomation is false without a prior row', async () => {
+    commentMock.findFirst.mockResolvedValue(null as never);
+    const skip = await shouldSkipCommentKeywordAutomation({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igMediaId: 'media_1',
+      fromId: 'igsid_1',
+      excludeCommentId: 'row_new',
+    });
+    expect(skip).toBe(false);
+  });
+
   it('keyword with both texts posts on the comment and sends a DM', async () => {
     const { replyToInstagramComment, sendInstagramPrivateReply } = await import('../facebook/page-client');
     commentMock.findUnique.mockResolvedValue(null as never);
@@ -642,7 +677,11 @@ describe('Phase 4 Instagram', () => {
     });
     expect(open.hidden).toBe(false);
     expect(open.privateReplySentAt).toBeNull();
-    expect(open.commentedAt).toEqual({ gt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) });
+    const retentionCutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const privateReplyCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    expect(open.commentedAt).toEqual({
+      gte: new Date(Math.max(retentionCutoff.getTime(), privateReplyCutoff.getTime())),
+    });
     const sent = instagramCommentListWhere({
       organizationId: 'org_1',
       channelId: 'ch_ig',
