@@ -87,6 +87,54 @@ export function metricsPeriodCompareLabel(period: MetricsPeriod): string {
   return 'vs previous period';
 }
 
+export function metricsPeriodSignature(period: MetricsPeriod): string {
+  if (period.kind === 'preset') return `preset:${period.days}`;
+  if (period.kind === 'overall') return 'overall';
+  return `custom:${period.from}:${period.to}`;
+}
+
+export function metricsPeriodBounds(period: MetricsPeriod): { start: Date; end: Date } {
+  const end = endOfDay(new Date());
+  if (period.kind === 'preset') {
+    return { start: startOfDay(addDays(end, -(period.days - 1))), end };
+  }
+  if (period.kind === 'overall') {
+    return { start: new Date(0), end };
+  }
+  const from = parseIsoDate(period.from);
+  const to = parseIsoDate(period.to);
+  if (!from || !to) {
+    return { start: startOfDay(addDays(end, -6)), end };
+  }
+  const startRaw = from.getTime() <= to.getTime() ? from : to;
+  const endRaw = from.getTime() <= to.getTime() ? to : from;
+  return { start: startOfDay(startRaw), end: endOfDay(endRaw) };
+}
+
+export function metricsPeriodDayBuckets(period: MetricsPeriod, maxDays = 31): Date[] {
+  const { start, end } = metricsPeriodBounds(period);
+  const buckets: Date[] = [];
+  let cursor = startOfDay(start);
+  const last = startOfDay(end);
+  while (cursor.getTime() <= last.getTime() && buckets.length < maxDays) {
+    buckets.push(new Date(cursor));
+    cursor = addDays(cursor, 1);
+  }
+  if (!buckets.length) buckets.push(startOfDay(new Date()));
+  return buckets;
+}
+
+export function conversationInMetricsPeriod(
+  lastMessageAt: string | undefined | null,
+  period: MetricsPeriod
+): boolean {
+  if (period.kind === 'overall') return true;
+  if (!lastMessageAt) return false;
+  const { start, end } = metricsPeriodBounds(period);
+  const time = new Date(lastMessageAt).getTime();
+  return time >= start.getTime() && time <= end.getTime();
+}
+
 export function metricsPeriodsEqual(a: MetricsPeriod, b: MetricsPeriod): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'preset' && b.kind === 'preset') return a.days === b.days;
