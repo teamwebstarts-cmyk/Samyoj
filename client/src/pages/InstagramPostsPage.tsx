@@ -1,0 +1,931 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CalendarClock, FileText, RefreshCw, Send, Trash2 } from 'lucide-react';
+import PageShell from '../components/ui/PageShell';
+import { useAuth } from '../contexts/AuthContext';
+import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
+import MetaMockNotice from '../components/meta/MetaMockNotice';
+import { useMetaMock } from '../contexts/MetaMockContext';
+import { automationApi, contentStudioApi, instagramApi } from '../services/api';
+import { getInstagramMockPosts, isMetaMockId, mergeById } from '../utils/metaMockData';
+import { getErrorMessage } from '../utils/errors';
+import { toastError, toastSuccess } from '../utils/toast';
+import ConnectScreen from '../components/instagram/posts/ConnectScreen';
+import PostPanel from '../components/instagram/posts/PostPanel';
+import PostComposerTab, { type ScheduleError } from '../components/instagram/posts/PostComposerTab';
+import PostPreviewTab, { type PreviewData } from '../components/instagram/posts/PostPreviewTab';
+import PostAutomationTab from '../components/instagram/posts/PostAutomationTab';
+import { PostBanner, PostFilters, PostStatsRow, type PostCounts, type PostFilterId } from '../components/instagram/posts/PostsChrome';
+import { PostsGrid, PostsLibrary, PostsZeroState } from '../components/instagram/posts/PostsGrid';
+import {
+  CAPTION_MAX,
+  CAROUSEL_MAX,
+  HASHTAG_MAX,
+  IMAGE_MAX_MB,
+  REMOTE_PREFIX,
+  VIDEO_MAX_MB,
+  countHashtags,
+  formatPostDate,
+  isRemoteId,
+  type LibraryItem,
+  type MediaItem,
+  type MediaType,
+  type PanelTab,
+  type MediaUploadState,
+  type PostRow,
+} from '../components/instagram/posts/types';
+import './instagram-comments.css';
+import './instagram-posts.css';
+
+type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null };
+
+/** Read image dimensions for the preview "Media" row; videos keep size only. */
+async function readMediaMeta(file: File): Promise<string | null> {
+  const sizeLabel =
+    file.size >= 1024 * 1024
+      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+  if (!file.type.startsWith('image/')) return sizeLabel;
+  try {
+    const url = URL.createObjectURL(file);
+    const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+    URL.revokeObjectURL(url);
+    return dims ? `${dims.w} × ${dims.h} • ${sizeLabel}` : sizeLabel;
+  } catch {
+    return sizeLabel;
+  }
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result || '');
+      resolve(raw.includes(',') ? raw.split(',')[1] : raw);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function toLocalInput(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Desktop layout keeps the composer panel permanently docked. */
+function useIsDesktopPanel(): boolean {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isDesktop;
+}
+
+export default function InstagramPostsPage() {
+  const { orgRole } = useAuth();
+  const canEdit = orgRole === 'OWNER' || orgRole === 'ADMIN' || orgRole === 'SUPERVISOR';
+  const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
+  const { enabled: mockEnabled } = useMetaMock();
+  const isDesktop = useIsDesktopPanel();
+
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [handle, setHandle] = useState<string | null>(null);
+  const [posts, setPosts] = useState<PostRow[]>([]);
+  const [library, setLibrary] = useState<LibraryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState(false);
+
+  const [filter, setFilter] = useState<PostFilterId>('all');
+  const [query, setQuery] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+
+  const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
+  const [panelTab, setPanelTab] = useState<PanelTab>('create');
+  const [mediaType, setMediaType] = useState<MediaType>('IMAGE');
+  const [caption, setCaption] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [mediaMeta, setMediaMeta] = useState<{ name: string; meta: string | null } | null>(null);
+  const [scheduleLocal, setScheduleLocal] = useState('');
+  const [scheduleError, setScheduleError] = useState<ScheduleError>(null);
+  const [saving, setSaving] = useState(false);
+  const [mediaUpload, setMediaUpload] = useState<MediaUploadState | null>(null);
+
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioAssets, setStudioAssets] = useState<StudioAsset[]>([]);
+  const [autoKeyword, setAutoKeyword] = useState('');
+  const [autoPublic, setAutoPublic] = useState('');
+  const [autoDm, setAutoDm] = useState('');
+  const [autoId, setAutoId] = useState<string | null>(null);
+
+  /* ---------------- data ---------------- */
+
+  const loadLibrary = useCallback(async () => {
+    if (mockEnabled) return;
+    setLibraryLoading(true);
+    try {
+      const { data } = await instagramApi.posts.library();
+      setLibrary(data.data.items || []);
+      setLibraryError(false);
+    } catch {
+      setLibrary([]);
+      setLibraryError(true);
+      toastError('Could not load Instagram library');
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [mockEnabled]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await instagramApi.posts.list('all');
+      const real = data.data.posts as PostRow[];
+      const samples = mockEnabled ? getInstagramMockPosts() : [];
+      setConnected(Boolean(data.data.connected) || samples.length > 0);
+      setHandle(
+        data.data.account?.username
+          ? `@${data.data.account.username.replace(/^@/, '')}`
+          : samples.length
+            ? '@yourstudio'
+            : null,
+      );
+      setPosts(mergeById(real, samples));
+      setLoadFailed(false);
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not load Instagram posts');
+      setConnected(false);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [mockEnabled]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (connected) void loadLibrary();
+  }, [connected, loadLibrary]);
+
+  /* ---------------- selection ---------------- */
+
+  const selected = useMemo(
+    () =>
+      selectedId && selectedId !== 'new' && !isRemoteId(selectedId)
+        ? posts.find((p) => p.id === selectedId) ?? null
+        : null,
+    [posts, selectedId],
+  );
+
+  const remoteItem = useMemo(() => {
+    if (!isRemoteId(selectedId)) return null;
+    const igMediaId = selectedId.slice(REMOTE_PREFIX.length);
+    return library.find((row) => row.igMediaId === igMediaId) ?? null;
+  }, [library, selectedId]);
+
+  const automationMediaId = selected?.igMediaId || remoteItem?.igMediaId || null;
+  const locked = selected ? selected.status === 'PUBLISHED' || selected.status === 'PROCESSING' : false;
+  const composerMode = selectedId === 'new' || (selected && !locked);
+  const removable = selected ? ['DRAFT', 'FAILED', 'CANCELLED'].includes(selected.status) : false;
+
+  const samyojIgIds = useMemo(
+    () => new Set(posts.map((p) => p.igMediaId).filter(Boolean) as string[]),
+    [posts],
+  );
+  const libraryTiles = library.filter((row) => !samyojIgIds.has(row.igMediaId));
+
+  /* Desktop: panel is always docked — when nothing is selected it shows the
+     composer. Closing on desktop therefore resets to a fresh New post. */
+  useEffect(() => {
+    if (isDesktop && selectedId === null) setSelectedId('new');
+  }, [isDesktop, selectedId]);
+
+  const openNew = (type: MediaType = 'IMAGE') => {
+    setSelectedId('new');
+    setPanelTab('create');
+    setMediaType(type);
+    setCaption('');
+    setImageUrl('');
+    setVideoUrl('');
+    setMediaItems([]);
+    setMediaMeta(null);
+    setScheduleLocal('');
+    setScheduleError(null);
+    setStudioOpen(false);
+    setAutoKeyword('');
+    setAutoPublic('');
+    setAutoDm('');
+    setAutoId(null);
+  };
+
+  const closePanel = () => {
+    if (isDesktop) {
+      openNew('IMAGE');
+    } else {
+      setSelectedId(null);
+    }
+  };
+
+  const openExisting = (post: PostRow) => {
+    setSelectedId(post.id);
+    setMediaType(post.mediaType || 'IMAGE');
+    setCaption(post.caption);
+    setImageUrl(post.mediaType === 'REELS' ? '' : post.imageUrl);
+    const payload = post.mediaPayload?.length ? post.mediaPayload : [];
+    setMediaItems(payload);
+    setVideoUrl(post.mediaType === 'REELS' ? payload[0]?.url || post.imageUrl : '');
+    setScheduleLocal(post.scheduledAt ? toLocalInput(post.scheduledAt) : '');
+    setScheduleError(null);
+    setMediaMeta(null);
+    setStudioOpen(false);
+    setPanelTab(post.status === 'PUBLISHED' || post.status === 'PROCESSING' ? 'preview' : 'create');
+    void loadPostAutomation(post.igMediaId, post.id);
+  };
+
+  const openRemote = (item: LibraryItem) => {
+    setSelectedId(`${REMOTE_PREFIX}${item.igMediaId}`);
+    setPanelTab('preview');
+    setCaption(item.caption);
+    setImageUrl(item.thumbnailUrl);
+    setVideoUrl('');
+    setMediaItems([]);
+    setMediaMeta(null);
+    setScheduleLocal('');
+    setScheduleError(null);
+    void loadPostAutomation(item.igMediaId);
+  };
+
+  /* ---------------- upload ---------------- */
+
+  const uploadFile = async (file: File, target: 'single' | 'carousel') => {
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/') && file.type !== 'image/gif';
+    if (!isVideo && !isImage) {
+      toastError('Use JPEG, PNG, WebP, MP4, or MOV.');
+      return;
+    }
+    if (mediaType === 'IMAGE' && isVideo) {
+      toastError('Switch to Reel for video.');
+      return;
+    }
+    if (mediaType === 'REELS' && !isVideo) {
+      toastError('Reels need a video file.');
+      return;
+    }
+    const maxBytes = (isVideo ? VIDEO_MAX_MB : IMAGE_MAX_MB) * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toastError(
+        isVideo
+          ? `Video must be ${VIDEO_MAX_MB} MB or smaller.`
+          : `Image must be ${IMAGE_MAX_MB} MB or smaller.`,
+      );
+      return;
+    }
+    if (target === 'carousel' && mediaItems.length >= CAROUSEL_MAX) {
+      toastError(`Carousel can contain up to ${CAROUSEL_MAX} slides.`);
+      return;
+    }
+
+    let progressTimer: ReturnType<typeof setInterval> | undefined;
+    const stopProgressTimer = () => {
+      if (progressTimer) clearInterval(progressTimer);
+      progressTimer = undefined;
+    };
+    const creepProgress = (cap: number) => {
+      stopProgressTimer();
+      progressTimer = setInterval(() => {
+        setMediaUpload((current) => {
+          if (!current) {
+            stopProgressTimer();
+            return null;
+          }
+          if (current.progress >= cap) return current;
+          const step = current.progress < 40 ? 4 : 2;
+          return { ...current, progress: Math.min(cap, current.progress + step) };
+        });
+      }, 140);
+    };
+
+    setMediaUpload({ fileName: file.name, label: 'Preparing your file…', progress: 6 });
+    creepProgress(28);
+    let data: string;
+    try {
+      data = await fileToBase64(file);
+    } catch {
+      stopProgressTimer();
+      setMediaUpload(null);
+      toastError('Could not read this file.');
+      return;
+    }
+
+    setMediaUpload((current) =>
+      current
+        ? { ...current, label: 'Uploading to Samyoj…', progress: Math.max(current.progress, 32) }
+        : { fileName: file.name, label: 'Uploading to Samyoj…', progress: 32 },
+    );
+    creepProgress(90);
+
+    try {
+      const { data: res } = await instagramApi.posts.upload({
+        mimeType: file.type,
+        data,
+        filename: file.name,
+      });
+      stopProgressTimer();
+      setMediaUpload((current) =>
+        current
+          ? { ...current, label: 'Building preview…', progress: 100 }
+          : { fileName: file.name, label: 'Building preview…', progress: 100 },
+      );
+      const url = res.data.mediaUrl || res.data.imageUrl;
+      const kind = res.data.kind || (isVideo ? 'video' : 'image');
+      const meta = await readMediaMeta(file);
+      await new Promise((resolve) => setTimeout(resolve, 320));
+      setMediaMeta({ name: file.name, meta });
+      if (target === 'carousel') {
+        setMediaItems((prev) => [...prev, { url, kind }]);
+        if (!imageUrl && kind === 'image') setImageUrl(url);
+      } else if (mediaType === 'REELS') {
+        setVideoUrl(url);
+        setMediaItems([{ url, kind: 'video' }]);
+      } else {
+        setImageUrl(url);
+        setMediaItems([]);
+      }
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not upload media');
+    } finally {
+      stopProgressTimer();
+      setMediaUpload(null);
+    }
+  };
+
+  const removeSlide = (index: number) => {
+    setMediaItems((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (imageUrl && !next.some((item) => item.url === imageUrl)) {
+        setImageUrl(next.find((item) => item.kind === 'image')?.url ?? next[0]?.url ?? '');
+      }
+      return next;
+    });
+  };
+
+  const removeMedia = () => {
+    setImageUrl('');
+    setVideoUrl('');
+    setMediaItems([]);
+    setMediaMeta(null);
+  };
+
+  /* ---------------- AI Studio ---------------- */
+
+  const loadStudioImages = async () => {
+    setStudioOpen(true);
+    try {
+      const { data } = await contentStudioApi.listAssets({ kind: 'IMAGE', limit: '24' });
+      const assets =
+        ((data as { data?: { assets?: StudioAsset[] } }).data?.assets) || [];
+      setStudioAssets(assets.filter((asset) => asset.publicUrl));
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not load AI Studio images');
+    }
+  };
+
+  const pickStudioImage = (asset: StudioAsset) => {
+    if (asset.publicUrl) setImageUrl(asset.publicUrl);
+    setMediaMeta({ name: 'AI Studio image', meta: null });
+    setStudioOpen(false);
+  };
+
+  /* ---------------- automation ---------------- */
+
+  const loadPostAutomation = async (igMediaId: string | null, postId?: string) => {
+    setAutoKeyword('');
+    setAutoPublic('');
+    setAutoDm('');
+    setAutoId(null);
+    if (!igMediaId && !postId) return;
+    try {
+      const { data } = await automationApi.list({ limit: '100', triggerType: 'KEYWORD' });
+      const rows =
+        ((data as { data?: { automations?: Array<{ id: string; config: Record<string, string> }> } }).data
+          ?.automations) || [];
+      // Live rules match on media id; pending rules (draft/scheduled) on the post id.
+      const match = rows.find(
+        (row) =>
+          row.config?.platform === 'IG' &&
+          ((igMediaId && row.config?.igMediaId === igMediaId) ||
+            (postId && row.config?.igPostId === postId)),
+      );
+      if (!match) return;
+      setAutoId(match.id);
+      setAutoKeyword(match.config.keyword || '');
+      setAutoPublic(match.config.publicMessage || '');
+      setAutoDm(match.config.message || match.config.response || '');
+    } catch {
+      /* automation list is optional */
+    }
+  };
+
+  const savePostAutomation = async () => {
+    if (!automationMediaId && !selected) return;
+    if (selected && isMetaMockId(selected.id)) {
+      toastError('Sample posts do not save a real comment rule.');
+      return;
+    }
+    if (!autoKeyword.trim() || (!autoPublic.trim() && !autoDm.trim())) {
+      toastError('Add a comment word, plus a public reply or a private DM.');
+      return;
+    }
+    const config: Record<string, string> = {
+      platform: 'IG',
+      keyword: autoKeyword.trim(),
+      message: autoDm.trim(),
+      publicMessage: autoPublic.trim(),
+    };
+    if (automationMediaId) {
+      // Live post — rule fires immediately for this media id.
+      config.igMediaId = automationMediaId;
+    } else if (selectedId && selectedId !== 'new' && !isRemoteId(selectedId)) {
+      // Draft/scheduled — pending until publish attaches the real media id.
+      config.igPostId = selectedId;
+    } else {
+      return;
+    }
+    setSaving(true);
+    try {
+      const savedName = `Post comment · ${autoKeyword.trim()}`;
+      if (autoId) {
+        await automationApi.update(autoId, {
+          name: savedName,
+          triggerType: 'KEYWORD',
+          config,
+          enabled: true,
+        });
+      } else {
+        const { data } = await automationApi.create({
+          name: savedName,
+          triggerType: 'KEYWORD',
+          config,
+          enabled: true,
+        });
+        const created = (data as { data?: { id?: string } }).data;
+        if (created?.id) setAutoId(created.id);
+      }
+      toastSuccess(
+        automationMediaId ? 'Comment automation saved' : 'Saved — activates when the post publishes',
+      );
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not save comment automation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ---------------- save / publish ---------------- */
+
+  const buildBody = () => {
+    if (mediaType === 'REELS') {
+      return { caption, mediaType, videoUrl, imageUrl: videoUrl || undefined };
+    }
+    if (mediaType === 'CAROUSEL') {
+      return { caption, mediaType, mediaItems, imageUrl: imageUrl || mediaItems[0]?.url };
+    }
+    return { caption, mediaType: 'IMAGE' as const, imageUrl };
+  };
+
+  const save = async (mode: 'draft' | 'schedule' | 'now') => {
+    if (selectedId && selectedId !== 'new' && isMetaMockId(selectedId)) {
+      toastError('This is a sample post. Create a real one to publish.');
+      return;
+    }
+    const body = buildBody();
+    if (mediaType === 'IMAGE' && !body.imageUrl) {
+      toastError('Add an image first.');
+      return;
+    }
+    if (mediaType === 'REELS' && !videoUrl) {
+      toastError('Add a video for this Reel.');
+      return;
+    }
+    if (mediaType === 'CAROUSEL' && mediaItems.length < 2) {
+      toastError('Carousel needs at least 2 slides.');
+      return;
+    }
+    if (countHashtags(caption) > HASHTAG_MAX) {
+      toastError(`Use at most ${HASHTAG_MAX} hashtags.`);
+      return;
+    }
+
+    let scheduledAt: string | null = null;
+    if (mode === 'schedule') {
+      if (!scheduleLocal) {
+        setScheduleError('empty');
+        toastError('Pick a date and time.');
+        return;
+      }
+      const when = new Date(scheduleLocal).getTime();
+      const delta = when - Date.now();
+      if (delta < 10 * 60 * 1000) {
+        setScheduleError('early');
+        toastError('Schedule at least 10 minutes from now.');
+        return;
+      }
+      if (delta > 75 * 24 * 60 * 60 * 1000) {
+        setScheduleError('late');
+        toastError('Schedule at most 75 days ahead.');
+        return;
+      }
+      scheduledAt = new Date(scheduleLocal).toISOString();
+    }
+
+    setSaving(true);
+    try {
+      const payload = { ...body, scheduledAt: mode === 'draft' ? null : scheduledAt };
+      const created =
+        selectedId && selectedId !== 'new'
+          ? (await instagramApi.posts.update(selectedId, payload)).data.data
+          : (await instagramApi.posts.create(payload)).data.data;
+      if (mode === 'now') {
+        const published = await instagramApi.posts.publish(created.id);
+        if (published.data.data.status === 'FAILED') {
+          toastError(published.data.data.lastError || 'Could not publish post');
+        } else {
+          toastSuccess('Post published');
+          setPanelTab('preview');
+          void loadPostAutomation(published.data.data.igMediaId);
+        }
+      } else {
+        toastSuccess(mode === 'schedule' ? 'Post scheduled' : 'Post saved as draft');
+      }
+      setSelectedId(created.id);
+      await load();
+    } catch (err) {
+      toastError(getErrorMessage(err) || (mode === 'now' ? 'Could not publish post' : 'Could not save post'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelSchedule = async () => {
+    if (!selected) return;
+    try {
+      await instagramApi.posts.cancel(selected.id);
+      toastSuccess('Schedule cancelled');
+      await load();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not cancel schedule');
+    }
+  };
+
+  const removePost = async () => {
+    if (!selected) return;
+    try {
+      await instagramApi.posts.remove(selected.id);
+      setSelectedId(null);
+      toastSuccess('Post removed');
+      await load();
+    } catch (err) {
+      toastError(getErrorMessage(err) || 'Could not remove post');
+    }
+  };
+
+  /* ---------------- derived ---------------- */
+
+  const counts: PostCounts = useMemo(
+    () => ({
+      total: posts.length,
+      published: posts.filter((post) => post.status === 'PUBLISHED').length,
+      scheduled: posts.filter((post) => post.status === 'SCHEDULED').length,
+      drafts: posts.filter((post) => post.status === 'DRAFT').length,
+      failed: posts.filter((post) => post.status === 'FAILED').length,
+    }),
+    [posts],
+  );
+
+  const filterCounts: Record<PostFilterId, number> = {
+    all: counts.total,
+    DRAFT: counts.drafts,
+    SCHEDULED: counts.scheduled,
+    PUBLISHED: counts.published,
+    FAILED: counts.failed,
+  };
+
+  const visiblePosts = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return posts.filter((post) => {
+      const statusOk = filter === 'all' || post.status === filter;
+      if (!statusOk) return false;
+      if (!q) return true;
+      return post.caption.toLowerCase().includes(q);
+    });
+  }, [posts, filter, query]);
+
+  const previewUrl =
+    mediaType === 'REELS'
+      ? videoUrl
+      : mediaType === 'CAROUSEL'
+        ? imageUrl || mediaItems[0]?.url || ''
+        : imageUrl;
+
+  const previewData: PreviewData = useMemo(() => {
+    if (remoteItem) {
+      return {
+        mediaType: (remoteItem.mediaType === 'REELS' ? 'REELS' : remoteItem.mediaType === 'CAROUSEL' ? 'CAROUSEL' : 'IMAGE') as MediaType,
+        previewUrl: remoteItem.thumbnailUrl,
+        caption: remoteItem.caption,
+        status: 'PUBLISHED',
+        scheduledAt: null,
+        publishedAt: null,
+        permalink: remoteItem.permalink,
+        isRemote: true,
+      };
+    }
+    return {
+      mediaType,
+      previewUrl,
+      caption,
+      status: selectedId === 'new' ? null : selected?.status ?? null,
+      scheduledAt: selectedId === 'new' ? (scheduleLocal ? new Date(scheduleLocal).toISOString() : null) : selected?.scheduledAt ?? null,
+      publishedAt: selected?.publishedAt ?? null,
+      mediaName: mediaMeta?.name ?? null,
+      mediaMeta: mediaMeta?.meta ?? null,
+    };
+  }, [remoteItem, mediaType, previewUrl, caption, selectedId, selected, scheduleLocal, mediaMeta]);
+
+  const gridItems = useMemo(() => {
+    const active = { id: 'current', url: previewData.previewUrl, active: true };
+    const others = posts
+      .filter((post) => post.id !== selectedId && post.imageUrl)
+      .map((post) => ({ id: post.id, url: post.imageUrl, active: false }));
+    return [active, ...others].slice(0, 9);
+  }, [posts, selectedId, previewData.previewUrl]);
+
+  const showZeroState =
+    connected === true && !loading && posts.length === 0 && filter === 'all' && !query.trim();
+
+  const automationSummaryDate =
+    remoteItem
+      ? null
+      : formatPostDate(selected?.scheduledAt || selected?.publishedAt || selected?.createdAt);
+
+  /* ---------------- footer actions ---------------- */
+
+  const renderFooter = () => {
+    if (!canEdit || !selectedId || remoteItem) return null;
+    if (locked) return null;
+    return (
+      <>
+        <button
+          type="button"
+          className="igp-btn igp-btn--outline"
+          disabled={saving}
+          onClick={() => void save('draft')}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Save as Draft
+        </button>
+        {selected?.status === 'SCHEDULED' ? (
+          <button type="button" className="igp-btn igp-btn--ghost" disabled={saving} onClick={() => void cancelSchedule()}>
+            <CalendarClock className="h-3.5 w-3.5" />
+            Cancel schedule
+          </button>
+        ) : null}
+        {removable ? (
+          <button type="button" className="igp-btn igp-btn--danger" disabled={saving} onClick={() => void removePost()}>
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove
+          </button>
+        ) : null}
+        {scheduleLocal ? (
+          <button
+            type="button"
+            className="igp-btn igp-btn--primary"
+            disabled={saving}
+            onClick={() => void save('schedule')}
+          >
+            {saving ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <CalendarClock className="h-4 w-4" />
+            )}
+            Schedule Post
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="igp-btn igp-btn--primary"
+            disabled={saving}
+            onClick={() => void save('now')}
+          >
+            {saving ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Publish now
+          </button>
+        )}
+      </>
+    );
+  };
+
+  /* ---------------- panel body ---------------- */
+
+  const renderPanelBody = () => {
+    if (panelTab === 'automation') {
+      const canSavePending = Boolean(
+        selected && !remoteItem && !locked && ['DRAFT', 'SCHEDULED', 'FAILED', 'CANCELLED'].includes(selected.status),
+      );
+      return (
+        <PostAutomationTab
+          ready={Boolean(automationMediaId)}
+          pendingOk={canSavePending}
+          isRemote={Boolean(remoteItem)}
+          isMock={Boolean(selected && isMetaMockId(selected.id))}
+          canEdit={canEdit}
+          saving={saving}
+          keyword={autoKeyword}
+          onKeywordChange={setAutoKeyword}
+          publicReply={autoPublic}
+          onPublicReplyChange={setAutoPublic}
+          dm={autoDm}
+          onDmChange={setAutoDm}
+          autoId={autoId}
+          onSave={() => void savePostAutomation()}
+          summary={{
+            status: remoteItem ? 'PUBLISHED' : selected?.status ?? null,
+            mediaType: remoteItem ? 'IMAGE' : mediaType,
+            dateLabel: automationSummaryDate,
+          }}
+        />
+      );
+    }
+
+    if (panelTab === 'preview') {
+      return (
+        <PostPreviewTab
+          data={previewData}
+          handle={handle}
+          canEdit={canEdit}
+          editablePost={Boolean(selected && !locked && !remoteItem)}
+          gridItems={gridItems}
+          automationConfigured={Boolean(autoId)}
+          onEdit={() => setPanelTab('create')}
+          onEditAutomation={() => setPanelTab('automation')}
+        />
+      );
+    }
+
+    return (
+      <PostComposerTab
+        mediaType={mediaType}
+        onMediaTypeChange={(next) => {
+          setMediaType(next);
+          if (next === 'IMAGE') {
+            setVideoUrl('');
+            setMediaItems([]);
+          }
+        }}
+        canEdit={canEdit}
+        composerMode={Boolean(composerMode)}
+        saving={saving}
+        uploadState={mediaUpload}
+        previewUrl={previewUrl}
+        videoUrl={videoUrl}
+        mediaItems={mediaItems}
+        onUploadFile={uploadFile}
+        onRemoveSlide={removeSlide}
+        onRemoveMedia={removeMedia}
+        caption={caption}
+        onCaptionChange={(value) => setCaption(value.slice(0, CAPTION_MAX))}
+        scheduleLocal={scheduleLocal}
+        onScheduleChange={setScheduleLocal}
+        scheduleError={scheduleError}
+        onScheduleErrorChange={setScheduleError}
+        studioOpen={studioOpen}
+        studioAssets={studioAssets}
+        onOpenStudio={() => void loadStudioImages()}
+        onPickStudio={pickStudioImage}
+        lastError={selected?.lastError ?? null}
+      />
+    );
+  };
+
+  const panelTitle = remoteItem ? 'Live on Instagram' : selectedId === 'new' ? 'New post' : 'Post';
+
+  /* ---------------- render ---------------- */
+
+  return (
+    <PageShell>
+      <div className="igc-page igp-page pb-8">
+        <MetaMockNotice />
+
+        <PostBanner connected={connected} handle={handle} />
+
+        {connected === false && !loading ? (
+          loadFailed ? (
+            <section className="igp-zero" style={{ paddingTop: 44 }}>
+              <span className="igp-auto__emptyicon">
+                <AlertCircle className="h-5 w-5" />
+              </span>
+              <h2 className="igp-zero__title">Could not load posts</h2>
+              <p className="igp-zero__desc">
+                Check your connection and try again. Your posts and settings are safe.
+              </p>
+              <div className="igp-zero__actions">
+                <button type="button" className="igp-btn igp-btn--primary igp-btn--lg" onClick={() => void load()}>
+                  <RefreshCw className="h-4 w-4" />
+                  Retry
+                </button>
+              </div>
+            </section>
+          ) : (
+            <ConnectScreen
+              canConnect={canConnect}
+              busy={busy === 'ig'}
+              onConnect={() => void startInstagramConnect()}
+            />
+          )
+        ) : (
+          <>
+            <PostStatsRow
+              counts={counts}
+              loading={loading}
+              canEdit={canEdit}
+              onNewPost={() => openNew('IMAGE')}
+            />
+
+            <div className="igp-workspace">
+              <div className="igp-feed">
+                <PostFilters
+                  filter={filter}
+                  onFilterChange={setFilter}
+                  counts={filterCounts}
+                  query={query}
+                  onQueryChange={setQuery}
+                  view={view}
+                  onViewChange={setView}
+                  canEdit={canEdit}
+                />
+
+                {showZeroState ? (
+                  <PostsZeroState canEdit={canEdit} onNewPost={() => openNew('IMAGE')} />
+                ) : (
+                  <PostsGrid
+                    posts={visiblePosts}
+                    loading={loading}
+                    selectedId={selectedId}
+                    onOpen={(post) => openExisting(post)}
+                    view={view}
+                    query={query}
+                    onClearQuery={() => setQuery('')}
+                  />
+                )}
+
+                {connected && (libraryTiles.length > 0 || libraryLoading || libraryError) ? (
+                  <PostsLibrary
+                    items={libraryTiles}
+                    loading={libraryLoading}
+                    error={libraryError}
+                    selectedId={selectedId}
+                    onOpen={openRemote}
+                    onRefresh={() => void loadLibrary()}
+                  />
+                ) : null}
+              </div>
+
+              <PostPanel
+                open={isDesktop || Boolean(selectedId)}
+                onClose={closePanel}
+                title={panelTitle}
+                tab={panelTab}
+                onTabChange={setPanelTab}
+                showCreateTab={!remoteItem}
+                automationReady={Boolean(automationMediaId)}
+                body={renderPanelBody()}
+                footer={renderFooter()}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </PageShell>
+  );
+}
