@@ -7,10 +7,12 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { saveLinkedInstagramChannel } from '../facebook/save-page-channel';
 import inboxRoutes from './inbox.routes';
 import commentsRoutes from './comments.routes';
+import postsRoutes from './posts.routes';
 
 const router = Router();
 router.use('/inbox', inboxRoutes);
 router.use('/comments', commentsRoutes);
+router.use('/posts', postsRoutes);
 
 const adminGuard = [authenticate, requireOrg, loadOrgRole, requireOrgRole('OWNER', 'ADMIN')];
 
