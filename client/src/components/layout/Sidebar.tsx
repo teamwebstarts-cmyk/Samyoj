@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
+import { resolveSidebarAccent, type SidebarChannelAccent } from '../../utils/sidebarChannelAccent';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronsLeft, ChevronDown, X } from 'lucide-react';
 import { getVisibleNavSections, type NavSection } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { PlatformBrand } from './PlatformBrand';
-import WhatsAppStatusCard from './WhatsAppStatusCard';
 import WhatsAppGlyph from '../dashboard/icons/WhatsAppGlyph';
 import { SidebarFlyoutTip, tipProps, useSidebarFlyoutTip } from './SidebarFlyoutTip';
 
@@ -21,6 +21,9 @@ interface SidebarProps {
 
 /** Abbreviated section titles keep header height when collapsed so icons never jump up. */
 const SECTION_SHORT: Record<string, string> = {
+  Channels: 'CH',
+  'AI Studio': 'AI',
+  Contacts: 'CON',
   WhatsApp: 'WA',
   Facebook: 'FB',
   Instagram: 'IG',
@@ -45,6 +48,7 @@ function NavItem({
   badge,
   onShowTip,
   onHideTip,
+  accent = 'neutral',
 }: {
   to: string;
   icon: LucideIcon;
@@ -56,6 +60,7 @@ function NavItem({
   badge?: number;
   onShowTip: (text: string, el: HTMLElement) => void;
   onHideTip: () => void;
+  accent?: SidebarChannelAccent;
 }) {
   const badgeLabel = formatBadge(badge ?? 0);
   const tipText = badgeLabel ? `${label} · ${badgeLabel}` : label;
@@ -75,7 +80,9 @@ function NavItem({
         [
           'sidebar-nav-item group relative box-border flex h-[var(--density-nav-item-h)] w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
           'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
-          isActive ? 'sidebar-nav-item--active' : 'sidebar-nav-item--idle',
+          isActive
+            ? `sidebar-nav-item--active sidebar-nav-item--accent-${accent}`
+            : 'sidebar-nav-item--idle',
         ].join(' ')
       }
     >
@@ -231,7 +238,8 @@ function PlatformDropdown({
         label={section.label}
         collapsed
         onNavigate={onNavigate}
-        badge={section.items.some((i) => i.to === '/inbox') ? inboxUnread : undefined}
+              badge={section.items.some((i) => i.to === '/inbox') ? inboxUnread : undefined}
+        accent={section.accent}
         onShowTip={onShowTip}
         onHideTip={onHideTip}
       />
@@ -249,16 +257,28 @@ function PlatformDropdown({
           ? 'text-[#E4405F]'
           : '';
 
+  const dropdownClass = [
+    'sidebar-dropdown',
+    `sidebar-dropdown--${section.accent || 'default'}`,
+    parentActive ? 'sidebar-dropdown--parent-active' : '',
+    childActive && open ? 'sidebar-dropdown--child-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className={`sidebar-dropdown sidebar-dropdown--${section.accent || 'default'}`}>
+    <div className={dropdownClass}>
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
+        aria-current={parentActive ? 'page' : undefined}
         className={[
           'sidebar-nav-item group relative box-border flex h-[var(--density-nav-item-h)] w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
           'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
-          parentActive ? 'sidebar-nav-item--active' : 'sidebar-nav-item--idle',
+          parentActive
+            ? `sidebar-nav-item--active sidebar-nav-item--accent-${section.accent}`
+            : 'sidebar-nav-item--idle',
         ].join(' ')}
       >
         <span className="sidebar-nav-icon relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
@@ -290,6 +310,7 @@ function PlatformDropdown({
               collapsed={false}
               onNavigate={onNavigate}
               badge={item.to === '/inbox' ? inboxUnread : undefined}
+              accent={section.accent}
               onShowTip={onShowTip}
               onHideTip={onHideTip}
             />
@@ -307,15 +328,19 @@ function SectionTitle({
 }: {
   label: string;
   collapsed: boolean;
-  accent?: 'facebook' | 'whatsapp' | 'instagram';
+  accent?: 'facebook' | 'whatsapp' | 'instagram' | 'studio';
 }) {
   const short = SECTION_SHORT[label] ?? label.slice(0, 3).toUpperCase();
   const accentBar =
     accent === 'facebook'
       ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-[#1877F2]'
-      : accent === 'whatsapp'
-        ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-emerald-500'
-        : '';
+        : accent === 'whatsapp'
+          ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-emerald-500'
+          : accent === 'instagram'
+            ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-[#f09433] before:via-[#dc2743] before:to-[#bc1888]'
+            : accent === 'studio'
+              ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-violet-400 before:to-violet-700'
+              : '';
 
   return (
     <p
@@ -363,6 +388,17 @@ export default function Sidebar({
     | { hiddenModules?: string[] }
     | undefined;
   const navSections = getVisibleNavSections(orgRole, uiToggles?.hiddenModules);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const channelAccent = resolveSidebarAccent(location.pathname, searchParams.toString());
+  const headerBorderClass =
+    channelAccent === 'facebook'
+      ? 'border-blue-100/80'
+      : channelAccent === 'instagram'
+        ? 'border-pink-100/80'
+        : channelAccent === 'studio'
+          ? 'border-violet-100/80'
+          : 'border-emerald-100/60';
   // Tip enabled whenever collapsed (nav labels) or always for collapse button
   const { tip, onShowTip, onHideTip } = useSidebarFlyoutTip(true);
 
@@ -375,7 +411,7 @@ export default function Sidebar({
     >
       <div
         className={[
-          'relative z-[2] flex shrink-0 items-center border-b border-emerald-100/60',
+          `relative z-[2] flex shrink-0 items-center border-b ${headerBorderClass}`,
           collapsed ? 'h-14 justify-center px-1.5' : 'h-14 pl-3 pr-2.5',
         ].join(' ')}
       >
@@ -437,21 +473,59 @@ export default function Sidebar({
         aria-label="Primary"
       >
         <div className="flex flex-col gap-3.5">
-          {navSections.map((section) =>
-            section.dropdown ? (
-              <PlatformDropdown
-                key={section.label}
-                section={section}
-                collapsed={collapsed}
-                onNavigate={onNavigate}
-                inboxUnread={inboxUnread}
-                onShowTip={onShowTip}
-                onHideTip={onHideTip}
-              />
-            ) : (
-              <div key={section.label || section.items[0]?.to || 'nav'}>
+          {navSections.map((section) => {
+            if (section.platforms?.length) {
+              return (
+                <div key={section.label}>
+                  <SectionTitle label={section.label} collapsed={collapsed} />
+                  <div className="flex flex-col gap-1">
+                    {section.platforms.map((platform) => (
+                      <PlatformDropdown
+                        key={platform.label}
+                        section={platform}
+                        collapsed={collapsed}
+                        onNavigate={onNavigate}
+                        inboxUnread={inboxUnread}
+                        onShowTip={onShowTip}
+                        onHideTip={onHideTip}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
+            if (section.dropdown) {
+              return (
+                <PlatformDropdown
+                  key={section.label}
+                  section={section}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                  inboxUnread={inboxUnread}
+                  onShowTip={onShowTip}
+                  onHideTip={onHideTip}
+                />
+              );
+            }
+
+            const sectionAccent: SidebarChannelAccent =
+              section.label === 'AI Studio'
+                ? 'studio'
+                : section.label
+                  ? 'neutral'
+                  : channelAccent;
+            const sectionClass =
+              section.label === 'AI Studio' ? 'sidebar-section sidebar-section--studio' : 'sidebar-section';
+
+            return (
+              <div key={section.label || section.items[0]?.to || 'nav'} className={sectionClass}>
                 {section.label ? (
-                  <SectionTitle label={section.label} collapsed={collapsed} accent={section.accent} />
+                  <SectionTitle
+                    label={section.label}
+                    collapsed={collapsed}
+                    accent={section.label === 'AI Studio' ? 'studio' : section.accent}
+                  />
                 ) : null}
                 <div className="flex flex-col gap-1">
                   {section.items.map((item) => (
@@ -461,20 +535,17 @@ export default function Sidebar({
                       collapsed={collapsed}
                       onNavigate={onNavigate}
                       badge={item.to === '/inbox' ? inboxUnread : undefined}
+                      accent={item.to === '/' ? channelAccent : sectionAccent}
                       onShowTip={onShowTip}
                       onHideTip={onHideTip}
                     />
                   ))}
                 </div>
               </div>
-            )
-          )}
+            );
+          })}
         </div>
       </nav>
-
-      <div className="relative z-[2] shrink-0 border-t border-emerald-100/60 p-2">
-        <WhatsAppStatusCard collapsed={collapsed} onNavigate={onNavigate} />
-      </div>
 
       <SidebarFlyoutTip tip={tip} />
     </div>
