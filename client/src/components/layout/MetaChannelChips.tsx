@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Facebook, Instagram } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import { facebookApi, instagramApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { getErrorMessage } from '../../utils/errors';
 import { facebookLoginHttpsBlockedReason } from '../../utils/facebookLoginHttps';
+import { formatPhoneDisplay } from '../../utils/formatPhone';
+import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
+import WhatsAppGlyph from '../dashboard/icons/WhatsAppGlyph';
 type MetaChip = {
   connected: boolean;
   label: string;
@@ -111,6 +115,10 @@ export function useMetaChannelStatus() {
   return { facebook, instagram, markInstagramConnected };
 }
 
+const channelRowClass =
+  'flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors';
+const channelDividerClass = 'border-t border-slate-100 dark:border-white/10';
+
 export default function MetaChannelChips({
   className = '',
   onNavigate,
@@ -120,6 +128,17 @@ export default function MetaChannelChips({
 }) {
   const { canConnect, busy, startFacebookConnect, startInstagramConnect } = useMetaChannelConnect();
   const { facebook, instagram, markInstagramConnected } = useMetaChannelStatus();
+  const { activeNumber, hasConnectedNumber, disconnectedNumbers, loading: waLoading } =
+    useWhatsAppNumber();
+  const disconnectedCopy = whatsappNotConnectedCopy(disconnectedNumbers);
+  const waHref = hasConnectedNumber ? '/inbox' : '/settings?tab=whatsapp';
+  const waTitle =
+    hasConnectedNumber && activeNumber
+      ? formatPhoneDisplay(activeNumber.phoneNumber)
+      : disconnectedCopy.disconnected
+        ? disconnectedCopy.phone ?? 'WhatsApp'
+        : 'WhatsApp';
+  const waStatusConnected = hasConnectedNumber && Boolean(activeNumber);
 
   const connectInstagram = async () => {
     const saved = await startInstagramConnect();
@@ -132,11 +151,44 @@ export default function MetaChannelChips({
     <div
       className={`rounded-xl border border-slate-200/80 bg-white/70 p-1.5 shadow-sm dark:border-white/10 dark:bg-white/5 ${className}`.trim()}
     >
+      {waLoading ? (
+        <div className={`${channelRowClass} animate-pulse`}>
+          <div className="h-3.5 w-3.5 shrink-0 rounded bg-theme-subtle" />
+          <div className="h-2.5 min-w-0 flex-1 rounded bg-theme-subtle" />
+          <div className="h-2.5 w-14 shrink-0 rounded bg-theme-subtle" />
+        </div>
+      ) : waStatusConnected ? (
+        <Link
+          to={waHref}
+          onClick={onNavigate}
+          className={`${channelRowClass} hover:bg-[#25D366]/8`}
+          title={waTitle}
+        >
+          <WhatsAppGlyph className="h-3.5 w-3.5 shrink-0 text-[#25D366]" />
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">{waTitle}</span>
+          <span className="shrink-0 text-[10px] font-semibold text-[#25D366]">Connected</span>
+        </Link>
+      ) : (
+        <Link
+          to={waHref}
+          onClick={onNavigate}
+          className={`${channelRowClass} hover:bg-[#25D366]/8`}
+          title={disconnectedCopy.disconnected ? disconnectedCopy.title : 'Connect WhatsApp'}
+        >
+          <WhatsAppGlyph className="h-3.5 w-3.5 shrink-0 text-[#25D366]" />
+          <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-theme-fg">
+            {disconnectedCopy.disconnected ? waTitle : 'WhatsApp'}
+          </span>
+          <span className="shrink-0 text-[10px] font-semibold text-theme-muted">
+            {disconnectedCopy.disconnected ? 'Disconnected' : 'Not connected'}
+          </span>
+        </Link>
+      )}
       {facebook?.connected ? (
         <Link
           to="/facebook/inbox"
           onClick={onNavigate}
-          className="flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-[#1877F2]/5"
+          className={`${channelRowClass} ${channelDividerClass} hover:bg-[#1877F2]/5`}
           title={facebook.label}
         >
           <Facebook className="h-3.5 w-3.5 shrink-0 text-[#1877F2]" strokeWidth={2.25} />
@@ -148,7 +200,7 @@ export default function MetaChannelChips({
           type="button"
           onClick={() => void startFacebookConnect()}
           disabled={!canConnect || busy === 'fb'}
-          className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-[#1877F2]/5 disabled:opacity-50"
+          className={`${channelRowClass} ${channelDividerClass} w-full hover:bg-[#1877F2]/5 disabled:opacity-50`}
           title={canConnect ? 'Connect Facebook Page' : 'Ask an admin to connect'}
         >
           <Facebook className="h-3.5 w-3.5 shrink-0 text-[#1877F2]" strokeWidth={2.25} />
@@ -162,7 +214,7 @@ export default function MetaChannelChips({
         <Link
           to="/instagram/inbox"
           onClick={onNavigate}
-          className="flex min-w-0 items-center gap-2 rounded-lg border-t border-slate-100 px-2.5 py-2 text-left hover:bg-[#E4405F]/5 dark:border-white/10"
+          className={`${channelRowClass} ${channelDividerClass} hover:bg-[#E4405F]/5`}
           title={instagram.label}
         >
           <Instagram className="h-3.5 w-3.5 shrink-0 text-[#E4405F]" strokeWidth={2.25} />
@@ -174,7 +226,7 @@ export default function MetaChannelChips({
           type="button"
           onClick={() => void connectInstagram()}
           disabled={!canConnect || busy === 'ig'}
-          className="flex w-full min-w-0 items-center gap-2 rounded-lg border-t border-slate-100 px-2.5 py-2 text-left hover:bg-[#E4405F]/5 disabled:opacity-50 dark:border-white/10"
+          className={`${channelRowClass} ${channelDividerClass} w-full hover:bg-[#E4405F]/5 disabled:opacity-50`}
           title={canConnect ? 'Connect Instagram' : 'Ask an admin to connect'}
         >
           <Instagram className="h-3.5 w-3.5 shrink-0 text-[#E4405F]" strokeWidth={2.25} />
