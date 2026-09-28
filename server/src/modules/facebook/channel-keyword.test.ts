@@ -26,6 +26,47 @@ describe('matchChannelKeyword', () => {
     expect(replies).toEqual({ privateText: '₹999', publicText: 'Check your DMs' });
   });
 
+  it('uses the rule for this post before a rule for every post', () => {
+    const replies = matchInstagramCommentReplies(
+      [
+        {
+          triggerType: 'KEYWORD',
+          config: { platform: 'IG', keyword: 'PRICE', message: 'any post', publicMessage: 'any' },
+        },
+        {
+          triggerType: 'KEYWORD',
+          config: {
+            platform: 'IG',
+            keyword: 'PRICE',
+            igMediaId: 'media_1',
+            message: 'this post dm',
+            publicMessage: 'this post reply',
+          },
+        },
+      ],
+      'PRICE',
+      'media_1'
+    );
+    expect(replies).toEqual({ privateText: 'this post dm', publicText: 'this post reply' });
+    expect(
+      matchInstagramCommentReplies(
+        [
+          {
+            triggerType: 'KEYWORD',
+            config: {
+              platform: 'IG',
+              keyword: 'PRICE',
+              igMediaId: 'media_1',
+              message: 'this post dm',
+            },
+          },
+        ],
+        'PRICE',
+        'media_2'
+      ).privateText
+    ).toBeNull();
+  });
+
   it('uses the Facebook welcome on a new chat and not the Instagram welcome', () => {
     const rows = [
       { triggerType: 'WELCOME', config: { platform: 'IG', message: 'IG hi' } },
