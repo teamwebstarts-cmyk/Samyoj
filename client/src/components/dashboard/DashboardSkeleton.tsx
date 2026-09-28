@@ -1,20 +1,25 @@
 export default function DashboardSkeleton() {
   return (
     <div className="dashboard-stack animate-pulse">
-      {/* Live Metrics hero */}
-      <div className="h-[180px] rounded-2xl bg-theme-subtle sm:h-[200px] sm:rounded-3xl md:h-[220px]" />
-
-      {/* Secondary: Needs | Performance | Campaigns */}
-      <div className="card-grid grid grid-cols-1 lg:grid-cols-3">
-        <div className="h-[220px] rounded-2xl bg-theme-subtle sm:h-[240px]" />
-        <div className="h-[220px] rounded-2xl bg-theme-subtle sm:h-[240px]" />
-        <div className="h-[220px] rounded-2xl bg-theme-subtle sm:h-[240px]" />
+      {/* KPI row */}
+      <div className="dashboard-kpi-row">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-[116px] rounded-2xl bg-theme-subtle" />
+        ))}
       </div>
 
-      {/* Quick actions (+ optional getting started) */}
-      <div className="card-grid grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5">
-        <div className="h-[140px] rounded-2xl bg-theme-subtle lg:col-span-3" />
-        <div className="h-[140px] rounded-2xl bg-theme-subtle lg:col-span-2" />
+      {/* Conversations, trend, templates */}
+      <div className="dashboard-content-grid">
+        <div className="h-[220px] rounded-2xl bg-theme-subtle" />
+        <div className="h-[220px] rounded-2xl bg-theme-subtle" />
+        <div className="h-[220px] rounded-2xl bg-theme-subtle" />
+      </div>
+
+      {/* Attention, actions, checklist */}
+      <div className="dashboard-bottom-grid">
+        <div className="h-[180px] rounded-2xl bg-theme-subtle" />
+        <div className="h-[180px] rounded-2xl bg-theme-subtle" />
+        <div className="h-[180px] rounded-2xl bg-theme-subtle" />
       </div>
     </div>
   );
