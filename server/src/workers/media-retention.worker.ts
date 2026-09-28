@@ -3,6 +3,7 @@ import path from 'path';
 import prisma from '../config/database';
 import { createModuleLogger } from '../utils/logger';
 import { deleteMediaObject } from '../modules/media/storage-adapter';
+import { purgeExpiredInstagramComments } from '../modules/instagram/comment-retention';
 
 const log = createModuleLogger('media-retention');
 
@@ -85,6 +86,7 @@ export async function runMediaRetentionPass(): Promise<{
   purged: number;
   recordingsScanned: number;
   recordingsDeleted: number;
+  instagramCommentsDeleted: number;
 }> {
   const orgs = await prisma.organization.findMany({
     select: { id: true, retentionDaysMessages: true },
@@ -130,12 +132,14 @@ export async function runMediaRetentionPass(): Promise<{
   }
 
   const recordings = await purgeExpiredCallRecordings();
+  const igComments = await purgeExpiredInstagramComments();
 
   return {
     scanned,
     purged,
     recordingsScanned: recordings.scanned,
     recordingsDeleted: recordings.deleted,
+    instagramCommentsDeleted: igComments.deleted,
   };
 }
 
@@ -153,5 +157,6 @@ export function startMediaRetentionWorker(): void {
   log.info('Media retention worker started', {
     intervalMs,
     callRecordingTtlDays: getCallRecordingTtlDays(),
+    instagramCommentRetentionDays: parseInt(process.env.INSTAGRAM_COMMENT_RETENTION_DAYS || '2', 10),
   });
 }

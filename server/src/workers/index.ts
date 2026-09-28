@@ -20,6 +20,7 @@ import {
 } from '../modules/billing/usage.service';
 import { attachWorkerErrorHandlers, logError } from '../errors';
 import { createModuleLogger } from '../utils/logger';
+import { startInstagramPostScheduler } from '../modules/instagram/posts.routes';
 import { hasAuditableCampaignConsent } from '../modules/campaigns/recipients';
 import {
   buildStaleCampaignJobAudit,
@@ -130,6 +131,7 @@ export function startWorkers(): void {
   process.env.SAMYOJ_EMBEDDED_WORKERS = '1';
   if (workersStarted) return;
   workersStarted = true;
+  startInstagramPostScheduler();
   startPlatformTelemetryWorker();
 
 // Webhook worker — handle inbound messages + status ticks (processWebhookPayload)
