@@ -16,6 +16,10 @@ import {
 } from './comment-ingest';
 import { syncInstagramComments } from './comment-sync';
 import { loadInstagramMediaPreviews, type InstagramMediaPreview } from './media-cache';
+import {
+  getInstagramCommentRetentionDays,
+  instagramCommentRetentionCutoff,
+} from './comment-retention';
 
 const router = Router();
 router.use(authenticate, requireOrg, loadOrgRole);
@@ -96,9 +100,15 @@ router.get(
         });
       }
     }
+    const retentionDays = getInstagramCommentRetentionDays();
+    const retentionCutoff = instagramCommentRetentionCutoff();
     sendSuccess(res, {
       connected: true,
       account: { channelId: channel.id, igUserId: channel.platformAccountId, name: channel.name },
+      retention: {
+        days: retentionDays,
+        cutoffAt: retentionCutoff.toISOString(),
+      },
       comments: rows.map((c) => ({
         ...c,
         privateReplyOpen: !c.privateReplySentAt && privateReplyOpen(c.commentedAt),
