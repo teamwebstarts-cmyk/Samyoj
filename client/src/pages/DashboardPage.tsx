@@ -1,28 +1,28 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
-import WhatsAppConnectGuide, {
+import DashboardConnectionHero, {
   type WhatsAppGuideStatus,
 } from '../components/dashboard/WhatsAppConnectGuide';
 import PreConnectDashboard, {
   PreConnectSkeleton,
 } from '../components/dashboard/PreConnectDashboard';
-import LiveMetricsHero from '../components/dashboard/LiveMetricsHero';
 import { DEFAULT_METRICS_PERIOD, metricsPeriodToParams, type MetricsPeriod } from '../utils/metricsPeriod';
-import NeedsAttentionCard from '../components/dashboard/NeedsAttentionCard';
-import MessagePerformanceDonut from '../components/dashboard/MessagePerformanceDonut';
-import UpcomingCampaignsCard from '../components/dashboard/UpcomingCampaignsCard';
-import GettingStartedCard from '../components/dashboard/GettingStartedCard';
-import DashboardQuickActions from '../components/dashboard/DashboardQuickActions';
-import MetaAdsRecap from '../components/dashboard/MetaAdsRecap';
+import DashboardChannelHome from '../components/dashboard/DashboardChannelHome';
+import DashboardChannelTabs from '../components/dashboard/DashboardChannelTabs';
+import DashboardKpiRow from '../components/dashboard/DashboardKpiRow';
+import DashboardContentRows from '../components/dashboard/DashboardContentRows';
 import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import AppButton from '../components/ui/AppButton';
 import { useOnActiveNumberChange } from '../hooks/useOnActiveNumberChange';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
-import { analyticsApi, campaignApi, onboardingApi } from '../services/api';
+import { useMetaChannelStatus } from '../components/layout/MetaChannelChips';
+import { analyticsApi, campaignApi, inboxApi, onboardingApi, templateApi } from '../services/api';
 import { toastError } from '../utils/toast';
-import type { AnalyticsOverview, Campaign } from '../types';
+import { anyWorkspaceChannel } from '../utils/workspaceChannels';
+import type { AnalyticsOverview, Campaign, Conversation, MessageTemplate } from '../types';
 
 const DEFAULT_PERIOD: MetricsPeriod = DEFAULT_METRICS_PERIOD;
 
@@ -65,13 +65,17 @@ function extractCampaigns(payload: unknown): Campaign[] {
 }
 
 export default function DashboardPage() {
+  const [searchParams] = useSearchParams();
   const { hasConnectedNumber, activeNumber, resolved, loading: numbersLoading } = useWhatsAppNumber();
+  const { facebook, instagram } = useMetaChannelStatus();
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>(DEFAULT_PERIOD);
   const [stats, setStats] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [recentConversations, setRecentConversations] = useState<Conversation[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(true);
   const [campaignsError, setCampaignsError] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
@@ -92,7 +96,27 @@ export default function DashboardPage() {
   }, []);
 
   const connectionReady = resolved && (!numbersLoading || hasConnectedNumber || waStatus.statusReady);
-  const isConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
+  const metaReady = facebook !== null && instagram !== null;
+  const waConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
+  const channels = {
+    whatsapp: waConnected,
+    facebook: facebook?.connected === true,
+    instagram: instagram?.connected === true,
+  };
+  const anyChannel = anyWorkspaceChannel(channels);
+  const workspaceReady = connectionReady && metaReady;
+  const requestedChannel = searchParams.get('channel');
+  const activeChannel =
+    requestedChannel === 'facebook' && channels.facebook
+      ? 'facebook'
+      : requestedChannel === 'instagram' && channels.instagram
+        ? 'instagram'
+        : channels.whatsapp
+          ? 'whatsapp'
+          : channels.facebook
+            ? 'facebook'
+            : 'instagram';
+  const showWhatsApp = activeChannel === 'whatsapp' && channels.whatsapp;
 
   const loadStats = useCallback(() => {
     if (!resolved || !activeNumber) return;
@@ -167,6 +191,25 @@ export default function DashboardPage() {
         if (requestNumberId === activeNumberIdRef.current) setCampaignsLoading(false);
       });
 
+    Promise.allSettled([
+      inboxApi.list({ page: '1', limit: '5', sort: 'recent' }),
+      templateApi.list({ limit: '4' }),
+    ]).then(([inboxResult, templatesResult]) => {
+      if (requestNumberId !== activeNumberIdRef.current) return;
+      if (inboxResult.status === 'fulfilled') {
+        const payload = inboxResult.value.data?.data as { conversations?: Conversation[] } | undefined;
+        setRecentConversations(payload?.conversations || []);
+      } else {
+        setRecentConversations([]);
+      }
+      if (templatesResult.status === 'fulfilled') {
+        const payload = templatesResult.value.data?.data as { templates?: MessageTemplate[] } | MessageTemplate[] | undefined;
+        setTemplates(Array.isArray(payload) ? payload : payload?.templates || []);
+      } else {
+        setTemplates([]);
+      }
+    });
+
     onboardingApi
       .status()
       .then(({ data }) => {
@@ -187,11 +230,12 @@ export default function DashboardPage() {
       });
   }, [activeNumber, resolved]);
 
-  // Load / refresh Live Metrics when connected (and whenever period changes via loadStats).
+  // Load WhatsApp live metrics only when a number is connected.
   useEffect(() => {
-    if (!connectionReady) return;
-    if (!isConnected) {
+    if (!workspaceReady) return;
+    if (!waConnected) {
       liveDataLoaded.current = false;
+      setLoading(false);
       return;
     }
     loadStats();
@@ -199,18 +243,18 @@ export default function DashboardPage() {
       liveDataLoaded.current = true;
       loadSideData();
     }
-  }, [connectionReady, isConnected, loadStats, loadSideData]);
+  }, [workspaceReady, waConnected, loadStats, loadSideData]);
 
   useOnActiveNumberChange(({ isInitial }) => {
     if (isInitial) return;
-    if (!isConnected) return;
+    if (!waConnected) return;
     loadStats();
     loadSideData();
   });
 
   const hasOnboarding = Boolean(onboarding && onboarding.totalSteps > 0);
 
-  if (!connectionReady) {
+  if (!workspaceReady) {
     return (
       <PageShell>
         <div className="dashboard-stack pb-5 sm:pb-6">
@@ -220,7 +264,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!isConnected) {
+  if (!anyChannel) {
     return (
       <PageShell>
         <div className="dashboard-stack pb-5 sm:pb-6">
@@ -233,87 +277,69 @@ export default function DashboardPage() {
   return (
     <PageShell>
       <div className="dashboard-stack pb-5 sm:pb-6">
-        <WhatsAppConnectGuide onStatusChange={onWaStatusChange} />
-        <MetaAdsRecap />
-
-        {loading && !stats ? (
-          <DashboardSkeleton />
-        ) : loadFailed && !stats ? (
+        <DashboardChannelTabs
+          channels={channels}
+          activeChannel={activeChannel}
+          whatsappLabel={activeNumber?.phoneNumber}
+          facebookLabel={facebook?.label}
+          instagramLabel={instagram?.label}
+        />
+        {showWhatsApp ? (
+          <DashboardConnectionHero
+            onStatusChange={onWaStatusChange}
+            period={metricsPeriod}
+            onPeriodChange={setMetricsPeriod}
+          />
+        ) : null}
+        {showWhatsApp && loading && !stats ? <DashboardSkeleton /> : null}
+        {showWhatsApp && loadFailed && !stats ? (
           <EmptyState
             icon={AlertCircle}
             variant="error"
             title="Could not load dashboard"
             description="Something went wrong while loading your numbers. Please try again."
-            action={
-              <AppButton type="button" onClick={() => loadStats()}>
-                Retry
-              </AppButton>
-            }
+            action={<AppButton type="button" onClick={() => loadStats()}>Retry</AppButton>}
           />
-        ) : stats ? (
-          <div className={refreshing ? 'opacity-70 transition-opacity' : undefined}>
-            <LiveMetricsHero
-              messagesSent={stats.messagesSent}
-              qualityRating={stats.qualityRating}
-              messagingLimitTier={stats.messagingLimitTier}
+        ) : null}
+        {showWhatsApp && stats ? (
+          <div className={`dashboard-board ${refreshing ? 'opacity-70 transition-opacity' : ''}`}>
+            <div className="dashboard-metrics min-w-0">
+              <DashboardKpiRow stats={stats} />
+            </div>
+            <DashboardContentRows
+              stats={stats}
+              campaigns={campaigns}
+              templates={templates}
+              conversations={recentConversations}
+              campaignsLoading={campaignsLoading}
+              campaignsError={campaignsError}
+              onRetryCampaigns={() => loadSideData()}
+              channels={channels}
+              onboarding={
+                hasOnboarding && onboarding
+                  ? {
+                      steps: onboarding.steps,
+                      completedCount: onboarding.completedCount,
+                      totalSteps: onboarding.totalSteps,
+                    }
+                  : null
+              }
+              onboardingError={onboardingError}
+              onRetryOnboarding={() => loadSideData()}
+              isConnected={waStatus.statusReady ? waStatus.connected : null}
+              incomingEnabled={waStatus.statusReady ? waStatus.incomingEnabled : null}
+            />
+          </div>
+        ) : null}
+        {(channels.facebook || channels.instagram) ? (
+          <div className={showWhatsApp ? 'hidden' : 'contents'} aria-hidden={showWhatsApp}>
+            <DashboardChannelHome
+              activeChannel={activeChannel === 'facebook' ? 'facebook' : 'instagram'}
+              facebook={facebook}
+              instagram={instagram}
               period={metricsPeriod}
               onPeriodChange={setMetricsPeriod}
             />
-
-            <div className="card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-2 md:items-stretch lg:grid-cols-3 lg:items-stretch">
-              <NeedsAttentionCard
-                openChats={stats.activeConversations}
-                failedMessages={stats.failedMessages}
-                isConnected={waStatus.statusReady ? waStatus.connected : null}
-                incomingEnabled={waStatus.statusReady ? waStatus.incomingEnabled : null}
-              />
-              <MessagePerformanceDonut
-                messagesSent={stats.messagesSent}
-                messagesDelivered={stats.messagesDelivered ?? 0}
-                messagesDeliveredOnly={stats.messagesDeliveredOnly}
-                messagesRead={stats.messagesRead ?? 0}
-                messagesFailed={stats.messagesFailed ?? stats.failedMessages}
-                messagesPending={stats.messagesPending ?? 0}
-              />
-              <UpcomingCampaignsCard
-                campaigns={campaigns}
-                loading={campaignsLoading}
-                error={campaignsError}
-                onRetry={() => loadSideData()}
-              />
-            </div>
-
-            <div className="card-grid mt-[var(--card-gap)] grid grid-cols-1 md:grid-cols-3 md:items-stretch lg:grid-cols-5 lg:items-stretch">
-              <div className="min-w-0 md:col-span-2 lg:col-span-3 lg:h-full">
-                <DashboardQuickActions />
-              </div>
-              {hasOnboarding && onboarding && (
-                <div className="min-w-0 md:col-span-1 lg:col-span-2 lg:h-full">
-                  <GettingStartedCard
-                    steps={onboarding.steps}
-                    completedCount={onboarding.completedCount}
-                    totalSteps={onboarding.totalSteps}
-                  />
-                </div>
-              )}
-              {onboardingError && !hasOnboarding && (
-                <div className="min-w-0 md:col-span-1 lg:col-span-2 lg:h-full">
-                  <div className="dashboard-card flex h-full flex-col justify-center rounded-2xl border-amber-100 bg-amber-50/40 p-[var(--card-pad)]">
-                    <p className="text-[13px] font-bold text-neutral-900">Couldn&apos;t load checklist</p>
-                    <p className="mt-0.5 text-[12px] text-neutral-600">
-                      Setup steps are temporarily unavailable.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => loadSideData()}
-                      className="mt-3 self-start rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-[12px] font-bold text-amber-900 hover:bg-amber-50"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         ) : null}
       </div>
