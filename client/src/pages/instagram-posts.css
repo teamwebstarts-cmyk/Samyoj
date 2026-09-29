@@ -1370,6 +1370,12 @@
   background: var(--igp-wash);
   color: var(--igp-ink);
 }
+.igp-tab:focus-visible {
+  /* Replace the global green ring so the focused tab does not look double-bordered. */
+  outline: 2px solid var(--igp-accent);
+  outline-offset: -2px;
+  box-shadow: none;
+}
 .igp-tab--on {
   border-color: var(--igp-accent-line);
   background: var(--igp-accent-soft);

@@ -1,16 +1,16 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react';
 import {
   Copy,
   Check,
   Trash2,
   Plus,
-  Link2,
   Mail,
 } from 'lucide-react';
 import PageShell from '../../components/ui/PageShell';
+import EmailConnectScreen from '../../components/email/EmailConnectScreen';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Trash2 as TrashIcon } from 'lucide-react';
-import { TEMPLATE_VARIABLES, MOCK_MAILBOX, removeEmailTemplate, upsertEmailTemplate, useEmailTemplates } from './mockData';
+import { TEMPLATE_VARIABLES, removeEmailTemplate, upsertEmailTemplate, useEmailPreview } from './mockData';
 import type { EmailTemplate } from './mockData';
 import './email.css';
 
@@ -56,7 +56,7 @@ const blankTemplate = (): EmailTemplate => ({
  * Email Templates — narrow list, create/edit in the middle, live preview on the right.
  */
 export default function EmailTemplatesPage() {
-  const templates = useEmailTemplates();
+  const { connected, mailboxEmail, templates } = useEmailPreview();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EmailTemplate>(blankTemplate());
   const [copied, setCopied] = useState(false);
@@ -65,6 +65,14 @@ export default function EmailTemplatesPage() {
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmailTemplate | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (seeded.current || !templates[0]) return;
+    seeded.current = true;
+    setSelectedId(templates[0].id);
+    setDraft({ ...templates[0] });
+  }, [templates]);
 
   const isEditingNew = selectedId === null;
   const canSave = useMemo(
@@ -73,25 +81,11 @@ export default function EmailTemplatesPage() {
   );
 
   // Not-connected gate — no template management until the mailbox is connected.
-  if (!MOCK_MAILBOX.connected) {
+  if (!connected) {
     return (
       <PageShell>
         <div className="ema-page ema-shell">
-          <section className="ema-card">
-            <div className="ema-zero" style={{ padding: '60px 24px' }}>
-              <span className="ema-zero__icon">
-                <Link2 className="h-6 w-6" strokeWidth={2.1} />
-              </span>
-              <p className="ema-zero__title">Connect your Gmail mailbox first</p>
-              <p className="ema-zero__desc">
-                Email templates need a connected Gmail or Google Workspace mailbox. Connect it from Settings —
-                Channels, or ask an admin if you do not see the option.
-              </p>
-              <div className="mt-5 flex flex-wrap justify-center gap-2">
-                <a href="/settings?tab=channels" className="ema-btn ema-btn--primary">Connect Gmail</a>
-              </div>
-            </div>
-          </section>
+          <EmailConnectScreen />
         </div>
       </PageShell>
     );
@@ -393,7 +387,7 @@ export default function EmailTemplatesPage() {
               <div className="ema-mail__who">
                 <span className="ema-avatar ema-avatar--pink" style={{ width: 36, height: 36, fontSize: 12 }}>A</span>
                 <span className="min-w-0">
-                  <span className="ema-mail__from">From {MOCK_MAILBOX.email}</span>
+                  <span className="ema-mail__from">From {mailboxEmail}</span>
                   <span className="ema-mail__to">To Asha · asha@example.com</span>
                 </span>
               </div>

@@ -1,19 +1,13 @@
 import { LogOut, Link2, MailPlus, LayoutTemplate, AlertCircle } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import GmailGlyph from '../email/GmailGlyph';
+import { useMetaMock } from '../../contexts/MetaMockContext';
 import { MOCK_MAILBOX } from '../../pages/email/mockData';
 
-/** One mailbox per org (v1). Mock-connected until the Gmail backend lands. */
-const connected = MOCK_MAILBOX.connected;
-const mailbox = MOCK_MAILBOX.email;
-/** Mock "reconnect required" state — backend flips this from invalid_grant handling. */
-const reconnectRequired = false;
-
-/**
- * Settings → Channels → Gmail card (mockup 8).
- * Connect/disconnect is OWNER/ADMIN only; staff see "Ask an admin to connect Gmail."
- */
 export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
+  const { enabled: connected } = useMetaMock();
+  const mailbox = MOCK_MAILBOX.email;
+  const reconnectRequired = false;
   if (reconnectRequired) {
     return (
       <section className="settings-channel-card settings-channel-card--gmail">

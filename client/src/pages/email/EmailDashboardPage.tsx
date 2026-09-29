@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import { Mail, MailCheck, MailX, LayoutTemplate, TrendingUp, Info, ChevronRight } from 'lucide-react';
 import EmailSvgHero from '../../components/email/EmailSvgHero';
 import GmailGlyph from '../../components/email/GmailGlyph';
+import EmailConnectScreen from '../../components/email/EmailConnectScreen';
 import EmailQuickActions, { DASHBOARD_QUICK_ACTIONS } from '../../components/email/EmailQuickActions';
 import { EmailBeforeYouSendList, DASHBOARD_CHECKLIST } from '../../components/email/EmailBeforeYouSend';
 import ChannelHeroLead, { ChannelHeroConnectedBadge } from '../../components/dashboard/ChannelHeroLead';
 import ChannelHeroActions from '../../components/dashboard/ChannelHeroActions';
 import { DEFAULT_METRICS_PERIOD, type MetricsPeriod } from '../../utils/metricsPeriod';
-import { MOCK_MAILBOX, MOCK_STATS, useRecentSends } from './mockData';
+import { useEmailPreview } from './mockData';
 import './email.css';
 
 const LIMITS_COPY =
@@ -42,14 +43,16 @@ function EmailStatCard({
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <strong className="text-[18px] font-extrabold leading-none tabular-nums text-slate-950">{value}</strong>
-          <span
-            className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-              tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
-            }`}
-          >
-            <TrendingUp className="h-[10px] w-[10px]" strokeWidth={2.6} />
-            {trend}
-          </span>
+          {trend ? (
+            <span
+              className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              <TrendingUp className="h-[10px] w-[10px]" strokeWidth={2.6} />
+              {trend}
+            </span>
+          ) : null}
         </span>
         <p className="mt-1 truncate text-[12px] font-medium leading-none text-slate-500">{label}</p>
       </span>
@@ -63,13 +66,24 @@ function EmailStatCard({
  */
 export default function EmailDashboardView() {
   const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
-  const recentSends = useRecentSends().slice(0, 5);
+  const { connected, mailboxEmail, sends, templates } = useEmailPreview();
+  const recentSends = sends.slice(0, 5);
+  const accepted = sends.filter((send) => send.status === 'ACCEPTED').length;
+  const failed = sends.filter((send) => send.status === 'FAILED').length;
   const stats = [
-    { label: 'Total sent', value: MOCK_STATS.totalSent, trend: MOCK_STATS.totalTrend, icon: Mail, tone: 'pink' as const },
-    { label: 'Accepted by Gmail', value: MOCK_STATS.accepted, trend: MOCK_STATS.acceptedTrend, icon: MailCheck, tone: 'green' as const },
-    { label: 'Failed', value: MOCK_STATS.failed, trend: MOCK_STATS.failedTrend, icon: MailX, tone: 'red' as const },
-    { label: 'Email templates', value: MOCK_STATS.templates, trend: MOCK_STATS.templatesTrend, icon: LayoutTemplate, tone: 'blue' as const },
+    { label: 'Total sent', value: sends.length, trend: '', icon: Mail, tone: 'pink' as const },
+    { label: 'Accepted by Gmail', value: accepted, trend: '', icon: MailCheck, tone: 'green' as const },
+    { label: 'Failed', value: failed, trend: '', icon: MailX, tone: 'red' as const },
+    { label: 'Email templates', value: templates.length, trend: '', icon: LayoutTemplate, tone: 'blue' as const },
   ];
+
+  if (!connected) {
+    return (
+      <div className="ema-page flex w-full min-w-0 flex-col gap-4">
+        <EmailConnectScreen />
+      </div>
+    );
+  }
 
   return (
     <div className="ema-page flex w-full min-w-0 flex-col gap-4">
@@ -82,7 +96,7 @@ export default function EmailDashboardView() {
           }
           title="Email"
           badge={<ChannelHeroConnectedBadge />}
-          nameLine={MOCK_MAILBOX.email}
+          nameLine={mailboxEmail}
           description="Send from your connected Gmail or Google Workspace mailbox."
         />
         <ChannelHeroActions
@@ -127,6 +141,11 @@ export default function EmailDashboardView() {
             </div>
           </div>
           <ul className="ema-recent ema-recent--board">
+            {recentSends.length === 0 && (
+              <li className="px-4 py-10 text-center text-[13px] font-semibold text-slate-500">
+                This mailbox is connected, but no emails have been sent yet.
+              </li>
+            )}
             {recentSends.map((send) => (
               <li key={send.id} className="ema-recent__row">
                 <span className={`ema-avatar ema-avatar--${send.avatar}`} aria-hidden="true">
@@ -154,7 +173,7 @@ export default function EmailDashboardView() {
             ))}
           </ul>
           <div className="flex items-center justify-between gap-2 border-t border-[var(--ema-line)] px-4 py-2.5 text-[11px] font-semibold text-[var(--ema-muted)]">
-            <span>Showing {recentSends.length} of {MOCK_STATS.totalSent} emails</span>
+            <span>Showing {recentSends.length} saved email{recentSends.length === 1 ? '' : 's'}</span>
             <Link to="/email/compose" className="ema-card__link">
               View all sent emails <ChevronRight className="h-3 w-3" />
             </Link>

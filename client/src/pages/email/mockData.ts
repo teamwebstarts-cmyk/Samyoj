@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useMetaMock } from '../../contexts/MetaMockContext';
 
 /** Mock data for the Email UI pass (backend wiring comes after pixel approval). */
 
@@ -193,7 +194,8 @@ export const MOCK_TEMPLATES: EmailTemplate[] = [
 
 export const MOCK_MAILBOX = {
   email: 'support@samyoj.com',
-  connected: true,
+  /** Sample address only. Live "connected" follows Settings → Meta preview data. */
+  connected: false,
 };
 
 export const TEMPLATE_VARIABLES = ['{{name}}', '{{email}}', '{{phone}}'] as const;
@@ -245,4 +247,19 @@ export function upsertEmailTemplate(template: EmailTemplate) {
 export function removeEmailTemplate(id: string) {
   emailTemplates = emailTemplates.filter((template) => template.id !== id);
   publishTemplates();
+}
+
+/** Gmail is not wired yet. Preview data appears only when Settings → Meta preview data is on. */
+export function useEmailPreview() {
+  const { enabled } = useMetaMock();
+  const storedSends = useRecentSends();
+  const storedTemplates = useEmailTemplates();
+  return {
+    preview: enabled,
+    connected: enabled,
+    mailboxEmail: enabled ? MOCK_MAILBOX.email : '',
+    sends: enabled ? storedSends : [],
+    templates: enabled ? storedTemplates : [],
+    contacts: enabled ? MOCK_CONTACTS : [],
+  };
 }

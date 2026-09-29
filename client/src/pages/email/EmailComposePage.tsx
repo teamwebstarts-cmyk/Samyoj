@@ -7,7 +7,6 @@ import {
   Info,
   ChevronDown,
   SendHorizontal,
-  Link2,
   History,
   PenLine,
   Trash2,
@@ -15,7 +14,8 @@ import {
 import PageShell from '../../components/ui/PageShell';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import GmailGlyph from '../../components/email/GmailGlyph';
-import { MOCK_CONTACTS, MOCK_MAILBOX, deleteRecentSend, useEmailTemplates, useRecentSends } from './mockData';
+import EmailConnectScreen from '../../components/email/EmailConnectScreen';
+import { deleteRecentSend, useEmailPreview } from './mockData';
 import { filterRecentSends, priorSendsFor } from './emailList';
 import type { EmailContact, EmailTemplate } from './mockData';
 import '../email/email.css';
@@ -51,7 +51,7 @@ function previewNodes(text: string, contact: EmailContact | null, empty: string)
 }
 
 export default function EmailComposePage() {
-  const mailboxConnected = MOCK_MAILBOX.connected;
+  const { connected: mailboxConnected, mailboxEmail, sends: recentSends, templates, contacts } = useEmailPreview();
   const [recipients, setRecipients] = useState<EmailContact[]>([]);
   const [templateId, setTemplateId] = useState('');
   const [subject, setSubject] = useState('');
@@ -64,8 +64,6 @@ export default function EmailComposePage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [sentQuery, setSentQuery] = useState('');
   const [sentStatus, setSentStatus] = useState<'ALL' | 'ACCEPTED' | 'FAILED'>('ALL');
-  const recentSends = useRecentSends();
-  const templates = useEmailTemplates();
   const searchRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -77,8 +75,8 @@ export default function EmailComposePage() {
   );
 
   const eligibleContacts = useMemo(
-    () => MOCK_CONTACTS.filter((c) => c.eligible),
-    []
+    () => contacts.filter((c) => c.eligible),
+    [contacts]
   );
 
   const filteredContacts = useMemo(() => {
@@ -157,21 +155,7 @@ export default function EmailComposePage() {
     return (
       <PageShell>
         <div className="ema-page ema-shell">
-          <section className="ema-card">
-            <div className="ema-zero" style={{ padding: '60px 24px' }}>
-              <span className="ema-zero__icon">
-                <Link2 className="h-6 w-6" strokeWidth={2.1} />
-              </span>
-              <p className="ema-zero__title">Connect your Gmail mailbox first</p>
-              <p className="ema-zero__desc">
-                Composing needs a connected Gmail or Google Workspace mailbox. Connect it from Settings — Channels,
-                or ask an admin if you do not see the option.
-              </p>
-              <div className="mt-5 flex flex-wrap justify-center gap-2">
-                <Link to="/settings?tab=channels" className="ema-btn ema-btn--primary">Connect Gmail</Link>
-              </div>
-            </div>
-          </section>
+          <EmailConnectScreen />
         </div>
       </PageShell>
     );
@@ -320,7 +304,7 @@ export default function EmailComposePage() {
                           {previewContact ? initials(previewContact.name) : '?'}
                         </span>
                         <span className="min-w-0">
-                          <span className="ema-mail__from">From {MOCK_MAILBOX.email}</span>
+                          <span className="ema-mail__from">From {mailboxEmail}</span>
                           <span className="ema-mail__to">
                             {previewContact
                               ? `To ${previewContact.name} · ${previewContact.email}`
@@ -355,7 +339,7 @@ export default function EmailComposePage() {
                       <GmailGlyph className="h-[17px] w-[17px]" />
                     </span>
                     <span className="min-w-0">
-                      <span className="ema-from__addr block">{MOCK_MAILBOX.email}</span>
+                      <span className="ema-from__addr block">{mailboxEmail}</span>
                       <span className="ema-from__via">
                         <Check className="h-[10px] w-[10px]" strokeWidth={3} />
                         Connected via Google (Read-only)
@@ -606,7 +590,7 @@ export default function EmailComposePage() {
                       {initials(selected.name)}
                     </span>
                     <span className="min-w-0">
-                      <span className="ema-mail__from">From {MOCK_MAILBOX.email}</span>
+                      <span className="ema-mail__from">From {mailboxEmail}</span>
                       <span className="ema-mail__to">To {selected.name} · {selected.email}</span>
                     </span>
                   </div>

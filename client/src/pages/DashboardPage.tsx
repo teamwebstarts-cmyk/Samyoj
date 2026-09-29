@@ -22,6 +22,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useMetaChannelStatus } from '../components/layout/MetaChannelChips';
 import { analyticsApi, campaignApi, inboxApi, onboardingApi, templateApi } from '../services/api';
 import { toastError } from '../utils/toast';
+import { useMetaMock } from '../contexts/MetaMockContext';
 import EmailDashboardView from './email/EmailDashboardPage';
 import type { AnalyticsOverview, Campaign, Conversation, MessageTemplate } from '../types';
 
@@ -103,12 +104,12 @@ export default function DashboardPage() {
   const connectionReady = resolved && (!numbersLoading || hasConnectedNumber || waStatus.statusReady);
   const metaReady = facebook !== null && instagram !== null;
   const waConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
+  const { enabled: emailPreview } = useMetaMock();
   const channels = {
     whatsapp: waConnected,
     facebook: facebook?.connected === true,
     instagram: instagram?.connected === true,
-    // Mock: Email tab always shown connected until Gmail backend lands.
-    email: true,
+    email: emailPreview,
   };
   // Email is mocked connected for the tab until the Gmail backend lands.
   // The pre-connect wall must key on real channels only (spec Phase 3: include
@@ -123,7 +124,7 @@ export default function DashboardPage() {
         ? 'instagram'
         : requestedChannel === 'whatsapp' && channels.whatsapp
           ? 'whatsapp'
-          : requestedChannel === 'email' && channels.email
+          : requestedChannel === 'email'
             ? 'email'
             : requestedChannel === 'all' || !requestedChannel
               ? 'all'
@@ -305,7 +306,7 @@ export default function DashboardPage() {
           whatsappLabel={activeNumber?.phoneNumber}
           facebookLabel={facebook?.label}
           instagramLabel={instagram?.label}
-          emailLabel="support@samyoj.com"
+          emailLabel={emailPreview ? 'support@samyoj.com' : 'Not connected'}
         />
         {showEmail ? <EmailDashboardView /> : null}
         {showAll ? (

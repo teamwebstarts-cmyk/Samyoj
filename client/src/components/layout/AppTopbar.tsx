@@ -32,7 +32,7 @@ import {
   topbarNotConnectedTitle,
 } from '../../utils/workspaceChannels';
 import { useMetaChannelStatus } from './MetaChannelChips';
-import { MOCK_MAILBOX } from '../../pages/email/mockData';
+import { useMetaMock } from '../../contexts/MetaMockContext';
 import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
@@ -136,12 +136,12 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const isApple = useIsApplePlatform();
   const isDashboard = pathname === '/' || pathname === '';
   const metaReady = facebook !== null && instagram !== null;
+  const { enabled: emailPreview } = useMetaMock();
   const channels = {
     whatsapp: hasConnectedNumber,
     facebook: facebook?.connected === true,
     instagram: instagram?.connected === true,
-    // Same mock flag the Email pages use, until a real mailbox status exists.
-    email: MOCK_MAILBOX.connected,
+    email: emailPreview,
   };
   const connectionBadge = topbarConnectionBadge(pathname, channels, {
     numbersReady: !numbersLoading,
