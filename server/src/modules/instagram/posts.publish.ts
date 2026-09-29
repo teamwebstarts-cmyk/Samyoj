@@ -45,7 +45,7 @@ async function graphRead(path: string, accessToken: string): Promise<Record<stri
   return data;
 }
 
-async function waitForContainer(
+export async function waitForContainer(
   containerId: string,
   accessToken: string,
   opts?: { maxAttempts?: number }
@@ -63,7 +63,7 @@ async function waitForContainer(
     }
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }
-  log.warn('Instagram container still processing', { containerId });
+  throw new Error('Instagram media is still processing. Try publishing again shortly.');
 }
 
 async function createChildContainer(
@@ -92,21 +92,13 @@ export async function publishInstagramPost(opts: {
   caption: string;
   imageUrl: string;
   mediaPayload?: InstagramMediaItem[] | null;
-  scheduledUnix?: number;
 }): Promise<{ containerId: string; igMediaId: string | null }> {
-  const scheduleExtras: Record<string, string> = {};
-  if (opts.scheduledUnix) {
-    scheduleExtras.published = 'false';
-    scheduleExtras.scheduled_publish_time = String(opts.scheduledUnix);
-  }
-
   if (opts.mediaType === 'REELS') {
     const videoUrl = opts.mediaPayload?.[0]?.url || opts.imageUrl;
     const body: Record<string, string> = {
       media_type: 'REELS',
       video_url: videoUrl,
       caption: opts.caption,
-      ...scheduleExtras,
     };
     const created = await graphForm(`/${opts.igUserId}/media`, opts.accessToken, body);
     const containerId = String(created.id || '');
@@ -128,7 +120,6 @@ export async function publishInstagramPost(opts: {
       media_type: 'CAROUSEL',
       children: childIds.join(','),
       caption: opts.caption,
-      ...scheduleExtras,
     };
     const created = await graphForm(`/${opts.igUserId}/media`, opts.accessToken, body);
     const containerId = String(created.id || '');
@@ -143,7 +134,6 @@ export async function publishInstagramPost(opts: {
   const body: Record<string, string> = {
     image_url: opts.imageUrl,
     caption: opts.caption,
-    ...scheduleExtras,
   };
   const created = await graphForm(`/${opts.igUserId}/media`, opts.accessToken, body);
   const containerId = String(created.id || '');
@@ -161,7 +151,6 @@ export async function publishInstagramImage(opts: {
   accessToken: string;
   imageUrl: string;
   caption: string;
-  scheduledUnix?: number;
 }): Promise<{ containerId: string; igMediaId: string | null }> {
   return publishInstagramPost({
     ...opts,

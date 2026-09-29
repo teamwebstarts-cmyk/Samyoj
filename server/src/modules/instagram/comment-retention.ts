@@ -4,8 +4,8 @@ import { createModuleLogger } from '../../utils/logger';
 const log = createModuleLogger('instagram-comment-retention');
 
 export function getInstagramCommentRetentionDays(): number {
-  const raw = parseInt(process.env.INSTAGRAM_COMMENT_RETENTION_DAYS || '2', 10);
-  if (!Number.isFinite(raw) || raw < 1) return 2;
+  const raw = parseInt(process.env.INSTAGRAM_COMMENT_RETENTION_DAYS || '7', 10);
+  if (!Number.isFinite(raw) || raw < 7) return 7;
   return raw;
 }
 

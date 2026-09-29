@@ -447,9 +447,20 @@ router.patch(
     const body = z
       .object({
         reason: reasonSchema,
+        plan: z.enum(['launch', 'starter', 'growth', 'pro', 'enterprise']).optional(),
         planExpiresAt: z.string().datetime().nullable().optional(),
         subscriptionStatus: z
-          .enum(['active', 'complimentary', 'expired', 'past_due', 'cancelled'])
+          .enum([
+            'trial',
+            'active',
+            'complimentary',
+            'grace',
+            'trial_expired',
+            'expired',
+            'past_due',
+            'locked',
+            'cancelled',
+          ])
           .optional(),
       })
       .parse(req.body);
@@ -459,6 +470,7 @@ router.patch(
         organizationId: orgIdParam.parse(req.params.id),
         operatorId: req.platformOperator!.id,
         reason: body.reason,
+        plan: body.plan,
         planExpiresAt:
           body.planExpiresAt === undefined
             ? undefined

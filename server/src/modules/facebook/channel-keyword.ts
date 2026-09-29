@@ -56,8 +56,22 @@ export function matchInstagramCommentReplies(
 export function matchChannelKeyword(rows: Rule[], platform: 'FB' | 'IG', text: string): string | null {
   const match = rows.find((row) => {
     if (row.triggerType && row.triggerType !== 'KEYWORD') return false;
-    const config = (row.config || {}) as { platform?: string; keyword?: string; message?: string; response?: string };
+    const config = (row.config || {}) as {
+      platform?: string;
+      keyword?: string;
+      message?: string;
+      response?: string;
+      publicMessage?: string;
+      igMediaId?: string;
+      igPostId?: string;
+    };
     if (config.platform !== platform) return false;
+    // Comment automations are delivered by comment-ingest with an explicit
+    // media id. They must never become account-wide DM rules just because they
+    // also contain a private reply body.
+    if (platform === 'IG' && (config.publicMessage?.trim() || config.igMediaId?.trim() || config.igPostId?.trim())) {
+      return false;
+    }
     if (!keywordMatches(text, { keyword: config.keyword })) return false;
     return Boolean((config.response || config.message || '').trim());
   });

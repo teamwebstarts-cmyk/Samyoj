@@ -59,18 +59,13 @@ export const AUDIT_SCORE: ScoreItem[] = [
       'client/src/pages/FacebookInboxPage.tsx',
       'client/src/pages/InstagramInboxPage.tsx',
     ],
-    must: ["'/:id/labels'", 'onAddLabel'],
+    must: ["'/:id/labels'", 'addLabel'],
   },
   {
     id: 'SAMYOJ-009',
     title: 'Snooze FB/IG chats',
-    verdict: 'done',
-    files: [
-      'server/src/modules/facebook/channel-inbox-actions.ts',
-      'client/src/pages/FacebookInboxPage.tsx',
-      'client/src/pages/InstagramInboxPage.tsx',
-    ],
-    must: ["'/:id/snooze'", 'onSnooze'],
+    verdict: 'remaining',
+    files: [],
   },
   {
     id: 'SAMYOJ-012-keyword',
@@ -236,8 +231,13 @@ export const AUDIT_SCORE: ScoreItem[] = [
   {
     id: 'IG-publish',
     title: 'Instagram post/story publishing',
-    verdict: 'out',
-    files: [],
+    verdict: 'done',
+    files: [
+      'server/src/modules/instagram/posts.routes.ts',
+      'server/src/modules/instagram/posts.publish.ts',
+      'client/src/pages/InstagramPostsPage.tsx',
+    ],
+    must: ['publishInstagramPost', "'/:id/publish'", "'/media'"],
   },
   {
     id: 'LEAD-live',

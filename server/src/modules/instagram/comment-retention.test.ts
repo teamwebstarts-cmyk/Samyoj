@@ -21,11 +21,11 @@ describe('instagram comment retention', () => {
     commentMock.deleteMany.mockReset();
   });
 
-  it('defaults to 2 days', () => {
-    expect(getInstagramCommentRetentionDays()).toBe(2);
+  it('defaults to the seven-day private-reply window', () => {
+    expect(getInstagramCommentRetentionDays()).toBe(7);
     const now = new Date('2026-09-28T12:00:00.000Z');
     const cutoff = instagramCommentRetentionCutoff(now);
-    expect(cutoff.toISOString()).toBe('2026-09-26T12:00:00.000Z');
+    expect(cutoff.toISOString()).toBe('2026-09-21T12:00:00.000Z');
   });
 
   it('lists only comments inside the retention window', () => {

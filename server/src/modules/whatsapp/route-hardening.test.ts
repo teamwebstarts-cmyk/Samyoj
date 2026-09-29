@@ -39,21 +39,22 @@ describe('WhatsApp route hardening', () => {
     expect(routesSrc).toContain("'/webhook-replay'");
   });
 
-  it('routes Page and Instagram objects through signature then Channel claim', () => {
+  it('routes Page and Instagram objects through signature then durable queueing', () => {
     const postBlock = routesSrc.slice(routesSrc.indexOf("router.post('/webhook'"));
     expect(postBlock).toContain("payload.object !== 'page'");
     expect(postBlock).toContain("payload.object !== 'instagram'");
-    expect(postBlock).toContain('dispatchNonMessageWebhookFields');
+    expect(postBlock).toContain('persistAndEnqueueInboundWebhook');
     const hmacIdx = postBlock.indexOf('inboundWebhookSignatureGate');
-    // Handler branch (not the log line) comes after signature validation.
+    // Handler branch comes after signature validation.
     const pageHandlerIdx = postBlock.indexOf(
-      "// --- 3b. Page/Instagram objects: claim when Channel resolves; never enqueue WhatsApp message processor ---"
+      "// --- 3b. Page/Instagram objects: persist + enqueue before acknowledging Meta ---"
     );
     expect(hmacIdx).toBeGreaterThan(-1);
     expect(pageHandlerIdx).toBeGreaterThan(hmacIdx);
     expect(postBlock.slice(pageHandlerIdx)).toContain("webhookObject === 'page'");
     expect(postBlock.slice(pageHandlerIdx)).toContain("webhookObject === 'instagram'");
-    expect(postBlock.slice(pageHandlerIdx)).toContain('dispatchNonMessageWebhookFields');
+    expect(postBlock.slice(pageHandlerIdx)).toContain('trackWebhookReceived(channel)');
+    expect(postBlock.slice(pageHandlerIdx)).toContain('trackWebhookQueued(channel)');
     expect(postBlock).not.toContain('Webhook ignored — not a WhatsApp business account payload');
   });
 

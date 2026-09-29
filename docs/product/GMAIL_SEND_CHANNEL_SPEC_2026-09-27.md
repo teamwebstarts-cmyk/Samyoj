@@ -1,7 +1,7 @@
 # Gmail send channel — research & integration specification
 
-**Status:** Research complete · **Not shipped** · do not implement until this doc is approved  
-**Date:** 2026-09-27  
+**Status:** Research complete · **Not shipped** · rechecked against official Google docs on 2026-09-29  
+**Date:** 2026-09-27 · **Recheck:** `docs/product/GMAIL_SEND_CHANNEL_RECHECK_2026-09-29.md`  
 **Audience:** Product, engineering, Google OAuth App Review, legal/compliance, QA  
 **Ask:** Add **Google Gmail** as a fourth channel that **only sends** mail. User connects a mailbox, picks contacts that already have an email saved, and sends a message (or a Samyoj email template). Not a Gmail inbox.
 
@@ -18,9 +18,9 @@
 | Can we show replies, opens, or “delivered to inbox”? | **Not with send-only.** `gmail.send` cannot list messages. A 200 from Google means **Gmail accepted the MIME**, not that the recipient opened it. Bounces land in the connected mailbox, which we will not read in v1. |
 | Should we send customer mail through existing Samyoj SMTP? | **No.** `server/src/services/email.service.ts` is **Samyoj-from** (password reset, verify, invites, platform outreach). Using it for customer CRM would send from Samyoj's address, mix ledgers, and lie about “their Gmail”. |
 | Mix `gmail.send` into Google **login**? | **No.** Login today is `openid email profile` (`server/src/modules/auth/oauth.routes.ts`). Adding send to login would force every sign-in through a sensitive scope. |
-| Customer production / production-ready pipeline? | **Irrelevant until coded.** This spec is research. Google OAuth verification for `gmail.send` is a **weeks-to-months** gate before any paying tenant can connect a mailbox outside a test Google Cloud project. |
+| Customer production / production-ready pipeline? | **Irrelevant until coded.** This spec is research. `gmail.send` is Sensitive; production external use requires Google's verification path. Google currently says sensitive verification typically takes **3–5 business days**, but review is not guaranteed and can take longer if corrections are requested. |
 
-**Recommended v1:** fourth channel **Email (Gmail)** — connect mailbox → compose/send to contacts with `Contact.email` → Samyoj-owned email templates → sent log in our DB. **No inbox. No Meta template clone. No SMTP-from-Samyoj for this feature.**
+**Recommended v1:** fourth channel **Email (Gmail)** — connect mailbox → one-to-one compose/send to contacts with `Contact.email` → optional Samyoj-owned email templates → sent log in our DB. **No inbox. No Meta template clone. No SMTP-from-Samyoj for this feature.** Multi-send is a gated Phase 2 feature, not an unrestricted v1 campaign tool.
 
 ---
 
@@ -223,11 +223,11 @@ Refresh tokens: encrypt at rest with the same AES-GCM helper as Meta tokens (`Me
 - OAuth consent branding, homepage, privacy policy, authorized domains
 - Demo video of: Connect Gmail → pick contact with email → send → show sent log (**no inbox**)
 - Justification: “Send customer emails the business already opted in for, from their own mailbox”
-- Unverified apps: 100-user cap / scary screen — **not** customer production
+- Testing external apps: only explicitly listed test users, hard cap 100. Published but unverified external apps can show warning UI and remain subject to a 100-user restriction for sensitive/restricted-scope use. This is **not** customer production.
 
-Restricted-scope CASA assessment: **not required** if we never request restricted scopes.
+The restricted-scope/CASA path is not part of this `gmail.send`-only plan. If any restricted scope is added later, re-check Google's current security-assessment requirements before implementation.
 
-**Testing while unverified:** Google Cloud test users (up to 100). Fine for Samyoj internal test-deploy. **Not** for tenant go-live.
+**Testing while unverified:** Google Cloud test users (up to 100). Fine for Samyoj internal test-deploy. External Testing refresh tokens for non-basic scopes such as `gmail.send` can expire after **7 days**. **Not** for tenant go-live.
 
 ### 6.3 Workspace admin blocks
 
@@ -365,17 +365,18 @@ This is not legal advice. Product must still fail closed.
 - Settings → Channels → Connect Gmail / Disconnect
 - Contact drawer Send email
 - `EmailSend` log page **Channels → Email → Sent**
+- Optional org-scoped Samyoj email templates
 - Fail if no `email` or no email opt-in
 - Copy: Accepted by Gmail, not delivered
 
 **Verify:** send to a real inbox from connected mailbox; log shows Gmail id; disconnect revokes usability; login Google still `openid email profile` only.
 
-### Phase 2 — Templates + multi-send
+### Phase 2 — Controlled multi-send
 
-- `EmailTemplate` CRUD
 - Audience picker (email present + opted in), de-dupe by email
 - BullMQ `gmail-send`, 1 recipient/job, hourly cap
 - Stop on daily-limit errors; surface Google's message
+- Add unsubscribe/suppression and sender-policy gates before promotional multi-send
 
 **Verify:** 5 contacts, 5 MIME sends, 5 log rows; sixth without opt-in skipped.
 
@@ -442,7 +443,7 @@ This is not legal advice. Product must still fail closed.
 
 ## 15. Decision needed from you (before any code)
 
-1. **v1 = one-to-one only**, or also **multi-send campaigns** in the first build?
+1. Confirm **v1 = one-to-one only** (recommended). Multi-send stays gated Phase 2 until consent, unsubscribe, suppression, throttling, and sender-policy controls are approved.
 2. **One mailbox per org** (recommended) vs many?
 3. Email opt-in: new fields (recommended) vs a single “marketing consent” for all channels (weaker legally)?
 4. FB/IG-only orgs: keep Contacts WhatsApp-walled (email send only when a WA workspace exists) **or** allow contacts without a number?

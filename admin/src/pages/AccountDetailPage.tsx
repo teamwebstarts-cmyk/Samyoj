@@ -831,11 +831,14 @@ export function AccountDetailPage() {
             const plan = (form.elements.namedItem('plan') as HTMLSelectElement).value;
             const days = Number((form.elements.namedItem('days') as HTMLInputElement).value);
             const status = (form.elements.namedItem('status') as HTMLSelectElement).value;
+            const planExpiresAt = Number.isFinite(days)
+              ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+              : null;
             setSaving(true);
             setSaveError('');
             platformRequest(`/orgs/${detail.id}/billing`, {
               method: 'PATCH',
-              body: JSON.stringify({ reason, plan, days, subscriptionStatus: status }),
+              body: JSON.stringify({ reason, plan, planExpiresAt, subscriptionStatus: status }),
             })
               .then(() => {
                 closeDrawer();

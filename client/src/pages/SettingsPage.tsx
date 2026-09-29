@@ -317,7 +317,11 @@ export default function SettingsPage() {
         igUserId: saved.igUserId,
         username: saved.username,
       });
-      toastSuccess('Instagram connected');
+      if (saved.subscribed === false) {
+        toastError('Instagram connected, but Meta webhook subscription failed. Reconnect after checking App Review permissions.');
+      } else {
+        toastSuccess('Instagram connected');
+      }
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not connect Instagram');
     } finally {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../../config/database';
 import type { InstagramPostMediaType, InstagramPostStatus, Prisma } from '@prisma/client';
 import { authenticate, requireOrg, loadOrgRole, requireOrgRole } from '../../middleware/auth';
+import { requireFeatureOnMutation } from '../../middleware/plan-guard';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { persistMediaBuffer, getPublicMediaUrl } from '../media/storage-adapter';
@@ -18,6 +19,7 @@ import {
 import { parseMediaPayload, resolvePostMedia } from './posts.media';
 import { mediaUrlForMeta } from './posts.media-url';
 import { publishInstagramPost } from './posts.publish';
+import { recoverStaleInstagramPosts } from './posts.recovery';
 import {
   fetchInstagramMedia,
   instagramMediaThumbnailUrl,
@@ -115,6 +117,16 @@ function refreshPublicMediaUrl(url: string): string {
     return getPublicMediaUrl(relative);
   } catch {
     return trimmed;
+  }
+}
+
+function uploadFilename(req: Request): string | undefined {
+  const raw = req.headers['x-file-name'];
+  if (typeof raw !== 'string' || !raw) return undefined;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return undefined;
   }
 }
 
@@ -288,6 +300,7 @@ const captionAiSchema = z.object({
 router.post(
   '/caption',
   editors,
+  requireFeatureOnMutation('ai'),
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const { mode, text } = captionAiSchema.parse(req.body);
@@ -529,20 +542,25 @@ router.post(
   editors,
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
-    const body = z
-      .object({
-        mimeType: z.string(),
-        data: z.string().min(1),
-        filename: z.string().optional(),
-      })
-      .parse(req.body);
-    const mime = body.mimeType.split(';')[0].trim().toLowerCase();
+    const rawUpload = Buffer.isBuffer(req.body) ? req.body : null;
+    const jsonBody = rawUpload
+      ? null
+      : z
+          .object({
+            mimeType: z.string(),
+            data: z.string().min(1),
+            filename: z.string().optional(),
+          })
+          .parse(req.body);
+    const headerMime = typeof req.headers['content-type'] === 'string' ? req.headers['content-type'] : '';
+    const mime = (rawUpload ? headerMime : jsonBody!.mimeType).split(';')[0].trim().toLowerCase();
     const isImage = INSTAGRAM_IMAGE_MIMES.has(mime);
     const isVideo = INSTAGRAM_VIDEO_MIMES.has(mime);
     if (!isImage && !isVideo) {
       throw new AppError(400, 'Use JPEG/PNG/WebP or MP4/MOV video.');
     }
-    const buffer = Buffer.from(body.data, 'base64');
+    const buffer = rawUpload ?? Buffer.from(jsonBody!.data, 'base64');
+    if (!buffer.length) throw new AppError(400, 'Media file is empty.');
     const max = isVideo ? INSTAGRAM_VIDEO_MAX_BYTES : INSTAGRAM_IMAGE_MAX_BYTES;
     if (buffer.length > max) {
       throw new AppError(400, isVideo ? 'Video must be 100 MB or smaller.' : 'Image must be 8 MB or smaller.');
@@ -552,7 +570,7 @@ router.post(
       messageId: randomUUID(),
       buffer,
       mimeType: mime,
-      filename: body.filename,
+      filename: rawUpload ? uploadFilename(req) : jsonBody?.filename,
     });
     const url = getPublicMediaUrl(stored.mediaPath);
     sendSuccess(res, {
@@ -566,6 +584,7 @@ router.post(
 );
 
 export async function publishDueInstagramPosts(): Promise<void> {
+  await recoverStaleInstagramPosts();
   const due = await prisma.instagramPost.findMany({
     where: { status: 'SCHEDULED', scheduledAt: { lte: new Date() } },
     take: 5,

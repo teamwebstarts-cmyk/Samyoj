@@ -3,7 +3,10 @@ import path from 'path';
 import prisma from '../config/database';
 import { createModuleLogger } from '../utils/logger';
 import { deleteMediaObject } from '../modules/media/storage-adapter';
-import { purgeExpiredInstagramComments } from '../modules/instagram/comment-retention';
+import {
+  getInstagramCommentRetentionDays,
+  purgeExpiredInstagramComments,
+} from '../modules/instagram/comment-retention';
 
 const log = createModuleLogger('media-retention');
 
@@ -157,6 +160,6 @@ export function startMediaRetentionWorker(): void {
   log.info('Media retention worker started', {
     intervalMs,
     callRecordingTtlDays: getCallRecordingTtlDays(),
-    instagramCommentRetentionDays: parseInt(process.env.INSTAGRAM_COMMENT_RETENTION_DAYS || '2', 10),
+    instagramCommentRetentionDays: getInstagramCommentRetentionDays(),
   });
 }

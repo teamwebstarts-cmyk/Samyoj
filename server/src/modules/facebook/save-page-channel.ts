@@ -164,7 +164,13 @@ export async function saveLinkedInstagramChannel(opts: {
   organizationId: string;
   pageId: string;
   pageAccessToken: string;
-}): Promise<{ channelId: string; igUserId: string; username: string | null } | null> {
+}): Promise<{
+  channelId: string;
+  igUserId: string;
+  username: string | null;
+  subscribed: boolean;
+  subscribeError?: string;
+} | null> {
   const ig = await fetchPageInstagramAccount(opts.pageId, opts.pageAccessToken);
   if (!ig) return null;
 
@@ -210,13 +216,17 @@ export async function saveLinkedInstagramChannel(opts: {
     data: { isActive: false },
   });
 
+  let subscribed = false;
+  let subscribeError: string | undefined;
   try {
     await subscribeInstagramAccount(ig.id, opts.pageAccessToken);
+    subscribed = true;
   } catch (err) {
+    subscribeError = err instanceof Error ? err.message : String(err);
     log.warn('IG subscribe deferred — Channel saved', {
       organizationId: opts.organizationId,
       igUserId: ig.id,
-      error: err instanceof Error ? err.message : String(err),
+      error: subscribeError,
     });
   }
 
@@ -239,7 +249,7 @@ export async function saveLinkedInstagramChannel(opts: {
     });
   }
 
-  return { channelId: channel.id, igUserId: ig.id, username: ig.username };
+  return { channelId: channel.id, igUserId: ig.id, username: ig.username, subscribed, subscribeError };
 }
 
 export async function disconnectFacebookPageChannel(

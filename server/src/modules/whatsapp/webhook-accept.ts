@@ -49,6 +49,31 @@ async function resolveEnvelopeOrg(phoneNumberIds: string[]) {
   return null;
 }
 
+async function resolveMetaChannelOrg(payload: Record<string, unknown>) {
+  const platform = payload.object === 'instagram' ? 'IG' : payload.object === 'page' ? 'FB' : null;
+  if (!platform) return null;
+  const ids = new Set<string>();
+  for (const entry of (payload.entry as Array<Record<string, unknown>>) || []) {
+    if (typeof entry.id === 'string') ids.add(entry.id);
+    for (const change of (entry.changes as Array<Record<string, unknown>>) || []) {
+      const value = change.value;
+      if (!value || typeof value !== 'object') continue;
+      const row = value as Record<string, unknown>;
+      for (const key of ['page_id', 'instagram_business_account', 'id']) {
+        if (typeof row[key] === 'string') ids.add(row[key] as string);
+      }
+    }
+  }
+  if (!ids.size) return null;
+  const channels = await prisma.channel.findMany({
+    where: { platform, platformAccountId: { in: [...ids] }, isActive: true },
+    select: { organizationId: true },
+    take: 20,
+  });
+  const organizations = new Set(channels.map((channel) => channel.organizationId));
+  return organizations.size === 1 ? { organizationId: [...organizations][0] } : null;
+}
+
 async function persistEnvelope(params: {
   organizationId: string;
   eventKey: string;
@@ -117,7 +142,8 @@ export async function persistAndEnqueueInboundWebhook(params: {
   const eventKey = inboundWebhookEnvelopeKey(params.payload);
   const jobId = inboundWebhookJobId(eventKey);
   const phoneNumberIds = collectWebhookPhoneNumberIds(params.payload);
-  const routed = await resolveEnvelopeOrg(phoneNumberIds);
+  const routed =
+    (await resolveEnvelopeOrg(phoneNumberIds)) || (await resolveMetaChannelOrg(params.payload));
 
   let persist: 'created' | 'duplicate' | 'skipped' = 'skipped';
   if (routed) {

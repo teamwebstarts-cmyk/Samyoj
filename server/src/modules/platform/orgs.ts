@@ -7,6 +7,7 @@ import {
   saveOrgAiSettings,
 } from '../ai/org-ai.service';
 import { getAiCreditBalances, grantAdminAddonBalance } from '../billing/ai-credits/service';
+import type { PlanTier } from '../billing/plans';
 import { getOrgFeatureFlags, KNOWN_FEATURE_FLAGS, setFeatureFlag } from '../settings/feature-flags';
 import { AppError } from '../../utils/response';
 import { maskBusinessPhone, utcDay } from './privacy';
@@ -512,6 +513,7 @@ export async function patchPlatformOrgBilling(input: {
   organizationId: string;
   operatorId: string;
   reason: string;
+  plan?: PlanTier;
   planExpiresAt?: Date | null;
   subscriptionStatus?: string;
 }) {
@@ -536,6 +538,7 @@ export async function patchPlatformOrgBilling(input: {
     const result = await tx.organization.update({
       where: { id: input.organizationId },
       data: {
+        ...(input.plan ? { plan: input.plan } : {}),
         ...(input.planExpiresAt !== undefined ? { planExpiresAt: input.planExpiresAt } : {}),
         ...(nextStatus ? { subscriptionStatus: nextStatus } : {}),
       },
@@ -589,6 +592,7 @@ export async function patchPlatformOrgBilling(input: {
         redactedMetadata: {
           operatorId: input.operatorId,
           reason: input.reason,
+          plan: input.plan ?? null,
           planExpiresAt: input.planExpiresAt?.toISOString() ?? null,
           subscriptionStatus: nextStatus ?? null,
         },
@@ -605,10 +609,12 @@ export async function patchPlatformOrgBilling(input: {
     targetId: input.organizationId,
     reason: input.reason,
     beforeState: {
+      plan: org.plan,
       planExpiresAt: org.planExpiresAt?.toISOString() ?? null,
       subscriptionStatus: org.subscriptionStatus,
     },
     afterState: {
+      plan: updated.plan,
       planExpiresAt: updated.planExpiresAt?.toISOString() ?? null,
       subscriptionStatus: updated.subscriptionStatus,
     },
@@ -617,6 +623,6 @@ export async function patchPlatformOrgBilling(input: {
   return {
     ...updated,
     ledgerNote:
-      'Complimentary/extend writes change expiry and status only. They do not create Razorpay payments (SAMYOJ-35).',
+      'Operator grants change entitlements and expiry without creating a provider payment.',
   };
 }

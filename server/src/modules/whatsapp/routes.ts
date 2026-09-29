@@ -44,7 +44,7 @@ import {
   persistAndEnqueueInboundWebhook,
   replayInboundWebhookEnvelope,
 } from './webhook-accept';
-import { dispatchNonMessageWebhookFields, parseJsonPreservingLargeIds } from './webhook-dispatcher';
+import { parseJsonPreservingLargeIds } from './webhook-dispatcher';
 import { emitProductEvent } from '../platform/events';
 import { requireActiveCommercial, requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
 
@@ -979,7 +979,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
     }
   }
 
-  // --- 3b. Page/Instagram objects: claim when Channel resolves; never enqueue WhatsApp message processor ---
+  // --- 3b. Page/Instagram objects: persist + enqueue before acknowledging Meta ---
   const webhookObject = typeof payload.object === 'string' ? payload.object : '';
   if (webhookObject === 'page' || webhookObject === 'instagram') {
     try {
@@ -989,9 +989,18 @@ router.post('/webhook', async (req: Request, res: Response) => {
         webhookObject === 'instagram' && req.rawBody
           ? parseJsonPreservingLargeIds(req.rawBody)
           : payload;
-      await dispatchNonMessageWebhookFields(dispatchPayload);
-      log.info('Page webhook handled', {
+      const accepted = await persistAndEnqueueInboundWebhook({
+        payload: dispatchPayload,
         requestId,
+      });
+      const channel = webhookObject === 'page' ? 'page' : 'instagram';
+      trackWebhookReceived(channel);
+      trackWebhookQueued(channel);
+      log.info('Page/Instagram webhook persisted and queued', {
+        requestId,
+        eventKey: accepted.eventKey,
+        persist: accepted.persist,
+        queue: accepted.queue,
         field,
         queueLatencyMs: Date.now() - startTime,
         source: 'webhook',

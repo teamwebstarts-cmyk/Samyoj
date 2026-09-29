@@ -15,6 +15,28 @@ describe('matchChannelKeyword', () => {
     expect(matchChannelKeyword([{ config: { keyword: 'PRICE', response: 'WA' } }], 'IG', 'PRICE')).toBeNull();
   });
 
+  it('does not use an Instagram comment rule for a DM', () => {
+    expect(
+      matchChannelKeyword(
+        [
+          {
+            triggerType: 'KEYWORD',
+            config: {
+              platform: 'IG',
+              keyword: 'PRICE',
+              message: 'comment private reply',
+              publicMessage: 'Check your DMs',
+              igMediaId: 'media_1',
+            },
+          },
+          { config: { platform: 'IG', keyword: 'HELP', response: 'DM help' } },
+        ],
+        'IG',
+        'PRICE',
+      ),
+    ).toBeNull();
+  });
+
   it('takes the oldest private text and the oldest public text', () => {
     const replies = matchInstagramCommentReplies(
       [

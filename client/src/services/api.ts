@@ -593,7 +593,15 @@ export const instagramApi = {
       };
     }>('/instagram/account'),
   connect: () =>
-    api.post<{ data: { channelId: string; igUserId: string; username: string | null } }>(
+    api.post<{
+      data: {
+        channelId: string;
+        igUserId: string;
+        username: string | null;
+        subscribed: boolean;
+        subscribeError?: string;
+      };
+    }>(
       '/instagram/connect'
     ),
   disconnect: () => api.post('/instagram/disconnect'),
@@ -731,10 +739,17 @@ export const instagramApi = {
     publish: (id: string) => api.post<{ data: InstagramPostRow }>(`/instagram/posts/${id}/publish`),
     cancel: (id: string) => api.post<{ data: InstagramPostRow }>(`/instagram/posts/${id}/cancel`),
     remove: (id: string) => api.delete(`/instagram/posts/${id}`),
-    upload: (body: { mimeType: string; data: string; filename?: string }) =>
+    upload: (file: File) =>
       api.post<{ data: { imageUrl: string; mediaUrl: string; kind: 'image' | 'video' } }>(
         '/instagram/posts/media',
-        body
+        file,
+        {
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(file.name),
+          },
+          transformRequest: [(data) => data],
+        },
       ),
     captionAi: (body: { mode: 'polish' | 'generate'; text: string }) =>
       api.post<{ data: { caption: string; mode: 'polish' | 'generate' } }>(

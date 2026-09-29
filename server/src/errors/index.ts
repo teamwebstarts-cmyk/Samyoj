@@ -219,14 +219,17 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
   };
 
   const normalized = logError(err, context);
+  const publicError = normalized.statusCode >= 500
+    ? { message: 'Internal server error', code: 'INTERNAL_ERROR' }
+    : {
+        message: normalized.message,
+        code: normalized.code,
+        ...(normalized.details ? { details: normalized.details } : {}),
+      };
 
   return res.status(normalized.statusCode).json({
     success: false,
-    error: {
-      message: normalized.message,
-      code: normalized.code,
-      ...(normalized.details ? { details: normalized.details } : {}),
-    },
+    error: publicError,
   });
 }
 

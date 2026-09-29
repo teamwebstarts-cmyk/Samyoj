@@ -61,18 +61,6 @@ async function readMediaMeta(file: File): Promise<string | null> {
   }
 }
 
-function fileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const raw = String(reader.result || '');
-      resolve(raw.includes(',') ? raw.split(',')[1] : raw);
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 function toLocalInput(iso: string) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -133,6 +121,7 @@ export default function InstagramPostsPage() {
   const [autoDm, setAutoDm] = useState('');
   const [autoId, setAutoId] = useState<string | null>(null);
   const automationLoadSeq = useRef(0);
+  const automationEditedRef = useRef(false);
 
   /* ---------------- data ---------------- */
 
@@ -219,6 +208,8 @@ export default function InstagramPostsPage() {
   }, [isDesktop, selectedId]);
 
   const openNew = (type: MediaType = 'IMAGE') => {
+    automationLoadSeq.current += 1;
+    automationEditedRef.current = false;
     setSelectedId('new');
     setPanelTab('create');
     setMediaType(type);
@@ -245,6 +236,8 @@ export default function InstagramPostsPage() {
   };
 
   const openExisting = (post: PostRow) => {
+    automationLoadSeq.current += 1;
+    automationEditedRef.current = false;
     setSelectedId(post.id);
     setMediaType(post.mediaType || 'IMAGE');
     setCaption(post.caption);
@@ -265,6 +258,8 @@ export default function InstagramPostsPage() {
   };
 
   const openRemote = (item: LibraryItem) => {
+    automationLoadSeq.current += 1;
+    automationEditedRef.current = false;
     setSelectedId(`${REMOTE_PREFIX}${item.igMediaId}`);
     setPanelTab('preview');
     setCaption(item.caption);
@@ -334,16 +329,6 @@ export default function InstagramPostsPage() {
 
     setMediaUpload({ fileName: file.name, label: 'Preparing your file…', progress: 6 });
     creepProgress(28);
-    let data: string;
-    try {
-      data = await fileToBase64(file);
-    } catch {
-      stopProgressTimer();
-      setMediaUpload(null);
-      toastError('Could not read this file.');
-      return;
-    }
-
     setMediaUpload((current) =>
       current
         ? { ...current, label: 'Uploading to Samyoj…', progress: Math.max(current.progress, 32) }
@@ -352,11 +337,7 @@ export default function InstagramPostsPage() {
     creepProgress(90);
 
     try {
-      const { data: res } = await instagramApi.posts.upload({
-        mimeType: file.type,
-        data,
-        filename: file.name,
-      });
+      const { data: res } = await instagramApi.posts.upload(file);
       stopProgressTimer();
       setMediaUpload((current) =>
         current
@@ -433,7 +414,7 @@ export default function InstagramPostsPage() {
     if (!igMediaId && !postId) return;
     try {
       const { data } = await automationApi.list({ limit: '100', triggerType: 'KEYWORD' });
-      if (seq !== automationLoadSeq.current) return;
+      if (seq !== automationLoadSeq.current || automationEditedRef.current) return;
       const rows =
         ((data as { data?: { automations?: Array<{ id: string; config: Record<string, string> }> } }).data
           ?.automations) || [];
@@ -452,6 +433,21 @@ export default function InstagramPostsPage() {
     } catch {
       /* automation list is optional */
     }
+  };
+
+  const onAutoKeywordChange = (value: string) => {
+    automationEditedRef.current = true;
+    setAutoKeyword(value);
+  };
+
+  const onAutoPublicChange = (value: string) => {
+    automationEditedRef.current = true;
+    setAutoPublic(value);
+  };
+
+  const onAutoDmChange = (value: string) => {
+    automationEditedRef.current = true;
+    setAutoDm(value);
   };
 
   const savePostAutomation = async (opts?: { postId?: string; igMediaId?: string | null }) => {
@@ -789,11 +785,11 @@ export default function InstagramPostsPage() {
           canEdit={canEdit}
           saving={saving}
           keyword={autoKeyword}
-          onKeywordChange={setAutoKeyword}
+          onKeywordChange={onAutoKeywordChange}
           publicReply={autoPublic}
-          onPublicReplyChange={setAutoPublic}
+          onPublicReplyChange={onAutoPublicChange}
           dm={autoDm}
-          onDmChange={setAutoDm}
+          onDmChange={onAutoDmChange}
           autoId={autoId}
           onSave={() => void savePostAutomation()}
           summary={{
@@ -853,11 +849,11 @@ export default function InstagramPostsPage() {
         onPickStudio={pickStudioImage}
         lastError={selected?.lastError ?? null}
         autoKeyword={autoKeyword}
-        onAutoKeywordChange={setAutoKeyword}
+        onAutoKeywordChange={onAutoKeywordChange}
         autoPublic={autoPublic}
-        onAutoPublicChange={setAutoPublic}
+        onAutoPublicChange={onAutoPublicChange}
         autoDm={autoDm}
-        onAutoDmChange={setAutoDm}
+        onAutoDmChange={onAutoDmChange}
         autoConfigured={Boolean(autoId)}
       />
     );

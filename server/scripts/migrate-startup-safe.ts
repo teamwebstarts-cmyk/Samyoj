@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   approvedReconciliationMigrations,
-  hasApprovedInstagramPostsRebuild,
   historicalDestructiveMigration,
 } from './migration-reconciliation-constants';
 
@@ -76,6 +75,26 @@ if (pending.includes(historicalDestructiveMigration)) {
   );
 }
 
+const instagramPostsDropMigration = '20260927190000_drop_instagram_posts';
+if (pending.includes(instagramPostsDropMigration)) {
+  if (verifyFreshDatabaseIsEmpty()) {
+    console.warn(
+      'Fresh empty database verified; applying the Instagram post migration chain because the ' +
+        'historical drop cannot delete existing rows.'
+    );
+    const deploy = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
+    if (deploy.status !== 0) {
+      throw new Error(`Fresh-database migration deploy failed with exit code ${deploy.status ?? 1}`);
+    }
+    console.log(`Applied migrations: ${pending.join(', ')}`);
+    process.exit(0);
+  }
+  throw new Error(
+    'Startup refused to migrate. The historical Instagram-post drop is pending on a non-empty database. ' +
+      'Back up and reconcile before applying it.'
+  );
+}
+
 if (
   approvedReconciliationMigrations.some((migration) => pending.includes(migration)) &&
   process.env.MIGRATION_BACKUP_FILE
@@ -88,9 +107,7 @@ if (
 }
 
 const destructivePending = pending.filter((name) => destructivePattern.test(migrationSql(name)));
-const blockedDestructivePending = destructivePending.filter(
-  (name) => name !== '20260927190000_drop_instagram_posts' || !hasApprovedInstagramPostsRebuild(pending)
-);
+const blockedDestructivePending = destructivePending;
 if (blockedDestructivePending.length > 0) {
   throw new Error(
     `Startup refused to migrate. Pending migration(s) contain destructive SQL: ${blockedDestructivePending.join(', ')}. ` +
