@@ -56,6 +56,8 @@ apply_codespace_env() {
   api_origin="$(codespace_api_origin)"
   webhook_url="${api_origin}/api/whatsapp/webhook"
   write_env_key CLIENT_URL "$client_origin"
+  write_env_key SERVER_URL "$api_origin"
+  write_env_key BASE_URL "$api_origin"
   write_env_key META_REDIRECT_URI "${client_origin}/settings/whatsapp/callback/popup"
   write_env_key META_WEBHOOK_URL "$webhook_url"
   echo "$client_origin" > "${ROOT_DIR}/.run/codespace-client-url"

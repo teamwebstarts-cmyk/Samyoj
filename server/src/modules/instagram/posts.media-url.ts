@@ -1,0 +1,49 @@
+import { config } from '../../config';
+import { getPublicMediaUrl } from '../media/storage-adapter';
+
+const PUBLIC_MARKER = '/api/media/public/';
+
+/** Relative storage path inside a Samyoj signed media URL, or null. */
+export function extractPublicMediaRelative(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    const idx = parsed.pathname.indexOf(PUBLIC_MARKER);
+    if (idx < 0) return null;
+    const relative = decodeURIComponent(parsed.pathname.slice(idx + PUBLIC_MARKER.length));
+    if (!relative || relative.includes('..')) return null;
+    return relative;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Origin Meta can actually fetch. Localhost and the Vite UI (:3000) fail Graph image_url.
+ * Prefer META_WEBHOOK_URL's host (Codespace :8000 / ngrok), else SERVER_URL.
+ */
+export function publicApiOrigin(
+  webhookUrl = config.meta.webhookUrl,
+  fallback = config.serverUrl,
+): string {
+  try {
+    if (webhookUrl.trim()) {
+      const origin = new URL(webhookUrl).origin;
+      const host = new URL(origin).hostname;
+      if (origin.startsWith('https://') && host !== 'localhost' && host !== '127.0.0.1') {
+        return origin;
+      }
+    }
+  } catch {
+    /* fallback */
+  }
+  return fallback.replace(/\/$/, '');
+}
+
+/** Re-sign a stored media URL onto a host Instagram Graph can download. */
+export function mediaUrlForMeta(url: string): string {
+  const relative = extractPublicMediaRelative(url);
+  if (!relative) return url.trim();
+  return getPublicMediaUrl(relative, publicApiOrigin());
+}

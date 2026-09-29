@@ -16,6 +16,7 @@ import {
   assertScheduleWindow,
 } from './posts.limits';
 import { parseMediaPayload, resolvePostMedia } from './posts.media';
+import { mediaUrlForMeta } from './posts.media-url';
 import { publishInstagramPost } from './posts.publish';
 import {
   fetchInstagramMedia,
@@ -188,13 +189,16 @@ async function publishRow(
   channel: { platformAccountId: string; accessToken: string | null }
 ) {
   if (!channel.accessToken) throw new Error('Reconnect Instagram to publish.');
-  const payload = parseMediaPayload(row.mediaPayload);
+  const payload = parseMediaPayload(row.mediaPayload).map((item) => ({
+    ...item,
+    url: mediaUrlForMeta(item.url),
+  }));
   return publishInstagramPost({
     igUserId: channel.platformAccountId,
     accessToken: MetaWhatsAppService.decryptToken(channel.accessToken),
     mediaType: row.mediaType,
     caption: row.caption,
-    imageUrl: row.imageUrl,
+    imageUrl: mediaUrlForMeta(row.imageUrl),
     mediaPayload: payload.length ? payload : null,
   });
 }

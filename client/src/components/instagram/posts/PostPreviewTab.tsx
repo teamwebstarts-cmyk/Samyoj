@@ -27,6 +27,7 @@ import {
   statusModifier,
   type MediaType,
 } from './types';
+import { resolvePublicMediaUrl } from '../../../utils/publicMediaUrl';
 
 export type PreviewData = {
   mediaType: MediaType;
@@ -87,6 +88,11 @@ export default function PostPreviewTab({
   const [view, setView] = useState<'feed' | 'grid'>('feed');
   const hashtags = extractHashtags(data.caption);
   const type = TYPE_META[data.mediaType];
+  const previewUrl = resolvePublicMediaUrl(data.previewUrl);
+  const resolvedGridItems = gridItems.map((item) => ({
+    ...item,
+    url: resolvePublicMediaUrl(item.url),
+  }));
   const tz = timezoneLabel();
   const displayHandle = (handle ?? '@samyoj_business').replace(/^@/, '');
 
@@ -204,11 +210,11 @@ export default function PostPreviewTab({
               <div
                 className={`igp-phone__media ${data.mediaType === 'REELS' ? 'igp-phone__media--reel' : ''}`}
               >
-                {data.previewUrl ? (
+                {previewUrl ? (
                   data.mediaType === 'REELS' ? (
-                    <video src={data.previewUrl} muted playsInline loop autoPlay />
+                    <video src={previewUrl} muted playsInline loop autoPlay />
                   ) : (
-                    <img src={data.previewUrl} alt="" />
+                    <img src={previewUrl} alt="" />
                   )
                 ) : (
                   <span className="igp-phone__mediaempty">
@@ -216,13 +222,13 @@ export default function PostPreviewTab({
                     Your media appears here
                   </span>
                 )}
-                {data.mediaType === 'REELS' && data.previewUrl ? (
+                {data.mediaType === 'REELS' && previewUrl ? (
                   <span className="igp-phone__reelbadge">
                     <Clapperboard className="h-2.5 w-2.5" />
                     Reel
                   </span>
                 ) : null}
-                {data.mediaType === 'CAROUSEL' && data.previewUrl ? (
+                {data.mediaType === 'CAROUSEL' && previewUrl ? (
                   <span className="igp-phone__dots" aria-hidden>
                     <i className="on" />
                     <i />
@@ -273,7 +279,7 @@ export default function PostPreviewTab({
                 <p className="igp-phone__profile-meta">Posts · Followers · Following</p>
               </div>
               <div className="igp-minigrid">
-                {gridItems.slice(0, 9).map((item) => (
+                {resolvedGridItems.slice(0, 9).map((item) => (
                   <span
                     key={item.id}
                     className={`igp-minigrid__cell ${item.active ? 'igp-minigrid__cell--on' : ''}`}
@@ -333,13 +339,13 @@ export default function PostPreviewTab({
                   </span>
                 </div>
               ) : null}
-              {data.mediaName || data.previewUrl ? (
+              {data.mediaName || previewUrl ? (
                 <div className="igp-detail__row">
                   <span className="igp-detail__label">Media</span>
                   <span className="igp-detail__value">
                     <span className="igp-detail__media">
                       <span className="igp-detail__mediathumb">
-                        {data.previewUrl ? <img src={data.previewUrl} alt="" /> : null}
+                        {previewUrl ? <img src={previewUrl} alt="" /> : null}
                       </span>
                       <span className="igp-detail__mediafile">
                         <strong>{data.mediaName || 'Media'}</strong>

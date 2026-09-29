@@ -1,6 +1,7 @@
 /**
- * Rewrite Samyoj signed media URLs to the current page origin so previews work
- * when the API returns localhost:8000 (dev) but the UI is on :3000 or a Codespace URL.
+ * Display-only: rewrite signed media URLs onto the current page origin so <img>
+ * previews work when the API returns localhost:8000 or Codespace :8000 but the
+ * UI is on :3000. Do not persist this rewrite — Meta cannot fetch the Vite host.
  */
 export function resolvePublicMediaUrl(url: string | null | undefined): string {
   const raw = (url ?? '').trim();

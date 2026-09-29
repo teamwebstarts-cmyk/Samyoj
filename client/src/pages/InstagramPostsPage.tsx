@@ -363,7 +363,7 @@ export default function InstagramPostsPage() {
           ? { ...current, label: 'Building preview…', progress: 100 }
           : { fileName: file.name, label: 'Building preview…', progress: 100 },
       );
-      const url = resolvePublicMediaUrl(res.data.mediaUrl || res.data.imageUrl);
+      const url = res.data.mediaUrl || res.data.imageUrl;
       const kind = res.data.kind || (isVideo ? 'video' : 'image');
       const meta = await readMediaMeta(file);
       await new Promise((resolve) => setTimeout(resolve, 320));

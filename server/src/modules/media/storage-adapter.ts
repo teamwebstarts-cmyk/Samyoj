@@ -129,9 +129,10 @@ async function existsS3(relativePath: string): Promise<boolean> {
   }
 }
 
-export function getPublicMediaUrl(relativePath: string): string {
+export function getPublicMediaUrl(relativePath: string, origin = config.serverUrl): string {
   const { exp, sig } = signPublicMediaQuery(relativePath);
-  return `${config.serverUrl}/api/media/public/${relativePath}?exp=${exp}&sig=${sig}`;
+  const base = origin.replace(/\/$/, '');
+  return `${base}/api/media/public/${relativePath}?exp=${exp}&sig=${sig}`;
 }
 
 export async function persistMediaBuffer(options: {
