@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   approvedReconciliationMigrations,
+  hasApprovedInstagramPostsRebuild,
   historicalDestructiveMigration,
 } from './migration-reconciliation-constants';
 
@@ -87,9 +88,12 @@ if (
 }
 
 const destructivePending = pending.filter((name) => destructivePattern.test(migrationSql(name)));
-if (destructivePending.length > 0) {
+const blockedDestructivePending = destructivePending.filter(
+  (name) => name !== '20260927190000_drop_instagram_posts' || !hasApprovedInstagramPostsRebuild(pending)
+);
+if (blockedDestructivePending.length > 0) {
   throw new Error(
-    `Startup refused to migrate. Pending migration(s) contain destructive SQL: ${destructivePending.join(', ')}. ` +
+    `Startup refused to migrate. Pending migration(s) contain destructive SQL: ${blockedDestructivePending.join(', ')}. ` +
       'Use the documented backup/preflight reconciliation workflow.'
   );
 }
