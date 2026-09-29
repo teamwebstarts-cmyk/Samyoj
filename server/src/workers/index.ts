@@ -44,6 +44,11 @@ import { startPlatformTelemetryWorker } from '../modules/platform/worker';
 import { whatsappSendFailurePatches } from '../modules/whatsapp/send-failure-explain';
 import { reconcileStalePaymentOrders } from '../modules/billing/fulfillment';
 import { reconcileBillingSubscriptions } from '../modules/billing/subscription.service';
+import {
+  markEmailSendFailed,
+  processGmailSend,
+  reconcileGmailSends,
+} from '../modules/gmail/send.service';
 
 const log = createModuleLogger('worker');
 
@@ -236,6 +241,43 @@ const messageWorker = new Worker(
 );
 
 attachWorkerErrorHandlers(messageWorker, 'message-queue');
+
+const gmailSendWorker = new Worker(
+  'gmail-send',
+  async (job: Job) => {
+    const emailSendId = job.data?.emailSendId;
+    if (!emailSendId) return;
+    try {
+      await processGmailSend(emailSendId);
+    } catch (error) {
+      const maxAttempts = job.opts.attempts ?? 1;
+      if ((job.attemptsMade ?? 0) + 1 >= maxAttempts) {
+        const exhausted = await prisma.emailSend.findUnique({
+          where: { id: emailSendId },
+          select: { providerCallStartedAt: true },
+        });
+        await markEmailSendFailed(
+          emailSendId,
+          exhausted?.providerCallStartedAt ? 'AMBIGUOUS' : 'FAILED',
+          error instanceof Error ? error.message : 'Gmail send failed after bounded retries',
+          exhausted?.providerCallStartedAt
+            ? 'GMAIL_RETRY_EXHAUSTED_AMBIGUOUS'
+            : 'GMAIL_RETRY_EXHAUSTED'
+        );
+      }
+      throw error;
+    }
+  },
+  {
+    connection,
+    concurrency: 3,
+    settings: {
+      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
+    },
+  }
+);
+
+attachWorkerErrorHandlers(gmailSendWorker, 'gmail-send');
 
 // Broadcast worker
 const broadcastWorker = new Worker(
@@ -916,10 +958,20 @@ const contentVideoWorker = new Worker(
 
 attachWorkerErrorHandlers(contentVideoWorker, 'content-video');
 
+void reconcileGmailSends().catch((err) =>
+  logError(err, { source: 'worker', action: 'reconcileGmailSends' })
+);
+setInterval(() => {
+  reconcileGmailSends().catch((err) =>
+    logError(err, { source: 'worker', action: 'reconcileGmailSends' })
+  );
+}, 60_000);
+
 log.info('Workers started', {
   queues: [
     'webhook-queue',
     'message-queue',
+    'gmail-send',
     'broadcast-queue',
     'automation-queue',
     'flow-queue',

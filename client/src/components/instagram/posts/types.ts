@@ -1,3 +1,5 @@
+import type { FeedRatioId } from './cropImage';
+
 export type MediaKind = 'image' | 'video';
 export type MediaType = 'IMAGE' | 'REELS' | 'CAROUSEL';
 export type MediaItem = { url: string; kind: MediaKind };
@@ -12,6 +14,7 @@ export type PostRow = {
   id: string;
   status: string;
   mediaType: MediaType;
+  feedRatio?: FeedRatioId;
   caption: string;
   imageUrl: string;
   mediaPayload: MediaItem[];
@@ -29,6 +32,8 @@ export type LibraryItem = {
   thumbnailUrl: string;
   permalink: string | null;
   caption: string;
+  likes?: number | null;
+  comments?: number | null;
 };
 
 export type PanelTab = 'create' | 'preview' | 'automation';

@@ -67,7 +67,6 @@ const CHANNEL_PLATFORMS: PlatformNavSection[] = [
     items: [
       { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
       { to: '/calls', icon: Phone, label: 'Calls' },
-      { to: '/campaigns', icon: Send, label: 'Campaigns' },
       { to: '/templates', icon: ClipboardList, label: 'Templates' },
       { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
     ],
@@ -132,7 +131,10 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Contacts',
-    items: [{ to: '/contacts', icon: UserPlus, label: 'Contacts' }],
+    items: [
+      { to: '/contacts', icon: UserPlus, label: 'Contacts' },
+      { to: '/campaigns', icon: Send, label: 'Campaigns' },
+    ],
   },
   {
     label: 'Support',

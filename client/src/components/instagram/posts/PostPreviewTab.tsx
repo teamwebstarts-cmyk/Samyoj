@@ -28,6 +28,7 @@ import {
   type MediaType,
 } from './types';
 import { resolvePublicMediaUrl } from '../../../utils/publicMediaUrl';
+import { FEED_RATIOS, type FeedRatioId } from './cropImage';
 
 export type PreviewData = {
   mediaType: MediaType;
@@ -39,6 +40,9 @@ export type PreviewData = {
   permalink?: string | null;
   mediaName?: string | null;
   mediaMeta?: string | null;
+  feedRatio?: FeedRatioId;
+  likes?: number | null;
+  comments?: number | null;
   isRemote?: boolean;
 };
 
@@ -95,6 +99,7 @@ export default function PostPreviewTab({
   }));
   const tz = timezoneLabel();
   const displayHandle = (handle ?? '@samyoj_business').replace(/^@/, '');
+  const feedRatio = FEED_RATIOS.find((row) => row.id === data.feedRatio)?.value ?? 1;
 
   const scheduleText =
     data.status === 'SCHEDULED' && data.scheduledAt
@@ -209,6 +214,7 @@ export default function PostPreviewTab({
               </div>
               <div
                 className={`igp-phone__media ${data.mediaType === 'REELS' ? 'igp-phone__media--reel' : ''}`}
+                style={data.mediaType === 'IMAGE' ? { aspectRatio: String(feedRatio) } : undefined}
               >
                 {previewUrl ? (
                   data.mediaType === 'REELS' ? (
@@ -236,13 +242,19 @@ export default function PostPreviewTab({
                   </span>
                 ) : null}
               </div>
-              <div className="igp-phone__actions" aria-hidden>
+              <div className="igp-phone__actions">
                 <Heart className="h-4 w-4" />
                 <MessageCircle className="h-4 w-4" />
                 <Send className="h-4 w-4" />
                 <Bookmark className="igp-phone__bookmark h-4 w-4" />
               </div>
               <div className="igp-phone__body">
+                {typeof data.likes === 'number' || typeof data.comments === 'number' ? (
+                  <p className="igp-phone__metrics">
+                    <strong>{typeof data.likes === 'number' ? data.likes.toLocaleString() : '—'} likes</strong>
+                    <span>{typeof data.comments === 'number' ? data.comments.toLocaleString() : '—'} comments</span>
+                  </p>
+                ) : null}
                 <p className={`igp-phone__caption ${data.caption ? '' : 'igp-phone__caption--empty'}`}>
                   {data.caption ? (
                     <>
@@ -376,6 +388,12 @@ export default function PostPreviewTab({
             <p className={`igp-detail__caption ${data.caption ? '' : 'igp-detail__caption--empty'}`}>
               {data.caption || 'No caption yet.'}
             </p>
+            {typeof data.likes === 'number' || typeof data.comments === 'number' ? (
+              <div className="igp-live-metrics" aria-label="Instagram engagement">
+                <span><Heart className="h-3.5 w-3.5" /> {typeof data.likes === 'number' ? data.likes.toLocaleString() : 'Stats unavailable'} likes</span>
+                <span><MessageCircle className="h-3.5 w-3.5" /> {typeof data.comments === 'number' ? data.comments.toLocaleString() : 'Stats unavailable'} comments</span>
+              </div>
+            ) : null}
             <span className="igp-sublabel__hint" style={{ display: 'block', marginTop: 6, textAlign: 'right' }}>
               {data.caption.length}/2200
             </span>

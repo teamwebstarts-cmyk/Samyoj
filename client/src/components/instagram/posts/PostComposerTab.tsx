@@ -39,6 +39,8 @@ type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null
 type ComposerTabProps = {
   mediaType: MediaType;
   onMediaTypeChange: (value: MediaType) => void;
+  feedRatio: FeedRatioId;
+  onFeedRatioChange: (value: FeedRatioId) => void;
   canEdit: boolean;
   composerMode: boolean;
   saving: boolean;
@@ -118,6 +120,8 @@ function scheduleProblem(value: string): Exclude<ScheduleError, null | 'empty'> 
 export default function PostComposerTab({
   mediaType,
   onMediaTypeChange,
+  feedRatio,
+  onFeedRatioChange,
   canEdit,
   composerMode,
   saving,
@@ -150,7 +154,6 @@ export default function PostComposerTab({
   const captionRef = useRef<HTMLTextAreaElement>(null);
   const [dragging, setDragging] = useState(false);
   const [autoOpen, setAutoOpen] = useState(false);
-  const [feedRatio, setFeedRatio] = useState<FeedRatioId>('1:1');
   const [expanded, setExpanded] = useState(false);
   const [cropping, setCropping] = useState(false);
   const [captionBusy, setCaptionBusy] = useState<'polish' | 'generate' | null>(null);
@@ -235,7 +238,7 @@ export default function PostComposerTab({
   const frameRatio = mediaType === 'REELS' ? '9 / 16' : String(ratioValue);
 
   const applyRatio = async (next: FeedRatioId) => {
-    setFeedRatio(next);
+    onFeedRatioChange(next);
     const source = sourceUrlRef.current;
     if (!source || mediaType !== 'IMAGE' || !editable) return;
     const spec = FEED_RATIOS.find((row) => row.id === next);
@@ -386,7 +389,7 @@ export default function PostComposerTab({
                           if (file) {
                             sourceUrlRef.current = '';
                             skipSourceRef.current = false;
-                            setFeedRatio('1:1');
+                            onFeedRatioChange('1:1');
                             onUploadFile(file, 'single');
                           }
                           event.target.value = '';

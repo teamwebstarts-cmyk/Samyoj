@@ -76,17 +76,17 @@ function RecentConversations({ stats, conversations }: { stats: AnalyticsOvervie
           {conversations.slice(0, 5).map((conversation) => {
             const lastMessage = conversation.messages?.[conversation.messages.length - 1];
             return (
-              <Link key={conversation.id} to={`/inbox?conversation=${conversation.id}`} className="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-emerald-50/60">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[9px] font-black text-emerald-700">
+              <Link key={conversation.id} to={`/inbox?conversation=${conversation.id}`} className="flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-emerald-50/60">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[10px] font-black text-emerald-700">
                   {(conversation.contact.name || 'CU').slice(0, 2).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[10px] font-extrabold text-neutral-800">{conversation.contact.name || 'Customer'}</span>
-                  <span className="block truncate text-[9px] font-medium text-neutral-500">{lastMessage?.content || 'Conversation awaiting a reply'}</span>
+                  <span className="block truncate text-[12px] font-extrabold leading-snug text-neutral-800">{conversation.contact.name || 'Customer'}</span>
+                  <span className="block truncate text-[11px] font-medium leading-snug text-neutral-500">{lastMessage?.content || 'Conversation awaiting a reply'}</span>
                 </span>
-                <span className="shrink-0 text-[9px] font-semibold text-neutral-400">{ago(conversation.lastMessageAt)}</span>
+                <span className="shrink-0 text-[10px] font-semibold text-neutral-400">{ago(conversation.lastMessageAt)}</span>
                 {conversation.unreadCount ? (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[8px] font-black text-white">
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-black text-white">
                     {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
                   </span>
                 ) : null}
@@ -111,15 +111,15 @@ function RecentConversations({ stats, conversations }: { stats: AnalyticsOvervie
       {rows.some(([, value]) => Number(value) > 0) ? (
         <div className="mt-3 space-y-2.5">
           {rows.map(([title, value, subtitle]) => (
-            <div key={title as string} className="flex items-center gap-2">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[10px] font-black text-emerald-700">
+            <div key={title as string} className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[11px] font-black text-emerald-700">
                 {(title as string).slice(0, 2).toUpperCase()}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-extrabold text-neutral-800">{title as string}</p>
-                <p className="truncate text-[10px] font-medium text-neutral-500">{subtitle as string}</p>
+                <p className="truncate text-[12.5px] font-extrabold leading-snug text-neutral-800">{title as string}</p>
+                <p className="truncate text-[11.5px] font-medium leading-snug text-neutral-500">{subtitle as string}</p>
               </div>
-              <span className="text-[10px] font-bold tabular-nums text-neutral-500">{Number(value).toLocaleString()}</span>
+              <span className="text-[11.5px] font-bold tabular-nums text-neutral-500">{Number(value).toLocaleString()}</span>
             </div>
           ))}
         </div>

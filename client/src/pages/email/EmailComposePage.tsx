@@ -9,15 +9,31 @@ import {
   SendHorizontal,
   History,
   PenLine,
-  Trash2,
+  Paperclip,
+  Bold,
+  Italic,
+  Link as LinkIcon,
+  Upload,
 } from 'lucide-react';
 import PageShell from '../../components/ui/PageShell';
-import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import GmailGlyph from '../../components/email/GmailGlyph';
 import EmailConnectScreen from '../../components/email/EmailConnectScreen';
-import { deleteRecentSend, useEmailPreview } from './mockData';
+import {
+  GMAIL_ALLOWED_ATTACHMENT_MIMES,
+  GMAIL_MAX_ATTACHMENT_BYTES,
+  GMAIL_MAX_ATTACHMENTS,
+  GMAIL_MAX_DECODED_MIME_BYTES,
+  avatarFor,
+  formatDate,
+  initials,
+  plainTextFromMarkup,
+  safeHtmlFromMarkup,
+  statusLabel,
+  useGmailWorkspace,
+} from '../../components/email/emailData';
+import { gmailApi, type GmailAttachment, type GmailContact, type GmailSend, type GmailTemplate } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
 import { filterRecentSends, priorSendsFor } from './emailList';
-import type { EmailContact, EmailTemplate } from './mockData';
 import '../email/email.css';
 
 const SUBJECT_MAX = 200;
@@ -26,14 +42,32 @@ const MESSAGE_MAX = 2000;
 const LIMITS_COPY =
   'Google limits this mailbox — about 500 emails/day on free Gmail, about 2,000/day on paid Workspace. If sending stops, wait up to 24 hours.';
 
-function initials(name: string) {
-  return name.split(' ').map((p) => p[0]).join('');
-}
+type EmailContact = GmailContact & {
+  name: string;
+  email: string;
+  avatar: ReturnType<typeof avatarFor>;
+};
 
-function shortWhen(sentAt: string) {
-  const match = sentAt.match(/^([A-Za-z]+ \d+), \d+ (.+)$/);
-  return match ? `${match[1]} · ${match[2].replace(':00', '')}` : sentAt;
-}
+type EmailTemplate = GmailTemplate;
+
+type DisplaySend = GmailSend & {
+  name: string;
+  email: string;
+  body: string;
+  sentAt: string;
+  avatar: ReturnType<typeof avatarFor>;
+  failReason?: string;
+};
+
+type AttachmentItem = {
+  localId: string;
+  file: File;
+  progress: number;
+  status: 'uploading' | 'ready' | 'error';
+  uploaded?: GmailAttachment;
+  error?: string;
+  controller: AbortController;
+};
 
 function previewNodes(text: string, contact: EmailContact | null, empty: string): ReactNode {
   if (!text.trim()) return <span className="ema-mail__empty">{empty}</span>;
@@ -51,7 +85,28 @@ function previewNodes(text: string, contact: EmailContact | null, empty: string)
 }
 
 export default function EmailComposePage() {
-  const { connected: mailboxConnected, mailboxEmail, sends: recentSends, templates, contacts } = useEmailPreview();
+  const { status, sends, templates: apiTemplates, contacts: apiContacts, loading, error: loadError, refresh } = useGmailWorkspace();
+  const mailboxConnected = status?.status === 'connected';
+  const mailboxEmail = status?.email || '';
+  const templates = apiTemplates;
+  const contacts = useMemo<EmailContact[]>(
+    () => apiContacts
+      .filter((contact): contact is GmailContact & { name: string; email: string } => Boolean(contact.name && contact.email))
+      .map((contact) => ({ ...contact, name: contact.name, email: contact.email, avatar: avatarFor(contact.email) })),
+    [apiContacts],
+  );
+  const recentSends = useMemo<DisplaySend[]>(
+    () => sends.map((send) => ({
+      ...send,
+      name: send.recipientName || send.recipientEmail,
+      email: send.recipientEmail,
+      body: send.textBody,
+      sentAt: formatDate(send.createdAt),
+      avatar: avatarFor(send.recipientEmail),
+      failReason: send.statusReason || undefined,
+    })),
+    [sends],
+  );
   const [recipients, setRecipients] = useState<EmailContact[]>([]);
   const [templateId, setTemplateId] = useState('');
   const [subject, setSubject] = useState('');
@@ -61,9 +116,13 @@ export default function EmailComposePage() {
   const [panel, setPanel] = useState<'sent' | 'compose'>('compose');
   const [composeTab, setComposeTab] = useState<'write' | 'preview'>('write');
   const [selectedId, setSelectedId] = useState('');
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [sentQuery, setSentQuery] = useState('');
-  const [sentStatus, setSentStatus] = useState<'ALL' | 'ACCEPTED' | 'FAILED'>('ALL');
+  const [sentStatus, setSentStatus] = useState<'ALL' | GmailSend['status']>('ALL');
+  const [sendStatus, setSendStatus] = useState('');
+  const [sendError, setSendError] = useState('');
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +154,116 @@ export default function EmailComposePage() {
     !subject.trim() ? 'a subject' : '',
     !message.trim() ? 'a message' : '',
   ].filter(Boolean);
-  const eligible = missing.length === 0 && mailboxConnected;
+  const eligible = missing.length === 0 && mailboxConnected && attachments.every((item) => item.status === 'ready');
+
+  const addFiles = async (files: File[]) => {
+    const existingBytes = attachments.reduce((total, item) => total + item.file.size, 0);
+    if (attachments.length + files.length > GMAIL_MAX_ATTACHMENTS) {
+      setSendError(`You can attach up to ${GMAIL_MAX_ATTACHMENTS} files.`);
+      return;
+    }
+    if (existingBytes + files.reduce((total, file) => total + file.size, 0) > GMAIL_MAX_DECODED_MIME_BYTES) {
+      setSendError('Attachments exceed the 20 MB total decoded budget. Remove a file before adding another.');
+      return;
+    }
+    setSendError('');
+    for (const file of files) {
+      const localId = `${file.name}-${file.lastModified}-${Math.random()}`;
+      const controller = new AbortController();
+      const item: AttachmentItem = { localId, file, progress: 0, status: 'uploading', controller };
+      setAttachments((current) => [...current, item]);
+      if (!GMAIL_ALLOWED_ATTACHMENT_MIMES.has(file.type.toLowerCase())) {
+        setAttachments((current) => current.map((entry) => entry.localId === localId
+          ? { ...entry, status: 'error', error: 'This file type is not supported.' }
+          : entry));
+        continue;
+      }
+      if (!file.size || file.size > GMAIL_MAX_ATTACHMENT_BYTES) {
+        setAttachments((current) => current.map((entry) => entry.localId === localId
+          ? { ...entry, status: 'error', error: 'Each file must be 15 MB or smaller.' }
+          : entry));
+        continue;
+      }
+      try {
+        const response = await gmailApi.uploadAttachment(file, {
+          signal: controller.signal,
+          onUploadProgress: (progress) => {
+            const total = progress.total || file.size;
+            setAttachments((current) => current.map((entry) => entry.localId === localId
+              ? { ...entry, progress: Math.min(100, Math.round((progress.loaded / total) * 100)) }
+              : entry));
+          },
+        });
+        setAttachments((current) => current.map((entry) => entry.localId === localId
+          ? { ...entry, status: 'ready', progress: 100, uploaded: response.data.data }
+          : entry));
+      } catch (cause) {
+        if ((cause as { code?: string })?.code === 'ERR_CANCELED') continue;
+        setAttachments((current) => current.map((entry) => entry.localId === localId
+          ? { ...entry, status: 'error', error: getErrorMessage(cause, 'Attachment upload failed.') }
+          : entry));
+      }
+    }
+  };
+
+  const removeAttachment = (localId: string) => {
+    setAttachments((current) => {
+      const item = current.find((entry) => entry.localId === localId);
+      item?.controller.abort();
+      return current.filter((entry) => entry.localId !== localId);
+    });
+  };
+
+  const wrapSelection = (prefix: string, suffix = prefix) => {
+    const input = messageRef.current;
+    const start = input?.selectionStart ?? message.length;
+    const end = input?.selectionEnd ?? message.length;
+    const selectedText = message.slice(start, end) || 'text';
+    const next = `${message.slice(0, start)}${prefix}${selectedText}${suffix}${message.slice(end)}`.slice(0, MESSAGE_MAX);
+    setMessage(next);
+    requestAnimationFrame(() => {
+      input?.focus();
+      const caret = Math.min(start + prefix.length + selectedText.length + suffix.length, next.length);
+      input?.setSelectionRange(caret, caret);
+    });
+  };
+
+  const addLink = () => {
+    const url = window.prompt('Paste a safe https:// link');
+    if (!url || !/^https:\/\//i.test(url.trim())) {
+      if (url) setSendError('Links must use https://.');
+      return;
+    }
+    const input = messageRef.current;
+    const start = input?.selectionStart ?? message.length;
+    const end = input?.selectionEnd ?? message.length;
+    const label = message.slice(start, end) || url.trim();
+    const next = `${message.slice(0, start)}[${label}](${url.trim()})${message.slice(end)}`.slice(0, MESSAGE_MAX);
+    setMessage(next);
+  };
+
+  const sendEmail = async () => {
+    if (!eligible || !recipients[0]) return;
+    setSendError('');
+    setSendStatus('Sending…');
+    try {
+      const response = await gmailApi.send({
+        contactIds: [recipients[0].id] as [string],
+        subject: subject.trim(),
+        textBody: plainTextFromMarkup(message).trim(),
+        htmlBody: safeHtmlFromMarkup(message),
+        attachmentIds: attachments.flatMap((item) => item.uploaded?.id || []),
+      }, crypto.randomUUID());
+      const result = response.data.data[0];
+      setSendStatus(result ? statusLabel(result.status) : 'Queued');
+      setSelectedId(result?.id || '');
+      setPanel('sent');
+      refresh();
+    } catch (cause) {
+      setSendStatus('');
+      setSendError(getErrorMessage(cause, 'Email could not be queued.'));
+    }
+  };
 
   const applyTemplate = (id: string) => {
     setTemplateId(id);
@@ -130,7 +298,7 @@ export default function EmailComposePage() {
 
   const pickContact = (c: EmailContact) => {
     if (!c.eligible) return;
-    setRecipients((prev) => (prev.some((r) => r.id === c.id) ? prev : [...prev, c]));
+    setRecipients([c]);
     setPickerOpen(false);
     setQuery('');
   };
@@ -151,11 +319,16 @@ export default function EmailComposePage() {
     setPanel('sent');
   };
 
+  if (loading) {
+    return <PageShell><div className="ema-page ema-shell"><div className="ema-zero"><p className="ema-zero__title">Loading Gmail…</p></div></div></PageShell>;
+  }
+
   if (!mailboxConnected) {
     return (
       <PageShell>
         <div className="ema-page ema-shell">
-          <EmailConnectScreen />
+          {loadError ? <div className="ema-notice ema-notice--fail" role="alert">{loadError}</div> : null}
+          <EmailConnectScreen connectionStatus={status?.status} />
         </div>
       </PageShell>
     );
@@ -207,7 +380,7 @@ export default function EmailComposePage() {
                 aria-label="Filter sent emails"
               />
               <div className="ema-sent__status" role="group" aria-label="Filter by status">
-                {(['ALL', 'ACCEPTED', 'FAILED'] as const).map((status) => (
+                {(['ALL', 'queued', 'accepted', 'failed', 'reconnect-required'] as const).map((status) => (
                   <button
                     key={status}
                     type="button"
@@ -215,7 +388,7 @@ export default function EmailComposePage() {
                     aria-pressed={sentStatus === status}
                     onClick={() => setSentStatus(status)}
                   >
-                    {status === 'ALL' ? 'All' : status === 'ACCEPTED' ? 'Accepted' : 'Failed'}
+                    {status === 'ALL' ? 'All' : statusLabel(status)}
                   </button>
                 ))}
               </div>
@@ -248,16 +421,20 @@ export default function EmailComposePage() {
                     <span className="min-w-0 flex-1">
                       <span className="ema-sent__top">
                         <span className="ema-sent__name">{send.name}</span>
-                        {send.status === 'ACCEPTED' ? (
-                          <span className="ema-chip ema-chip--accepted">Accepted</span>
-                        ) : (
-                          <span className="ema-chip ema-chip--failed">Failed</span>
-                        )}
+                        <span className={`ema-chip ${
+                          send.status === 'accepted'
+                            ? 'ema-chip--accepted'
+                            : send.status === 'failed'
+                              ? 'ema-chip--failed'
+                              : send.status === 'reconnect-required'
+                                ? 'ema-chip--reconnect'
+                                : 'ema-chip--blue'
+                        }`}>{statusLabel(send.status)}</span>
                       </span>
                       <span className="ema-sent__subject">{send.subject}</span>
                       <span className="ema-sent__meta">
                         <span className="ema-sent__email">{send.email}</span>
-                        <span className="ema-sent__time">{shortWhen(send.sentAt)}</span>
+                        <span className="ema-sent__time">{send.sentAt}</span>
                       </span>
                     </span>
                   </button>
@@ -342,7 +519,7 @@ export default function EmailComposePage() {
                       <span className="ema-from__addr block">{mailboxEmail}</span>
                       <span className="ema-from__via">
                         <Check className="h-[10px] w-[10px]" strokeWidth={3} />
-                        Connected via Google (Read-only)
+                        Connected via Google (send-only)
                       </span>
                     </span>
                   </div>
@@ -466,10 +643,10 @@ export default function EmailComposePage() {
                         >
                           <span className="min-w-0">
                             <span className="ema-prior__subject">{send.subject}</span>
-                            <span className="ema-prior__meta">{send.who} · {shortWhen(send.sentAt)}</span>
+                            <span className="ema-prior__meta">{send.who} · {send.sentAt}</span>
                           </span>
-                          <span className={`ema-chip ${send.status === 'ACCEPTED' ? 'ema-chip--accepted' : 'ema-chip--failed'}`}>
-                            {send.status === 'ACCEPTED' ? 'Accepted' : 'Failed'}
+                          <span className={`ema-chip ${send.status === 'accepted' ? 'ema-chip--accepted' : send.status === 'failed' ? 'ema-chip--failed' : 'ema-chip--blue'}`}>
+                            {statusLabel(send.status)}
                           </span>
                         </button>
                       ))}
@@ -519,6 +696,7 @@ export default function EmailComposePage() {
                     <span className="ema-field__counter">{message.length}/{MESSAGE_MAX}</span>
                   </span>
                   <textarea
+                    ref={messageRef}
                     className="ema-textarea"
                     placeholder="Write your message here..."
                     maxLength={MESSAGE_MAX}
@@ -526,8 +704,72 @@ export default function EmailComposePage() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                   />
+                  <div className="ema-formatbar" aria-label="Safe message formatting">
+                    <button type="button" className="ema-formatbar__button" onClick={() => wrapSelection('**')} title="Bold">
+                      <Bold className="h-3.5 w-3.5" /><span className="sr-only">Bold</span>
+                    </button>
+                    <button type="button" className="ema-formatbar__button" onClick={() => wrapSelection('*')} title="Italic">
+                      <Italic className="h-3.5 w-3.5" /><span className="sr-only">Italic</span>
+                    </button>
+                    <button type="button" className="ema-formatbar__button" onClick={addLink} title="Add https link">
+                      <LinkIcon className="h-3.5 w-3.5" /><span className="sr-only">Link</span>
+                    </button>
+                    <span className="ema-field__hint">Safe formatting is sent as HTML plus plain text.</span>
+                  </div>
                 </div>
 
+                <div className="ema-field">
+                  <span className="ema-field__label">
+                    Attachments <span className="ema-field__counter">{attachments.length}/{GMAIL_MAX_ATTACHMENTS}</span>
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    className="sr-only"
+                    type="file"
+                    multiple
+                    onChange={(event) => {
+                      void addFiles(Array.from(event.target.files || []));
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="ema-dropzone"
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void addFiles(Array.from(event.dataTransfer.files));
+                    }}
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span>Drop files here or choose files</span>
+                    <small>Up to 5 files · 15 MB each · 20 MB total</small>
+                  </button>
+                  {attachments.length > 0 ? (
+                    <div className="ema-attachments">
+                      {attachments.map((item) => (
+                        <div key={item.localId} className="ema-attachment">
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[var(--ema-muted)]" />
+                          <span className="min-w-0 flex-1">
+                            <span className="ema-attachment__name">{item.file.name}</span>
+                            {item.status === 'uploading' ? <span className="ema-attachment__meta">Uploading… {item.progress}%</span> : null}
+                            {item.status === 'ready' ? <span className="ema-attachment__meta">Ready to send</span> : null}
+                            {item.error ? <span className="ema-attachment__error">{item.error}</span> : null}
+                          </span>
+                          {item.status === 'uploading' ? <progress max="100" value={item.progress} aria-label={`Uploading ${item.file.name}`} /> : null}
+                          <button type="button" className="ema-recipient__x" aria-label={`Remove ${item.file.name}`} onClick={() => removeAttachment(item.localId)}>
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <span className="ema-field__hint">Allowed: PDF, images, text/CSV, ZIP, and Office files. Files are private and temporary.</span>
+                </div>
+
+                {sendError ? <div className="ema-notice ema-notice--fail" role="alert"><Info className="h-[15px] w-[15px] shrink-0" /> <span>{sendError}</span></div> : null}
+                {sendStatus ? <div className="ema-notice ema-notice--ok" role="status"><Check className="h-[15px] w-[15px] shrink-0" /> <span>{sendStatus}. Gmail acceptance is not delivery or read confirmation.</span></div> : null}
                 <div className="ema-notice ema-notice--info" role="note">
                   <Info className="h-[15px] w-[15px] shrink-0" strokeWidth={2.2} aria-hidden="true" />
                   <span>{LIMITS_COPY}</span>
@@ -544,7 +786,7 @@ export default function EmailComposePage() {
                   <button type="button" className="ema-btn ema-btn--ghost" onClick={() => setPanel('sent')}>
                     Cancel
                   </button>
-                  <button type="button" className="ema-btn ema-btn--primary" disabled={!eligible}>
+                  <button type="button" className="ema-btn ema-btn--primary" disabled={!eligible} onClick={() => void sendEmail()}>
                     <SendHorizontal className="h-4 w-4" strokeWidth={2.2} />
                     Send Email
                   </button>
@@ -558,22 +800,18 @@ export default function EmailComposePage() {
                     <p className="ema-card__sub">{selected.sentAt}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {selected.status === 'ACCEPTED' ? (
-                      <span className="ema-chip ema-chip--accepted">Accepted by Gmail</span>
-                    ) : (
-                      <span className="ema-chip ema-chip--failed">Failed</span>
-                    )}
-                    <button
-                      type="button"
-                      className="ema-iconbtn"
-                      aria-label={`Delete email to ${selected.name}`}
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <Trash2 className="h-4 w-4" strokeWidth={2.2} />
-                    </button>
+                    <span className={`ema-chip ${
+                      selected.status === 'accepted'
+                        ? 'ema-chip--accepted'
+                        : selected.status === 'failed'
+                          ? 'ema-chip--failed'
+                          : selected.status === 'reconnect-required'
+                            ? 'ema-chip--reconnect'
+                            : 'ema-chip--blue'
+                    }`}>{statusLabel(selected.status)}</span>
                   </div>
                 </div>
-                {selected.status === 'ACCEPTED' ? (
+                {selected.status === 'accepted' ? (
                   <div className="ema-notice ema-notice--ok" role="status" style={{ margin: '0 16px' }}>
                     <Check className="h-[15px] w-[15px] shrink-0" strokeWidth={2.2} aria-hidden="true" />
                     <span>Gmail accepted this email. Delivery, opens, and replies are not shown.</span>
@@ -581,7 +819,7 @@ export default function EmailComposePage() {
                 ) : (
                   <div className="ema-notice ema-notice--fail" role="status" style={{ margin: '0 16px' }}>
                     <Info className="h-[15px] w-[15px] shrink-0" strokeWidth={2.2} aria-hidden="true" />
-                    <span>{selected.failReason || 'Gmail did not accept this email. It was not sent.'}</span>
+                    <span>{selected.failReason || `Gmail status: ${statusLabel(selected.status)}.`}</span>
                   </div>
                 )}
                 <div className="ema-mail">
@@ -612,27 +850,6 @@ export default function EmailComposePage() {
             )}
           </section>
         </div>
-        <ConfirmDialog
-          open={deleteOpen}
-          onClose={() => setDeleteOpen(false)}
-          onConfirm={() => {
-            if (!selected) return;
-            const index = recentSends.findIndex((send) => send.id === selected.id);
-            const next = recentSends[index + 1] ?? recentSends[index - 1] ?? null;
-            deleteRecentSend(selected.id);
-            setSelectedId(next?.id ?? '');
-            setDeleteOpen(false);
-            setPanel('sent');
-          }}
-          title="Delete this email?"
-          description="This removes the email from Samyoj’s sent list. It does not delete the copy in Gmail."
-          highlight={selected?.subject}
-          highlightLabel="Subject"
-          confirmLabel="Delete email"
-          cancelLabel="Keep email"
-          variant="danger"
-          icon={Trash2}
-        />
       </div>
     </PageShell>
   );

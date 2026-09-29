@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AxiosProgressEvent } from 'axios';
 import { getErrorMessage, logError } from '../utils/errors';
 import { clearAuthTokens, clearClientSessionCookies, getCsrfToken, hasAuthSessionHint } from '../utils/authStorage';
 import type { AgentAvailability, OrgRole, TeamPermissions, TeamSettings } from '../types';
@@ -240,6 +241,125 @@ function idempotencyHeaders(key?: string) {
       : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
   return { headers: { 'Idempotency-Key': resolvedKey } };
 }
+
+export interface GmailStatus {
+  connected: boolean;
+  email: string | null;
+  status: 'connected' | 'reconnect-required' | 'disconnected';
+  reconnectReason: string | null;
+  scopes: string[];
+}
+
+export interface GmailContact {
+  id: string;
+  name: string | null;
+  email: string | null;
+  emailOptedIn: boolean;
+  emailConsentSource: string | null;
+  emailConsentAt: string | null;
+  emailConsentVersion: string | null;
+  emailOptOutAt: string | null;
+  eligible: boolean;
+}
+
+export interface GmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  textBody: string;
+  htmlBody: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GmailSendStatus =
+  | 'queued'
+  | 'sending'
+  | 'accepted'
+  | 'ambiguous'
+  | 'reconnect-required'
+  | 'failed';
+
+export interface GmailSend {
+  id: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  subject: string;
+  textBody: string;
+  status: GmailSendStatus;
+  statusReason: string | null;
+  createdAt: string;
+  acceptedAt: string | null;
+  failedAt: string | null;
+}
+
+export interface GmailAttachment {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  expiresAt: string;
+  /** Kept private and never rendered as a public URL. Older APIs may omit it. */
+  mediaPath?: string;
+}
+
+export interface GmailSendPayload {
+  contactIds: [string];
+  subject?: string;
+  textBody?: string;
+  htmlBody?: string | null;
+  templateId?: string;
+  attachmentIds?: string[];
+}
+
+export const gmailApi = {
+  status: () => api.get<{ success: true; data: GmailStatus }>('/gmail/status'),
+  connect: () =>
+    api.get<{ success: true; data: { url: string; scopes: string[] } }>('/gmail/connect'),
+  disconnect: () =>
+    api.post<{ success: true; data: { status: 'disconnected' } }>('/gmail/disconnect', {}),
+  contacts: () => api.get<{ success: true; data: GmailContact[] }>('/gmail/contacts'),
+  setConsent: (contactId: string, data: { optedIn: boolean; source?: string; version?: string }) =>
+    api.put<{ success: true; data: Pick<GmailContact, 'id' | 'emailOptedIn' | 'emailConsentAt' | 'emailOptOutAt'> }>(
+      `/gmail/contacts/${contactId}/email-consent`,
+      data,
+    ),
+  templates: () => api.get<{ success: true; data: GmailTemplate[] }>('/gmail/templates'),
+  createTemplate: (data: {
+    name: string;
+    subject: string;
+    textBody: string;
+    htmlBody?: string | null;
+  }) => api.post<{ success: true; data: GmailTemplate }>('/gmail/templates', data),
+  updateTemplate: (
+    id: string,
+    data: Partial<Pick<GmailTemplate, 'name' | 'subject' | 'textBody' | 'htmlBody'>>,
+  ) => api.patch<{ success: true; data: GmailTemplate }>(`/gmail/templates/${id}`, data),
+  deleteTemplate: (id: string) =>
+    api.delete<{ success: true; data: { deleted: true } }>(`/gmail/templates/${id}`),
+  send: (data: GmailSendPayload, idempotencyKey?: string) =>
+    api.post<{
+      success: true;
+      data: Array<{ id: string; recipientEmail: string; status: GmailSendStatus }>;
+    }>('/gmail/send', data, idempotencyHeaders(idempotencyKey)),
+  sends: () => api.get<{ success: true; data: GmailSend[] }>('/gmail/sends'),
+  uploadAttachment: (
+    file: File,
+    options?: {
+      signal?: AbortSignal;
+      onUploadProgress?: (progress: AxiosProgressEvent) => void;
+    },
+  ) =>
+    api.post<{ success: true; data: GmailAttachment }>('/gmail/attachments', file, {
+      signal: options?.signal,
+      onUploadProgress: options?.onUploadProgress,
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-File-Name': file.name,
+        'X-File-Mime-Type': file.type || 'application/octet-stream',
+      },
+    }),
+};
 
 export const inboxApi = {
   list: (params?: Record<string, string>) => api.get('/inbox', { params }),
@@ -560,11 +680,13 @@ export const facebookApi = {
 };
 
 type InstagramPostMediaItem = { url: string; kind: 'image' | 'video' };
+type InstagramFeedRatio = '1:1' | '4:5' | '1.91:1';
 
 type InstagramPostRow = {
   id: string;
   status: string;
   mediaType: 'IMAGE' | 'REELS' | 'CAROUSEL';
+  feedRatio: InstagramFeedRatio;
   caption: string;
   imageUrl: string;
   mediaPayload: InstagramPostMediaItem[];
@@ -582,6 +704,8 @@ type InstagramLibraryItem = {
   thumbnailUrl: string;
   permalink: string | null;
   caption: string;
+  likes?: number | null;
+  comments?: number | null;
 };
 
 export const instagramApi = {
@@ -720,6 +844,7 @@ export const instagramApi = {
     create: (body: {
       caption: string;
       mediaType?: InstagramPostRow['mediaType'];
+      feedRatio?: InstagramFeedRatio;
       imageUrl?: string;
       videoUrl?: string;
       mediaItems?: InstagramPostMediaItem[];
@@ -730,6 +855,7 @@ export const instagramApi = {
       body: {
         caption?: string;
         mediaType?: InstagramPostRow['mediaType'];
+        feedRatio?: InstagramFeedRatio;
         imageUrl?: string;
         videoUrl?: string;
         mediaItems?: InstagramPostMediaItem[];

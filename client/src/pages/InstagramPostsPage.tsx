@@ -6,7 +6,7 @@ import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
 import MetaMockNotice from '../components/meta/MetaMockNotice';
 import { useMetaMock } from '../contexts/MetaMockContext';
 import { automationApi, contentStudioApi, instagramApi } from '../services/api';
-import { getInstagramMockPosts, isMetaMockId, mergeById } from '../utils/metaMockData';
+import { getInstagramMockLibrary, getInstagramMockPosts, isMetaMockId, mergeById } from '../utils/metaMockData';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { resolvePublicMediaUrl } from '../utils/publicMediaUrl';
@@ -15,7 +15,7 @@ import PostPanel from '../components/instagram/posts/PostPanel';
 import PostComposerTab, { type ScheduleError } from '../components/instagram/posts/PostComposerTab';
 import PostPreviewTab, { type PreviewData } from '../components/instagram/posts/PostPreviewTab';
 import PostAutomationTab from '../components/instagram/posts/PostAutomationTab';
-import { PostBanner, PostFilters, PostStatsRow, type PostCounts, type PostFilterId } from '../components/instagram/posts/PostsChrome';
+import { PostBanner, PostFeedBar, PostStatsRow, type PostCounts, type PostFeedTab, type PostFilterId } from '../components/instagram/posts/PostsChrome';
 import { PostsGrid, PostsLibrary, PostsZeroState } from '../components/instagram/posts/PostsGrid';
 import {
   CAPTION_MAX,
@@ -34,10 +34,23 @@ import {
   type MediaUploadState,
   type PostRow,
 } from '../components/instagram/posts/types';
+import type { FeedRatioId } from '../components/instagram/posts/cropImage';
 import './instagram-comments.css';
 import './instagram-posts.css';
 
 type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null };
+
+/** Newest activity first: published date, else schedule, else last edit. */
+function postRecency(post: PostRow): number {
+  const iso =
+    post.status === 'SCHEDULED'
+      ? post.scheduledAt
+      : post.status === 'PUBLISHED'
+        ? post.publishedAt
+        : post.updatedAt || post.createdAt || post.scheduledAt || post.publishedAt;
+  const time = iso ? new Date(iso).getTime() : 0;
+  return Number.isNaN(time) ? 0 : time;
+}
 
 /** Read image dimensions for the preview "Media" row; videos keep size only. */
 async function readMediaMeta(file: File): Promise<string | null> {
@@ -98,8 +111,9 @@ export default function InstagramPostsPage() {
   const [libraryError, setLibraryError] = useState(false);
 
   const [filter, setFilter] = useState<PostFilterId>('all');
+  const [feedTab, setFeedTab] = useState<PostFeedTab>('posts');
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [feedRatio, setFeedRatio] = useState<FeedRatioId>('1:1');
 
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
   const [panelTab, setPanelTab] = useState<PanelTab>('create');
@@ -126,7 +140,12 @@ export default function InstagramPostsPage() {
   /* ---------------- data ---------------- */
 
   const loadLibrary = useCallback(async () => {
-    if (mockEnabled) return;
+    if (mockEnabled) {
+      setLibrary(getInstagramMockLibrary());
+      setLibraryError(false);
+      setLibraryLoading(false);
+      return;
+    }
     setLibraryLoading(true);
     try {
       const { data } = await instagramApi.posts.library();
@@ -200,6 +219,9 @@ export default function InstagramPostsPage() {
     [posts],
   );
   const libraryTiles = library.filter((row) => !samyojIgIds.has(row.igMediaId));
+  const selectedLiveStats = selected?.igMediaId
+    ? library.find((row) => row.igMediaId === selected.igMediaId)
+    : null;
 
   /* Desktop: panel is always docked — when nothing is selected it shows the
      composer. Closing on desktop therefore resets to a fresh New post. */
@@ -213,6 +235,7 @@ export default function InstagramPostsPage() {
     setSelectedId('new');
     setPanelTab('create');
     setMediaType(type);
+    setFeedRatio('1:1');
     setCaption('');
     setImageUrl('');
     setVideoUrl('');
@@ -240,6 +263,7 @@ export default function InstagramPostsPage() {
     automationEditedRef.current = false;
     setSelectedId(post.id);
     setMediaType(post.mediaType || 'IMAGE');
+    setFeedRatio(post.feedRatio ?? '1:1');
     setCaption(post.caption);
     setImageUrl(post.mediaType === 'REELS' ? '' : post.imageUrl);
     const payload = post.mediaPayload?.length ? post.mediaPayload : [];
@@ -262,6 +286,7 @@ export default function InstagramPostsPage() {
     automationEditedRef.current = false;
     setSelectedId(`${REMOTE_PREFIX}${item.igMediaId}`);
     setPanelTab('preview');
+    setFeedRatio('1:1');
     setCaption(item.caption);
     setImageUrl(item.thumbnailUrl);
     setVideoUrl('');
@@ -511,12 +536,12 @@ export default function InstagramPostsPage() {
 
   const buildBody = () => {
     if (mediaType === 'REELS') {
-      return { caption, mediaType, videoUrl, imageUrl: videoUrl || undefined };
+      return { caption, mediaType, feedRatio, videoUrl, imageUrl: videoUrl || undefined };
     }
     if (mediaType === 'CAROUSEL') {
-      return { caption, mediaType, mediaItems, imageUrl: imageUrl || mediaItems[0]?.url };
+      return { caption, mediaType, feedRatio, mediaItems, imageUrl: imageUrl || mediaItems[0]?.url };
     }
-    return { caption, mediaType: 'IMAGE' as const, imageUrl };
+    return { caption, mediaType: 'IMAGE' as const, feedRatio, imageUrl };
   };
 
   const save = async (mode: 'draft' | 'schedule' | 'now') => {
@@ -598,6 +623,7 @@ export default function InstagramPostsPage() {
         await savePostAutomation({ postId: created.id, igMediaId: liveIgMediaId });
       }
       await load();
+      if (mode === 'now') void loadLibrary();
     } catch (err) {
       toastError(getErrorMessage(err) || (mode === 'now' ? 'Could not publish post' : 'Could not save post'));
     } finally {
@@ -641,23 +667,23 @@ export default function InstagramPostsPage() {
     [posts],
   );
 
-  const filterCounts: Record<PostFilterId, number> = {
-    all: counts.total,
-    DRAFT: counts.drafts,
-    SCHEDULED: counts.scheduled,
-    PUBLISHED: counts.published,
-    FAILED: counts.failed,
-  };
-
   const visiblePosts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return posts.filter((post) => {
-      const statusOk = filter === 'all' || post.status === filter;
-      if (!statusOk) return false;
-      if (!q) return true;
-      return post.caption.toLowerCase().includes(q);
-    });
+    return posts
+      .filter((post) => {
+        const statusOk = filter === 'all' || post.status === filter;
+        if (!statusOk) return false;
+        if (!q) return true;
+        return post.caption.toLowerCase().includes(q);
+      })
+      .sort((a, b) => postRecency(b) - postRecency(a));
   }, [posts, filter, query]);
+
+  const visibleLibrary = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return libraryTiles;
+    return libraryTiles.filter((item) => item.caption.toLowerCase().includes(q));
+  }, [libraryTiles, query]);
 
   const previewUrl = resolvePublicMediaUrl(
     mediaType === 'REELS'
@@ -677,6 +703,9 @@ export default function InstagramPostsPage() {
         scheduledAt: null,
         publishedAt: null,
         permalink: remoteItem.permalink,
+        likes: remoteItem.likes,
+        comments: remoteItem.comments,
+        feedRatio: '1:1',
         isRemote: true,
       };
     }
@@ -689,8 +718,11 @@ export default function InstagramPostsPage() {
       publishedAt: selected?.publishedAt ?? null,
       mediaName: mediaMeta?.name ?? null,
       mediaMeta: mediaMeta?.meta ?? null,
+      feedRatio,
+      likes: selectedLiveStats?.likes,
+      comments: selectedLiveStats?.comments,
     };
-  }, [remoteItem, mediaType, previewUrl, caption, selectedId, selected, scheduleLocal, mediaMeta]);
+  }, [remoteItem, mediaType, previewUrl, caption, selectedId, selected, scheduleLocal, mediaMeta, feedRatio, selectedLiveStats]);
 
   const gridItems = useMemo(() => {
     const active = { id: 'current', url: previewData.previewUrl, active: true };
@@ -701,7 +733,12 @@ export default function InstagramPostsPage() {
   }, [posts, selectedId, previewData.previewUrl]);
 
   const showZeroState =
-    connected === true && !loading && posts.length === 0 && filter === 'all' && !query.trim();
+    feedTab === 'posts' &&
+    connected === true &&
+    !loading &&
+    posts.length === 0 &&
+    filter === 'all' &&
+    !query.trim();
 
   const automationSummaryDate =
     remoteItem
@@ -820,6 +857,8 @@ export default function InstagramPostsPage() {
       <PostComposerTab
         key={selectedId ?? 'new'}
         mediaType={mediaType}
+        feedRatio={feedRatio}
+        onFeedRatioChange={setFeedRatio}
         onMediaTypeChange={(next) => {
           setMediaType(next);
           if (next === 'IMAGE') {
@@ -903,20 +942,40 @@ export default function InstagramPostsPage() {
           <>
             <div className="igp-workspace">
               <div className="igp-feed">
-                <PostStatsRow counts={counts} loading={loading} />
+                <PostStatsRow
+                  counts={counts}
+                  loading={loading}
+                  filter={feedTab === 'posts' ? filter : null}
+                  onFilterChange={(next) => {
+                    setFilter(next);
+                    setFeedTab('posts');
+                  }}
+                />
 
-                <PostFilters
-                  filter={filter}
-                  onFilterChange={setFilter}
-                  counts={filterCounts}
+                <PostFeedBar
+                  tab={feedTab}
+                  onTabChange={setFeedTab}
+                  liveCount={libraryTiles.length}
                   query={query}
                   onQueryChange={setQuery}
-                  view={view}
-                  onViewChange={setView}
                   canEdit={canEdit}
                 />
 
-                {showZeroState ? (
+                {feedTab === 'live' ? (
+                  <PostsLibrary
+                    items={visibleLibrary}
+                    loading={libraryLoading}
+                    error={libraryError}
+                    selectedId={selectedId}
+                    onOpen={openRemote}
+                    onRefresh={() => void loadLibrary()}
+                    emptyNote={
+                      query.trim()
+                        ? `No live posts match “${query.trim()}”.`
+                        : undefined
+                    }
+                  />
+                ) : showZeroState ? (
                   <PostsZeroState canEdit={canEdit} onNewPost={() => openNew('IMAGE')} />
                 ) : (
                   <PostsGrid
@@ -924,22 +983,10 @@ export default function InstagramPostsPage() {
                     loading={loading}
                     selectedId={selectedId}
                     onOpen={(post) => openExisting(post)}
-                    view={view}
                     query={query}
                     onClearQuery={() => setQuery('')}
                   />
                 )}
-
-                {connected && (libraryTiles.length > 0 || libraryLoading || libraryError) ? (
-                  <PostsLibrary
-                    items={libraryTiles}
-                    loading={libraryLoading}
-                    error={libraryError}
-                    selectedId={selectedId}
-                    onOpen={openRemote}
-                    onRefresh={() => void loadLibrary()}
-                  />
-                ) : null}
               </div>
 
               <PostPanel

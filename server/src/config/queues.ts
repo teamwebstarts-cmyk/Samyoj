@@ -27,5 +27,9 @@ export const compliancePurgeQueue = new Queue('compliance-purge', { connection }
 export const contentQueue = new Queue('content', { connection });
 export const contentImageQueue = new Queue('content-image', { connection });
 export const contentVideoQueue = new Queue('content-video', { connection });
+export const gmailSendQueue = new Queue('gmail-send', {
+  connection,
+  defaultJobOptions: { ...defaultJobOptions, attempts: 4 },
+});
 
 export const retryDelays = [10000, 30000, 120000, 600000]; // 10s, 30s, 2m, 10m

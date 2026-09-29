@@ -707,6 +707,7 @@ export type MockInstagramPost = {
   id: string;
   status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'FAILED';
   mediaType: 'IMAGE' | 'REELS' | 'CAROUSEL';
+  feedRatio: '1:1' | '4:5' | '1.91:1';
   caption: string;
   imageUrl: string;
   mediaPayload: Array<{ url: string; kind: 'image' | 'video' }>;
@@ -723,6 +724,7 @@ export function getInstagramMockPosts(): MockInstagramPost[] {
       id: `${META_MOCK_ID_PREFIX}ig-post-live`,
       status: 'PUBLISHED',
       mediaType: 'IMAGE',
+      feedRatio: '1:1',
       caption: 'New drop is live. Comment PRICE and we will send the details in your DMs.',
       imageUrl: 'https://picsum.photos/seed/samyoj-ig-live/800/800',
       mediaPayload: [],
@@ -735,6 +737,7 @@ export function getInstagramMockPosts(): MockInstagramPost[] {
       id: `${META_MOCK_ID_PREFIX}ig-post-soon`,
       status: 'SCHEDULED',
       mediaType: 'CAROUSEL',
+      feedRatio: '1:1',
       caption: 'Tomorrow morning: studio hours and a quiet carousel of the new shelf.',
       imageUrl: 'https://picsum.photos/seed/samyoj-ig-soon/800/800',
       mediaPayload: [
@@ -750,6 +753,7 @@ export function getInstagramMockPosts(): MockInstagramPost[] {
       id: `${META_MOCK_ID_PREFIX}ig-post-draft`,
       status: 'DRAFT',
       mediaType: 'REELS',
+      feedRatio: '1:1',
       caption: 'Draft Reel — still choosing the hook.',
       imageUrl: 'https://picsum.photos/seed/samyoj-ig-reel/800/800',
       mediaPayload: [{ url: 'https://picsum.photos/seed/samyoj-ig-reel/800/800', kind: 'video' }],
@@ -762,6 +766,7 @@ export function getInstagramMockPosts(): MockInstagramPost[] {
       id: `${META_MOCK_ID_PREFIX}ig-post-fail`,
       status: 'FAILED',
       mediaType: 'IMAGE',
+      feedRatio: '1:1',
       caption: 'This sample failed because the image URL was not public.',
       imageUrl: 'https://picsum.photos/seed/samyoj-ig-fail/800/800',
       mediaPayload: [],
@@ -769,6 +774,38 @@ export function getInstagramMockPosts(): MockInstagramPost[] {
       publishedAt: null,
       igMediaId: null,
       lastError: 'Instagram could not fetch this image. Use a public HTTPS link.',
+    },
+  ];
+}
+
+export function getInstagramMockLibrary() {
+  return [
+    {
+      igMediaId: 'mock-media-reel-1',
+      mediaType: 'REELS',
+      thumbnailUrl: 'https://picsum.photos/seed/ig-reel-1/800/800',
+      permalink: 'https://www.instagram.com/p/mock-reel-1/',
+      caption: 'New drop — comment PRICE for the link',
+      likes: 1840,
+      comments: 96,
+    },
+    {
+      igMediaId: 'mock-media-carousel',
+      mediaType: 'CAROUSEL_ALBUM',
+      thumbnailUrl: 'https://picsum.photos/seed/ig-carousel/800/800',
+      permalink: 'https://www.instagram.com/p/mock-carousel/',
+      caption: 'A quiet carousel from the studio',
+      likes: 742,
+      comments: 38,
+    },
+    {
+      igMediaId: 'mock-media-post-1',
+      mediaType: 'IMAGE',
+      thumbnailUrl: 'https://picsum.photos/seed/ig-post-1/800/800',
+      permalink: 'https://www.instagram.com/p/mock-post-1/',
+      caption: 'Is this offer still valid?',
+      likes: 321,
+      comments: 14,
     },
   ];
 }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Copy,
   Check,
@@ -10,8 +10,13 @@ import PageShell from '../../components/ui/PageShell';
 import EmailConnectScreen from '../../components/email/EmailConnectScreen';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Trash2 as TrashIcon } from 'lucide-react';
-import { TEMPLATE_VARIABLES, removeEmailTemplate, upsertEmailTemplate, useEmailPreview } from './mockData';
-import type { EmailTemplate } from './mockData';
+import {
+  EMAIL_TEMPLATE_LIBRARY,
+  nextTemplateName,
+  useGmailWorkspace,
+} from '../../components/email/emailData';
+import { gmailApi, type GmailTemplate } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
 import './email.css';
 
 const NAME_MAX = 50;
@@ -44,19 +49,27 @@ function renderPreview(text: string, empty: string): ReactNode {
   });
 }
 
+const TEMPLATE_VARIABLES = ['{{name}}', '{{email}}', '{{phone}}'] as const;
+
+type EmailTemplate = GmailTemplate;
+
 const blankTemplate = (): EmailTemplate => ({
   id: 'new',
   name: '',
   subject: '',
   textBody: '',
-  updatedAt: 'New',
+  htmlBody: null,
+  createdAt: '',
+  updatedAt: '',
 });
 
 /**
  * Email Templates — narrow list, create/edit in the middle, live preview on the right.
  */
 export default function EmailTemplatesPage() {
-  const { connected, mailboxEmail, templates } = useEmailPreview();
+  const { status, templates, loading, error: loadError, refresh } = useGmailWorkspace();
+  const connected = status?.status === 'connected';
+  const mailboxEmail = status?.email || '';
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EmailTemplate>(blankTemplate());
   const [copied, setCopied] = useState(false);
@@ -65,14 +78,9 @@ export default function EmailTemplatesPage() {
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmailTemplate | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
-  const seeded = useRef(false);
-
-  useEffect(() => {
-    if (seeded.current || !templates[0]) return;
-    seeded.current = true;
-    setSelectedId(templates[0].id);
-    setDraft({ ...templates[0] });
-  }, [templates]);
+  const [browseTab, setBrowseTab] = useState<'yours' | 'library'>('yours');
+  const [libraryPreviewId, setLibraryPreviewId] = useState<string>(EMAIL_TEMPLATE_LIBRARY[0].id);
+  const [actionError, setActionError] = useState('');
 
   const isEditingNew = selectedId === null;
   const canSave = useMemo(
@@ -80,12 +88,16 @@ export default function EmailTemplatesPage() {
     [draft]
   );
 
+  if (loading) {
+    return <PageShell><div className="ema-page ema-shell"><div className="ema-zero"><p className="ema-zero__title">Loading Gmail…</p></div></div></PageShell>;
+  }
+
   // Not-connected gate — no template management until the mailbox is connected.
   if (!connected) {
     return (
       <PageShell>
         <div className="ema-page ema-shell">
-          <EmailConnectScreen />
+          <EmailConnectScreen connectionStatus={status?.status} />
         </div>
       </PageShell>
     );
@@ -145,19 +157,47 @@ export default function EmailTemplatesPage() {
     return saved.name !== draft.name || saved.subject !== draft.subject || saved.textBody !== draft.textBody;
   }, [draft, isEditingNew, selectedId, templates]);
 
-  const saveDraft = () => {
-    if (isEditingNew) {
-      const created: EmailTemplate = { ...draft, id: `t${Date.now()}`, updatedAt: 'Just now' };
-      upsertEmailTemplate(created);
-      setSelectedId(created.id);
-      setDraft(created);
-    } else {
-      const next = { ...draft, updatedAt: 'Just now' };
-      upsertEmailTemplate(next);
-      setDraft(next);
+  const saveDraft = async () => {
+    setActionError('');
+    try {
+      const payload = {
+        name: draft.name.trim(),
+        subject: draft.subject.trim(),
+        textBody: draft.textBody,
+        htmlBody: null,
+      };
+      const response = isEditingNew
+        ? await gmailApi.createTemplate(payload)
+        : await gmailApi.updateTemplate(draft.id, payload);
+      const saved = response.data.data;
+      setSelectedId(saved.id);
+      setDraft(saved);
+      setSavedFlash(true);
+      refresh();
+      window.setTimeout(() => setSavedFlash(false), 1600);
+    } catch (cause) {
+      setActionError(getErrorMessage(cause, 'Could not save this template.'));
     }
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 1600);
+  };
+
+  const copyLibraryTemplate = async () => {
+    const source = EMAIL_TEMPLATE_LIBRARY.find((item) => item.id === libraryPreviewId);
+    if (!source) return;
+    setActionError('');
+    try {
+      const response = await gmailApi.createTemplate({
+        name: nextTemplateName(source.name, templates),
+        subject: source.subject,
+        textBody: source.textBody,
+        htmlBody: null,
+      });
+      setSelectedId(response.data.data.id);
+      setDraft(response.data.data);
+      setBrowseTab('yours');
+      refresh();
+    } catch (cause) {
+      setActionError(getErrorMessage(cause, 'Could not copy this library template.'));
+    }
   };
 
   const copyVariables = async () => {
@@ -188,11 +228,44 @@ export default function EmailTemplatesPage() {
             New template
           </button>
         </div>
+        {loadError ? <div className="ema-notice ema-notice--fail" role="alert">{loadError}</div> : null}
+        {actionError ? <div className="ema-notice ema-notice--fail" role="alert">{actionError}</div> : null}
 
         <div className="ema-templates">
           {/* ============ Left column: template list ============ */}
           <div className="ema-editor">
             <section className="ema-card">
+              <div className="ema-ttabs" role="tablist" aria-label="Template browsing">
+                <button type="button" role="tab" aria-selected={browseTab === 'yours'} className={`ema-ttab ${browseTab === 'yours' ? 'ema-ttab--on' : ''}`} onClick={() => setBrowseTab('yours')}>Yours ({templates.length})</button>
+                <button type="button" role="tab" aria-selected={browseTab === 'library'} className={`ema-ttab ${browseTab === 'library' ? 'ema-ttab--on' : ''}`} onClick={() => setBrowseTab('library')}>Library (12)</button>
+              </div>
+              {browseTab === 'library' ? (
+                <div className="ema-tlist" style={{ paddingTop: 0 }}>
+                  {EMAIL_TEMPLATE_LIBRARY.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`ema-trow ${item.id === libraryPreviewId ? 'ema-trow--on' : ''}`}
+                      onClick={() => setLibraryPreviewId(item.id)}
+                    >
+                      <span className="ema-trow__main">
+                        <span className="ema-trow__name block">{item.name}</span>
+                        <span className="ema-trow__subject block">{item.subject}</span>
+                      </span>
+                      <span className="ema-trow__time">Library</span>
+                    </button>
+                  ))}
+                  <div className="ema-mail" style={{ margin: '2px 0 0' }}>
+                    <h2 className="ema-mail__subject">{EMAIL_TEMPLATE_LIBRARY.find((item) => item.id === libraryPreviewId)?.subject}</h2>
+                    <div className="ema-mail__body">{EMAIL_TEMPLATE_LIBRARY.find((item) => item.id === libraryPreviewId)?.textBody}</div>
+                  </div>
+                  <button type="button" className="ema-btn ema-btn--primary" onClick={() => void copyLibraryTemplate()}>
+                    <Copy className="h-4 w-4" /> Copy and edit
+                  </button>
+                  <span className="ema-field__hint">Library templates are read-only and never count as yours until copied.</span>
+                </div>
+              ) : (
+                <>
               <div className="ema-card__head" style={{ paddingBottom: 10 }}>
                 <div>
                   <div className="ema-card__title">Your templates</div>
@@ -242,6 +315,8 @@ export default function EmailTemplatesPage() {
                   </div>
                 )}
               </div>
+                </>
+              )}
             </section>
           </div>
 
@@ -415,13 +490,16 @@ export default function EmailTemplatesPage() {
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => {
             if (!deleteTarget) return;
-            const remaining = templates.filter((t) => t.id !== deleteTarget.id);
-            removeEmailTemplate(deleteTarget.id);
-            if (deleteTarget.id === selectedId) {
-              if (remaining[0]) selectTemplate(remaining[0]);
-              else startNew();
-            }
-            setDeleteTarget(null);
+            void (async () => {
+              try {
+                await gmailApi.deleteTemplate(deleteTarget.id);
+                if (deleteTarget.id === selectedId) startNew();
+                setDeleteTarget(null);
+                refresh();
+              } catch (cause) {
+                setActionError(getErrorMessage(cause, 'Could not delete this template.'));
+              }
+            })();
           }}
           title="Delete email template?"
           description={`"${deleteTarget?.name ?? 'This template'}" will be permanently removed. Past emails already sent with it are not affected.`}

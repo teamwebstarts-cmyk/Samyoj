@@ -1,12 +1,22 @@
-import { CalendarClock, Clapperboard, ImagePlus, Layers, MessageSquare, Plus, Sparkles, Wand2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Clapperboard,
+  Heart,
+  ImagePlus,
+  MessageCircle,
+  MessageSquare,
+  Plus,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { resolvePublicMediaUrl } from '../../../utils/publicMediaUrl';
+import InstagramGlyph from '../../dashboard/icons/InstagramGlyph';
 import {
   postDisplayDate,
   statusLabel,
   statusModifier,
   type LibraryItem,
-  type MediaType,
   type PostRow,
 } from './types';
 
@@ -15,14 +25,8 @@ type GridProps = {
   loading: boolean;
   selectedId: string | null;
   onOpen: (post: PostRow) => void;
-  view: 'grid' | 'list';
   query: string;
   onClearQuery: () => void;
-};
-
-const KIND_META: Partial<Record<MediaType, { label: string; icon: typeof Clapperboard }>> = {
-  REELS: { label: 'Reel', icon: Clapperboard },
-  CAROUSEL: { label: 'Carousel', icon: Layers },
 };
 
 function tileThumb(post: PostRow): string {
@@ -31,6 +35,12 @@ function tileThumb(post: PostRow): string {
       ? post.mediaPayload[0].url
       : post.imageUrl || post.mediaPayload.find((item) => item.kind === 'image')?.url || '';
   return resolvePublicMediaUrl(raw);
+}
+
+function metric(value: number | null | undefined): string {
+  if (typeof value !== 'number') return '—';
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  return String(value);
 }
 
 /** Skeleton tiles shown while the first page of posts loads. */
@@ -131,7 +141,6 @@ export function PostsGrid({
   loading,
   selectedId,
   onOpen,
-  view,
   query,
   onClearQuery,
 }: GridProps) {
@@ -162,51 +171,6 @@ export function PostsGrid({
     );
   }
 
-  if (view === 'list') {
-    return (
-      <div className="igp-list">
-        {posts.map((post) => {
-          const date = postDisplayDate(post);
-          const kind = KIND_META[post.mediaType];
-          return (
-            <button
-              key={post.id}
-              type="button"
-              className={`igp-rowitem ${selectedId === post.id ? 'igp-rowitem--on' : ''}`}
-              onClick={() => onOpen(post)}
-            >
-              <span className="igp-rowitem__thumb">
-                <img src={tileThumb(post)} alt="" loading="lazy" />
-              </span>
-              <span className="igp-rowitem__main">
-                <span className={`igp-rowitem__caption ${post.caption ? '' : 'igp-rowitem__caption--empty'}`}>
-                  {post.caption || 'No caption yet'}
-                </span>
-                <span className="igp-rowitem__sub">
-                  {date ? (
-                    <>
-                      <CalendarClock className="h-3 w-3" />
-                      {date}
-                    </>
-                  ) : null}
-                  {kind ? (
-                    <span className="igp-kind">
-                      <kind.icon className="h-3 w-3" />
-                      {kind.label}
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-              <span className={`igp-status igp-status--${statusModifier(post.status)} igp-rowitem__status`}>
-                {statusLabel(post.status)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <div className="igp-grid">
       {posts.map((post) => {
@@ -232,7 +196,7 @@ export function PostsGrid({
                 {statusLabel(post.status)}
               </span>
               <span className="igp-igbadge" aria-hidden>
-                <ImagePlus className="h-3 w-3" strokeWidth={2.4} />
+                <InstagramGlyph className="h-3 w-3" />
               </span>
             </span>
             <span className="igp-tile__meta">
@@ -255,10 +219,11 @@ type LibraryProps = {
   selectedId: string | null;
   onOpen: (item: LibraryItem) => void;
   onRefresh: () => void;
+  emptyNote?: string;
 };
 
 /** Recent media from the connected account — automation only, never re-published. */
-export function PostsLibrary({ items, loading, error, selectedId, onOpen, onRefresh }: LibraryProps) {
+export function PostsLibrary({ items, loading, error, selectedId, onOpen, onRefresh, emptyNote }: LibraryProps) {
   return (
     <section className="igp-lib">
       <div className="igp-lib__head">
@@ -295,7 +260,7 @@ export function PostsLibrary({ items, loading, error, selectedId, onOpen, onRefr
           </button>
         </p>
       ) : items.length === 0 ? (
-        <p className="igp-emptynote">No live posts found on this account yet.</p>
+        <p className="igp-emptynote">{emptyNote || 'No live posts found on this account yet.'}</p>
       ) : (
         <div className="igp-lib__grid">
           {items.map((item) => (
@@ -306,12 +271,16 @@ export function PostsLibrary({ items, loading, error, selectedId, onOpen, onRefr
                 selectedId === `remote:${item.igMediaId}` ? 'igp-lib__tile--on' : ''
               }`}
               onClick={() => onOpen(item)}
-              aria-label="Open live Instagram post"
+              aria-label={`Open live Instagram post${item.caption ? `: ${item.caption}` : ''}. ${metric(item.likes)} likes, ${metric(item.comments)} comments`}
             >
               <img src={resolvePublicMediaUrl(item.thumbnailUrl)} alt="" loading="lazy" />
               <span className="igp-lib__live">Live</span>
               <span className="igp-lib__ig" aria-hidden>
-                <ImagePlus className="h-3 w-3" strokeWidth={2.4} />
+                <InstagramGlyph className="h-3 w-3" />
+              </span>
+              <span className="igp-lib__metrics" aria-label={`${metric(item.likes)} likes, ${metric(item.comments)} comments`}>
+                <span><Heart className="h-3 w-3" /> {metric(item.likes)}</span>
+                <span><MessageCircle className="h-3 w-3" /> {metric(item.comments)}</span>
               </span>
             </button>
           ))}

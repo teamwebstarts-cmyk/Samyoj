@@ -602,6 +602,8 @@ export type InstagramGraphMedia = {
   thumbnail_url?: string;
   permalink?: string;
   caption?: string;
+  like_count?: number;
+  comments_count?: number;
 };
 
 export function instagramMediaThumbnailUrl(media: InstagramGraphMedia): string | null {
@@ -616,11 +618,21 @@ export async function fetchInstagramMedia(
   mediaId: string,
   pageAccessToken: string
 ): Promise<InstagramGraphMedia | null> {
-  const data = await graphGet<InstagramGraphMedia>(
-    `/${mediaId}?fields=id,media_type,media_url,thumbnail_url,permalink,caption`,
-    pageAccessToken
-  );
-  return data?.id ? data : null;
+  try {
+    const data = await graphGet<InstagramGraphMedia>(
+      `/${mediaId}?fields=id,media_type,media_url,thumbnail_url,permalink,caption,like_count,comments_count`,
+      pageAccessToken
+    );
+    return data?.id ? data : null;
+  } catch {
+    // Some Meta account/app combinations can read media but not engagement
+    // fields. Keep the library usable and render those metrics as unavailable.
+    const data = await graphGet<InstagramGraphMedia>(
+      `/${mediaId}?fields=id,media_type,media_url,thumbnail_url,permalink,caption`,
+      pageAccessToken
+    );
+    return data?.id ? data : null;
+  }
 }
 
 export async function listInstagramMediaIds(

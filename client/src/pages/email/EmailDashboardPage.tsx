@@ -9,7 +9,13 @@ import { EmailBeforeYouSendList, DASHBOARD_CHECKLIST } from '../../components/em
 import ChannelHeroLead, { ChannelHeroConnectedBadge } from '../../components/dashboard/ChannelHeroLead';
 import ChannelHeroActions from '../../components/dashboard/ChannelHeroActions';
 import { DEFAULT_METRICS_PERIOD, type MetricsPeriod } from '../../utils/metricsPeriod';
-import { useEmailPreview } from './mockData';
+import {
+  formatDate,
+  avatarFor,
+  initials,
+  statusLabel,
+  useGmailWorkspace,
+} from '../../components/email/emailData';
 import './email.css';
 
 const LIMITS_COPY =
@@ -66,10 +72,12 @@ function EmailStatCard({
  */
 export default function EmailDashboardView() {
   const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
-  const { connected, mailboxEmail, sends, templates } = useEmailPreview();
+  const { status, sends, templates, loading, error } = useGmailWorkspace();
+  const connected = status?.status === 'connected';
+  const mailboxEmail = status?.email || '';
   const recentSends = sends.slice(0, 5);
-  const accepted = sends.filter((send) => send.status === 'ACCEPTED').length;
-  const failed = sends.filter((send) => send.status === 'FAILED').length;
+  const accepted = sends.filter((send) => send.status === 'accepted').length;
+  const failed = sends.filter((send) => send.status === 'failed').length;
   const stats = [
     { label: 'Total sent', value: sends.length, trend: '', icon: Mail, tone: 'pink' as const },
     { label: 'Accepted by Gmail', value: accepted, trend: '', icon: MailCheck, tone: 'green' as const },
@@ -77,10 +85,15 @@ export default function EmailDashboardView() {
     { label: 'Email templates', value: templates.length, trend: '', icon: LayoutTemplate, tone: 'blue' as const },
   ];
 
+  if (loading) {
+    return <div className="ema-page ema-zero"><p className="ema-zero__title">Loading Gmail…</p></div>;
+  }
+
   if (!connected) {
     return (
       <div className="ema-page flex w-full min-w-0 flex-col gap-4">
-        <EmailConnectScreen />
+        {error ? <div className="ema-notice ema-notice--fail" role="alert">{error}</div> : null}
+        <EmailConnectScreen connectionStatus={status?.status} />
       </div>
     );
   }
@@ -148,27 +161,31 @@ export default function EmailDashboardView() {
             )}
             {recentSends.map((send) => (
               <li key={send.id} className="ema-recent__row">
-                <span className={`ema-avatar ema-avatar--${send.avatar}`} aria-hidden="true">
-                  {send.name.split(' ').map((p) => p[0]).join('')}
+                <span className={`ema-avatar ema-avatar--${avatarFor(send.recipientEmail)}`} aria-hidden="true">
+                  {initials(send.recipientName, send.recipientEmail)}
                 </span>
                 <span className="ema-recent__main">
                   <span className="ema-recent__who">
-                    <span className="ema-recent__name">{send.name}</span>
-                    <span className="ema-recent__time">{send.sentAt}</span>
+                    <span className="ema-recent__name">{send.recipientName || send.recipientEmail}</span>
+                    <span className="ema-recent__time">{formatDate(send.createdAt)}</span>
                   </span>
                   <span className="ema-recent__line">
                     <span className="ema-recent__subject">{send.subject}</span>
-                    <span className="ema-recent__email">{send.email}</span>
+                    <span className="ema-recent__email">{send.recipientEmail}</span>
                   </span>
-                  {send.status === 'FAILED' && (
-                    <span className="ema-recent__reason">{send.failReason || 'Gmail did not accept this email.'}</span>
+                  {send.status === 'failed' && (
+                    <span className="ema-recent__reason">{send.statusReason || 'Gmail did not accept this email.'}</span>
                   )}
                 </span>
-                {send.status === 'ACCEPTED' ? (
-                  <span className="ema-chip ema-chip--accepted">Accepted</span>
-                ) : (
-                  <span className="ema-chip ema-chip--failed">Failed</span>
-                )}
+                <span className={`ema-chip ${
+                  send.status === 'accepted'
+                    ? 'ema-chip--accepted'
+                    : send.status === 'failed'
+                      ? 'ema-chip--failed'
+                      : send.status === 'reconnect-required'
+                        ? 'ema-chip--reconnect'
+                        : 'ema-chip--blue'
+                }`}>{statusLabel(send.status)}</span>
               </li>
             ))}
           </ul>

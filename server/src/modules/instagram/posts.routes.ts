@@ -94,6 +94,7 @@ const mediaItemSchema = z.object({
 const writeSchema = z.object({
   caption: z.string().max(CAPTION_MAX).default(''),
   mediaType: z.enum(['IMAGE', 'REELS', 'CAROUSEL']).optional(),
+  feedRatio: z.enum(['1:1', '4:5', '1.91:1']).default('1:1'),
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),
   mediaItems: z.array(mediaItemSchema).optional(),
@@ -135,6 +136,7 @@ function toDto(row: {
   id: string;
   status: string;
   mediaType: InstagramPostMediaType;
+  feedRatio: string;
   caption: string;
   imageUrl: string;
   mediaPayload: Prisma.JsonValue;
@@ -153,6 +155,7 @@ function toDto(row: {
     id: row.id,
     status: row.status,
     mediaType: row.mediaType,
+    feedRatio: row.feedRatio,
     caption: row.caption,
     imageUrl: refreshPublicMediaUrl(row.imageUrl),
     mediaPayload,
@@ -281,6 +284,8 @@ router.get(
           thumbnailUrl: thumb,
           permalink: media.permalink || null,
           caption: media.caption || '',
+          likes: typeof media.like_count === 'number' ? media.like_count : null,
+          comments: typeof media.comments_count === 'number' ? media.comments_count : null,
         });
       } catch (err) {
         log.warn('Instagram library media skipped', {
@@ -367,6 +372,7 @@ router.post(
         createdByUserId: req.user!.userId,
         caption,
         mediaType: media.mediaType,
+        feedRatio: body.feedRatio,
         imageUrl: media.imageUrl,
         mediaPayload: media.mediaPayload ?? undefined,
         scheduledAt,
@@ -399,6 +405,7 @@ router.patch(
       }
     }
     let mediaType = existing.mediaType;
+    const feedRatio = body.feedRatio ?? existing.feedRatio;
     let imageUrl = existing.imageUrl;
     let mediaPayload: Prisma.InputJsonValue | undefined =
       existing.mediaPayload === null ? undefined : (existing.mediaPayload as Prisma.InputJsonValue);
@@ -443,6 +450,7 @@ router.patch(
       data: {
         caption,
         mediaType,
+        feedRatio,
         imageUrl,
         mediaPayload,
         scheduledAt,

@@ -13,6 +13,8 @@ import {
   Users,
 } from 'lucide-react';
 import GmailGlyph from './GmailGlyph';
+import { gmailApi, type GmailStatus } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
 
 type GateTab = 'connection' | 'limits' | 'help';
 
@@ -35,8 +37,22 @@ function GoogleMark() {
   );
 }
 
-export default function EmailConnectScreen() {
+export default function EmailConnectScreen({ connectionStatus = 'disconnected' }: { connectionStatus?: GmailStatus['status'] }) {
   const [tab, setTab] = useState<GateTab>('connection');
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState('');
+
+  const connect = async () => {
+    setConnecting(true);
+    setError('');
+    try {
+      const response = await gmailApi.connect();
+      window.location.assign(response.data.data.url);
+    } catch (cause) {
+      setError(getErrorMessage(cause, 'Gmail could not start connecting.'));
+      setConnecting(false);
+    }
+  };
 
   return (
     <div className="ema-gate">
@@ -66,30 +82,47 @@ export default function EmailConnectScreen() {
         ))}
       </div>
 
-      {tab === 'connection' ? <ConnectionPane onLimits={() => setTab('limits')} /> : null}
+      {tab === 'connection' ? (
+        <ConnectionPane connectionStatus={connectionStatus} onLimits={() => setTab('limits')} connecting={connecting} error={error} onConnect={() => void connect()} />
+      ) : null}
       {tab === 'limits' ? <LimitsPane /> : null}
       {tab === 'help' ? <HelpPane /> : null}
     </div>
   );
 }
 
-function ConnectionPane({ onLimits }: { onLimits: () => void }) {
+function ConnectionPane({
+  onLimits,
+  connecting,
+  error,
+  onConnect,
+  connectionStatus,
+}: {
+  onLimits: () => void;
+  connecting: boolean;
+  error: string;
+  onConnect: () => void;
+  connectionStatus: GmailStatus['status'];
+}) {
   return (
     <div className="ema-gate__stack">
       <section className="ema-gate__hero">
         <div className="ema-gate__hero-inner">
           <div className="ema-gate__pitch">
           <span className="ema-gate__status">
-            <i /> Not connected
+            <i /> {connectionStatus === 'reconnect-required' ? 'Reconnect required' : 'Not connected'}
           </span>
-          <h2>Connect your Gmail</h2>
-          <p>Send email as your Gmail or Google Workspace mailbox. Samyoj does not read your inbox.</p>
-          <Link to="/settings?tab=channels" className="ema-gate__cta">
+          <h2>{connectionStatus === 'reconnect-required' ? 'Reconnect your Gmail' : 'Connect your Gmail'}</h2>
+          <p>{connectionStatus === 'reconnect-required'
+            ? 'Google access needs to be renewed before Samyoj can send again. Your sent history stays.'
+            : 'Send email as your Gmail or Google Workspace mailbox. Samyoj does not read your inbox.'}</p>
+          <button type="button" className="ema-gate__cta" onClick={onConnect} disabled={connecting}>
             <span className="ema-gate__g">
               <GoogleMark />
             </span>
-            Connect Gmail
-          </Link>
+            {connecting ? 'Opening Google…' : 'Connect Gmail'}
+          </button>
+          {error ? <p className="ema-notice ema-notice--fail" role="alert">{error}</p> : null}
           <p className="ema-gate__note">
             <Info className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
             If your company Google admin blocks apps, ask them to allow Samyoj.

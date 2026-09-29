@@ -90,6 +90,7 @@ export async function runMediaRetentionPass(): Promise<{
   recordingsScanned: number;
   recordingsDeleted: number;
   instagramCommentsDeleted: number;
+  gmailAttachmentsDeleted: number;
 }> {
   const orgs = await prisma.organization.findMany({
     select: { id: true, retentionDaysMessages: true },
@@ -136,6 +137,31 @@ export async function runMediaRetentionPass(): Promise<{
 
   const recordings = await purgeExpiredCallRecordings();
   const igComments = await purgeExpiredInstagramComments();
+  const expiredGmailAttachments = await prisma.emailAttachment.findMany({
+    where: { expiresAt: { lt: new Date() }, deletedAt: null },
+    select: { id: true, storagePath: true, emailSendId: true },
+  });
+  for (const attachment of expiredGmailAttachments) {
+    await deleteMediaObject(attachment.storagePath);
+  }
+  if (expiredGmailAttachments.length) {
+    await prisma.emailAttachment.updateMany({
+      where: { id: { in: expiredGmailAttachments.map((attachment) => attachment.id) } },
+      data: { deletedAt: new Date() },
+    });
+    await prisma.emailSend.updateMany({
+      where: {
+        id: { in: expiredGmailAttachments.flatMap((attachment) => attachment.emailSendId ? [attachment.emailSendId] : []) },
+        status: 'QUEUED',
+      },
+      data: {
+        status: 'FAILED',
+        statusReason: 'Attachment upload expired before send',
+        errorCode: 'ATTACHMENT_EXPIRED',
+        failedAt: new Date(),
+      },
+    });
+  }
 
   return {
     scanned,
@@ -143,6 +169,7 @@ export async function runMediaRetentionPass(): Promise<{
     recordingsScanned: recordings.scanned,
     recordingsDeleted: recordings.deleted,
     instagramCommentsDeleted: igComments.deleted,
+    gmailAttachmentsDeleted: expiredGmailAttachments.length,
   };
 }
 

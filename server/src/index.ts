@@ -53,6 +53,7 @@ import publicApiRoutes from './modules/public-api/routes';
 import leadRoutes from './modules/leads/routes';
 import ticketRoutes from './modules/tickets/routes';
 import supportRoutes from './modules/support/routes';
+import gmailRoutes from './modules/gmail/routes';
 import platformRoutes from './modules/platform/routes';
 import { setRealtimeIO } from './realtime';
 import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/presence';
@@ -288,6 +289,7 @@ app.use('/api/v1', publicApiRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/gmail', gmailRoutes);
 app.use('/api/platform', platformRoutes);
 
 const { clientDist, clientPublic } = getClientPaths();

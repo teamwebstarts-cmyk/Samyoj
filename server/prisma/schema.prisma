@@ -250,6 +250,21 @@ enum PlatformOutreachStatus {
   LOGGED
 }
 
+enum GmailMailboxStatus {
+  CONNECTED
+  RECONNECT_REQUIRED
+  DISCONNECTED
+}
+
+enum EmailSendStatus {
+  QUEUED
+  SENDING
+  ACCEPTED
+  FAILED
+  AMBIGUOUS
+  RECONNECT_REQUIRED
+}
+
 model User {
   id              String    @id @default(uuid())
   name            String
@@ -274,6 +289,10 @@ model User {
   assignedLeads           Lead[]                   @relation("AssignedLeads")
   assignedTickets         Ticket[]                 @relation("AssignedTickets")
   supportTickets          SupportTicket[]          @relation("SupportTickets")
+  gmailMailboxesConnected GmailMailbox[]           @relation("GmailMailboxConnectedBy")
+  emailTemplatesCreated   EmailTemplate[]          @relation("EmailTemplateCreatedBy")
+  emailSendsCreated       EmailSend[]              @relation("EmailSendCreatedBy")
+  emailAttachmentsCreated EmailAttachment[]        @relation("EmailAttachmentCreatedBy")
 
   @@map("users")
 }
@@ -389,6 +408,10 @@ model Organization {
   aiCreditReservations           AiCreditReservation[]
   aiCreditPurchases              AiCreditPurchase[]
   aiRecurringAddons              OrgAiRecurringAddon[]
+  gmailMailboxes                 GmailMailbox[]
+  emailTemplates                 EmailTemplate[]
+  emailSends                     EmailSend[]
+  emailAttachments               EmailAttachment[]
   planPeriods                    PlanPeriod[]
   billingEvents                  BillingEvent[]
   inboundContactOverflows        InboundContactOverflow[]
@@ -1076,43 +1099,160 @@ model WhatsappNumber {
 }
 
 model Contact {
-  id               String        @id @default(uuid())
-  organizationId   String        @map("organization_id")
-  phone            String
-  normalizedPhone  String        @map("normalized_phone")
-  whatsappNumberId String?       @map("whatsapp_number_id")
-  name             String?
-  email            String?
-  tags             String[]      @default([])
-  notes            String?
-  customAttributes Json          @default("{}") @map("custom_attributes")
-  optedIn          Boolean       @default(false) @map("opted_in")
-  consentSource    String?       @map("consent_source")
-  consentAt        DateTime?     @map("consent_at")
-  consentVersion   String?       @map("consent_version")
-  consentDecision  Json?         @map("consent_decision")
-  optOutAt         DateTime?     @map("opt_out_at")
-  source           ContactSource @default(MANUAL)
+  id                  String        @id @default(uuid())
+  organizationId      String        @map("organization_id")
+  phone               String
+  normalizedPhone     String        @map("normalized_phone")
+  whatsappNumberId    String?       @map("whatsapp_number_id")
+  name                String?
+  email               String?
+  emailOptedIn        Boolean       @default(false) @map("email_opted_in")
+  emailConsentSource  String?       @map("email_consent_source")
+  emailConsentAt      DateTime?     @map("email_consent_at")
+  emailConsentVersion String?       @map("email_consent_version")
+  emailOptOutAt       DateTime?     @map("email_opt_out_at")
+  tags                String[]      @default([])
+  notes               String?
+  customAttributes    Json          @default("{}") @map("custom_attributes")
+  optedIn             Boolean       @default(false) @map("opted_in")
+  consentSource       String?       @map("consent_source")
+  consentAt           DateTime?     @map("consent_at")
+  consentVersion      String?       @map("consent_version")
+  consentDecision     Json?         @map("consent_decision")
+  optOutAt            DateTime?     @map("opt_out_at")
+  source              ContactSource @default(MANUAL)
   /**
    * When false, inbound calls from this contact skip AI (human ring, then missed). Global AI calling off still wins.
    */
-  callingAiEnabled Boolean       @default(false) @map("calling_ai_enabled")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  callingAiEnabled    Boolean       @default(false) @map("calling_ai_enabled")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
-  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  whatsappNumber     WhatsappNumber?            @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber     WhatsappNumber?           @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
   conversations      Conversation[]
   calls              Call[]
   orders             Order[]
   leads              Lead[]
   tickets            Ticket[]
   platformIdentities ContactPlatformIdentity[]
+  emailSends         EmailSend[]
 
   @@unique([organizationId, whatsappNumberId, normalizedPhone])
   @@unique([organizationId, id])
   @@index([organizationId, whatsappNumberId])
   @@map("contacts")
+}
+
+model GmailMailbox {
+  id                    String             @id @default(uuid())
+  organizationId        String             @map("organization_id")
+  email                 String
+  providerAccountId     String?            @map("provider_account_id")
+  accessTokenEncrypted  String?            @map("access_token_encrypted")
+  refreshTokenEncrypted String?            @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime?          @map("token_expires_at")
+  scopes                String[]           @default([])
+  status                GmailMailboxStatus @default(CONNECTED)
+  reconnectReason       String?            @map("reconnect_reason")
+  connectedById         String             @map("connected_by_id")
+  disconnectedAt        DateTime?          @map("disconnected_at")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectedBy  User            @relation("GmailMailboxConnectedBy", fields: [connectedById], references: [id], onDelete: Restrict)
+  templates    EmailTemplate[]
+  sends        EmailSend[]
+
+  @@index([organizationId, status])
+  @@index([connectedById])
+  @@map("gmail_mailboxes")
+}
+
+model EmailTemplate {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  mailboxId      String?  @map("mailbox_id")
+  createdById    String   @map("created_by_id")
+  name           String
+  subject        String
+  textBody       String   @map("text_body") @db.Text
+  htmlBody       String?  @map("html_body") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailbox      GmailMailbox? @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
+  createdBy    User          @relation("EmailTemplateCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  sends        EmailSend[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, updatedAt])
+  @@map("email_templates")
+}
+
+model EmailSend {
+  id                    String          @id @default(uuid())
+  organizationId        String          @map("organization_id")
+  mailboxId             String          @map("mailbox_id")
+  templateId            String?         @map("template_id")
+  contactId             String?         @map("contact_id")
+  createdById           String          @map("created_by_id")
+  recipientEmail        String          @map("recipient_email")
+  recipientName         String?         @map("recipient_name")
+  subject               String
+  textBody              String          @map("text_body") @db.Text
+  htmlBody              String?         @map("html_body") @db.Text
+  status                EmailSendStatus @default(QUEUED)
+  statusReason          String?         @map("status_reason")
+  errorCode             String?         @map("error_code")
+  gmailMessageId        String?         @map("gmail_message_id")
+  idempotencyKey        String?         @map("idempotency_key")
+  attempts              Int             @default(0)
+  sendingLeaseToken     String?         @map("sending_lease_token")
+  sendingLeaseExpiresAt DateTime?       @map("sending_lease_expires_at")
+  providerCallStartedAt DateTime?       @map("provider_call_started_at")
+  acceptedAt            DateTime?       @map("accepted_at")
+  failedAt              DateTime?       @map("failed_at")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailbox      GmailMailbox      @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  template     EmailTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  contact      Contact?          @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
+  createdBy    User              @relation("EmailSendCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  attachments  EmailAttachment[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@index([mailboxId, status, createdAt])
+  @@index([status, sendingLeaseExpiresAt])
+  @@map("email_sends")
+}
+
+model EmailAttachment {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  emailSendId    String?   @map("email_send_id")
+  createdById    String    @map("created_by_id")
+  originalName   String    @map("original_name")
+  mimeType       String    @map("mime_type")
+  sizeBytes      Int       @map("size_bytes")
+  sha256         String
+  storagePath    String    @map("storage_path")
+  expiresAt      DateTime  @map("expires_at")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  emailSend    EmailSend?   @relation(fields: [emailSendId], references: [id], onDelete: SetNull)
+  createdBy    User         @relation("EmailAttachmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, expiresAt])
+  @@index([emailSendId])
+  @@map("email_attachments")
 }
 
 /// Org-owned Meta Page / IG / (future) WA asset. Not a WhatsappNumber replacement.
@@ -1130,13 +1270,13 @@ model Channel {
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  leads         Lead[]
-  conversations Conversation[]
-  instagramComments InstagramComment[]
-  instagramPosts    InstagramPost[]
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads               Lead[]
+  conversations       Conversation[]
+  instagramComments   InstagramComment[]
+  instagramPosts      InstagramPost[]
   instagramMediaCache InstagramMediaCache[]
-  metaAdsSnapshots  MetaAdsSnapshot[]
+  metaAdsSnapshots    MetaAdsSnapshot[]
 
   @@unique([organizationId, platform, platformAccountId])
   @@index([platform, platformAccountId])
@@ -1193,16 +1333,17 @@ model InstagramPost {
   createdByUserId String?                @map("created_by_user_id")
   status          InstagramPostStatus    @default(DRAFT)
   mediaType       InstagramPostMediaType @default(IMAGE) @map("media_type")
+  feedRatio       String                 @default("1:1") @map("feed_ratio")
   caption         String                 @default("") @db.Text
   imageUrl        String                 @map("image_url")
   mediaPayload    Json?                  @map("media_payload")
-  scheduledAt     DateTime?           @map("scheduled_at")
-  publishedAt     DateTime?           @map("published_at")
-  containerId     String?             @map("container_id")
-  igMediaId       String?             @map("ig_media_id")
-  lastError       String?             @map("last_error") @db.Text
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
+  scheduledAt     DateTime?              @map("scheduled_at")
+  publishedAt     DateTime?              @map("published_at")
+  containerId     String?                @map("container_id")
+  igMediaId       String?                @map("ig_media_id")
+  lastError       String?                @map("last_error") @db.Text
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Restrict)

@@ -8,6 +8,7 @@ import AllChannelsConnectionHero from './AllChannelsConnectionHero';
 import GettingStartedCard, { type GettingStartedStep } from './GettingStartedCard';
 import type { MetricsPeriod } from '../../utils/metricsPeriod';
 import FacebookGlyph from './icons/FacebookGlyph';
+import MetaGlyph from './icons/MetaGlyph';
 import InstagramGlyph from './icons/InstagramGlyph';
 import WhatsAppGlyph from './icons/WhatsAppGlyph';
 import KpiSparkline from './icons/KpiSparkline';
@@ -227,11 +228,14 @@ export default function DashboardAllChannels({
         facebookLabel={facebookLabel}
         instagramLabel={instagramLabel}
       />
-      <section className="rounded-2xl border border-[#e7eef8] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:px-4 sm:py-3.5">
+      <Link
+        to="/facebook/ads"
+        className="rounded-2xl border border-[#e7eef8] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-colors hover:border-[#c9d8f8] hover:bg-[#f8fbff] sm:px-4 sm:py-3.5"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:flex-nowrap lg:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef4ff] text-[#1877F2]">
-              <span className="text-[18px] font-black leading-none">∞</span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef4ff] text-[#0081FB]">
+              <MetaGlyph className="h-5 w-5" />
             </span>
             <div className="min-w-0">
               <p className="text-[13px] font-extrabold text-neutral-900">Meta ads performance</p>
@@ -245,14 +249,8 @@ export default function DashboardAllChannels({
             <Stat label="Leads" value={String(ads?.leads ?? 0)} />
             <Stat label="CPL" value={ads ? money(ads.cpl ?? 0, ads.currency) : '₹0.00'} />
           </div>
-          <Link
-            to="/facebook/ads"
-            className="shrink-0 text-center text-[12px] font-bold text-[#1877F2] hover:underline lg:text-right"
-          >
-            View detailed ads
-          </Link>
         </div>
-      </section>
+      </Link>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.18fr_0.82fr_1fr] md:items-stretch">
         <section className="flex h-full flex-col rounded-2xl border border-[#e7eef8] bg-white p-3">
@@ -362,12 +360,12 @@ export default function DashboardAllChannels({
         <section className="rounded-2xl border border-[#e7eef8] bg-white p-3.5">
           <h2 className="mb-3 text-[14px] font-extrabold">Quick actions</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Action to="/inbox" title="Open WhatsApp Inbox" sub="Customers" tone="bg-[#e9fff3]" icon={<WhatsAppGlyph className="h-4 w-4 text-[#25D366]" />} />
-            <Action to="/facebook/inbox" title="Open Facebook Messenger" sub="Reply to customers" tone="bg-[#eef4ff]" icon={<FacebookGlyph className="h-4 w-4 text-[#1877F2]" />} />
-            <Action to="/instagram/inbox" title="Open Instagram Business" sub="Reply to DMs" tone="bg-[#fff0f6]" icon={<InstagramGlyph className="h-4 w-4 text-[#E1306C]" />} />
-            <Action to="/campaigns" title="Create Campaign" sub="Send messages" tone="bg-[#fff6ea]" icon={<Megaphone className="h-4 w-4 text-orange-500" />} />
-            <Action to="/templates" title="Manage Templates" sub="Approved messages" tone="bg-[#fffbea]" icon={<FileText className="h-4 w-4 text-amber-500" />} />
-            <Action to="/ai-bot" title="Set up AI Agent" sub="Automate replies" tone="bg-[#f4f0ff]" icon={<Bot className="h-4 w-4 text-violet-500" />} />
+            <Action to="/inbox" title="WhatsApp Inbox" sub="Customers" tone="bg-[#e9fff3]" icon={<WhatsAppGlyph className="h-4 w-4 text-[#25D366]" />} />
+            <Action to="/facebook/inbox" title="Messenger" sub="Reply to customers" tone="bg-[#eef4ff]" icon={<FacebookGlyph className="h-4 w-4 text-[#1877F2]" />} />
+            <Action to="/instagram/inbox" title="Instagram Inbox" sub="Reply to DMs" tone="bg-[#fff0f6]" icon={<InstagramGlyph className="h-4 w-4 text-[#E1306C]" />} />
+            <Action to="/campaigns" title="New campaign" sub="Send messages" tone="bg-[#fff6ea]" icon={<Megaphone className="h-4 w-4 text-orange-500" />} />
+            <Action to="/templates" title="Templates" sub="Approved messages" tone="bg-[#fffbea]" icon={<FileText className="h-4 w-4 text-amber-500" />} />
+            <Action to="/ai-bot" title="AI agent" sub="Automate replies" tone="bg-[#f4f0ff]" icon={<Bot className="h-4 w-4 text-violet-500" />} />
           </div>
         </section>
 
@@ -489,7 +487,7 @@ function Action({
     <Link to={to} className={`flex min-h-[78px] flex-col justify-between rounded-xl p-2.5 ${tone}`}>
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm">{icon}</span>
       <span>
-        <strong className="block text-[11.5px] leading-tight">{title}</strong>
+        <strong className="block truncate text-[11.5px] leading-tight">{title}</strong>
         <small className="mt-0.5 flex items-center gap-1 text-[10px] text-neutral-500">
           {sub} <ArrowRight className="h-3 w-3" />
         </small>

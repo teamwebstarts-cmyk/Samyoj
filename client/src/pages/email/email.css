@@ -1344,6 +1344,100 @@
   color: var(--ema-red);
 }
 
+.ema-formatbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.ema-formatbar__button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  border: 1px solid var(--ema-line);
+  border-radius: 8px;
+  background: var(--ema-card);
+  color: var(--ema-muted);
+  cursor: pointer;
+}
+.ema-formatbar__button:hover {
+  border-color: var(--ema-primary-line-strong);
+  color: var(--ema-primary);
+}
+.ema-dropzone {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px dashed var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-wash);
+  padding: 10px 12px;
+  color: var(--ema-blue);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ema-dropzone:hover {
+  border-color: var(--ema-blue);
+  background: var(--ema-blue-soft);
+}
+.ema-dropzone small {
+  width: 100%;
+  color: var(--ema-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.ema-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ema-attachment {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ema-line);
+  border-radius: 10px;
+  background: var(--ema-card);
+  padding: 7px 8px;
+}
+.ema-attachment__name,
+.ema-attachment__meta,
+.ema-attachment__error {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ema-attachment__name {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-attachment__meta {
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-attachment__error {
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ema-red);
+}
+.ema-attachment progress {
+  width: 72px;
+  height: 5px;
+  accent-color: var(--ema-primary);
+}
+
 /* Template select + variable chips */
 .ema-select {
   width: 100%;
@@ -1903,6 +1997,13 @@
   color: #fff;
   white-space: nowrap;
   box-shadow: 0 10px 18px -10px rgba(234, 67, 53, 0.8);
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ema-gate__cta:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 .ema-gate__cta:hover {
   background: var(--ema-primary-strong);

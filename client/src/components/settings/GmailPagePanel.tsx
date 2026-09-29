@@ -1,13 +1,71 @@
-import { LogOut, Link2, MailPlus, LayoutTemplate, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LogOut, Link2, MailPlus, LayoutTemplate, AlertCircle, LoaderCircle } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import GmailGlyph from '../email/GmailGlyph';
-import { useMetaMock } from '../../contexts/MetaMockContext';
-import { MOCK_MAILBOX } from '../../pages/email/mockData';
+import { gmailApi, type GmailStatus } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
-  const { enabled: connected } = useMetaMock();
-  const mailbox = MOCK_MAILBOX.email;
-  const reconnectRequired = false;
+  const [status, setStatus] = useState<GmailStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadStatus = async () => {
+    setLoading(true);
+    try {
+      setStatus((await gmailApi.status()).data.data);
+      setError('');
+    } catch (cause) {
+      setError(getErrorMessage(cause, 'Could not load Gmail connection status.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadStatus();
+  }, []);
+
+  const connect = async () => {
+    setWorking(true);
+    setError('');
+    try {
+      const response = await gmailApi.connect();
+      window.location.assign(response.data.data.url);
+    } catch (cause) {
+      setError(getErrorMessage(cause, 'Gmail could not start connecting.'));
+      setWorking(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setWorking(true);
+    setError('');
+    try {
+      await gmailApi.disconnect();
+      setStatus({ connected: false, email: null, status: 'disconnected', reconnectReason: null, scopes: [] });
+    } catch (cause) {
+      setError(getErrorMessage(cause, 'Could not disconnect Gmail.'));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const connected = status?.status === 'connected';
+  const reconnectRequired = status?.status === 'reconnect-required';
+
+  if (loading) {
+    return (
+      <section className="settings-channel-card settings-channel-card--gmail">
+        <div className="settings-channel-empty">
+          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <p>Checking Gmail connection…</p>
+        </div>
+      </section>
+    );
+  }
+
   if (reconnectRequired) {
     return (
       <section className="settings-channel-card settings-channel-card--gmail">
@@ -27,8 +85,8 @@ export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
             </div>
           </div>
           <div className="settings-channel-card__actions">
-            <AppButton size="sm" disabled={!canEdit}>
-              <Link2 className="h-3.5 w-3.5" /> Connect Gmail
+            <AppButton size="sm" disabled={!canEdit || working} onClick={() => void connect()}>
+              <Link2 className="h-3.5 w-3.5" /> {working ? 'Opening…' : 'Connect Gmail'}
             </AppButton>
           </div>
         </div>
@@ -36,6 +94,7 @@ export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
           <p>Google access was revoked. Reconnect to start sending again.</p>
           <small>Sent history stays. Nothing was deleted.</small>
         </div>
+        {error ? <p className="px-4 pb-3 text-xs text-red-600" role="alert">{error}</p> : null}
       </section>
     );
   }
@@ -53,19 +112,21 @@ export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
                 <h2>Gmail</h2>
                 <span className="settings-channel-status"><i /> Connected</span>
               </div>
-              <p>{mailbox} · Gmail mailbox</p>
+              <p>{status?.email || 'Connected mailbox'} · Gmail mailbox</p>
             </div>
           </div>
           <div className="settings-channel-card__actions">
             <button
               type="button"
               className="settings-channel-action settings-channel-action--danger"
-              disabled={!canEdit}
+              disabled={!canEdit || working}
+              onClick={() => void disconnect()}
             >
-              <LogOut className="h-3 w-3" /> Disconnect
+              <LogOut className="h-3 w-3" /> {working ? 'Disconnecting…' : 'Disconnect'}
             </button>
           </div>
         </div>
+        {error ? <p className="px-4 pb-3 text-xs text-red-600" role="alert">{error}</p> : null}
         <div className="settings-channel-card__features">
           <a href="/email/compose" className="settings-channel-feature">
             <span className="settings-channel-feature__icon settings-channel-feature__icon--pink">
@@ -115,8 +176,8 @@ export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
           </div>
         </div>
         <div className="settings-channel-card__actions">
-          <AppButton size="sm" disabled={!canEdit}>
-            <Link2 className="h-3.5 w-3.5" /> Connect Gmail
+          <AppButton size="sm" disabled={!canEdit || working} onClick={() => void connect()}>
+            <Link2 className="h-3.5 w-3.5" /> {working ? 'Opening…' : 'Connect Gmail'}
           </AppButton>
         </div>
       </div>
@@ -133,6 +194,7 @@ export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
           </>
         )}
       </div>
+      {error ? <p className="px-4 pb-3 text-xs text-red-600" role="alert">{error}</p> : null}
     </section>
   );
 }

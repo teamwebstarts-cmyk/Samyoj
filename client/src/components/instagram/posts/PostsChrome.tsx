@@ -6,8 +6,6 @@ import {
   Clock3,
   FileText,
   ImagePlus,
-  LayoutGrid,
-  List,
   Lock,
   MessageSquare,
   Plus,
@@ -93,21 +91,30 @@ export type PostCounts = {
 type StatsRowProps = {
   counts: PostCounts;
   loading: boolean;
+  filter: PostFilterId | null;
+  onFilterChange: (value: PostFilterId) => void;
 };
 
-const STATS: Array<{ key: keyof PostCounts; label: string; icon: typeof FileText; tone: string }> = [
-  { key: 'total', label: 'Total posts', icon: FileText, tone: 'pink' },
-  { key: 'published', label: 'Published', icon: CheckCircle2, tone: 'green' },
-  { key: 'scheduled', label: 'Scheduled', icon: Clock3, tone: 'blue' },
-  { key: 'failed', label: 'Failed', icon: AlertCircle, tone: 'rose' },
+const STATS: Array<{
+  key: keyof PostCounts;
+  filter: PostFilterId;
+  label: string;
+  icon: typeof FileText;
+  tone: string;
+}> = [
+  { key: 'total', filter: 'all', label: 'Total posts', icon: FileText, tone: 'pink' },
+  { key: 'published', filter: 'PUBLISHED', label: 'Published', icon: CheckCircle2, tone: 'green' },
+  { key: 'scheduled', filter: 'SCHEDULED', label: 'Scheduled', icon: Clock3, tone: 'blue' },
+  { key: 'failed', filter: 'FAILED', label: 'Failed', icon: AlertCircle, tone: 'rose' },
 ];
 
-/** Four KPI chips in the left feed. Drafts stay on the filter chips. */
-export function PostStatsRow({ counts, loading }: StatsRowProps) {
+/** Status cards. Clicking one filters the All posts grid. */
+export function PostStatsRow({ counts, loading, filter, onFilterChange }: StatsRowProps) {
   return (
-    <div className="igp-stats">
+    <div className="igp-stats" role="tablist" aria-label="Filter posts by status">
       {STATS.map((row) => {
         const Icon = row.icon;
+        const selected = filter === row.filter;
         if (loading) {
           return (
             <div key={row.key} className="igp-stat igp-stat--skeleton" aria-hidden>
@@ -122,7 +129,14 @@ export function PostStatsRow({ counts, loading }: StatsRowProps) {
           );
         }
         return (
-          <div key={row.key} className="igp-stat">
+          <button
+            key={row.key}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            className={`igp-stat ${selected ? 'igp-stat--on' : ''}`}
+            onClick={() => onFilterChange(row.filter)}
+          >
             <span className={`igp-stat__icon igp-stat__icon--${row.tone}`}>
               <Icon className="h-4 w-4" strokeWidth={2.2} />
             </span>
@@ -130,7 +144,7 @@ export function PostStatsRow({ counts, loading }: StatsRowProps) {
               <p className="igp-stat__value">{counts[row.key]}</p>
               <p className="igp-stat__label">{row.label}</p>
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -140,55 +154,54 @@ export function PostStatsRow({ counts, loading }: StatsRowProps) {
 export const POST_FILTERS = ['all', 'DRAFT', 'SCHEDULED', 'PUBLISHED', 'FAILED'] as const;
 export type PostFilterId = (typeof POST_FILTERS)[number];
 
-const FILTER_LABELS: Record<PostFilterId, string> = {
-  all: 'All',
-  DRAFT: 'Drafts',
-  SCHEDULED: 'Scheduled',
-  PUBLISHED: 'Published',
-  FAILED: 'Failed',
-};
+export type PostFeedTab = 'posts' | 'live';
 
-type PostFiltersProps = {
-  filter: PostFilterId;
-  onFilterChange: (value: PostFilterId) => void;
-  counts: Record<PostFilterId, number>;
+type PostFeedBarProps = {
+  tab: PostFeedTab;
+  onTabChange: (value: PostFeedTab) => void;
+  liveCount: number;
   query: string;
   onQueryChange: (value: string) => void;
-  view: 'grid' | 'list';
-  onViewChange: (value: 'grid' | 'list') => void;
   canEdit: boolean;
 };
 
-/** Status chips + search + grid/list toggle. Search runs on loaded rows only. */
-export function PostFilters({
-  filter,
-  onFilterChange,
-  counts,
+/** Samyoj-managed posts vs media already live on Instagram, plus caption search. */
+export function PostFeedBar({
+  tab,
+  onTabChange,
+  liveCount,
   query,
   onQueryChange,
-  view,
-  onViewChange,
   canEdit,
-}: PostFiltersProps) {
+}: PostFeedBarProps) {
   return (
     <div className="igp-filters">
-      <div className="igp-filters__chips" role="tablist" aria-label="Filter posts by status">
-        {POST_FILTERS.map((id) => {
-          const active = filter === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              className={`igp-chip ${active ? 'igp-chip--on' : ''}`}
-              onClick={() => onFilterChange(id)}
-            >
-              {FILTER_LABELS[id]}
-              <span className="igp-chip__count">{counts[id]}</span>
-            </button>
-          );
-        })}
+      <div className="igp-tabs" role="tablist" aria-label="Post source">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'posts'}
+          className={tab === 'posts' ? 'is-on' : ''}
+          onClick={() => onTabChange('posts')}
+        >
+          <span className="igp-tab__text">
+            <strong>Samyoj posts</strong>
+            <small>Created here</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'live'}
+          className={tab === 'live' ? 'is-on' : ''}
+          onClick={() => onTabChange('live')}
+        >
+          <span className="igp-tab__text">
+            <strong>On Instagram</strong>
+            <small>Live on your account</small>
+          </span>
+          <span>{liveCount}</span>
+        </button>
       </div>
 
       <div className="igp-filters__tools">
@@ -199,30 +212,10 @@ export function PostFilters({
           id="igp-search"
           className="igp-search"
           type="search"
-          placeholder="Search captions…"
+          placeholder={tab === 'live' ? 'Search live posts…' : 'Search captions…'}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
-        <button
-          type="button"
-          className={`igp-iconbtn ${view === 'grid' ? 'igp-iconbtn--on' : ''}`}
-          onClick={() => onViewChange('grid')}
-          aria-label="Grid view"
-          aria-pressed={view === 'grid'}
-          title="Grid view"
-        >
-          <LayoutGrid className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className={`igp-iconbtn ${view === 'list' ? 'igp-iconbtn--on' : ''}`}
-          onClick={() => onViewChange('list')}
-          aria-label="List view"
-          aria-pressed={view === 'list'}
-          title="List view"
-        >
-          <List className="h-4 w-4" />
-        </button>
         {!canEdit ? (
           <span className="igp-kind" title="View-only access">
             <Lock className="h-3 w-3" />
