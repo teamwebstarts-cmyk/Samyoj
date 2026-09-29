@@ -47,6 +47,7 @@ vi.mock('../platform/events', () => ({
 }));
 
 vi.mock('./session', () => ({
+  hashRefreshToken: (token: string) => `hash:${token}`,
   createSession: vi.fn().mockResolvedValue({ accessToken: 'at_test', refreshToken: 'rt_test' }),
   rotateRefreshSession: vi.fn(),
   issueTenantSession: vi.fn(async (res: import('express').Response) => {
@@ -351,7 +352,13 @@ describe('POST /api/auth/logout', () => {
     expect(res.body.data.message).toMatch(/logged out/i);
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { token: 'rt_to_revoke', userId: 'user-1' },
+        where: expect.objectContaining({
+          userId: 'user-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({ token: expect.any(String) }),
+            { token: 'rt_to_revoke' },
+          ]),
+        }),
       })
     );
     const cookies = res.headers['set-cookie'] as string[] | undefined;

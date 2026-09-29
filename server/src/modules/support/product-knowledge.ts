@@ -242,11 +242,11 @@ Agents work the Inbox; they do not manage billing. Two-factor can be required fr
       'fees',
       'charges',
     ],
-    content: `Billing is under Account → Billing (owners/admins). Current checkout is a one-shot Razorpay payment for Growth (₹3,999) or Business (₹11,999), plus a free Starter plan. Activation is about 30 days — this is not a full auto-renewing subscription, GST invoice, or dunning product yet.
+    content: `Billing is under Account → Billing (owners/admins). Paid plans use Razorpay subscription checkout when configured, with plan-period entitlements and GST invoice records. One-pack AI top-ups are separate, and plan availability depends on the current catalog and organization status.
 
 The Samyoj plan price is software only. WhatsApp / Meta Cloud API message fees are billed by Meta on the WABA and are a separate bill. Do not mix them.
 
-Do not quote other catalogs, trials, or monthly/quarterly/yearly SKUs as if they were live. For payment failures or plan questions, use Account → Billing. Do not paste card numbers, OTPs, or passwords here.`,
+Do not invent prices, trials, cadences, or renewal outcomes. For payment failures or plan questions, use Account → Billing. Do not paste card numbers, OTPs, or passwords here.`,
   },
   {
     id: 'reports',

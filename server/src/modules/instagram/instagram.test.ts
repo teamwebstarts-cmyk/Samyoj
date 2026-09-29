@@ -677,7 +677,7 @@ describe('Phase 4 Instagram', () => {
     });
     expect(open.hidden).toBe(false);
     expect(open.privateReplySentAt).toBeNull();
-    const retentionCutoff = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const retentionCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const privateReplyCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     expect(open.commentedAt).toEqual({
       gte: new Date(Math.max(retentionCutoff.getTime(), privateReplyCutoff.getTime())),

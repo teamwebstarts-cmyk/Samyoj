@@ -307,17 +307,19 @@ model PasswordResetToken {
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid())
-  token     String    @unique
-  userId    String    @map("user_id")
-  expiresAt DateTime  @map("expires_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  userAgent String?   @map("user_agent")
-  ipAddress String?   @map("ip_address")
-  revokedAt DateTime? @map("revoked_at")
+  id             String    @id @default(uuid())
+  token          String    @unique
+  userId         String    @map("user_id")
+  organizationId String?   @map("organization_id")
+  expiresAt      DateTime  @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  userAgent      String?   @map("user_agent")
+  ipAddress      String?   @map("ip_address")
+  revokedAt      DateTime? @map("revoked_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@map("refresh_tokens")
 }
 

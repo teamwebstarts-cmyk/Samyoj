@@ -4,7 +4,7 @@
 **Use:** marketing site, product pages, “what we offer” lists.  
 **Honesty rule:** only the rows marked **In the product** may be sold as available today. Rows marked **Planned** are research and roadmap, not a promise. **Internal testing** means the code runs on a test deploy (`bash start.sh`). It is **not** customer production.
 
-Customer production is still **no**: a new WhatsApp reply has not been proven on the customer host, restore has not been drilled on that host, Razorpay Subscriptions (TARGET) are not shipped, live call transfer is a stub, and Facebook / Instagram / Ads live events are blocked until Meta App Review and a published app.
+Customer production is still **no**: a new WhatsApp reply has not been proven on the customer host, restore has not been drilled on that host, live Razorpay subscription webhooks have not been proven here, live call transfer is a stub, and Facebook / Instagram / Ads live events are blocked until Meta App Review and a published app.
 
 Sources: product navigation, `docs/memory/STATUS_AND_FUTURE.md`, `docs/meta-ecosystem/STATUS_SIMPLE.md`, phase specs 0–7.
 
@@ -46,7 +46,7 @@ These are the WhatsApp surfaces in the app today.
 | Dashboard | Connection status, message counts, campaigns, quick actions. | In the product |
 | Analytics | Two columns: Meta’s last-7-day ad numbers, and your Instant Form pipeline (qualified, won, amount). Missing amount shows “—”, not ₹0. | In the product (code). Left column stays empty until Ads read is live. Do not call this ROI. |
 | Settings → Channels | One settings screen for the WhatsApp number, Facebook Page, and Instagram account. Disconnect is soft. Inboxes stay separate. | In the product |
-| Billing & usage | Plan cards (Kickstart through Enterprise), usage meters, and one-time AI top-ups when Razorpay is configured. A monthly/quarterly/yearly toggle is on the page. Recurring subscription checkout, dunning, and GST tax invoices are not live. | In the product as **manual billing**. Do not say “subscribe yearly” or “GST invoice on autopilot.” |
+| Billing & usage | Plan cards, usage meters, Razorpay subscription checkout, GST invoice records, and one-time AI top-ups when configured. | In the product (internal test). Provider webhook/dunning operations still need live verification; do not promise a successful charge without a configured Razorpay account. |
 | Reports / ROI | A single “rupees earned from ads” number. | **Not built.** Do not put ROI on the website. |
 | Content Studio | A drafting screen exists in the codebase. | Hidden from the sidebar. Do not list it on the website, and do not call it a social publisher. |
 

@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type { Request, Response } from 'express';
 import prisma from '../../config/database';
 import { config } from '../../config';
@@ -13,6 +13,10 @@ export function clientMeta(req: Request) {
     ipAddress:
       (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? null,
   };
+}
+
+export function hashRefreshToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
 export async function revokeRefreshSessionsForUser(
@@ -32,8 +36,9 @@ export async function createSession(payload: JwtPayload, req: Request) {
 
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      token: hashRefreshToken(refreshToken),
       userId: payload.userId,
+      organizationId: payload.organizationId ?? null,
       expiresAt: parseExpiry(config.jwt.refreshExpiresIn),
       userAgent: meta.userAgent,
       ipAddress: meta.ipAddress,
@@ -64,10 +69,20 @@ export async function rotateTenantSession(
 
 /** Rotate refresh token; revoke old; detect reuse by revoked token. */
 export async function rotateRefreshSession(oldRefreshToken: string, req: Request) {
-  const stored = await prisma.refreshToken.findUnique({
-    where: { token: oldRefreshToken },
+  const hashedToken = hashRefreshToken(oldRefreshToken);
+  let stored = await prisma.refreshToken.findUnique({
+    where: { token: hashedToken },
     include: { user: { include: { organizations: { take: 1 } } } },
   });
+  let legacyPlaintext = false;
+  if (!stored) {
+    // One-time compatibility path for sessions created before hash-at-rest.
+    stored = await prisma.refreshToken.findUnique({
+      where: { token: oldRefreshToken },
+      include: { user: { include: { organizations: { take: 1 } } } },
+    });
+    legacyPlaintext = Boolean(stored);
+  }
 
   if (!stored) {
     return null;
@@ -90,12 +105,15 @@ export async function rotateRefreshSession(oldRefreshToken: string, req: Request
   const payload: JwtPayload = {
     userId: stored.user.id,
     email: stored.user.email,
-    organizationId: orgMembership?.organizationId,
+    organizationId: stored.organizationId ?? orgMembership?.organizationId,
   };
 
   await prisma.refreshToken.update({
     where: { id: stored.id },
-    data: { revokedAt: new Date() },
+    data: {
+      ...(legacyPlaintext ? { token: hashedToken } : {}),
+      revokedAt: new Date(),
+    },
   });
 
   return createSession(payload, req);

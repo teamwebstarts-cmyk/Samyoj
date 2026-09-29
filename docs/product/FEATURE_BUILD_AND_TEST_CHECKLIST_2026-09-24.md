@@ -70,7 +70,7 @@ Internal test deploy was restarted 24 Sep 2026: API `:8000`, UI `:3000`, Admin `
 
 | Feature | Build | Why |
 |---|---|---|
-| TARGET subscriptions, GST invoices | Not built | SAMYOJ-35. Do not mix Meta message fees into the plan price. |
+| Razorpay subscriptions, GST invoices | Implemented in code | Live Razorpay charge/webhook verification remains external. Do not mix Meta message fees into the plan price. |
 | Platform admin impersonation and WhatsApp outreach | Not built | Left on SAMYOJ-57. |
 | App publish + App Review | Not done | Required before real Facebook, Instagram, Lead Ads, and Ads events. See `docs/meta-ecosystem/META_APP_REVIEW_AND_LIVE_TEST_RUNBOOK_2026-09-24.md`. |
 

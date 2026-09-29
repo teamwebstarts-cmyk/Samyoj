@@ -23,7 +23,7 @@ import {
   type TeamSettings,
 } from './types';
 import type { OrgRole } from '@prisma/client';
-import { revokeRefreshSessionsForUser, issueTenantSession } from '../auth/session';
+import { hashRefreshToken, revokeRefreshSessionsForUser, issueTenantSession } from '../auth/session';
 import { readTenantRefreshToken } from '../auth/cookies';
 import { revokeOrgMemberSockets, revokeUserSockets } from '../../realtime';
 import { requireActiveCommercialOnMutation } from '../../middleware/plan-guard';
@@ -843,7 +843,9 @@ router.delete(
       where: {
         userId,
         revokedAt: null,
-        ...(exceptCurrent ? { token: { not: exceptCurrent } } : {}),
+        ...(exceptCurrent
+          ? { token: { notIn: [hashRefreshToken(exceptCurrent), exceptCurrent] } }
+          : {}),
       },
       data: { revokedAt: new Date() },
     });

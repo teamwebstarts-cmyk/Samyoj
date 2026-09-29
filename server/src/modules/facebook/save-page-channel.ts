@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { AppError } from '../../errors';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
@@ -9,6 +10,13 @@ import {
 import { createModuleLogger } from '../../utils/logger';
 
 const log = createModuleLogger('facebook-save-page');
+
+function mapChannelOwnershipRace(err: unknown): never {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    throw new AppError(409, 'This Meta account is already connected to another organization');
+  }
+  throw err;
+}
 
 async function assertActiveChannelOwnership(
   platform: 'FB' | 'IG',
@@ -65,25 +73,30 @@ export async function saveFacebookPageChannel(opts: {
     },
   });
 
-  const channel = existing
-    ? await prisma.channel.update({
-        where: { id: existing.id },
-        data: {
-          name: opts.pageName,
-          accessToken: encrypted,
-          isActive: true,
-        },
-      })
-    : await prisma.channel.create({
-        data: {
-          organizationId: opts.organizationId,
-          platform: 'FB',
-          platformAccountId: opts.pageId,
-          name: opts.pageName,
-          accessToken: encrypted,
-          isActive: true,
-        },
-      });
+  let channel;
+  try {
+    channel = existing
+      ? await prisma.channel.update({
+          where: { id: existing.id },
+          data: {
+            name: opts.pageName,
+            accessToken: encrypted,
+            isActive: true,
+          },
+        })
+      : await prisma.channel.create({
+          data: {
+            organizationId: opts.organizationId,
+            platform: 'FB',
+            platformAccountId: opts.pageId,
+            name: opts.pageName,
+            accessToken: encrypted,
+            isActive: true,
+          },
+        });
+  } catch (err) {
+    mapChannelOwnershipRace(err);
+  }
 
   // Soft-deactivate other active FB pages for this org (one Page card in Phase 1).
   await prisma.channel.updateMany({
@@ -184,27 +197,32 @@ export async function saveLinkedInstagramChannel(opts: {
     },
   });
 
-  const channel = existing
-    ? await prisma.channel.update({
-        where: { id: existing.id },
-        data: {
-          name: ig.username || ig.id,
-          accessToken: encrypted,
-          parentPageId: opts.pageId,
-          isActive: true,
-        },
-      })
-    : await prisma.channel.create({
-        data: {
-          organizationId: opts.organizationId,
-          platform: 'IG',
-          platformAccountId: ig.id,
-          name: ig.username || ig.id,
-          accessToken: encrypted,
-          parentPageId: opts.pageId,
-          isActive: true,
-        },
-      });
+  let channel;
+  try {
+    channel = existing
+      ? await prisma.channel.update({
+          where: { id: existing.id },
+          data: {
+            name: ig.username || ig.id,
+            accessToken: encrypted,
+            parentPageId: opts.pageId,
+            isActive: true,
+          },
+        })
+      : await prisma.channel.create({
+          data: {
+            organizationId: opts.organizationId,
+            platform: 'IG',
+            platformAccountId: ig.id,
+            name: ig.username || ig.id,
+            accessToken: encrypted,
+            parentPageId: opts.pageId,
+            isActive: true,
+          },
+        });
+  } catch (err) {
+    mapChannelOwnershipRace(err);
+  }
 
   await prisma.channel.updateMany({
     where: {

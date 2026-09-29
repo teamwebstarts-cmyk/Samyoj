@@ -16,7 +16,7 @@ import {
 } from '../../services/email.service';
 import oauthRoutes from './oauth.routes';
 import { passwordSchema } from './password-policy';
-import { issueTenantSession, rotateTenantSession } from './session';
+import { hashRefreshToken, issueTenantSession, rotateTenantSession } from './session';
 import {
   clearTenantAuthCookies,
   readTenantRefreshToken,
@@ -346,7 +346,10 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
   const refreshToken = body.refreshToken ?? readTenantRefreshToken(req);
   if (refreshToken) {
     await prisma.refreshToken.updateMany({
-      where: { token: refreshToken, userId: req.user!.userId },
+      where: {
+        userId: req.user!.userId,
+        OR: [{ token: hashRefreshToken(refreshToken) }, { token: refreshToken }],
+      },
       data: { revokedAt: new Date() },
     });
   }

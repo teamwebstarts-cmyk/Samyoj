@@ -28,7 +28,13 @@ vi.mock('../../config/redis', () => ({
 }));
 
 import prisma from '../../config/database';
-import { createSession, rotateRefreshSession, revokeRefreshSessionsForUser, clientMeta } from './session';
+import {
+  createSession,
+  hashRefreshToken,
+  rotateRefreshSession,
+  revokeRefreshSessionsForUser,
+  clientMeta,
+} from './session';
 
 const refreshTokenCreate = vi.mocked(prisma.refreshToken.create);
 const refreshTokenFindUnique = vi.mocked(prisma.refreshToken.findUnique);
@@ -93,6 +99,8 @@ describe('createSession', () => {
     const call = refreshTokenCreate.mock.calls[0][0];
     expect(call.data.userId).toBe('u1');
     expect(call.data.token).toBeTruthy();
+    expect(call.data.token).not.toContain('.');
+    expect(call.data.organizationId).toBe('org-1');
     expect(call.data.userAgent).toBe('TestAgent/1.0');
     expect(call.data.ipAddress).toBe('1.2.3.4');
   });
@@ -149,7 +157,7 @@ describe('rotateRefreshSession', () => {
   it('revokes old token and creates new session for valid token', async () => {
     refreshTokenFindUnique.mockResolvedValue({
       id: 'rt-1',
-      token: 'valid-token',
+      token: hashRefreshToken('valid-token'),
       userId: 'u1',
       revokedAt: null,
       expiresAt: new Date('2099-01-01'),
@@ -167,6 +175,43 @@ describe('rotateRefreshSession', () => {
       data: { revokedAt: expect.any(Date) },
     });
     expect(refreshTokenCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the organization bound to the refresh session instead of choosing the first membership', async () => {
+    refreshTokenFindUnique.mockResolvedValue({
+      id: 'rt-1',
+      token: hashRefreshToken('org-two-token'),
+      userId: 'u1',
+      organizationId: 'org-2',
+      revokedAt: null,
+      expiresAt: new Date('2099-01-01'),
+      user: { id: 'u1', email: 'a@b.c', organizations: [{ organizationId: 'org-1' }] },
+    } as never);
+
+    const result = await rotateRefreshSession('org-two-token', mockReq());
+    expect(result).not.toBeNull();
+    expect(refreshTokenCreate.mock.calls[0][0].data.organizationId).toBe('org-2');
+  });
+
+  it('lazily hashes a legacy plaintext session during rotation', async () => {
+    refreshTokenFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'rt-legacy',
+        token: 'legacy-token',
+        userId: 'u1',
+        organizationId: 'org-1',
+        revokedAt: null,
+        expiresAt: new Date('2099-01-01'),
+        user: { id: 'u1', email: 'a@b.c', organizations: [] },
+      } as never);
+
+    await rotateRefreshSession('legacy-token', mockReq());
+
+    expect(refreshTokenUpdate).toHaveBeenCalledWith({
+      where: { id: 'rt-legacy' },
+      data: { token: hashRefreshToken('legacy-token'), revokedAt: expect.any(Date) },
+    });
   });
 });
 

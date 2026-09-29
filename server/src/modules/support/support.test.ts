@@ -78,9 +78,11 @@ describe('support system prompt', () => {
     expect(knowledge).not.toMatch(/META_APP_SECRET|webhook URL|ngrok/i);
   });
 
-  it('does not present TARGET catalog prices as live', () => {
+  it('does not present stale manual-billing copy as live', () => {
     const billing = SUPPORT_KNOWLEDGE_TOPICS.find((t) => t.id === 'billing')!;
-    expect(billing.content).toMatch(/₹3,999|₹3999|3,999/);
+    expect(billing.content).toMatch(/Razorpay subscription/i);
+    expect(billing.content).toMatch(/GST invoice/i);
+    expect(billing.content).not.toMatch(/one-shot Razorpay|not a full auto-renewing subscription/i);
     expect(billing.content).not.toMatch(/14-day/);
     expect(billing.content).toMatch(/Meta/);
   });
