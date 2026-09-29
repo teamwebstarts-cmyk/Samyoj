@@ -1,4 +1,4 @@
-export type SidebarChannelAccent = 'whatsapp' | 'facebook' | 'instagram' | 'studio' | 'neutral';
+export type SidebarChannelAccent = 'whatsapp' | 'facebook' | 'instagram' | 'email' | 'studio' | 'neutral';
 
 const WHATSAPP_ROUTE_PREFIXES = [
   '/inbox',
@@ -15,6 +15,7 @@ const WHATSAPP_ROUTE_PREFIXES = [
 export function resolveSidebarAccent(pathname: string, search: string): SidebarChannelAccent {
   if (pathname.startsWith('/facebook')) return 'facebook';
   if (pathname.startsWith('/instagram')) return 'instagram';
+  if (pathname.startsWith('/email')) return 'email';
   if (
     pathname.startsWith('/ai-bot') ||
     pathname.startsWith('/automations') ||
@@ -26,6 +27,7 @@ export function resolveSidebarAccent(pathname: string, search: string): SidebarC
     const channel = new URLSearchParams(search).get('channel');
     if (channel === 'facebook') return 'facebook';
     if (channel === 'instagram') return 'instagram';
+    if (channel === 'email') return 'email';
     return 'whatsapp';
   }
   if (WHATSAPP_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {

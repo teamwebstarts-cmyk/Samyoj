@@ -22,6 +22,7 @@ export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
     whatsapp: hasConnectedNumber,
     facebook: facebook?.connected === true,
     instagram: instagram?.connected === true,
+    email: false,
   });
   const moreActive = isMoreRouteActive(
     pathname,

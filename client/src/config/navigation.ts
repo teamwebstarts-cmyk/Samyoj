@@ -9,6 +9,9 @@ import {
   ImagePlus,
   Instagram,
   LayoutDashboard,
+  LayoutTemplate,
+  Mail,
+  MailPlus,
   MessageSquare,
   Package,
   Phone,
@@ -34,17 +37,17 @@ export interface NavItem {
   hidden?: boolean;
 }
 
-/** Platform row with chevron (WhatsApp / Facebook / Instagram). */
+/** Platform row with chevron (WhatsApp / Facebook / Instagram / Email). */
 export type PlatformNavSection = NavSection & {
   dropdown: true;
   icon: LucideIcon;
-  accent: 'facebook' | 'whatsapp' | 'instagram';
+  accent: 'facebook' | 'whatsapp' | 'instagram' | 'email';
 };
 
 export interface NavSection {
   label: string;
   items: NavItem[];
-  accent?: 'facebook' | 'whatsapp' | 'instagram';
+  accent?: 'facebook' | 'whatsapp' | 'instagram' | 'email';
   /** Dashboard-style row with chevron; children render under it. */
   dropdown?: boolean;
   icon?: LucideIcon;
@@ -88,6 +91,16 @@ const CHANNEL_PLATFORMS: PlatformNavSection[] = [
       { to: '/instagram/inbox', icon: MessageSquare, label: 'Inbox' },
       { to: '/instagram/comments', icon: Hash, label: 'Comments' },
       { to: '/instagram/posts', icon: ImagePlus, label: 'Posts' },
+    ],
+  },
+  {
+    label: 'Email',
+    accent: 'email',
+    dropdown: true,
+    icon: Mail,
+    items: [
+      { to: '/email/compose', icon: MailPlus, label: 'Compose' },
+      { to: '/email/templates', icon: LayoutTemplate, label: 'Templates' },
     ],
   },
 ];
@@ -196,6 +209,8 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/instagram/inbox', icon: Instagram, label: 'Instagram Inbox' },
   { to: '/instagram/comments', icon: Hash, label: 'Instagram Comments' },
   { to: '/instagram/posts', icon: ImagePlus, label: 'Instagram Posts' },
+  { to: '/email/compose', icon: MailPlus, label: 'Email Compose' },
+  { to: '/email/templates', icon: LayoutTemplate, label: 'Email Templates' },
   { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
   { to: '/automations', icon: Workflow, label: 'Automations' },

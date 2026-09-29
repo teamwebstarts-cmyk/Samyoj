@@ -370,6 +370,25 @@
     color: #db2777;
   }
 
+  .sidebar-dropdown--email .sidebar-nav-item--idle:hover {
+    background: linear-gradient(90deg, #fdecea 0%, #fff8f7 100%);
+    border-color: rgba(245, 194, 192, 0.95);
+  }
+
+  .sidebar-dropdown--email .sidebar-nav-item--idle:hover .sidebar-nav-icon {
+    background: rgba(234, 67, 53, 0.1);
+    color: #c5221f;
+  }
+
+  .sidebar-glass[data-sidebar-accent='email'] {
+    border-right-color: rgba(245, 194, 192, 0.9);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(253, 236, 234, 0.9) 100%);
+  }
+
+  .sidebar-glass[data-sidebar-accent='email']::after {
+    background: linear-gradient(180deg, rgba(234, 67, 53, 0.14) 0%, rgba(234, 67, 53, 0.04) 40%, transparent 100%);
+  }
+
   .sidebar-glass[data-sidebar-accent='facebook'] {
     border-right-color: rgba(191, 219, 254, 0.85);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(239, 246, 255, 0.9) 100%);
@@ -498,6 +517,25 @@
     color: #fff;
   }
 
+  .sidebar-nav-item--active.sidebar-nav-item--accent-email {
+    color: #9f1d1a;
+    background: linear-gradient(135deg, #fdecea 0%, #fff6f5 55%, #ffffff 100%);
+    border: 1px solid #f5c2c0;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.8) inset,
+      0 6px 18px rgba(197, 34, 31, 0.12);
+  }
+
+  .sidebar-nav-item--active.sidebar-nav-item--accent-email::before {
+    background: linear-gradient(180deg, #f28b82, #c5221f);
+  }
+
+  .sidebar-nav-item--active.sidebar-nav-item--accent-email .sidebar-nav-icon {
+    background: linear-gradient(145deg, #ea4335 0%, #c5221f 100%);
+    box-shadow: 0 4px 12px rgba(197, 34, 31, 0.28);
+    color: #fff;
+  }
+
   .sidebar-nav-item--active.sidebar-nav-item--accent-studio {
     color: #5b21b6;
     background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 55%, #ffffff 100%);
@@ -578,6 +616,10 @@
     color: #e4405f;
   }
 
+  .sidebar-dropdown--email:has(.sidebar-nav-item--active) > button.sidebar-nav-item .sidebar-nav-icon {
+    color: #c5221f;
+  }
+
   /* Collapsed dropdown while a child route is active (children unmounted — :has() does not apply). */
   .sidebar-dropdown--parent-active > button.sidebar-nav-item.sidebar-nav-item--active::before {
     content: '';
@@ -645,6 +687,25 @@
   .sidebar-dropdown--instagram.sidebar-dropdown--parent-active > button.sidebar-nav-item .sidebar-nav-icon {
     background: linear-gradient(135deg, #feda75 0%, #e1306c 52%, #c13584 100%);
     box-shadow: 0 4px 12px rgba(225, 48, 108, 0.28);
+    color: #fff;
+  }
+
+  .sidebar-dropdown--email.sidebar-dropdown--parent-active > button.sidebar-nav-item.sidebar-nav-item--active {
+    color: #9f1d1a;
+    background: linear-gradient(135deg, #fdecea 0%, #fff6f5 55%, #ffffff 100%);
+    border-color: #f5c2c0;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.8) inset,
+      0 6px 18px rgba(197, 34, 31, 0.12);
+  }
+
+  .sidebar-dropdown--email.sidebar-dropdown--parent-active > button.sidebar-nav-item.sidebar-nav-item--active::before {
+    background: linear-gradient(180deg, #f28b82, #c5221f);
+  }
+
+  .sidebar-dropdown--email.sidebar-dropdown--parent-active > button.sidebar-nav-item .sidebar-nav-icon {
+    background: linear-gradient(145deg, #ea4335 0%, #c5221f 100%);
+    box-shadow: 0 4px 12px rgba(197, 34, 31, 0.28);
     color: #fff;
   }
 
@@ -1623,6 +1684,12 @@
     box-shadow: 0 4px 18px rgba(225, 48, 108, 0.12);
   }
 
+  .dashboard-channel-tab[data-channel='email'][data-active='true'] {
+    border-color: #ea4335;
+    background: linear-gradient(180deg, #fdecea, #ffffff 78%);
+    box-shadow: 0 4px 18px rgba(197, 34, 31, 0.12);
+  }
+
   .dashboard-channel-tab[data-channel='whatsapp']:hover,
   .dashboard-channel-tab[data-channel='whatsapp'][data-active='true'] {
     border-color: rgba(37, 211, 102, 0.55);
@@ -2191,6 +2258,17 @@
 
   .dashboard-channel-hero-decor--facebook > svg {
     max-height: 118px;
+  }
+
+  .dashboard-channel-hero-decor--email {
+    top: 58%;
+    height: 118px;
+    width: min(420px, 40%);
+  }
+
+  .dashboard-channel-hero-decor--email > svg {
+    max-height: 118px;
+    width: 100%;
   }
 
   .wa3d-stage {
@@ -4709,6 +4787,10 @@
     border-color: #d8efe5;
   }
 
+  .settings-channel-card--gmail {
+    border-color: #f9d2dd;
+  }
+
   .settings-channel-card__header {
     display: flex;
     min-height: 58px;
@@ -4740,6 +4822,30 @@
   .settings-channel-card__brand--facebook { background: #1877f2; }
   .settings-channel-card__brand--instagram {
     background: linear-gradient(135deg, #f09433, #e1306c 52%, #833ab4);
+  }
+  .settings-channel-card__brand--gmail {
+    background: #fff;
+    border: 1px solid #e5e9f4;
+  }
+
+  .settings-channel-status--warn {
+    background: #fef3c7;
+    color: #b45309;
+  }
+  .settings-channel-status--warn i {
+    background: #f59e0b;
+  }
+
+  .settings-channel-card__limits {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 0;
+    padding: 0 14px 14px;
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: #8a6d1c;
   }
 
   .settings-channel-card__title-row {

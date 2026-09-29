@@ -255,7 +255,9 @@ function PlatformDropdown({
         ? 'text-emerald-600'
         : section.accent === 'instagram'
           ? 'text-[#E4405F]'
-          : '';
+          : section.accent === 'email'
+            ? 'text-[#FD2058]'
+            : '';
 
   const dropdownClass = [
     'sidebar-dropdown',
@@ -328,7 +330,7 @@ function SectionTitle({
 }: {
   label: string;
   collapsed: boolean;
-  accent?: 'facebook' | 'whatsapp' | 'instagram' | 'studio';
+  accent?: 'facebook' | 'whatsapp' | 'instagram' | 'email' | 'studio';
 }) {
   const short = SECTION_SHORT[label] ?? label.slice(0, 3).toUpperCase();
   const accentBar =
@@ -338,9 +340,11 @@ function SectionTitle({
           ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-emerald-500'
           : accent === 'instagram'
             ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-[#f09433] before:via-[#dc2743] before:to-[#bc1888]'
-            : accent === 'studio'
-              ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-violet-400 before:to-violet-700'
-              : '';
+            : accent === 'email'
+              ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-[#f28b82] before:to-[#c5221f]'
+              : accent === 'studio'
+                ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-violet-400 before:to-violet-700'
+                : '';
 
   return (
     <p
@@ -396,9 +400,11 @@ export default function Sidebar({
       ? 'border-blue-100/80'
       : channelAccent === 'instagram'
         ? 'border-pink-100/80'
-        : channelAccent === 'studio'
-          ? 'border-violet-100/80'
-          : 'border-emerald-100/60';
+        : channelAccent === 'email'
+          ? 'border-red-100/80'
+          : channelAccent === 'studio'
+            ? 'border-violet-100/80'
+            : 'border-emerald-100/60';
   // Tip enabled whenever collapsed (nav labels) or always for collapse button
   const { tip, onShowTip, onHideTip } = useSidebarFlyoutTip(true);
 

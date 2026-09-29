@@ -36,6 +36,18 @@ export const PAGE_META: Record<string, PageMeta> = {
     title: 'Instagram Posts',
     description: 'Create, schedule and manage your Instagram posts',
   },
+  '/email': {
+    title: 'Email',
+    description: 'Send from your connected Gmail. Not an inbox.',
+  },
+  '/email/compose': {
+    title: 'Email Compose',
+    description: 'Send a one-time email to a contact from your connected Gmail mailbox',
+  },
+  '/email/templates': {
+    title: 'Email Templates',
+    description: 'Save a reusable template to send faster and keep your messaging consistent',
+  },
   '/calls': {
     title: 'Calls',
     description: 'Voice calls handled by your AI bot',

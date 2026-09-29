@@ -22,7 +22,7 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useMetaChannelStatus } from '../components/layout/MetaChannelChips';
 import { analyticsApi, campaignApi, inboxApi, onboardingApi, templateApi } from '../services/api';
 import { toastError } from '../utils/toast';
-import { anyWorkspaceChannel } from '../utils/workspaceChannels';
+import EmailDashboardView from './email/EmailDashboardPage';
 import type { AnalyticsOverview, Campaign, Conversation, MessageTemplate } from '../types';
 
 const DEFAULT_PERIOD: MetricsPeriod = DEFAULT_METRICS_PERIOD;
@@ -107,8 +107,13 @@ export default function DashboardPage() {
     whatsapp: waConnected,
     facebook: facebook?.connected === true,
     instagram: instagram?.connected === true,
+    // Mock: Email tab always shown connected until Gmail backend lands.
+    email: true,
   };
-  const anyChannel = anyWorkspaceChannel(channels);
+  // Email is mocked connected for the tab until the Gmail backend lands.
+  // The pre-connect wall must key on real channels only (spec Phase 3: include
+  // channels.email here once the mailbox status is real).
+  const anyChannel = channels.whatsapp || channels.facebook || channels.instagram;
   const workspaceReady = connectionReady && metaReady;
   const requestedChannel = searchParams.get('channel');
   const activeChannel =
@@ -118,15 +123,22 @@ export default function DashboardPage() {
         ? 'instagram'
         : requestedChannel === 'whatsapp' && channels.whatsapp
           ? 'whatsapp'
-          : requestedChannel === 'all' || !requestedChannel
-            ? 'all'
-            : channels.whatsapp
-              ? 'whatsapp'
-              : channels.facebook
-                ? 'facebook'
-                : 'instagram';
+          : requestedChannel === 'email' && channels.email
+            ? 'email'
+            : requestedChannel === 'all' || !requestedChannel
+              ? 'all'
+              : channels.whatsapp
+                ? 'whatsapp'
+                : channels.facebook
+                  ? 'facebook'
+                  : 'instagram';
   const showAll = activeChannel === 'all';
   const showWhatsApp = activeChannel === 'whatsapp' && channels.whatsapp;
+  const showMetaChannel =
+    (activeChannel === 'facebook' && channels.facebook) ||
+    (activeChannel === 'instagram' && channels.instagram);
+  // Email renders its own dashboard view (mockup 1) — mock mailbox until backend lands.
+  const showEmail = activeChannel === 'email';
 
   const loadStats = useCallback(() => {
     if (!resolved || !activeNumber) return;
@@ -293,7 +305,9 @@ export default function DashboardPage() {
           whatsappLabel={activeNumber?.phoneNumber}
           facebookLabel={facebook?.label}
           instagramLabel={instagram?.label}
+          emailLabel="support@samyoj.com"
         />
+        {showEmail ? <EmailDashboardView /> : null}
         {showAll ? (
           <DashboardAllChannels
             channels={channels}
@@ -364,7 +378,7 @@ export default function DashboardPage() {
             />
           </div>
         ) : null}
-        {(channels.facebook || channels.instagram) && !showAll ? (
+        {showMetaChannel ? (
           <div className={showWhatsApp ? 'hidden' : 'contents'} aria-hidden={showWhatsApp}>
             <DashboardChannelHome
               activeChannel={activeChannel === 'facebook' ? 'facebook' : 'instagram'}

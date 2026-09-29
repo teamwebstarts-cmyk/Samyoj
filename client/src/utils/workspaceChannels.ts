@@ -1,11 +1,11 @@
 export type WorkspaceChannels = {
-  whatsapp: boolean;
-  facebook: boolean;
-  instagram: boolean;
+  whatsapp: boolean; facebook: boolean; instagram: boolean;
+  /** Gmail mailbox active (Email channel). False until backend lands; mockups render connected. */
+  email: boolean;
 };
 
 export function anyWorkspaceChannel(channels: WorkspaceChannels): boolean {
-  return channels.whatsapp || channels.facebook || channels.instagram;
+  return channels.whatsapp || channels.facebook || channels.instagram || channels.email;
 }
 
 function joinedChannelNames(channels: WorkspaceChannels): string[] {
@@ -13,6 +13,7 @@ function joinedChannelNames(channels: WorkspaceChannels): string[] {
     channels.whatsapp ? 'WhatsApp' : null,
     channels.facebook ? 'Facebook' : null,
     channels.instagram ? 'Instagram' : null,
+    channels.email ? 'Email' : null,
   ].filter((name): name is string => Boolean(name));
 }
 
@@ -23,10 +24,15 @@ export function dashboardDescription(channels: WorkspaceChannels): string {
   if (names.length === 1) {
     if (channels.whatsapp) return "Here's your WhatsApp workspace at a glance";
     if (channels.facebook) return 'Facebook Page workspace at a glance';
+    if (channels.email) return 'Email workspace at a glance';
     return 'Instagram workspace at a glance';
   }
-  if (names.length === 3) return 'WhatsApp, Facebook, and Instagram at a glance';
-  return `${names[0]} and ${names[1]} at a glance`;
+  if (names.length === 4) return 'WhatsApp, Facebook, Instagram, and Email at a glance';
+  return names.length > 1 ? `${names[0]} and ${names[1]} at a glance` : `${names[0]} at a glance`;
+}
+
+export function isEmailSurface(pathname: string): boolean {
+  return pathname === '/email' || pathname.startsWith('/email/');
 }
 
 export function isWhatsAppSurface(pathname: string): boolean {
@@ -76,6 +82,9 @@ export function topbarConnectionBadge(
     if (!opts.metaReady) return 'hidden';
     return channels.instagram ? 'live' : 'not-connected';
   }
+  if (isEmailSurface(pathname)) {
+    return channels.email ? 'live' : 'not-connected';
+  }
   if (isWhatsAppSurface(pathname)) {
     if (!opts.numbersReady) return 'hidden';
     return channels.whatsapp ? 'live' : 'not-connected';
@@ -90,6 +99,7 @@ export function topbarLiveTitle(pathname: string): string {
   if (isFacebookSurface(pathname)) return 'Facebook Page connected — live updates available';
   if (isInstagramSurface(pathname)) return 'Instagram connected — live updates available';
   if (isWhatsAppSurface(pathname)) return 'WhatsApp connected — live updates available';
+  if (isEmailSurface(pathname)) return 'Gmail mailbox connected for sending';
   return 'A channel is connected — live updates available';
 }
 
@@ -97,6 +107,7 @@ export function topbarNotConnectedTitle(pathname: string): string {
   if (isFacebookSurface(pathname)) return 'Facebook Page not connected';
   if (isInstagramSurface(pathname)) return 'Instagram not connected';
   if (isWhatsAppSurface(pathname)) return 'WhatsApp not connected';
+  if (isEmailSurface(pathname)) return 'Gmail mailbox not connected';
   return 'No channel connected';
 }
 

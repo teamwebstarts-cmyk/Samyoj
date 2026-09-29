@@ -12,12 +12,14 @@ interface DashboardChannelTabsProps {
   whatsappLabel?: string;
   facebookLabel?: string;
   instagramLabel?: string;
+  emailLabel?: string;
 }
 
 const CHANNELS = [
   { key: 'whatsapp' as const, label: 'WhatsApp', fallback: 'Business number', href: '/?channel=whatsapp' },
   { key: 'facebook' as const, label: 'Facebook', fallback: 'Page', href: '/?channel=facebook' },
   { key: 'instagram' as const, label: 'Instagram', fallback: 'Business account', href: '/?channel=instagram' },
+  { key: 'email' as const, label: 'Email', fallback: 'Connected Gmail', href: '/?channel=email' },
 ];
 
 export default function DashboardChannelTabs({
@@ -26,11 +28,13 @@ export default function DashboardChannelTabs({
   whatsappLabel,
   facebookLabel,
   instagramLabel,
+  emailLabel,
 }: DashboardChannelTabsProps) {
   const subtitles = {
     whatsapp: whatsappLabel || '+ WhatsApp number',
     facebook: facebookLabel || 'Page connected',
     instagram: instagramLabel || 'Business account',
+    email: emailLabel || 'Connected Gmail',
   };
 
   const allActive = activeChannel === 'all';
@@ -51,7 +55,7 @@ export default function DashboardChannelTabs({
             <span className="truncate text-[12px] font-extrabold text-neutral-900 sm:text-[13px]">All Channels</span>
           </span>
           <span className="dashboard-channel-tab__sub mt-0.5 block truncate text-[10.5px] font-medium text-neutral-500">
-            WhatsApp, Facebook, Instagram
+            WhatsApp, Facebook, Instagram, Email
           </span>
         </span>
       </Link>
@@ -63,13 +67,17 @@ export default function DashboardChannelTabs({
             ? WhatsAppGlyph
             : channel.key === 'facebook'
               ? FacebookGlyph
-              : InstagramGlyph;
+              : channel.key === 'instagram'
+                ? InstagramGlyph
+                : MailGlyph;
         const iconClass =
           channel.key === 'whatsapp'
             ? 'bg-[#25D366] text-white shadow-[0_4px_10px_rgba(37,211,102,0.35)]'
             : channel.key === 'facebook'
               ? 'bg-[#1877F2] text-white shadow-[0_4px_10px_rgba(24,119,242,0.32)]'
-              : 'bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] text-white shadow-[0_4px_10px_rgba(220,39,67,0.28)]';
+              : channel.key === 'instagram'
+                ? 'bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] text-white shadow-[0_4px_10px_rgba(220,39,67,0.28)]'
+                : 'bg-[#ea4335] text-white shadow-[0_4px_10px_rgba(234,67,53,0.32)]';
 
         return (
           <Link
@@ -81,7 +89,7 @@ export default function DashboardChannelTabs({
             data-connected={connected}
           >
             <span className={`dashboard-channel-tab__icon ${iconClass}`}>
-              <Icon className={channel.key === 'instagram' ? 'h-[17px] w-[17px] stroke-[2.25]' : 'h-[18px] w-[18px]'} />
+              <Icon className="h-[18px] w-[18px]" />
             </span>
             <span className="min-w-0">
               <span className="flex items-center gap-1.5">
@@ -106,23 +114,6 @@ export default function DashboardChannelTabs({
           </Link>
         );
       })}
-      <div className="dashboard-channel-tab dashboard-channel-tab--disabled" aria-label="Email Coming soon" aria-disabled="true">
-        <span className="dashboard-channel-tab__icon bg-slate-500 text-white shadow-[0_3px_8px_rgba(71,85,105,0.25)]">
-          <MailGlyph className="h-[18px] w-[18px]" />
-        </span>
-        <span className="min-w-0">
-          <span className="flex items-center gap-1.5">
-            <span className="truncate text-[12px] font-extrabold text-neutral-700 sm:text-[13px]">Email</span>
-            <span className="inline-flex rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
-              <span className="hidden sm:inline">Coming soon</span>
-              <span className="sm:hidden">Soon</span>
-            </span>
-          </span>
-          <span className="dashboard-channel-tab__sub mt-0.5 block truncate text-[10.5px] font-medium text-neutral-400">
-            Email inbox
-          </span>
-        </span>
-      </div>
     </nav>
   );
 }

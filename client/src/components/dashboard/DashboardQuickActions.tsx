@@ -182,7 +182,7 @@ function ActionTile({
 }
 
 export default function DashboardQuickActions({
-  channels = { whatsapp: true, facebook: false, instagram: false },
+  channels = { whatsapp: true, facebook: false, instagram: false, email: false },
 }: {
   channels?: WorkspaceChannels;
 }) {

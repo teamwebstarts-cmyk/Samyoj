@@ -7,9 +7,8 @@ set -euo pipefail
 # ALWAYS uses ngrok. No Cloudflare / cloudflared fallback.
 # Fails clearly if ngrok CLI or NGROK_AUTHTOKEN is missing.
 #
-# Default TUNNEL_PORT=8000 (API webhook). In Codespaces, prefer stable
-# https://{name}-3000/8000.app.github.dev (see scripts/public-dev-url.sh) instead of ngrok.
-# Override TUNNEL_PORT=3000 only if you want one ngrok URL for UI+API proxy.
+# Default TUNNEL_PORT=8000 (API webhook). Override TUNNEL_PORT=3000 only if
+# you explicitly want one ngrok URL for UI+API proxy.
 #
 # Usage:  bash scripts/dev-tunnel.sh
 # =============================================================================

@@ -41,19 +41,19 @@ describe('Meta navigation', () => {
   });
 
   it('keeps WhatsApp tabs when a number is connected, Meta tabs when it is not', () => {
-    expect(getMobileBottomNav({ whatsapp: true, facebook: true, instagram: true }).map((i) => i.to)).toEqual([
+    expect(getMobileBottomNav({ whatsapp: true, facebook: true, instagram: true, email: false }).map((i) => i.to)).toEqual([
       '/inbox',
       '/campaigns',
       '/contacts',
       '/automations',
     ]);
-    expect(getMobileBottomNav({ whatsapp: false, facebook: true, instagram: true }).map((i) => i.to)).toEqual([
+    expect(getMobileBottomNav({ whatsapp: false, facebook: true, instagram: true, email: false }).map((i) => i.to)).toEqual([
       '/',
       '/facebook/inbox',
       '/instagram/inbox',
       '/automations',
     ]);
-    expect(getMobileBottomNav({ whatsapp: false, facebook: false, instagram: true }).map((i) => i.to)).toEqual([
+    expect(getMobileBottomNav({ whatsapp: false, facebook: false, instagram: true, email: false }).map((i) => i.to)).toEqual([
       '/',
       '/instagram/inbox',
       '/instagram/comments',

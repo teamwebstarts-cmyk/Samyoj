@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+# ponytail: verify_webhook_challenge lives in scripts/public-dev-url.sh
+source "$ROOT_DIR/scripts/public-dev-url.sh"
 RUN_DIR="$ROOT_DIR/.run"
 LOG_DIR="$RUN_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -156,54 +158,13 @@ curl -fsS http://localhost:3000 >/dev/null 2>&1 ||
   fail "Client did not become reachable. See .run/logs/client.log"
 ok "Client is reachable"
 
-# shellcheck source=scripts/public-dev-url.sh
-source "$ROOT_DIR/scripts/public-dev-url.sh"
-
-PUBLIC_MODE="${SAMYOJ_PUBLIC_MODE:-auto}"
-if [[ "$PUBLIC_MODE" == "auto" ]]; then
-  if [[ "${SAMYOJ_FORCE_NGROK:-0}" == "1" ]]; then
-    PUBLIC_MODE="ngrok"
-  elif codespace_name; then
-    PUBLIC_MODE="codespace"
-  else
-    PUBLIC_MODE="ngrok"
-  fi
+PUBLIC_MODE="${SAMYOJ_PUBLIC_MODE:-ngrok}"
+if [[ "$PUBLIC_MODE" != "ngrok" ]]; then
+  fail "Ngrok is required for inbound webhook testing. Stable Codespaces URLs and fallback tunnels are disabled."
 fi
 
 CONNECT_HTTPS_ORIGIN=""
 WEBHOOK_URL=""
-
-if [[ "$PUBLIC_MODE" == "codespace" ]]; then
-  ensure_codespace_ports_public
-  CLIENT_ORIGIN="$(codespace_client_origin)"
-  API_ORIGIN="$(codespace_api_origin)"
-  apply_codespace_env
-  CONNECT_HTTPS_ORIGIN="$CLIENT_ORIGIN"
-  WEBHOOK_URL="${API_ORIGIN}/api/whatsapp/webhook"
-  ok "Using stable Codespaces URLs (set once in Meta; same until this codespace is deleted)"
-  ok "  UI + OAuth: $CLIENT_ORIGIN"
-  ok "  Webhook:    $WEBHOOK_URL"
-
-  info "Checking Codespaces port previews (3000 UI, 8000 API)..."
-  PREVIEW_OK=true
-  if ! probe_https_status "${CLIENT_ORIGIN}/"; then
-    warn "Port 3000 preview is not reachable (HTTP 404). In Cursor/VS Code: Ports → forward 3000 → Visibility Public → open browser from Ports tab."
-    PREVIEW_OK=false
-  fi
-  if ! probe_https_status "${API_ORIGIN}/health"; then
-    warn "Port 8000 preview is not reachable. Forward port 8000 as Public (Meta webhook)."
-    PREVIEW_OK=false
-  fi
-  if [[ "$PREVIEW_OK" != true ]]; then
-    if [[ "${SAMYOJ_NGROK_FALLBACK:-0}" == "1" ]]; then
-      warn "Falling back to ngrok (SAMYOJ_NGROK_FALLBACK=1). OAuth URLs will change when ngrok restarts."
-      PUBLIC_MODE="ngrok"
-    else
-      warn "Codespaces preview not live yet — Meta URLs in server/.env are already set (stable). Forward ports 3000+8000 as Public, then: cd server && npm run setup-webhook"
-      CODESPACE_PORTS_PENDING=1
-    fi
-  fi
-fi
 
 if [[ "$PUBLIC_MODE" == "ngrok" ]]; then
   if is_running tunnel; then
@@ -212,7 +173,7 @@ if [[ "$PUBLIC_MODE" == "ngrok" ]]; then
     rm -f "$RUN_DIR/tunnel.pid" "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
   fi
   rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
-  info "Starting ngrok tunnel (ephemeral URL — use Codespaces mode to avoid Meta URL churn)..."
+  info "Starting ngrok tunnel (random URL; no stable-domain or fallback mode)..."
   start_process tunnel "bash scripts/dev-tunnel.sh"
   for attempt in {1..60}; do
     if [[ -s "$RUN_DIR/tunnel-url" ]]; then
@@ -249,10 +210,8 @@ done
 if [[ "$CHALLENGE_OK" == true ]]; then
   ok "Public webhook challenge passed"
   (cd server && npm run setup-webhook) >/dev/null 2>&1 && ok "Meta webhook registered" || warn "Meta webhook registration pending (connect a number first if needed)"
-elif [[ -n "${CODESPACE_PORTS_PENDING:-}" ]]; then
-  warn "Webhook verify skipped until Codespaces ports 3000 and 8000 are Public (stable URL already in server/.env)."
 else
-  fail "Public webhook challenge failed. Inbox replies will not arrive. See .run/logs/tunnel.log or forward Codespace port 8000."
+  fail "Public webhook challenge failed. Inbox replies will not arrive. See .run/logs/tunnel.log."
 fi
 
 info "Starting Admin..."
@@ -279,12 +238,7 @@ echo "  Local UI (no Connect):     http://localhost:3000"
 echo "  Admin:                     http://localhost:3001"
 echo "  API (local):               http://localhost:8000"
 echo "  Webhook (Meta):            $WEBHOOK_URL"
-if [[ "$PUBLIC_MODE" == "codespace" ]]; then
-  echo "  Meta (stable — register once for this codespace name):"
-  echo "    OAuth: ${CONNECT_HTTPS_ORIGIN}/settings/whatsapp/callback/popup"
-  echo "           ${CONNECT_HTTPS_ORIGIN}/settings/facebook/callback"
-  echo "    JS SDK domain: ${CONNECT_HTTPS_ORIGIN}"
-elif [[ -n "$CONNECT_HTTPS_ORIGIN" ]]; then
+if [[ -n "$CONNECT_HTTPS_ORIGIN" ]]; then
   echo "  Meta OAuth (ngrok — update when URL changes):"
   echo "    ${CONNECT_HTTPS_ORIGIN}/settings/whatsapp/callback/popup"
 fi

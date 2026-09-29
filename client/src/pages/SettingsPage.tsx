@@ -37,6 +37,7 @@ import BusinessProfilePanel from '../components/settings/BusinessProfilePanel';
 import WhatsAppChannelsPanel from '../components/settings/WhatsAppChannelsPanel';
 import FacebookPagePanel, { type FacebookPageSummary } from '../components/settings/FacebookPagePanel';
 import InstagramPagePanel, { type InstagramAccountSummary } from '../components/settings/InstagramPagePanel';
+import GmailPagePanel from '../components/settings/GmailPagePanel';
 import MetaPreviewMockPanel from '../components/settings/MetaPreviewMockPanel';
 import HoursAndInboxPanel from '../components/settings/HoursAndInboxPanel';
 import IntegrationsPanel from '../components/settings/IntegrationsPanel';
@@ -86,7 +87,7 @@ const TAB_DEFS: Array<SettingsNavItem & { id: SettingsTab }> = [
   {
     id: 'channels',
     label: 'Channels',
-    hint: 'WhatsApp, Facebook, Instagram',
+    hint: 'WhatsApp, Facebook, Instagram, Gmail',
     icon: Smartphone,
   },
   {
@@ -577,6 +578,7 @@ export default function SettingsPage() {
                         onDisconnect={() => void disconnectInstagramAccount()}
                         canEdit={isOwnerOrAdmin}
                       />
+                      <GmailPagePanel canEdit={isOwnerOrAdmin} />
                       <MetaPreviewMockPanel />
                     </div>
                   )}

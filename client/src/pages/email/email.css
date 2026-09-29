@@ -1,0 +1,1770 @@
+/* Email (Gmail) — Samyoj design language
+   Reference: "mail ui ux /" mockups 1-8 + desshboad3d SVG
+   Tokens decoded from pixel analysis (see docs/product/GMAIL_UI_BUILD_PLAN_2026-09-29.md) */
+
+.ema-page {
+  /* palette — decoded from mockups */
+  --ema-primary: #ea4335;
+  --ema-primary-strong: #c5221f;
+  --ema-primary-soft: #fdecea;
+  --ema-primary-line: #f5c2c0;
+  --ema-primary-line-strong: #f28b82;
+  --ema-blue: #1a73e8;
+  --ema-blue-strong: #1557b0;
+  --ema-blue-soft: #e8f0fe;
+  --ema-blue-line: #c6dafc;
+  --ema-green: #059669;
+  --ema-green-soft: #d9f5e8;
+  --ema-amber: #b45309;
+  --ema-amber-soft: #fef3c7;
+  --ema-amber-line: #fde68a;
+  --ema-red: #dc2626;
+  --ema-red-soft: #fee2e2;
+  --ema-violet: #7c3aed;
+  --ema-violet-soft: #ede9fe;
+  --ema-page: #f2f5fe;
+  --ema-card: #ffffff;
+  --ema-wash: #f7f9fd;
+  --ema-line: #e5e9f4;
+  --ema-line-strong: #d5dcec;
+  --ema-ink: #16203a;
+  --ema-muted: #64748b;
+  --ema-shadow: 0 1px 2px rgba(22, 32, 58, 0.04), 0 10px 28px -16px rgba(22, 32, 58, 0.16);
+  --ema-panel-shadow: 0 2px 4px rgba(22, 32, 58, 0.04), 0 24px 48px -24px rgba(30, 58, 138, 0.18);
+  --ema-hero-bg: linear-gradient(120deg, #e1e9fc 0%, #eae7fb 52%, #f3ebf8 100%);
+}
+
+.dark .ema-page {
+  --ema-card: var(--color-surface);
+  --ema-wash: rgba(255, 255, 255, 0.04);
+  --ema-line: var(--color-border);
+  --ema-line-strong: var(--color-border-strong);
+  --ema-ink: var(--color-text);
+  --ema-muted: var(--color-text-muted);
+  --ema-primary-soft: rgba(234, 67, 53, 0.16);
+  --ema-primary-line: rgba(234, 67, 53, 0.38);
+  --ema-primary-line-strong: rgba(242, 139, 130, 0.55);
+  --ema-blue-soft: rgba(26, 115, 232, 0.16);
+  --ema-blue-line: rgba(26, 115, 232, 0.4);
+  --ema-green-soft: rgba(5, 150, 105, 0.16);
+  --ema-amber-soft: rgba(245, 158, 11, 0.16);
+  --ema-amber-line: rgba(245, 158, 11, 0.4);
+  --ema-red-soft: rgba(220, 38, 38, 0.16);
+  --ema-violet-soft: rgba(139, 92, 246, 0.16);
+  --ema-page: transparent;
+  --ema-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -16px rgba(0, 0, 0, 0.5);
+  --ema-panel-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.6);
+  --ema-hero-bg: linear-gradient(120deg, rgba(26, 115, 232, 0.14) 0%, rgba(139, 92, 246, 0.12) 55%, rgba(253, 32, 88, 0.1) 100%);
+}
+
+/* ============ Page frame ============ */
+
+.ema-shell {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+/* ============ Buttons ============ */
+
+.ema-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 38px;
+  border: none;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease, filter 160ms ease;
+}
+.ema-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.ema-btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.ema-btn--primary {
+  background: var(--ema-primary);
+  color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(253, 32, 88, 0.65);
+}
+.ema-btn--primary:not(:disabled):hover {
+  background: var(--ema-primary-strong);
+  box-shadow: 0 10px 22px -10px rgba(253, 32, 88, 0.75);
+}
+
+.ema-btn--blue {
+  background: var(--ema-blue);
+  color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(26, 115, 232, 0.6);
+}
+.ema-btn--blue:not(:disabled):hover {
+  background: var(--ema-blue-strong);
+}
+
+.ema-btn--outline {
+  border: 1px solid var(--ema-line-strong);
+  background: var(--ema-card);
+  color: var(--ema-ink);
+}
+.ema-btn--outline:not(:disabled):hover {
+  border-color: var(--ema-primary-line-strong);
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+}
+
+.ema-btn--ghost {
+  background: transparent;
+  color: var(--ema-muted);
+}
+.ema-btn--ghost:not(:disabled):hover {
+  background: var(--ema-wash);
+  color: var(--ema-ink);
+}
+
+.ema-btn--lg {
+  height: 44px;
+  border-radius: 14px;
+  padding: 0 20px;
+  font-size: 13.5px;
+}
+
+/* Keyboard focus visibility (a11y floor) */
+.ema-page :focus-visible {
+  outline: 2px solid var(--ema-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ema-btn,
+  .ema-action,
+  .ema-trow {
+    transition: none;
+  }
+  .ema-action:hover {
+    transform: none;
+  }
+}
+
+/* ============ Chips / badges ============ */
+
+.ema-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+.ema-chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.ema-chip--connected,
+.ema-chip--accepted {
+  background: var(--ema-green-soft);
+  color: var(--ema-green);
+}
+.ema-chip--failed {
+  background: var(--ema-red-soft);
+  color: var(--ema-red);
+}
+.ema-chip--reconnect {
+  background: var(--ema-amber-soft);
+  color: var(--ema-amber);
+}
+.ema-chip--off {
+  background: var(--ema-wash);
+  color: var(--ema-muted);
+}
+.ema-chip--blue {
+  background: var(--ema-blue-soft);
+  color: var(--ema-blue);
+}
+.ema-chip--pink {
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+}
+
+.ema-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.ema-trend--up {
+  background: var(--ema-green-soft);
+  color: var(--ema-green);
+}
+.ema-trend--down {
+  background: var(--ema-red-soft);
+  color: var(--ema-red);
+}
+
+/* ============ Cards & panels ============ */
+
+.ema-card {
+  border: 1px solid var(--ema-line);
+  border-radius: 16px;
+  background: var(--ema-card);
+  box-shadow: var(--ema-shadow);
+}
+
+.ema-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+.ema-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ema-ink);
+}
+.ema-card__sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ema-blue);
+  text-decoration: none;
+}
+.ema-card__link:hover {
+  background: var(--ema-blue-soft);
+}
+
+/* ============ Stats row ============ */
+
+.ema-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 1023px) {
+  .ema-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .ema-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ema-stat {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ema-line);
+  border-radius: 14px;
+  background: var(--ema-card);
+  padding: 12px 14px;
+  box-shadow: var(--ema-shadow);
+}
+.ema-stat__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.ema-stat__icon svg {
+  display: block;
+}
+.ema-stat__icon--pink {
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+}
+.ema-stat__icon--green {
+  background: var(--ema-green-soft);
+  color: var(--ema-green);
+}
+.ema-stat__icon--red {
+  background: var(--ema-red-soft);
+  color: var(--ema-red);
+}
+.ema-stat__icon--blue {
+  background: var(--ema-blue-soft);
+  color: var(--ema-blue);
+}
+.ema-stat__meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ema-stat__value {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--ema-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ema-stat__label {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ema-muted);
+}
+
+/* ============ Limits notice ============ */
+
+.ema-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--ema-amber-line);
+  border-radius: 12px;
+  background: var(--ema-amber-soft);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--ema-amber);
+}
+.ema-notice--info {
+  border-color: var(--ema-blue-line);
+  background: var(--ema-blue-soft);
+  color: var(--ema-blue);
+}
+.ema-notice--ok {
+  border-color: #a7f3d0;
+  background: var(--ema-green-soft);
+  color: #047857;
+}
+.ema-notice--fail {
+  border-color: #fecaca;
+  background: var(--ema-red-soft);
+  color: #b91c1c;
+}
+.ema-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ema-line);
+  border-radius: 10px;
+  background: var(--ema-card);
+  color: var(--ema-red);
+  cursor: pointer;
+}
+.ema-iconbtn:hover {
+  border-color: #fecaca;
+  background: var(--ema-red-soft);
+}
+.ema-notice a,
+.ema-notice button.ema-notice__more {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ============ Recent sent table ============ */
+
+.ema-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.ema-table th {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ema-line);
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ema-muted);
+}
+.ema-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ema-line);
+  color: var(--ema-ink);
+  font-weight: 600;
+}
+.ema-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.ema-table tbody tr {
+  transition: background-color 120ms ease;
+}
+.ema-table tbody tr:hover {
+  background: var(--ema-wash);
+}
+.ema-table__contact {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.ema-avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #fff;
+}
+.ema-avatar--blue {
+  background: linear-gradient(145deg, #84c6ff, #3468e6);
+}
+.ema-avatar--violet {
+  background: linear-gradient(145deg, #d69bf8, #8340d6);
+}
+.ema-avatar--pink {
+  background: linear-gradient(145deg, #fd5f85, #e91d50);
+}
+.ema-avatar--green {
+  background: linear-gradient(145deg, #34d399, #059669);
+}
+.ema-avatar--amber {
+  background: linear-gradient(145deg, #fbbf24, #d97706);
+}
+.ema-table__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.ema-table__email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-table__subject {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ema-table__time {
+  font-size: 11.5px;
+  color: var(--ema-muted);
+  white-space: nowrap;
+}
+
+.ema-recent {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ema-recent__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ema-line);
+}
+.ema-recent__row:last-child {
+  border-bottom: none;
+}
+.ema-recent__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  row-gap: 1px;
+}
+.ema-recent__name,
+.ema-recent__email,
+.ema-recent__subject,
+.ema-recent__time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ema-recent__name {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-recent__email,
+.ema-recent__time {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-recent__subject {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ema-ink);
+}
+.ema-recent__reason {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ema-red);
+}
+.ema-recent__row .ema-chip {
+  justify-self: end;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .ema-recent__row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .ema-recent__row .ema-chip {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 4px;
+  }
+}
+
+/* ============ Quick actions ============ */
+
+.ema-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.ema-action {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--ema-line);
+  border-radius: 14px;
+  background: var(--ema-card);
+  padding: 12px 13px;
+  text-align: left;
+  text-decoration: none;
+  transition: border-color 150ms ease, box-shadow 160ms ease, transform 140ms ease;
+}
+.ema-action:hover {
+  border-color: var(--ema-primary-line-strong);
+  box-shadow: 0 10px 22px -14px rgba(253, 32, 88, 0.4);
+  transform: translateY(-1px);
+}
+.ema-action__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.ema-action__icon svg {
+  display: block;
+}
+.ema-action__icon--pink {
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+}
+.ema-action__icon--blue {
+  background: var(--ema-blue-soft);
+  color: var(--ema-blue);
+}
+.ema-action__icon--violet {
+  background: var(--ema-violet-soft);
+  color: var(--ema-violet);
+}
+.ema-action__icon--green {
+  background: var(--ema-green-soft);
+  color: var(--ema-green);
+}
+.ema-action strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-action > span:last-child span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-action > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ema-action__chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--ema-muted);
+}
+
+/* ============ Before you send checklist ============ */
+
+.ema-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 16px 16px;
+}
+.ema-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ema-ink);
+}
+.ema-check svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ema-check small {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-check--ok svg {
+  color: var(--ema-green);
+}
+.ema-check--info svg {
+  color: var(--ema-blue);
+}
+.ema-check--lock svg {
+  color: var(--ema-amber);
+}
+
+/* ============ Hero (dashboard top) ============ */
+
+.ema-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  border: 1px solid var(--ema-primary-line);
+  border-radius: 20px;
+  background: var(--ema-hero-bg);
+  padding: 18px 22px;
+}
+
+/* Dashboard hero follows the shared WhatsApp/Facebook/Instagram shell:
+   channel identity stays left, with one useful action and the report period on the right. */
+.ema-hero--dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+  border-radius: 22px;
+  border: 1px solid #fedfe6;
+  background: linear-gradient(110deg, #fff7f8 0%, #fff0f3 45%, #fcecf4 80%, #ffffff 100%);
+  box-shadow: none;
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .ema-hero--dashboard {
+    padding: 1.25rem 1.75rem;
+  }
+}
+.ema-hero--dashboard .channel-hero-lead {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+.ema-hero--dashboard .channel-hero-lead .text-slate-500 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ema-hero--dashboard .ema-hero__actions {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  width: 11.25rem;
+  min-width: 11.25rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+.ema-hero__manage {
+  display: inline-flex;
+  min-height: 36px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 8px 12px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px -4px rgba(22, 32, 58, 0.25);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.ema-hero__manage:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+.ema-hero--dashboard .ema-hero__art {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: 12.75rem;
+  z-index: 0;
+  width: min(380px, 36%);
+  height: 104px;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+@media (min-width: 1024px) {
+  .ema-hero--dashboard .ema-hero__art {
+    display: block;
+  }
+}
+.ema-hero--dashboard .ema-hero__art svg {
+  height: 104px;
+  width: 100%;
+}
+
+@media (max-width: 639px) {
+  .ema-hero--dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ema-hero--dashboard .ema-hero__actions {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .ema-hero--dashboard .ema-hero__actions > * {
+    flex: 1 1 12rem;
+  }
+  .ema-hero--dashboard .ema-hero__art {
+    display: none;
+  }
+}
+
+.ema-hero__main {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ema-hero__titlerow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.ema-hero__title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ema-ink);
+}
+.ema-hero__mailbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+  box-shadow: 0 2px 8px -4px rgba(22, 32, 58, 0.25);
+}
+.dark .ema-hero__mailbox {
+  background: rgba(15, 23, 42, 0.7);
+}
+.ema-hero__copy {
+  margin-top: 5px;
+  max-width: 40rem;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--ema-muted);
+}
+.ema-hero__cta {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ema-hero__art {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: auto;
+  padding-right: 8px;
+}
+.ema-hero__art svg {
+  width: 236px;
+  height: auto;
+  border-radius: 14px;
+}
+@media (max-width: 900px) {
+  .ema-hero__art svg {
+    width: 170px;
+  }
+}
+@media (max-width: 640px) {
+  .ema-hero__art {
+    display: none;
+  }
+}
+
+/* ============ Compose split: sent list | detail or form ============ */
+
+.ema-split {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  min-height: min(720px, calc(100vh - 168px));
+}
+@media (max-width: 900px) {
+  .ema-split {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}
+
+.ema-sent {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.ema-sent__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 8px;
+}
+.ema-sent__status {
+  display: flex;
+  gap: 6px;
+}
+.ema-sent__statusbtn {
+  border: 1px solid var(--ema-line);
+  border-radius: 999px;
+  background: var(--ema-card);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ema-muted);
+  cursor: pointer;
+}
+.ema-sent__statusbtn--on {
+  border-color: var(--ema-primary-line-strong);
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+}
+.ema-prior {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ema-prior__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--ema-line);
+  border-radius: 12px;
+  background: var(--ema-wash);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.ema-prior__item:hover {
+  border-color: var(--ema-primary-line);
+}
+.ema-prior__subject {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-prior__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-sent__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 10px 12px;
+}
+.ema-sent__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--ema-line);
+  border-radius: 12px;
+  background: var(--ema-card);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.ema-sent__item:hover {
+  background: var(--ema-wash);
+}
+.ema-sent__item--on {
+  border-color: var(--ema-primary-line);
+  background: var(--ema-primary-soft);
+}
+.ema-sent__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ema-sent__name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-sent__top .ema-chip {
+  flex-shrink: 0;
+  padding: 3px 7px;
+}
+.ema-sent__time {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ema-muted);
+}
+.ema-sent__subject {
+  display: block;
+  overflow: hidden;
+  margin-top: 1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ema-ink);
+}
+.ema-sent__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ema-sent__email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+
+.ema-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.ema-pane__pad {
+  padding: 16px 18px 18px;
+}
+.ema-read__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px;
+}
+.ema-read__subject {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ema-ink);
+}
+.ema-read__who {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+
+/* ============ Compose layout (legacy two-column) ============ */
+
+.ema-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 348px;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1023px) {
+  .ema-compose {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ema-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ema-form .ema-ttabs {
+  margin: 0;
+}
+.ema-form .ema-foot {
+  flex-wrap: wrap;
+}
+.ema-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ema-field__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-field__label .ema-req {
+  color: var(--ema-primary);
+}
+.ema-field__counter {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ema-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ema-field__hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-input,
+.ema-textarea {
+  width: 100%;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-card);
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ema-ink);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.ema-input::placeholder,
+.ema-textarea::placeholder {
+  color: var(--ema-muted);
+  font-weight: 500;
+}
+.ema-input:focus,
+.ema-textarea:focus {
+  border-color: var(--ema-primary);
+  box-shadow: 0 0 0 3px rgba(253, 32, 88, 0.12);
+}
+.ema-textarea {
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.6;
+}
+.ema-input[readonly] {
+  background: var(--ema-wash);
+  color: var(--ema-muted);
+  cursor: default;
+}
+
+.ema-from {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-wash);
+  padding: 9px 12px;
+}
+.ema-from__glyph {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(22, 32, 58, 0.14);
+}
+.ema-from__addr {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ema-ink);
+}
+.ema-from__via {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ema-blue);
+}
+.ema-from__chip {
+  margin-left: auto;
+}
+
+/* Contact picker */
+.ema-picker {
+  position: relative;
+}
+.ema-picker__toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-card);
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ema-ink);
+  cursor: pointer;
+  text-align: left;
+}
+.ema-picker__toggle:hover {
+  border-color: var(--ema-primary-line-strong);
+}
+.ema-picker__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  overflow: hidden;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 14px;
+  background: var(--ema-card);
+  box-shadow: var(--ema-panel-shadow);
+}
+.ema-picker__search {
+  display: block;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--ema-line);
+  background: transparent;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--ema-ink);
+  outline: none;
+}
+.ema-picker__list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.ema-picker__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  padding: 8px 9px;
+  cursor: pointer;
+  text-align: left;
+}
+.ema-picker__item:hover,
+.ema-picker__item--on {
+  background: var(--ema-primary-soft);
+}
+.ema-picker__item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ema-picker__note {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--ema-line);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-recipient {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-wash);
+  padding: 8px 10px;
+}
+.ema-recipient__x {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--ema-line);
+  color: var(--ema-muted);
+  cursor: pointer;
+}
+.ema-recipient__x:hover {
+  background: var(--ema-red-soft);
+  color: var(--ema-red);
+}
+
+/* Template select + variable chips */
+.ema-select {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-card);
+  padding: 9px 32px 9px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ema-ink);
+  outline: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+}
+.ema-select:focus {
+  border-color: var(--ema-primary);
+  box-shadow: 0 0 0 3px rgba(253, 32, 88, 0.12);
+}
+
+.ema-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.ema-var {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  gap: 5px;
+  border: 1px solid var(--ema-blue-line);
+  border-radius: 999px;
+  background: var(--ema-blue-soft);
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ema-blue);
+  cursor: pointer;
+}
+.ema-var:hover {
+  border-color: var(--ema-blue);
+}
+.ema-vars__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--ema-muted);
+  cursor: pointer;
+}
+.ema-vars__copy:hover {
+  color: var(--ema-blue);
+}
+
+/* Compose footer */
+.ema-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 2px;
+}
+
+/* ============ Right rail ============ */
+
+.ema-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ema-rail__checks {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 16px 16px;
+}
+.ema-check--block svg {
+  color: var(--ema-muted);
+}
+.ema-check--block.ema-check--ok svg {
+  color: var(--ema-green);
+}
+
+/* Message preview */
+.ema-preview {
+  overflow: hidden;
+}
+.ema-preview__mailhead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--ema-line);
+  background: var(--ema-wash);
+  padding: 11px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-preview__mailhead b {
+  color: var(--ema-ink);
+  font-weight: 700;
+}
+.ema-preview__body {
+  min-height: 110px;
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.65;
+  color: var(--ema-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ema-preview__body--empty {
+  color: var(--ema-muted);
+  font-style: italic;
+}
+
+/* Quick tips */
+.ema-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+.ema-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.ema-tip__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+.ema-tip__icon--pink {
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+}
+.ema-tip__icon--blue {
+  background: var(--ema-blue-soft);
+  color: var(--ema-blue);
+}
+.ema-tip__icon--violet {
+  background: var(--ema-violet-soft);
+  color: var(--ema-violet);
+}
+.ema-tip__icon--green {
+  background: var(--ema-green-soft);
+  color: var(--ema-green);
+}
+.ema-tip strong {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-tip span {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ema-muted);
+}
+
+/* ============ Templates ============ */
+
+.ema-templates {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1.45fr) minmax(300px, 0.92fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .ema-templates {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .ema-tpreview {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 720px) {
+  .ema-templates {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ema-templates .ema-trow__time {
+  display: none;
+}
+
+.ema-unsaved {
+  margin-left: 8px;
+  border-radius: 999px;
+  background: var(--ema-amber-soft);
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ema-amber);
+}
+
+.ema-mail {
+  margin: 4px 14px 10px;
+  overflow: hidden;
+  border: 1px solid var(--ema-line);
+  border-radius: 14px;
+  background: var(--ema-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.ema-mail__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 8px;
+}
+.ema-mail__from,
+.ema-mail__to {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ema-mail__from {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-mail__to {
+  margin-top: 1px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-mail__subject {
+  margin: 0;
+  padding: 8px 14px 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: var(--ema-ink);
+}
+.ema-mail__body {
+  min-height: 180px;
+  padding: 12px 14px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ema-ink);
+}
+.ema-mail__empty {
+  color: var(--ema-muted);
+  font-weight: 600;
+}
+.ema-fill {
+  border-radius: 4px;
+  background: var(--ema-green-soft);
+  padding: 0 3px;
+  color: var(--ema-green);
+  font-weight: 800;
+}
+.ema-fill--miss {
+  background: var(--ema-amber-soft);
+  color: var(--ema-amber);
+}
+.ema-mail__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 14px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ema-muted);
+}
+.ema-mail__warn {
+  font-weight: 700;
+  color: var(--ema-amber);
+}
+
+.ema-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ema-tcreate {
+  min-width: 0;
+}
+
+.ema-tpane {
+  min-width: 0;
+  overflow: hidden;
+}
+.ema-ttabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 16px 12px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--ema-wash);
+}
+.ema-ttab {
+  height: 32px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ema-muted);
+  cursor: pointer;
+}
+.ema-ttab--on {
+  background: var(--ema-card);
+  color: var(--ema-ink);
+  box-shadow: 0 1px 2px rgba(22, 32, 58, 0.08);
+}
+.ema-tpane .ema-preview__body {
+  min-height: 220px;
+}
+
+.ema-tlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+.ema-trow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--ema-line);
+  border-radius: 12px;
+  background: var(--ema-card);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.ema-trow:hover {
+  border-color: var(--ema-primary-line-strong);
+}
+.ema-trow--on {
+  border-color: var(--ema-primary);
+  box-shadow: 0 0 0 2px rgba(253, 32, 88, 0.18);
+}
+.ema-trow__main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ema-trow__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-trow__subject {
+  overflow: hidden;
+  margin-top: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-trow__time {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-trow__del {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ema-muted);
+  cursor: pointer;
+}
+.ema-trow__del:hover {
+  background: var(--ema-red-soft);
+  color: var(--ema-red);
+}
+
+/* Selected recipient chips (To field) */
+.ema-tochips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 1px solid var(--ema-line-strong);
+  border-radius: 11px;
+  background: var(--ema-wash);
+  padding: 7px 9px;
+}
+.ema-tochip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ema-line);
+  border-radius: 999px;
+  background: var(--ema-card);
+  padding: 3px 5px 3px 4px;
+}
+.ema-tochip__name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ema-ink);
+}
+
+/* ============ Empty states ============ */
+
+.ema-zero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 34px 20px;
+  text-align: center;
+}
+.ema-zero__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--ema-primary-soft);
+  color: var(--ema-primary);
+  margin-bottom: 12px;
+}
+.ema-zero__title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ema-ink);
+}
+.ema-zero__desc {
+  margin-top: 6px;
+  max-width: 420px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--ema-muted);
+}
+
+/* ============ Responsive tweaks ============ */
+
+@media (max-width: 640px) {
+  .ema-card__head {
+    flex-wrap: wrap;
+  }
+  .ema-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ema-hero__cta {
+    margin-top: 10px;
+  }
+  .ema-foot {
+    flex-wrap: wrap;
+  }
+  .ema-foot .ema-btn {
+    flex: 1 1 auto;
+  }
+}
