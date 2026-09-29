@@ -58,7 +58,7 @@ export default function EmailComposePage() {
   const [message, setMessage] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [panel, setPanel] = useState<'sent' | 'compose'>('sent');
+  const [panel, setPanel] = useState<'sent' | 'compose'>('compose');
   const [composeTab, setComposeTab] = useState<'write' | 'preview'>('write');
   const [selectedId, setSelectedId] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -133,6 +133,8 @@ export default function EmailComposePage() {
   const pickContact = (c: EmailContact) => {
     if (!c.eligible) return;
     setRecipients((prev) => (prev.some((r) => r.id === c.id) ? prev : [...prev, c]));
+    setPickerOpen(false);
+    setQuery('');
   };
 
   const removeRecipient = (id: string) => {

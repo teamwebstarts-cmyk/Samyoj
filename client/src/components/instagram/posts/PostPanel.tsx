@@ -24,7 +24,8 @@ const TABS: Array<{ id: PanelTab; label: string; shortLabel: string; icon: typeo
 
 /**
  * Right-side composer/detail panel.
- * Desktop: sticky column beside the grid. Mobile (<1024px): full-screen sheet
+ * Wide desktop: sticky column beside the grid. Compact desktop/tablet (<1280px):
+ * full-screen sheet so the preview never gets squeezed into a narrow column.
  * with Escape-to-close, body scroll lock and focus returned to the trigger.
  */
 export default function PostPanel({
@@ -52,9 +53,9 @@ export default function PostPanel({
     };
     window.addEventListener('keydown', onKeyDown);
 
-    const mobile = window.matchMedia('(max-width: 1023px)');
+    const compact = window.matchMedia('(max-width: 1279px)');
     let restoreScroll = '';
-    if (mobile.matches) {
+    if (compact.matches) {
       restoreScroll = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
     }

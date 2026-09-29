@@ -1292,8 +1292,8 @@
   box-shadow: var(--igp-panel-shadow);
 }
 
-/* Desktop: panel fills remaining viewport so footer sits on the device bottom. */
-@media (min-width: 1024px) {
+/* Wide desktop: dock the panel only when the feed and preview both have room. */
+@media (min-width: 1280px) {
   .igp-page {
     overflow: hidden;
   }
@@ -1303,7 +1303,7 @@
     padding-right: 2px;
   }
   .igp-panel {
-    width: clamp(400px, 44%, 540px);
+    width: clamp(460px, 46%, 640px);
     height: auto;
     align-self: stretch;
     min-height: 0;
@@ -1443,8 +1443,8 @@
   color: #93c5fd;
 }
 
-/* Mobile: panel as full-screen sheet — above bottom nav (z-40), below sheets (z-70+) */
-@media (max-width: 1023px) {
+/* Compact desktop/tablet: use a full-screen sheet instead of squeezing the preview. */
+@media (max-width: 1279px) {
   .igp-panel {
     position: fixed;
     inset: 0;
@@ -2372,17 +2372,22 @@
   gap: 10px;
 }
 
-@container igp-preview (min-width: 500px) {
+/*
+ * Keep the phone readable instead of letting the two-column preview squeeze it.
+ * Docked panels stay stacked; roomy sheets can place details beside the phone.
+ */
+@container igp-preview (min-width: 680px) {
   .igp-preview__cols {
     flex-direction: row;
     align-items: flex-start;
   }
   .igp-preview__left {
-    flex: 0 1 48%;
-    width: 48%;
-    max-width: 280px;
+    flex: 0 0 320px;
+    width: 320px;
+    max-width: 320px;
   }
   .igp-phone-stage {
+    width: 320px;
     max-width: none;
   }
 }

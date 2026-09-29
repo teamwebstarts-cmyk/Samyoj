@@ -57,8 +57,8 @@ const blankTemplate = (): EmailTemplate => ({
  */
 export default function EmailTemplatesPage() {
   const templates = useEmailTemplates();
-  const [selectedId, setSelectedId] = useState<string | null>(templates[0]?.id ?? null);
-  const [draft, setDraft] = useState<EmailTemplate>(templates[0] ?? blankTemplate());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EmailTemplate>(blankTemplate());
   const [copied, setCopied] = useState(false);
   const activeField = useRef<'subject' | 'body'>('body');
   const subjectRef = useRef<HTMLInputElement>(null);

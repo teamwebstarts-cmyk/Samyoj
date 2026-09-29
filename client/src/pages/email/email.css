@@ -146,6 +146,11 @@
   outline-offset: 2px;
   border-radius: 8px;
 }
+.ema-page input:focus-visible,
+.ema-page textarea:focus-visible,
+.ema-page select:focus-visible {
+  outline: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .ema-btn,
@@ -542,6 +547,36 @@
   font-weight: 700;
   color: var(--ema-red);
 }
+.ema-recent--board .ema-recent__row {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.ema-recent--board .ema-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 11px;
+}
+.ema-recent--board .ema-recent__who,
+.ema-recent--board .ema-recent__line {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ema-recent--board .ema-recent__time {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ema-muted);
+}
+.ema-recent--board .ema-recent__email {
+  flex-shrink: 1;
+  max-width: 46%;
+  text-align: right;
+}
 .ema-recent__row .ema-chip {
   justify-self: end;
   white-space: nowrap;
@@ -865,7 +900,7 @@
 
 .ema-split {
   display: grid;
-  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
   min-height: min(720px, calc(100vh - 168px));
@@ -1032,6 +1067,12 @@
   min-height: 0;
   overflow: auto;
 }
+.ema-read {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(247, 249, 253, 0.72), var(--ema-card) 34%);
+}
 .ema-pane__pad {
   padding: 16px 18px 18px;
 }
@@ -1041,6 +1082,28 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px 16px 12px;
+}
+.ema-read__head + .ema-notice {
+  margin: 0 16px;
+}
+.ema-read .ema-mail {
+  flex: 1 1 auto;
+  margin: 14px 16px 18px;
+  border-color: var(--ema-line-strong);
+  box-shadow: 0 10px 28px -22px rgba(22, 32, 58, 0.4);
+}
+.ema-read .ema-mail__who {
+  background: var(--ema-wash);
+  border-bottom: 1px solid var(--ema-line);
+  padding: 15px 16px 12px;
+}
+.ema-read .ema-mail__subject {
+  padding: 15px 16px 0;
+  font-size: 17px;
+}
+.ema-read .ema-mail__body {
+  min-height: 240px;
+  padding: 14px 16px 24px;
 }
 .ema-read__subject {
   font-size: 16px;
@@ -1691,10 +1754,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  border: 1px solid var(--ema-line-strong);
-  border-radius: 11px;
-  background: var(--ema-wash);
-  padding: 7px 9px;
+  padding: 0;
 }
 .ema-tochip {
   display: inline-flex;

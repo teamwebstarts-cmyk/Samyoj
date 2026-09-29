@@ -2261,14 +2261,13 @@
   }
 
   .dashboard-channel-hero-decor--email {
-    top: 58%;
+    top: 44%;
     height: 118px;
     width: min(420px, 40%);
   }
 
   .dashboard-channel-hero-decor--email > svg {
     max-height: 118px;
-    width: 100%;
   }
 
   .wa3d-stage {

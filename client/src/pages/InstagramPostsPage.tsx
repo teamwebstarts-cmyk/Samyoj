@@ -67,13 +67,13 @@ function toLocalInput(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** Desktop layout keeps the composer panel permanently docked. */
+/** Keep the composer docked only when the viewport can give both columns room. */
 function useIsDesktopPanel(): boolean {
   const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches,
   );
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)');
+    const mq = window.matchMedia('(min-width: 1280px)');
     const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
