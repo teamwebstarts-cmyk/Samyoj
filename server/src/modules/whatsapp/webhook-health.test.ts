@@ -42,6 +42,17 @@ describe('webhook health lifecycle', () => {
     expect(webhookHealth.lastReceivedAt).toBeTruthy();
   });
 
+  it('keeps Page and Instagram counters separate from WhatsApp totals', () => {
+    const received = webhookHealth.totalReceived;
+    const queued = webhookHealth.totalQueued;
+    trackWebhookReceived('instagram');
+    trackWebhookQueued('instagram');
+    expect(webhookHealth.totalReceived).toBe(received + 1);
+    expect(webhookHealth.totalQueued).toBe(queued + 1);
+    expect(webhookHealth.byChannel.instagram.received).toBeGreaterThan(0);
+    expect(webhookHealth.byChannel.instagram.queued).toBeGreaterThan(0);
+  });
+
   it('omits the live webhook URL from the public health payload', () => {
     const payload = toPublicWebhookHealth({
       queueDepth: 2,

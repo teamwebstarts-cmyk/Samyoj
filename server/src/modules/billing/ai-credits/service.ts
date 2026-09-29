@@ -20,6 +20,7 @@ export type AiCreditBalanceView = {
   includedUsed: number;
   includedRemaining: number | 'custom';
   addonBalance: number;
+  reserved: number;
   totalRemaining: number | 'custom';
   periodStart: string;
   periodEnd: string;
@@ -126,6 +127,7 @@ function toView(
   row: {
     includedUsed: number;
     addonBalance: number;
+    reserved: number;
     periodStart: Date;
     periodEnd: Date;
   },
@@ -138,19 +140,24 @@ function toView(
       includedUsed: row.includedUsed,
       includedRemaining: 'custom',
       addonBalance: row.addonBalance,
+      reserved: row.reserved,
       totalRemaining: 'custom',
       periodStart: row.periodStart.toISOString(),
       periodEnd: row.periodEnd.toISOString(),
     };
   }
   const includedRemaining = Math.max(0, includedLimit - row.includedUsed);
-  const totalRemaining = includedRemaining + Math.max(0, row.addonBalance);
+  const totalRemaining = Math.max(
+    0,
+    includedRemaining + Math.max(0, row.addonBalance) - Math.max(0, row.reserved),
+  );
   return {
     pool,
     includedLimit,
     includedUsed: row.includedUsed,
     includedRemaining,
     addonBalance: row.addonBalance,
+    reserved: row.reserved,
     totalRemaining,
     periodStart: row.periodStart.toISOString(),
     periodEnd: row.periodEnd.toISOString(),
@@ -216,6 +223,81 @@ export async function assertAiCreditsAvailable(
   }
 }
 
+export async function reserveCallingMinutesForCall(params: {
+  organizationId: string;
+  callId: string;
+  minutes?: number;
+}): Promise<void> {
+  const amount = Math.max(1, Math.ceil(params.minutes ?? 1));
+  const quota = await checkQuota(params.organizationId, 'calling');
+  if (!quota.allowed) {
+    throw new AppError(403, quota.reason || 'AI calling is not included on your plan.', quota.code);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.aiCreditReservation.findUnique({
+      where: { callId: params.callId },
+    });
+    if (existing) return;
+
+    const org = await loadOrg(params.organizationId, tx);
+    const currentPeriod = await getCurrentPlanPeriod(params.organizationId, tx);
+    const planTier = tierFromPeriodOrCache(currentPeriod, org.plan);
+    const aiSettings = ((org.settings as Record<string, unknown> | null)?.ai || {}) as OrgAiSettings;
+    const includedLimit = includedAllowanceForPlan(planTier, 'calling', aiSettings);
+    if (includedLimit === 'custom') {
+      throw new AppError(
+        403,
+        'Your Enterprise AI allowance is administrator-configured. Contact your administrator to enable usage.',
+        'AI_CUSTOM_ALLOWANCE_REQUIRED',
+      );
+    }
+
+    await ensureBalanceRow(
+      params.organizationId,
+      'calling',
+      tx,
+      currentPeriod?.endsAt ?? org.planExpiresAt,
+    );
+    await tx.$queryRaw`
+      SELECT id
+      FROM "org_ai_credit_balances"
+      WHERE "organization_id" = ${params.organizationId} AND "pool" = 'calling'
+      FOR UPDATE
+    `;
+    const row = await tx.orgAiCreditBalance.findUnique({
+      where: {
+        organizationId_pool: {
+          organizationId: params.organizationId,
+          pool: 'calling',
+        },
+      },
+    });
+    if (!row) throw new AppError(500, 'AI credit balance unavailable');
+
+    const available =
+      Math.max(0, includedLimit - row.includedUsed) +
+      Math.max(0, row.addonBalance) -
+      Math.max(0, row.reserved);
+    if (available < amount) {
+      throw new AppError(429, 'AI calling minutes exhausted.', 'AI_CREDITS_EXHAUSTED');
+    }
+
+    await tx.orgAiCreditBalance.update({
+      where: { id: row.id },
+      data: { reserved: row.reserved + amount },
+    });
+    await tx.aiCreditReservation.create({
+      data: {
+        organizationId: params.organizationId,
+        pool: 'calling',
+        callId: params.callId,
+        amount,
+      },
+    });
+  });
+}
+
 export function computeDeductionSplit(params: {
   includedLimit: number;
   includedUsed: number;
@@ -255,7 +337,7 @@ async function deductAmount(
   const aiSettings = ((org.settings as Record<string, unknown> | null)?.ai || {}) as OrgAiSettings;
   const includedLimit = includedLimitForPlan(planTier, pool, aiSettings);
 
-  const row = await ensureBalanceRow(organizationId, pool, tx, currentPeriod?.endsAt ?? org.planExpiresAt);
+  await ensureBalanceRow(organizationId, pool, tx, currentPeriod?.endsAt ?? org.planExpiresAt);
   // Serialize deductions for the same pool. A read-then-write without this
   // lock lets concurrent AI requests spend the same included/add-on units.
   await tx.$queryRaw`
@@ -264,19 +346,27 @@ async function deductAmount(
     WHERE "organization_id" = ${organizationId} AND "pool" = ${pool}
     FOR UPDATE
   `;
+  const lockedRow = await tx.orgAiCreditBalance.findUnique({
+    where: { organizationId_pool: { organizationId, pool } },
+  });
+  if (!lockedRow) throw new AppError(500, 'AI credit balance unavailable');
 
   const next = computeDeductionSplit({
     includedLimit,
-    includedUsed: row.includedUsed,
-    addonBalance: row.addonBalance,
+    includedUsed: lockedRow.includedUsed,
+    addonBalance: lockedRow.addonBalance,
     amount,
   });
-  if (!next) {
+  const available =
+    Math.max(0, includedLimit - lockedRow.includedUsed) +
+    Math.max(0, lockedRow.addonBalance) -
+    Math.max(0, lockedRow.reserved);
+  if (!next || available < amount) {
     throw new AppError(429, 'AI credits exhausted', 'AI_CREDITS_EXHAUSTED');
   }
 
   await tx.orgAiCreditBalance.update({
-    where: { id: row.id },
+    where: { id: lockedRow.id },
     data: { includedUsed: next.includedUsed, addonBalance: next.addonBalance },
   });
 }
@@ -356,6 +446,128 @@ export async function deductCallingMinutesForCall(params: {
   }
 }
 
+export async function settleCallingMinutesForCall(params: {
+  organizationId: string;
+  callId: string;
+  durationSeconds: number;
+}): Promise<void> {
+  const actualAmount = callingSecondsToMinutes(params.durationSeconds);
+  const current = await prisma.aiCreditReservation.findUnique({
+    where: { callId: params.callId },
+  });
+  if (!current) {
+    await deductCallingMinutesForCall(params);
+    return;
+  }
+  if (current.status !== 'RESERVED') return;
+
+  await prisma.$transaction(async (tx) => {
+    const reservation = await tx.aiCreditReservation.findUnique({
+      where: { callId: params.callId },
+    });
+    if (!reservation || reservation.status !== 'RESERVED') return;
+
+    const org = await loadOrg(params.organizationId, tx);
+    const currentPeriod = await getCurrentPlanPeriod(params.organizationId, tx);
+    await ensureBalanceRow(
+      params.organizationId,
+      'calling',
+      tx,
+      currentPeriod?.endsAt ?? org.planExpiresAt,
+    );
+    await tx.$queryRaw`
+      SELECT id
+      FROM "org_ai_credit_balances"
+      WHERE "organization_id" = ${params.organizationId} AND "pool" = 'calling'
+      FOR UPDATE
+    `;
+    const row = await tx.orgAiCreditBalance.findUnique({
+      where: {
+        organizationId_pool: {
+          organizationId: params.organizationId,
+          pool: 'calling',
+        },
+      },
+    });
+    if (!row) throw new AppError(500, 'AI credit balance unavailable');
+
+    await tx.orgAiCreditBalance.update({
+      where: { id: row.id },
+      data: { reserved: Math.max(0, row.reserved - reservation.amount) },
+    });
+
+    if (actualAmount > 0) {
+      await deductAmount(params.organizationId, 'calling', actualAmount, tx);
+      await tx.aiCreditDeduction.create({
+        data: {
+          organizationId: params.organizationId,
+          pool: 'calling',
+          amount: actualAmount,
+          callId: params.callId,
+        },
+      });
+    }
+    await tx.aiCreditReservation.update({
+      where: { id: reservation.id },
+      data: {
+        status: 'SETTLED',
+        amount: actualAmount,
+        settledAt: new Date(),
+      },
+    });
+  });
+}
+
+export async function releaseStaleCallingCreditReservations(
+  maxAgeMs = 2 * 60 * 60 * 1000,
+  limit = 100,
+): Promise<number> {
+  const rows = await prisma.aiCreditReservation.findMany({
+    where: {
+      pool: 'calling',
+      status: 'RESERVED',
+      createdAt: { lt: new Date(Date.now() - maxAgeMs) },
+    },
+    select: { id: true, organizationId: true, pool: true, amount: true },
+    take: limit,
+  });
+  let released = 0;
+  for (const reservation of rows) {
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.aiCreditReservation.findUnique({
+        where: { id: reservation.id },
+      });
+      if (!current || current.status !== 'RESERVED') return;
+      await tx.$queryRaw`
+        SELECT id
+        FROM "org_ai_credit_balances"
+        WHERE "organization_id" = ${current.organizationId} AND "pool" = ${current.pool}
+        FOR UPDATE
+      `;
+      const balance = await tx.orgAiCreditBalance.findUnique({
+        where: {
+          organizationId_pool: {
+            organizationId: current.organizationId,
+            pool: current.pool,
+          },
+        },
+      });
+      if (balance) {
+        await tx.orgAiCreditBalance.update({
+          where: { id: balance.id },
+          data: { reserved: Math.max(0, balance.reserved - current.amount) },
+        });
+      }
+      await tx.aiCreditReservation.update({
+        where: { id: current.id },
+        data: { status: 'EXPIRED', settledAt: new Date() },
+      });
+      released += 1;
+    });
+  }
+  return released;
+}
+
 /**
  * Reconcile call deductions that were durably marked pending after a call
  * ended. The deduction key is the call ID, so a retry is safe after a worker
@@ -401,7 +613,7 @@ export async function retryPendingCallingMinuteDeductions(limit = 100): Promise<
     }
 
     try {
-      await deductCallingMinutesForCall({
+      await settleCallingMinutesForCall({
         organizationId: row.organizationId,
         callId: row.id,
         durationSeconds,

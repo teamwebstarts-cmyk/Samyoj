@@ -384,6 +384,7 @@ model Organization {
   platformAuditLogs              PlatformAuditLog[]
   outreachLogs                   OutreachLog[]
   aiCreditBalances               OrgAiCreditBalance[]
+  aiCreditReservations           AiCreditReservation[]
   aiCreditPurchases              AiCreditPurchase[]
   aiRecurringAddons              OrgAiRecurringAddon[]
   planPeriods                    PlanPeriod[]
@@ -1764,6 +1765,7 @@ model OrgAiCreditBalance {
   pool           String
   includedUsed   Int      @default(0) @map("included_used")
   addonBalance   Int      @default(0) @map("addon_balance")
+  reserved       Int      @default(0)
   periodStart    DateTime @map("period_start")
   periodEnd      DateTime @map("period_end")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -1774,6 +1776,22 @@ model OrgAiCreditBalance {
   @@unique([organizationId, pool])
   @@index([organizationId])
   @@map("org_ai_credit_balances")
+}
+
+model AiCreditReservation {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  pool           String
+  callId         String    @unique @map("call_id")
+  amount         Int
+  status         String    @default("RESERVED")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  settledAt      DateTime? @map("settled_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("ai_credit_reservations")
 }
 
 model AiCreditPurchase {

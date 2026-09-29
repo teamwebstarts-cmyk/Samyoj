@@ -88,7 +88,7 @@ router.get(
 
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const unreadOnly = req.query.unread === 'true';
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 200) : '';
     const assignedTo =
       typeof req.query.assignedTo === 'string' && req.query.assignedTo
         ? req.query.assignedTo

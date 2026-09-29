@@ -7,8 +7,6 @@ const CHAT_ACTIONS = new Set([
   'embedding',
   'generate_personality',
   'generate_training',
-  'call_summary',
-  'support_help',
   'content_studio',
   'instagram_caption',
 ]);

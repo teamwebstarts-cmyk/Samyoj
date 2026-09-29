@@ -7,8 +7,8 @@ import { emitTicketEvent } from '../tickets/events';
 import { createChatCompletion } from '../ai/chat-completion.service';
 import { recordAiUsage, getOrgAiSettings, isCallingAiEnabled } from '../ai/org-ai.service';
 import {
-  assertAiCreditsAvailable,
-  deductCallingMinutesForCall,
+  reserveCallingMinutesForCall,
+  settleCallingMinutesForCall,
 } from '../billing/ai-credits/service';
 import { charUsage } from '../ai/ai-usage-actions';
 import { SAFE_CHAT_TEMPERATURE } from '../ai/ai-constants';
@@ -156,7 +156,11 @@ export class AiVoiceCallSession {
     if (!isCallingAiEnabled(aiSettings)) {
       throw new Error('Calling AI is disabled for this organization');
     }
-    await assertAiCreditsAvailable(this.ctx.organizationId, 'calling', 1);
+    await reserveCallingMinutesForCall({
+      organizationId: this.ctx.organizationId,
+      callId: this.ctx.callId,
+      minutes: 1,
+    });
     if (!isSarvamSttConfigured() || !isSarvamTtsConfigured()) {
       throw new Error('Sarvam voice is not configured. Set SARVAM_API_KEY in server/.env.');
     }
@@ -1119,7 +1123,7 @@ export class AiVoiceCallSession {
         : 0);
     if (billableSeconds > 0) {
       try {
-        await deductCallingMinutesForCall({
+        await settleCallingMinutesForCall({
           organizationId: this.ctx.organizationId,
           callId: this.ctx.callId,
           durationSeconds: billableSeconds,
@@ -1212,6 +1216,7 @@ export class AiVoiceCallSession {
         botId: this.ctx.aiBotId ?? undefined,
         whatsappNumberId: this.ctx.whatsappNumberId,
         usageAction: 'call_summary',
+        skipCreditCheck: true,
         messages: [
           {
             role: 'system',

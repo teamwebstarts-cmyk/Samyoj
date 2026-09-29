@@ -157,6 +157,7 @@ export async function answerSupportQuestion(input: {
     const completion = await createChatCompletion({
       organizationId: input.organizationId,
       usageAction: 'support_help',
+      skipCreditCheck: true,
       model: config.sarvam.chatModel || 'sarvam-105b',
       temperature: SAFE_CHAT_TEMPERATURE,
       maxTokens: 500,

@@ -3,7 +3,7 @@
 **Status (2026-08-17):** First release is **in code** for internal test-deploy. Customer production is still **no**.  
 **Date:** research 2026-08-16; shipped 2026-08-17.  
 **Jira:** [SAMYOJ-57](https://teamwebstarts.atlassian.net/browse/SAMYOJ-57) — comment on this ticket; do not file a sibling.  
-**Relates:** [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS ledger honesty still open, [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) billing TARGET not shipped, [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) customer cookies (do not mix).  
+**Relates:** [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS ledger honesty still open, recurring AI add-ons/operator billing hardening, and [SAMYOJ-3](https://teamwebstarts.atlassian.net/browse/SAMYOJ-3) customer cookies (do not mix).  
 **Older stub:** `docs/product/CALLS_AI_USAGE_ADMIN_2026-08-16.md` §4.
 
 This is **not** the customer Dashboard (`/`). It is a **Samyoj operator** product: how *our paying/trial orgs* use Samyoj, where they get stuck, what Meta errors they hit, how much AI they burn, and whether they paid. End WhatsApp customers of those orgs stay out of this console.
@@ -12,7 +12,7 @@ This is **not** the customer Dashboard (`/`). It is a **Samyoj operator** produc
 
 | Shipped (test-deploy) | Still remaining |
 |-----------------------|-----------------|
-| Additive migration `20260817003000_platform_schema_auth` (apply with `npm run db:migrate-startup-safe`, never raw `prisma migrate deploy` on a path that would hit `20260808120000`). Outreach `LOGGED` status is `20260817120000`. | [SAMYOJ-35](https://teamwebstarts.atlassian.net/browse/SAMYOJ-35) TARGET Razorpay Subscriptions / GST / dunning. Admin shows **current** plan, expiry, `PaymentOrder`, extend/comp only. |
+| Additive migration `20260817003000_platform_schema_auth` (apply with `npm run db:migrate-startup-safe`, never raw `prisma migrate deploy` on a path that would hit `20260808120000`). Outreach `LOGGED` status is `20260817120000`. | Recurring AI add-ons, STT/TTS ledger completeness, and customer-host billing proof remain open. |
 | `/api/platform/*`: cookie session, CSRF, TOTP when `PLATFORM_MFA_REQUIRED` is true (production default; skippable in development), RBAC (`SUPER_ADMIN` / `SUPPORT` / `ANALYST`). Org JWT cannot call these routes. Pending TOTP secret is reused until enroll or explicit reset. | [SAMYOJ-56](https://teamwebstarts.atlassian.net/browse/SAMYOJ-56) STT/TTS coverage is still under-logged. Admin rolls up `AiUsageLog` honestly — do not claim listening/speaking units are complete. |
 | Tenant `GET /api/ops/recent-errors` **removed** (404). Meta errors live under platform only, including Graph delivery-status failures. | Impersonation / “view as org” — **not built**, not this release. |
 | `admin/` Vite app on `:3001` (`PLATFORM_ADMIN_URL`). `bash start.sh` launches it. | WhatsApp outreach to the business number — **not built**. Email templates only. |
@@ -51,11 +51,11 @@ A separate, dark-ops console where Samyoj staff see **org-level** health (login 
 |-------|--------|----------------|
 | Jira | SAMYOJ-57 In Progress; first-release comment 2026-08-17 | Parent ticket. Do not file a sibling. |
 | Customer UI | Dashboard, Reports, Billing, Inbox, Calls, Campaigns, AI Bot, Settings | **Never** mount admin here. |
-| Auth | JWT in `sessionStorage` (SAMYOJ-49). `User.role` `ADMIN`/`AGENT` is the **org founder**, set on register (`auth/routes.ts`). `OrgRole` OWNER/ADMIN/SUPERVISOR/AGENT. | **Cannot** reuse `User.role = ADMIN` as platform staff. |
+| Auth | HttpOnly tenant cookies (`samyoj_access` / `samyoj_refresh`) plus readable CSRF cookie. `User.role` `ADMIN`/`AGENT` is the **org founder**, set on register (`auth/routes.ts`). `OrgRole` OWNER/ADMIN/SUPERVISOR/AGENT. | **Cannot** reuse `User.role = ADMIN` as platform staff. |
 | Membership | `OrganizationUser.lastActiveAt` on login + availability ping | Last-seen for *agents inside an org*. |
 | Analytics API | `/api/analytics/overview` number-scoped, `authenticate + requireOrg` | Org Reports only. Admin needs **cross-org roll-up**, new routes. |
 | AI ledger | `AiUsageLog` + `recordAiUsage`. Named actions exist (`ai-usage-actions.ts`) but STT/TTS still under-logged (SAMYOJ-56). `monthlyTokenLimit` in `Organization.settings.ai`. | Roll up per org. Admin **writes** the limit. |
-| Billing CURRENT | `Organization.plan`, `planExpiresAt`, `subscriptionStatus`. Razorpay **Orders** one-shot. | Show as-is. Do **not** implement TARGET Subscriptions here (SAMYOJ-35). |
+| Billing CURRENT | `Organization.plan`, `planExpiresAt`, `subscriptionStatus`, Razorpay **Subscriptions**, plan periods, and GST invoices. | Show current subscription/period state; operator grants must remain non-payment audit events. |
 | Meta usage poll | `pollConversationAnalytics` → `ConversationCharge`. `pollQualityRatings` → `WhatsappNumber.qualityRating`. | Surface GREEN/YELLOW/RED + category counts. Cost is **Meta’s**, never fold into SaaS. |
 | Feature flags | `OrgFeatureFlag` + `KNOWN_FEATURE_FLAGS` (content_studio, calling, commerce, public_api, …) | Admin can enable/disable per org. |
 | Audit | `AuditLog` (org, sparse), `TeamAuditLog` (team actions) | Incomplete. New `PlatformAuditLog` for operator writes. |

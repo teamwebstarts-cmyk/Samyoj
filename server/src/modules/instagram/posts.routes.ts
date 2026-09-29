@@ -9,6 +9,7 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { persistMediaBuffer, getPublicMediaUrl } from '../media/storage-adapter';
 import { randomUUID } from 'crypto';
 import {
+  CAPTION_MAX,
   INSTAGRAM_IMAGE_MAX_BYTES,
   INSTAGRAM_IMAGE_MIMES,
   INSTAGRAM_VIDEO_MAX_BYTES,
@@ -91,7 +92,7 @@ const mediaItemSchema = z.object({
 });
 
 const writeSchema = z.object({
-  caption: z.string().max(2300).default(''),
+  caption: z.string().max(CAPTION_MAX).default(''),
   mediaType: z.enum(['IMAGE', 'REELS', 'CAROUSEL']).optional(),
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),

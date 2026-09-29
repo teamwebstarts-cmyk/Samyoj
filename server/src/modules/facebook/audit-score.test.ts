@@ -7,11 +7,11 @@ describe('Facebook/Instagram audit recapture', () => {
     // eslint-disable-next-line no-console
     console.log(result.line);
     expect(result.failures, result.failures.join('\n')).toEqual([]);
-    expect(result.counts.done).toBe(18);
-    expect(result.counts.remaining).toBe(3);
+    expect(result.counts.done).toBe(19);
+    expect(result.counts.remaining).toBe(2);
     expect(result.counts.out).toBe(4);
     expect(result.counts.live_unproven).toBe(2);
     expect(AUDIT_SCORE.some((item) => item.id === 'ADS-create' && item.verdict === 'out')).toBe(true);
-    expect(result.line).toBe('SCORE done=18 remaining=3 out=4 live_unproven=2');
+    expect(result.line).toBe('SCORE done=19 remaining=2 out=4 live_unproven=2');
   });
 });

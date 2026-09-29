@@ -321,7 +321,7 @@ export async function checkQuota(
       reason: 'Your subscription or trial has expired. Upgrade to continue using this feature.',
     };
   }
-  if (entitlements.softLocked && quotaType === 'waNumbers') {
+  if (entitlements.softLocked && ['waNumbers', 'ai', 'calling'].includes(quotaType)) {
     return {
       allowed: false,
       used: entitlements.quotas.waNumbers.used,

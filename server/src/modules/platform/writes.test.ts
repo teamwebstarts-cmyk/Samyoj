@@ -22,6 +22,7 @@ describe('platform write APIs', () => {
 
   it('does not accept provider keys, prompts, or forged payments', () => {
     expect(routes).not.toMatch(/apiKey\s*:|endpoint\s*:|prompt\s*:|razorpay_payment_id|PaymentOrder\.create/);
-    expect(routes).toContain("'active', 'complimentary', 'expired', 'past_due', 'cancelled'");
+    expect(routes).toContain("'trial'");
+    expect(routes).toContain("'locked'");
   });
 });

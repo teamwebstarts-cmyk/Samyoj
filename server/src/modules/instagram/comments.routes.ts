@@ -41,7 +41,7 @@ router.get(
       sendSuccess(res, { connected: false, comments: [], total: 0, account: null });
       return;
     }
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 200) : '';
     const status = typeof req.query.status === 'string' ? req.query.status : 'all';
     const page = Math.max(parseInt(String(req.query.page || '1'), 10) || 1, 1);
     const pageSize = Math.min(

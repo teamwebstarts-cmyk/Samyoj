@@ -974,7 +974,10 @@ setInterval(() => {
 // Retry calling-minute deductions that were durably marked after a call ended.
 setInterval(() => {
   import('../modules/billing/ai-credits/service')
-    .then(({ retryPendingCallingMinuteDeductions }) => retryPendingCallingMinuteDeductions())
+    .then(async ({ retryPendingCallingMinuteDeductions, releaseStaleCallingCreditReservations }) => {
+      await retryPendingCallingMinuteDeductions();
+      await releaseStaleCallingCreditReservations();
+    })
     .catch((err) => logError(err, { source: 'worker', action: 'retryCallingMinuteDeductions' }));
 }, 60_000);
 

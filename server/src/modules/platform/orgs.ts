@@ -410,7 +410,7 @@ export async function getPlatformOrg(organizationId: string, now = new Date()) {
       subscriptionStatus: org.subscriptionStatus,
       payments,
       ledgerNote:
-        'This is the current Razorpay Orders checkout, not TARGET Subscriptions/GST/dunning (SAMYOJ-35). Meta Cloud API fees are a separate WABA ledger.',
+        'Current SaaS billing uses Razorpay Subscriptions with GST invoices. Operator grants do not create provider payments. Meta Cloud API fees are a separate WABA ledger.',
     },
     ai: {
       ...publicAiControls(await getOrgAiSettings(organizationId)),
@@ -558,13 +558,16 @@ export async function patchPlatformOrgBilling(input: {
       if (currentPeriod && input.planExpiresAt && input.planExpiresAt > new Date()) {
         await tx.planPeriod.update({
           where: { id: currentPeriod.id },
-          data: { endsAt: input.planExpiresAt },
+          data: {
+            endsAt: input.planExpiresAt,
+            ...(input.plan ? { planTier: input.plan } : {}),
+          },
         });
       } else if (!currentPeriod && input.planExpiresAt && input.planExpiresAt > new Date()) {
         await tx.planPeriod.create({
           data: {
             organizationId: input.organizationId,
-            planTier: org.plan,
+            planTier: input.plan ?? org.plan,
             cadence: 'custom',
             startsAt: new Date(),
             endsAt: input.planExpiresAt,

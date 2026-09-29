@@ -13,6 +13,7 @@ import {
 vi.mock('../../config/database', () => ({
   default: {
     whatsappNumber: { findFirst: vi.fn() },
+    channel: { findMany: vi.fn() },
     providerWebhookEvent: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('../../utils/crypto', () => ({
 }));
 
 const numbers = vi.mocked(prisma.whatsappNumber);
+const channels = vi.mocked(prisma.channel);
 const events = vi.mocked(prisma.providerWebhookEvent);
 const queueAdd = vi.mocked(webhookQueue.add);
 
@@ -62,6 +64,7 @@ const payload = {
 beforeEach(() => {
   vi.clearAllMocks();
   numbers.findFirst.mockResolvedValue({ id: 'wa-1', organizationId: 'org-1' } as never);
+  channels.findMany.mockResolvedValue([] as never);
   events.create.mockResolvedValue({ id: 'evt-1' } as never);
   queueAdd.mockResolvedValue({ id: 'job-1' } as never);
 });
@@ -82,6 +85,25 @@ describe('inbound webhook persist-then-enqueue', () => {
     const eventKey = inboundWebhookEnvelopeKey(payload);
     expect(eventKey.startsWith('envelope_')).toBe(true);
     expect(inboundWebhookJobId(eventKey)).toBe(eventKey);
+  });
+
+  it('resolves Page/Instagram envelopes to their active channel organization', async () => {
+    numbers.findFirst.mockResolvedValue(null);
+    channels.findMany.mockResolvedValue([{ organizationId: 'org-ig' }] as never);
+    const instagramPayload = {
+      object: 'instagram',
+      entry: [{ id: '17841400000000001', messaging: [{ sender: { id: 'customer-1' } }] }],
+    };
+
+    const result = await persistAndEnqueueInboundWebhook({
+      payload: instagramPayload,
+      requestId: 'ig_1',
+    });
+
+    expect(result.organizationId).toBe('org-ig');
+    expect(events.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ organizationId: 'org-ig', requestId: 'ig_1' }),
+    });
   });
 
   it('persists the envelope before the queue add, and the caller acks only after both', async () => {
