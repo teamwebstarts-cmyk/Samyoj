@@ -2,7 +2,7 @@
 
 OWNS: docs/product/UNIVERSAL_CAMPAIGNS_REVIEW_2026-09-30.md, docs/product/UNIVERSAL_CAMPAIGNS_REVIEW_BRIEF_2026-09-30.md, client/src/config/navigation.ts, client/src/config/navigation.test.ts, .unlazy/universal-campaigns-review/**
 
-Scope: document the current WhatsApp-only campaign system, research channel limits, and move the Campaigns sidebar item under Contacts without changing campaign send behavior.
+Scope: document the current WhatsApp-only campaign system and channel limits. Campaigns nav stays under WhatsApp (Contacts move reverted).
 
 - [x] G1: review document contains the current-code map and channel capability evidence
   CHECK: node .unlazy/universal-campaigns-review/verify-universal-campaigns.mjs document
@@ -16,7 +16,7 @@ Scope: document the current WhatsApp-only campaign system, research channel limi
   CWD: ../..
   EVIDENCE: exit=0; shell=/bin/sh; cwd=/workspaces/Samyoj; path=b67db49af689/39 entries; output=universal campaigns boundary verification passed
 
-- [x] G3: Campaigns is listed under Contacts and not under the WhatsApp platform group
+- [x] G3: Campaigns is listed under the WhatsApp platform group and not under Contacts
   CHECK: node .unlazy/universal-campaigns-review/verify-universal-campaigns.mjs navigation
   EXPECT: universal campaigns navigation verification passed
   CWD: ../..

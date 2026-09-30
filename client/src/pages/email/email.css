@@ -68,6 +68,18 @@
   max-width: 1360px;
   margin: 0 auto;
 }
+.ema-shell--compose {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+.ema-shell--templates {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
 
 /* ============ Buttons ============ */
 
@@ -900,15 +912,34 @@
 
 .ema-split {
   display: grid;
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(248px, 288px) minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
   min-height: min(720px, calc(100vh - 168px));
+}
+.ema-split--viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+.ema-split--viewport > .ema-card {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
 }
 @media (max-width: 900px) {
   .ema-split {
     grid-template-columns: 1fr;
     min-height: 0;
+  }
+  .ema-split--viewport {
+    height: auto;
+    max-height: none;
+    flex: 1 1 auto;
+  }
+  .ema-split--viewport .ema-sent {
+    max-height: min(52vh, 520px);
   }
 }
 
@@ -916,32 +947,18 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 100%;
+  height: 100%;
   overflow: hidden;
 }
 .ema-sent__filters {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 12px 8px;
+  flex-shrink: 0;
+  padding: 0 10px 6px;
 }
-.ema-sent__status {
-  display: flex;
-  gap: 6px;
-}
-.ema-sent__statusbtn {
-  border: 1px solid var(--ema-line);
-  border-radius: 999px;
-  background: var(--ema-card);
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--ema-muted);
-  cursor: pointer;
-}
-.ema-sent__statusbtn--on {
-  border-color: var(--ema-primary-line-strong);
-  background: var(--ema-primary-soft);
-  color: var(--ema-primary);
+.ema-input--compact {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 .ema-prior {
   display: flex;
@@ -983,21 +1000,33 @@
 .ema-sent__list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 4px 10px 12px;
+  padding: 2px 8px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+}
+.ema-sent__list::-webkit-scrollbar {
+  width: 5px;
+}
+.ema-sent__list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.4);
+}
+.ema-sent__list::-webkit-scrollbar-track {
+  background: transparent;
 }
 .ema-sent__item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   border: 1px solid var(--ema-line);
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--ema-card);
-  padding: 10px 12px;
+  padding: 8px 10px;
   text-align: left;
   cursor: pointer;
 }
@@ -1065,13 +1094,25 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  max-height: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.ema-pane__pad,
+.ema-pane .ema-read {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .ema-read {
   display: flex;
   min-height: 100%;
   flex-direction: column;
   background: linear-gradient(180deg, rgba(247, 249, 253, 0.72), var(--ema-card) 34%);
+}
+.ema-pane .ema-read {
+  min-height: 0;
 }
 .ema-pane__pad {
   padding: 16px 18px 18px;
@@ -1620,16 +1661,87 @@
 
 .ema-templates {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1.45fr) minmax(300px, 0.92fr);
+  grid-template-columns: minmax(280px, 300px) minmax(0, 1.45fr) minmax(300px, 0.92fr);
   gap: 14px;
   align-items: start;
 }
+.ema-templates--viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  align-items: stretch;
+  overflow: hidden;
+}
+.ema-templates--viewport > .ema-editor {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.ema-templates--viewport .ema-tlibrary {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.ema-templates--viewport .ema-tlibrary .ema-ttabs,
+.ema-templates--viewport .ema-tlibrary .ema-card__head {
+  flex-shrink: 0;
+}
+.ema-templates--viewport .ema-tlibrary .ema-tlist {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.ema-templates--viewport > .ema-tcreate,
+.ema-templates--viewport > .ema-tpreview {
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ema-templates--skeleton {
+  min-height: min(640px, calc(100dvh - 12rem));
+  align-items: stretch;
+}
+.ema-templates--skeleton > .ema-card {
+  min-height: 0;
+  height: 100%;
+}
+.ema-library-read {
+  border: 1px solid var(--ema-line);
+  border-radius: 12px;
+  background: var(--ema-wash);
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--ema-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ema-library-read--body {
+  min-height: 200px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+}
 @media (max-width: 1100px) {
   .ema-templates {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: minmax(260px, 280px) minmax(0, 1fr);
   }
   .ema-tpreview {
     grid-column: 1 / -1;
+  }
+  .ema-templates--viewport {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .ema-templates--viewport .ema-tlibrary {
+    max-height: min(52vh, 520px);
   }
 }
 @media (max-width: 720px) {

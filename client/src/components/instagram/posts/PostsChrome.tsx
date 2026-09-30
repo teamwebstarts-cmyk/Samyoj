@@ -6,6 +6,8 @@ import {
   Clock3,
   FileText,
   ImagePlus,
+  Instagram,
+  Layers,
   Lock,
   MessageSquare,
   Plus,
@@ -159,70 +161,68 @@ export type PostFeedTab = 'posts' | 'live';
 type PostFeedBarProps = {
   tab: PostFeedTab;
   onTabChange: (value: PostFeedTab) => void;
+  postsCount: number;
   liveCount: number;
-  query: string;
-  onQueryChange: (value: string) => void;
   canEdit: boolean;
 };
 
-/** Samyoj-managed posts vs media already live on Instagram, plus caption search. */
+/** Samyoj-managed posts vs media already live on Instagram. */
 export function PostFeedBar({
   tab,
   onTabChange,
+  postsCount,
   liveCount,
-  query,
-  onQueryChange,
   canEdit,
 }: PostFeedBarProps) {
   return (
     <div className="igp-filters">
-      <div className="igp-tabs" role="tablist" aria-label="Post source">
+      <div className="igp-source" role="tablist" aria-label="Post source">
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'posts'}
-          className={tab === 'posts' ? 'is-on' : ''}
+          className={`igp-source__tab ${tab === 'posts' ? 'is-on' : ''}`}
           onClick={() => onTabChange('posts')}
         >
-          <span className="igp-tab__text">
+          <span className="igp-source__icon igp-source__icon--samyoj" aria-hidden="true">
+            <Layers className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          </span>
+          <span className="igp-source__body">
             <strong>Samyoj posts</strong>
-            <small>Created here</small>
+            <small>Create, schedule &amp; publish here</small>
+          </span>
+          <span className="igp-source__count" aria-label={`${postsCount} Samyoj posts`}>
+            {postsCount}
           </span>
         </button>
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'live'}
-          className={tab === 'live' ? 'is-on' : ''}
+          className={`igp-source__tab ${tab === 'live' ? 'is-on' : ''}`}
           onClick={() => onTabChange('live')}
         >
-          <span className="igp-tab__text">
-            <strong>On Instagram</strong>
-            <small>Live on your account</small>
+          <span className="igp-source__icon igp-source__icon--ig" aria-hidden="true">
+            <Instagram className="h-[18px] w-[18px]" strokeWidth={2.2} />
           </span>
-          <span>{liveCount}</span>
+          <span className="igp-source__body">
+            <strong>On Instagram</strong>
+            <small>Live on your connected account</small>
+          </span>
+          <span className="igp-source__count" aria-label={`${liveCount} live posts`}>
+            {liveCount}
+          </span>
         </button>
       </div>
 
-      <div className="igp-filters__tools">
-        <label className="sr-only" htmlFor="igp-search">
-          Search posts by caption
-        </label>
-        <input
-          id="igp-search"
-          className="igp-search"
-          type="search"
-          placeholder={tab === 'live' ? 'Search live posts…' : 'Search captions…'}
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-        {!canEdit ? (
+      {!canEdit ? (
+        <div className="igp-filters__tools">
           <span className="igp-kind" title="View-only access">
             <Lock className="h-3 w-3" />
             View only
           </span>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

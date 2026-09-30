@@ -35,8 +35,9 @@ export class WhatsappNumberScopeError extends Error {
 export function isNumberScopedUrl(url?: string) {
   if (!url) return false;
   const path = url.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/api(?=\/)/, '');
-  return /^\/(inbox|contacts|calling|ai-bot|campaigns|templates|flows(?:-assets)?|analytics|tickets|commerce|leads|wa-forms)(?:\/|$)/.test(
-    path
+  return (
+    /^\/(inbox|contacts|calling|ai-bot|campaigns|templates|flows(?:-assets)?|analytics|tickets|commerce|leads|wa-forms)(?:\/|$)/.test(path) ||
+    /^\/gmail\/(?:contacts|send|attachments|sends)(?:\/|$)/.test(path)
   );
 }
 

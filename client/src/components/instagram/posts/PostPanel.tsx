@@ -19,7 +19,7 @@ type PostPanelProps = {
 const TABS: Array<{ id: PanelTab; label: string; shortLabel: string; icon: typeof Pencil }> = [
   { id: 'create', label: 'Create Post', shortLabel: 'Create', icon: Pencil },
   { id: 'preview', label: 'Post Preview', shortLabel: 'Preview', icon: Eye },
-  { id: 'automation', label: 'Comment Automation', shortLabel: 'Automation', icon: MessageSquare },
+  { id: 'automation', label: 'Comment Automation', shortLabel: 'Comment automation', icon: MessageSquare },
 ];
 
 /**
@@ -90,7 +90,7 @@ export default function PostPanel({
       tabIndex={-1}
     >
       <header className="igp-panel__head">
-        <div className="igp-tabs" role="tablist" aria-label="Post panel sections">
+        <div className="igp-panel__tabs" role="tablist" aria-label="Post panel sections">
           {visibleTabs.map((row) => {
             const Icon = row.icon;
             const active = tab === row.id;

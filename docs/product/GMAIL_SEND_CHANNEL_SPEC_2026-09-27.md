@@ -1,9 +1,11 @@
 # Gmail send channel — research & integration specification
 
-**Status:** Research complete · **Not shipped** · rechecked against official Google docs on 2026-09-29  
+**Status:** Historical research baseline; implementation follow-on shipped 2026-09-30
 **Date:** 2026-09-27 · **Recheck:** `docs/product/GMAIL_SEND_CHANNEL_RECHECK_2026-09-29.md`  
 **Audience:** Product, engineering, Google OAuth App Review, legal/compliance, QA  
 **Ask:** Add **Google Gmail** as a fourth channel that **only sends** mail. User connects a mailbox, picks contacts that already have an email saved, and sends a message (or a Samyoj email template). Not a Gmail inbox.
+
+> Implementation update (2026-09-30): the requested Compose-only attachment and 12-template-library follow-on is implemented in `docs/product/GMAIL_ATTACHMENTS_LIBRARY_IMPLEMENTATION_2026-09-29.md`. This research specification remains the policy/source baseline; Google verification and real-mail checks still gate customer rollout.
 
 ---
 
@@ -463,4 +465,4 @@ Until those four are answered, treat this document as the integration plan — *
 - [Sensitive scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)  
 - Code: `Contact.email` in `server/prisma/schema.prisma`; Google login scopes in `server/src/modules/auth/oauth.routes.ts`; SMTP in `server/src/services/email.service.ts`; WhatsApp campaign consent in `server/src/modules/campaigns/recipients.ts`; Meta channel save in `server/src/modules/facebook/save-page-channel.ts`
 
-**Not shipped.** Internal test-deploy of *this* Gmail feature = only after Phase 1 exists. Customer production of Gmail = only after Google **sensitive** OAuth verification for production users.
+The original v1 research was not shipped as written. The implementation follow-on is available for internal testing; customer production of Gmail remains blocked until Google **sensitive** OAuth verification, privacy disclosures, and real-mail testing pass.

@@ -252,8 +252,12 @@ const gmailSendWorker = new Worker(
     } catch (error) {
       const maxAttempts = job.opts.attempts ?? 1;
       if ((job.attemptsMade ?? 0) + 1 >= maxAttempts) {
-        const exhausted = await prisma.emailSend.findUnique({
-          where: { id: emailSendId },
+        const exhausted = await prisma.emailSend.findFirst({
+          where: {
+            id: emailSendId,
+            whatsappNumberId: { not: null },
+            whatsappNumber: { isActive: true },
+          },
           select: { providerCallStartedAt: true },
         });
         await markEmailSendFailed(

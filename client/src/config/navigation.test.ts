@@ -38,9 +38,9 @@ describe('Meta navigation', () => {
 
     const contacts = sections.find((s) => s.label === 'Contacts');
     expect(contacts?.items.some((i) => i.to === '/contacts')).toBe(true);
-    expect(contacts?.items.some((i) => i.to === '/campaigns')).toBe(true);
+    expect(contacts?.items.some((i) => i.to === '/campaigns')).toBe(false);
     const whatsapp = channels?.platforms?.find((s) => s.accent === 'whatsapp');
-    expect(whatsapp?.items.some((i) => i.to === '/campaigns')).toBe(false);
+    expect(whatsapp?.items.some((i) => i.to === '/campaigns')).toBe(true);
   });
 
   it('keeps WhatsApp tabs when a number is connected, Meta tabs when it is not', () => {

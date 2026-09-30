@@ -1443,6 +1443,8 @@ export interface AnalyticsOverview {
   failedMessages: number;
   activeConversations: number;
   totalContacts: number;
+  /** Contacts created in the selected period. */
+  newContacts?: number;
   deltas?: {
     messagesSent: number | null;
     deliveryRate: number | null;

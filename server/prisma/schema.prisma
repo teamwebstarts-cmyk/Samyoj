@@ -1088,6 +1088,8 @@ model WhatsappNumber {
   flows                     Flow[]
   automations               Automation[]
   flowAssets                FlowAsset[]
+  gmailSends                EmailSend[]
+  gmailAttachments          EmailAttachment[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, normalizedPhoneNumber])
@@ -1140,6 +1142,7 @@ model Contact {
 
   @@unique([organizationId, whatsappNumberId, normalizedPhone])
   @@unique([organizationId, id])
+  @@unique([organizationId, whatsappNumberId, id])
   @@index([organizationId, whatsappNumberId])
   @@map("contacts")
 }
@@ -1195,6 +1198,7 @@ model EmailTemplate {
 model EmailSend {
   id                    String          @id @default(uuid())
   organizationId        String          @map("organization_id")
+  whatsappNumberId      String?         @map("whatsapp_number_id")
   mailboxId             String          @map("mailbox_id")
   templateId            String?         @map("template_id")
   contactId             String?         @map("contact_id")
@@ -1219,14 +1223,17 @@ model EmailSend {
   updatedAt             DateTime        @updatedAt @map("updated_at")
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
   mailbox      GmailMailbox      @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
   template     EmailTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  contact      Contact?          @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Restrict)
+  contact      Contact?          @relation(fields: [organizationId, whatsappNumberId, contactId], references: [organizationId, whatsappNumberId, id], onDelete: Restrict)
   createdBy    User              @relation("EmailSendCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   attachments  EmailAttachment[]
 
-  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, whatsappNumberId, idempotencyKey])
+  @@unique([organizationId, whatsappNumberId, id])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, whatsappNumberId, status, createdAt])
   @@index([mailboxId, status, createdAt])
   @@index([status, sendingLeaseExpiresAt])
   @@map("email_sends")
@@ -1235,6 +1242,7 @@ model EmailSend {
 model EmailAttachment {
   id             String    @id @default(uuid())
   organizationId String    @map("organization_id")
+  whatsappNumberId String? @map("whatsapp_number_id")
   emailSendId    String?   @map("email_send_id")
   createdById    String    @map("created_by_id")
   originalName   String    @map("original_name")
@@ -1247,10 +1255,11 @@ model EmailAttachment {
   createdAt      DateTime  @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  emailSend    EmailSend?   @relation(fields: [emailSendId], references: [id], onDelete: SetNull)
+  whatsappNumber WhatsappNumber? @relation(fields: [organizationId, whatsappNumberId], references: [organizationId, id], onDelete: Restrict)
+  emailSend    EmailSend?   @relation(fields: [organizationId, whatsappNumberId, emailSendId], references: [organizationId, whatsappNumberId, id], onDelete: Restrict)
   createdBy    User         @relation("EmailAttachmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([organizationId, expiresAt])
+  @@index([organizationId, whatsappNumberId, expiresAt])
   @@index([emailSendId])
   @@map("email_attachments")
 }

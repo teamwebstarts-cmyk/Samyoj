@@ -158,6 +158,20 @@ curl -fsS http://localhost:3000 >/dev/null 2>&1 ||
   fail "Client did not become reachable. See .run/logs/client.log"
 ok "Client is reachable"
 
+if codespace_name 2>/dev/null; then
+  ensure_codespace_ports_public
+  CS_CLIENT="$(codespace_client_origin)"
+  echo "$CS_CLIENT" >"$RUN_DIR/codespace-client-url"
+  write_env_key CLIENT_URL "$CS_CLIENT"
+  ok "Codespace UI (public): $CS_CLIENT"
+  restart_api
+  for attempt in {1..40}; do
+    curl -fsS http://localhost:8000/health >/dev/null 2>&1 && break
+    is_running api || fail "API failed after CLIENT_URL update. See .run/logs/api.log"
+    sleep 1
+  done
+fi
+
 PUBLIC_MODE="${SAMYOJ_PUBLIC_MODE:-ngrok}"
 if [[ "$PUBLIC_MODE" != "ngrok" ]]; then
   fail "Ngrok is required for inbound webhook testing. Stable Codespaces URLs and fallback tunnels are disabled."
@@ -234,6 +248,9 @@ else
   ok "All services started (public webhook not verified yet — see warnings above)."
 fi
 echo "  Connect + test UI (HTTPS): $CONNECT_HTTPS_ORIGIN"
+if [[ -f "$RUN_DIR/codespace-client-url" ]]; then
+  echo "  Codespace UI (HTTPS):      $(cat "$RUN_DIR/codespace-client-url")"
+fi
 echo "  Local UI (no Connect):     http://localhost:3000"
 echo "  Admin:                     http://localhost:3001"
 echo "  API (local):               http://localhost:8000"

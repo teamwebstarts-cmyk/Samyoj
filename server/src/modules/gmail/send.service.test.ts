@@ -21,7 +21,12 @@ describe('Gmail send lease', () => {
 
     expect(token).toEqual(expect.any(String));
     expect(updateMany).toHaveBeenCalledWith({
-      where: { id: 'send-1', status: 'QUEUED' },
+      where: {
+        id: 'send-1',
+        status: 'QUEUED',
+        whatsappNumberId: { not: null },
+        whatsappNumber: { isActive: true },
+      },
       data: expect.objectContaining({
         status: 'SENDING',
         attempts: { increment: 1 },

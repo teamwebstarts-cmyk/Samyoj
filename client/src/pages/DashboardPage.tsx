@@ -22,7 +22,8 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useMetaChannelStatus } from '../components/layout/MetaChannelChips';
 import { analyticsApi, campaignApi, inboxApi, onboardingApi, templateApi } from '../services/api';
 import { toastError } from '../utils/toast';
-import { useMetaMock } from '../contexts/MetaMockContext';
+import { useGmailChannelAvailable, useGmailWorkspace } from '../components/email/emailData';
+import { GMAIL_MOCK_MAILBOX } from '../utils/gmailMockData';
 import EmailDashboardView from './email/EmailDashboardPage';
 import type { AnalyticsOverview, Campaign, Conversation, MessageTemplate } from '../types';
 
@@ -104,12 +105,13 @@ export default function DashboardPage() {
   const connectionReady = resolved && (!numbersLoading || hasConnectedNumber || waStatus.statusReady);
   const metaReady = facebook !== null && instagram !== null;
   const waConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
-  const { enabled: emailPreview } = useMetaMock();
+  const emailChannel = useGmailChannelAvailable();
+  const { status: gmailStatus } = useGmailWorkspace();
   const channels = {
     whatsapp: waConnected,
     facebook: facebook?.connected === true,
     instagram: instagram?.connected === true,
-    email: emailPreview,
+    email: emailChannel,
   };
   // Email is mocked connected for the tab until the Gmail backend lands.
   // The pre-connect wall must key on real channels only (spec Phase 3: include
@@ -306,7 +308,11 @@ export default function DashboardPage() {
           whatsappLabel={activeNumber?.phoneNumber}
           facebookLabel={facebook?.label}
           instagramLabel={instagram?.label}
-          emailLabel={emailPreview ? 'support@samyoj.com' : 'Not connected'}
+          emailLabel={
+            gmailStatus?.status === 'connected'
+              ? gmailStatus.email || GMAIL_MOCK_MAILBOX
+              : 'Not connected'
+          }
         />
         {showEmail ? <EmailDashboardView /> : null}
         {showAll ? (

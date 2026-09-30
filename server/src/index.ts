@@ -67,7 +67,15 @@ const httpServer = createServer(app);
 const customerCors = cors({
   origin: corsOriginDelegate,
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-WhatsApp-Number-Id', 'x-csrf-token'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-WhatsApp-Number-Id',
+    'X-File-Name',
+    'X-File-Mime-Type',
+    'Idempotency-Key',
+    'x-csrf-token',
+  ],
 });
 const platformCors = cors({
   origin: platformCorsOriginDelegate,

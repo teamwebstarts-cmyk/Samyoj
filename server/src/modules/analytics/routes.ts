@@ -295,6 +295,7 @@ router.get(
       activeConversations,
       closedConversations,
       totalContacts,
+      newContacts,
       deltas: {
         messagesSent: compareEnabled ? growthPct(messagesSent, messagesSentPrev) : null,
         inboundMessages: compareEnabled ? pctDelta(inboundMessages, inboundMessagesPrev) : null,

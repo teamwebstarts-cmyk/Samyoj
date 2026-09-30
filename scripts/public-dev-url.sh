@@ -47,7 +47,7 @@ NODE
 ensure_codespace_ports_public() {
   codespace_name || return 0
   command -v gh >/dev/null 2>&1 || return 0
-  gh codespace ports visibility 3000:public 8000:public -c "$CODESPACE_NAME" >/dev/null 2>&1 || true
+  gh codespace ports visibility 3000:public 3001:public 8000:public -c "$CODESPACE_NAME" >/dev/null 2>&1 || true
 }
 
 apply_codespace_env() {

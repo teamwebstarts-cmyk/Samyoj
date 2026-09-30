@@ -25,8 +25,6 @@ type GridProps = {
   loading: boolean;
   selectedId: string | null;
   onOpen: (post: PostRow) => void;
-  query: string;
-  onClearQuery: () => void;
 };
 
 function tileThumb(post: PostRow): string {
@@ -135,33 +133,14 @@ export function PostsZeroState({ canEdit, onNewPost }: { canEdit: boolean; onNew
   );
 }
 
-/** Grid / list of Samyoj-managed posts, with skeletons and filtered-empty note. */
+/** Grid / list of Samyoj-managed posts, with skeletons and status-filter empty note. */
 export function PostsGrid({
   posts,
   loading,
   selectedId,
   onOpen,
-  query,
-  onClearQuery,
 }: GridProps) {
   if (loading) return <GridSkeleton />;
-
-  if (posts.length === 0 && query.trim()) {
-    return (
-      <div className="igp-grid">
-        <p className="igp-emptynote">
-          No posts match “{query.trim()}”.{' '}
-          <button
-            type="button"
-            className="font-bold text-[var(--igp-accent)] underline"
-            onClick={onClearQuery}
-          >
-            Clear search
-          </button>
-        </p>
-      </div>
-    );
-  }
 
   if (posts.length === 0) {
     return (

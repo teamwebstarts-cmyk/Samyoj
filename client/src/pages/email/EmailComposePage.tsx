@@ -16,10 +16,15 @@ import {
   Upload,
 } from 'lucide-react';
 import PageShell from '../../components/ui/PageShell';
+import MetaMockNotice from '../../components/meta/MetaMockNotice';
+import EmailLoadingSkeleton from '../../components/email/EmailLoadingSkeleton';
+import { GMAIL_MOCK_PREVIEW_BLOCK } from '../../utils/gmailMockData';
 import GmailGlyph from '../../components/email/GmailGlyph';
 import EmailConnectScreen from '../../components/email/EmailConnectScreen';
 import {
   GMAIL_ALLOWED_ATTACHMENT_MIMES,
+  GMAIL_EMAIL_CONSENT_SOURCE,
+  GMAIL_EMAIL_CONSENT_VERSION,
   GMAIL_MAX_ATTACHMENT_BYTES,
   GMAIL_MAX_ATTACHMENTS,
   GMAIL_MAX_DECODED_MIME_BYTES,
@@ -85,14 +90,22 @@ function previewNodes(text: string, contact: EmailContact | null, empty: string)
 }
 
 export default function EmailComposePage() {
-  const { status, sends, templates: apiTemplates, contacts: apiContacts, loading, error: loadError, refresh } = useGmailWorkspace();
+  const { status, sends, templates: apiTemplates, contacts: apiContacts, loading, error: loadError, mockPreview, refresh } = useGmailWorkspace();
   const mailboxConnected = status?.status === 'connected';
   const mailboxEmail = status?.email || '';
   const templates = apiTemplates;
   const contacts = useMemo<EmailContact[]>(
     () => apiContacts
-      .filter((contact): contact is GmailContact & { name: string; email: string } => Boolean(contact.name && contact.email))
-      .map((contact) => ({ ...contact, name: contact.name, email: contact.email, avatar: avatarFor(contact.email) })),
+      .filter((contact): contact is GmailContact & { email: string } => Boolean(contact.email?.trim()))
+      .map((contact) => {
+        const email = contact.email.trim();
+        return {
+          ...contact,
+          name: contact.name?.trim() || email,
+          email,
+          avatar: avatarFor(email),
+        };
+      }),
     [apiContacts],
   );
   const recentSends = useMemo<DisplaySend[]>(
@@ -117,9 +130,10 @@ export default function EmailComposePage() {
   const [composeTab, setComposeTab] = useState<'write' | 'preview'>('write');
   const [selectedId, setSelectedId] = useState('');
   const [sentQuery, setSentQuery] = useState('');
-  const [sentStatus, setSentStatus] = useState<'ALL' | GmailSend['status']>('ALL');
   const [sendStatus, setSendStatus] = useState('');
   const [sendError, setSendError] = useState('');
+  const [consentContactId, setConsentContactId] = useState<string | null>(null);
+  const [consentError, setConsentError] = useState('');
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
@@ -127,26 +141,21 @@ export default function EmailComposePage() {
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const selected = recentSends.find((s) => s.id === selectedId) ?? recentSends[0] ?? null;
-  const visibleSends = filterRecentSends(recentSends, sentQuery, sentStatus);
+  const visibleSends = filterRecentSends(recentSends, sentQuery, 'ALL');
   const template: EmailTemplate | null = templates.find((t) => t.id === templateId) ?? null;
   const priorSends = recipients.flatMap((contact) =>
     priorSendsFor(recentSends, contact.email).map((send) => ({ ...send, who: contact.name }))
   );
 
-  const eligibleContacts = useMemo(
-    () => contacts.filter((c) => c.eligible),
-    [contacts]
-  );
-
   const filteredContacts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return eligibleContacts;
-    return eligibleContacts.filter(
+    if (!q) return contacts;
+    return contacts.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q)
     );
-  }, [eligibleContacts, query]);
+  }, [contacts, query]);
 
   const previewContact = recipients[0] ?? null;
   const missing = [
@@ -244,6 +253,10 @@ export default function EmailComposePage() {
 
   const sendEmail = async () => {
     if (!eligible || !recipients[0]) return;
+    if (mockPreview) {
+      setSendError(GMAIL_MOCK_PREVIEW_BLOCK);
+      return;
+    }
     setSendError('');
     setSendStatus('Sending…');
     try {
@@ -277,6 +290,7 @@ export default function EmailComposePage() {
   const openPicker = () => {
     setPickerOpen(true);
     setQuery('');
+    setConsentError('');
     setTimeout(() => searchRef.current?.focus(), 0);
   };
 
@@ -303,6 +317,24 @@ export default function EmailComposePage() {
     setQuery('');
   };
 
+  const enableEmailPermission = async (contact: EmailContact) => {
+    if (contact.eligible || consentContactId) return;
+    setConsentContactId(contact.id);
+    setConsentError('');
+    try {
+      await gmailApi.setConsent(contact.id, {
+        optedIn: true,
+        source: GMAIL_EMAIL_CONSENT_SOURCE,
+        version: GMAIL_EMAIL_CONSENT_VERSION,
+      });
+      refresh();
+    } catch (cause) {
+      setConsentError(getErrorMessage(cause, 'Could not enable email permission.'));
+    } finally {
+      setConsentContactId(null);
+    }
+  };
+
   const removeRecipient = (id: string) => {
     setRecipients((prev) => prev.filter((r) => r.id !== id));
   };
@@ -320,7 +352,11 @@ export default function EmailComposePage() {
   };
 
   if (loading) {
-    return <PageShell><div className="ema-page ema-shell"><div className="ema-zero"><p className="ema-zero__title">Loading Gmail…</p></div></div></PageShell>;
+    return (
+      <PageShell list>
+        <EmailLoadingSkeleton variant="compose" />
+      </PageShell>
+    );
   }
 
   if (!mailboxConnected) {
@@ -335,8 +371,9 @@ export default function EmailComposePage() {
   }
 
   return (
-    <PageShell>
-      <div className="ema-page ema-shell">
+    <PageShell list>
+      <div className="ema-page ema-shell ema-shell--compose">
+        {mockPreview ? <MetaMockNotice /> : null}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-[19px] font-extrabold tracking-[-0.02em] text-[var(--ema-ink)]">
@@ -359,8 +396,14 @@ export default function EmailComposePage() {
             <span className="ema-chip ema-chip--connected">Connected</span>
           </div>
         </div>
+        {loadError ? (
+          <div className="ema-notice ema-notice--fail mt-3" role="alert">
+            <Info className="h-[15px] w-[15px] shrink-0" />
+            <span>{loadError}</span>
+          </div>
+        ) : null}
 
-        <div className="ema-split">
+        <div className="ema-split ema-split--viewport">
           <section className="ema-card ema-sent" aria-label="Recently sent">
             <div className="ema-card__head" style={{ paddingBottom: 10 }}>
               <div>
@@ -373,25 +416,12 @@ export default function EmailComposePage() {
             </div>
             <div className="ema-sent__filters">
               <input
-                className="ema-input"
-                placeholder="Filter by name, email, or subject"
+                className="ema-input ema-input--compact"
+                placeholder="Search name, email, or subject"
                 value={sentQuery}
                 onChange={(e) => setSentQuery(e.target.value)}
-                aria-label="Filter sent emails"
+                aria-label="Search sent emails"
               />
-              <div className="ema-sent__status" role="group" aria-label="Filter by status">
-                {(['ALL', 'queued', 'accepted', 'failed', 'reconnect-required'] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    className={`ema-sent__statusbtn ${sentStatus === status ? 'ema-sent__statusbtn--on' : ''}`}
-                    aria-pressed={sentStatus === status}
-                    onClick={() => setSentStatus(status)}
-                  >
-                    {status === 'ALL' ? 'All' : statusLabel(status)}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className="ema-sent__list" role="listbox" aria-label="Sent emails">
               {recentSends.length === 0 && (
@@ -401,7 +431,7 @@ export default function EmailComposePage() {
               )}
               {recentSends.length > 0 && visibleSends.length === 0 && (
                 <p className="px-2 py-6 text-center text-[12px] font-semibold text-[var(--ema-muted)]">
-                  No emails match this filter.
+                  No emails match your search.
                 </p>
               )}
               {visibleSends.map((send) => {
@@ -585,10 +615,16 @@ export default function EmailComposePage() {
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
                         />
+                        {consentError ? (
+                          <div className="ema-notice ema-notice--fail" role="alert" style={{ margin: '8px 8px 0' }}>
+                            <Info className="h-[15px] w-[15px] shrink-0" />
+                            <span>{consentError}</span>
+                          </div>
+                        ) : null}
                         <div className="ema-picker__list">
                           {filteredContacts.length === 0 && (
                             <p className="px-3 py-4 text-center text-[11.5px] font-semibold text-[var(--ema-muted)]">
-                              No eligible contacts found
+                              No contacts with an email found
                             </p>
                           )}
                           {filteredContacts.map((c) => {
@@ -597,9 +633,11 @@ export default function EmailComposePage() {
                               <button
                                 key={c.id}
                                 type="button"
-                                className={`ema-picker__item ${picked ? 'ema-picker__item--on' : ''}`}
+                                className={`ema-picker__item ${picked ? 'ema-picker__item--on' : ''} ${!c.eligible ? 'ema-picker__item--disabled' : ''}`}
                                 aria-pressed={picked}
-                                onClick={() => pickContact(c)}
+                                aria-disabled={!c.eligible}
+                                disabled={consentContactId !== null}
+                                onClick={() => c.eligible ? pickContact(c) : void enableEmailPermission(c)}
                               >
                                 <span className={`ema-avatar ema-avatar--${c.avatar}`}>
                                   {initials(c.name)}
@@ -611,13 +649,18 @@ export default function EmailComposePage() {
                                 {picked && (
                                   <Check className="h-4 w-4 shrink-0 text-[var(--ema-primary)]" strokeWidth={2.6} />
                                 )}
+                                {!c.eligible && (
+                                  <span className="shrink-0 text-[10.5px] font-extrabold text-[var(--ema-primary)]">
+                                    {consentContactId === c.id ? 'Enabling…' : 'Enable email permission'}
+                                  </span>
+                                )}
                               </button>
                             );
                           })}
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t border-[var(--ema-line)] px-3 py-2">
                           <p className="text-[10.5px] font-semibold text-[var(--ema-muted)]">
-                            Only contacts with a valid email and permission are shown.
+                            Contacts with an email are shown. Permission is required before sending.
                           </p>
                           <button
                             type="button"

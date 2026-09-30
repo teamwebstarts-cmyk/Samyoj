@@ -9,6 +9,8 @@ import { EmailBeforeYouSendList, DASHBOARD_CHECKLIST } from '../../components/em
 import ChannelHeroLead, { ChannelHeroConnectedBadge } from '../../components/dashboard/ChannelHeroLead';
 import ChannelHeroActions from '../../components/dashboard/ChannelHeroActions';
 import { DEFAULT_METRICS_PERIOD, type MetricsPeriod } from '../../utils/metricsPeriod';
+import MetaMockNotice from '../../components/meta/MetaMockNotice';
+import EmailLoadingSkeleton from '../../components/email/EmailLoadingSkeleton';
 import {
   formatDate,
   avatarFor,
@@ -72,7 +74,7 @@ function EmailStatCard({
  */
 export default function EmailDashboardView() {
   const [period, setPeriod] = useState<MetricsPeriod>(DEFAULT_METRICS_PERIOD);
-  const { status, sends, templates, loading, error } = useGmailWorkspace();
+  const { status, sends, templates, loading, error, mockPreview } = useGmailWorkspace();
   const connected = status?.status === 'connected';
   const mailboxEmail = status?.email || '';
   const recentSends = sends.slice(0, 5);
@@ -86,7 +88,7 @@ export default function EmailDashboardView() {
   ];
 
   if (loading) {
-    return <div className="ema-page ema-zero"><p className="ema-zero__title">Loading Gmail…</p></div>;
+    return <EmailLoadingSkeleton variant="dashboard" />;
   }
 
   if (!connected) {
@@ -100,6 +102,7 @@ export default function EmailDashboardView() {
 
   return (
     <div className="ema-page flex w-full min-w-0 flex-col gap-4">
+      {mockPreview ? <MetaMockNotice /> : null}
       <section className="dashboard-channel-hero dashboard-channel-hero-layout relative overflow-hidden rounded-[22px] border border-[#fedfe6] bg-[linear-gradient(110deg,#fff7f8_0%,#fff0f3_45%,#fcecf4_80%,#ffffff_100%)] px-4 py-4 sm:px-7 sm:py-5">
         <ChannelHeroLead
           icon={

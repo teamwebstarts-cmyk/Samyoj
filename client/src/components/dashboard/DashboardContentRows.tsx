@@ -100,7 +100,12 @@ function RecentConversations({ stats, conversations }: { stats: AnalyticsOvervie
 
   const rows = [
     ['Active conversations', stats.activeConversations, 'Customers waiting for a reply'],
-    ['Contacts', stats.totalContacts, 'People reached in this period'],
+    [
+      'New contacts',
+      stats.newContacts ??
+        (stats.dailySeries ?? []).reduce((sum, point) => sum + (point.newContacts ?? 0), 0),
+      'People added in this period',
+    ],
     ['Messages sent', stats.messagesSent, 'Outbound messages delivered'],
     ['Service conversations', stats.serviceConversations ?? 0, 'Support conversations'],
   ];

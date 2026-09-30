@@ -27,6 +27,7 @@ import {
 } from './oauth';
 import { encrypt } from '../../utils/crypto';
 import { sanitizeEmailHtml } from './mime';
+import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -34,6 +35,32 @@ const activeMailboxWhere = (organizationId: string) => ({
   organizationId,
   status: { in: [GmailMailboxStatus.CONNECTED, GmailMailboxStatus.RECONNECT_REQUIRED] },
 });
+
+export function activeGmailAttachmentWhere(
+  organizationId: string,
+  whatsappNumberId: string,
+  now = new Date(),
+): Prisma.EmailAttachmentWhereInput {
+  return {
+    organizationId,
+    whatsappNumberId,
+    whatsappNumber: { isActive: true },
+    deletedAt: null,
+    emailSendId: null,
+    expiresAt: { gt: now },
+  };
+}
+
+export function activeGmailSendWhere(
+  organizationId: string,
+  whatsappNumberId: string,
+): Prisma.EmailSendWhereInput {
+  return {
+    organizationId,
+    whatsappNumberId,
+    whatsappNumber: { isActive: true },
+  };
+}
 
 function sendStatus(status: string): string {
   return status === 'ACCEPTED'
@@ -180,6 +207,7 @@ router.post(
 router.post(
   '/attachments',
   express.raw({ type: '*/*', limit: `${MAX_ATTACHMENT_BYTES}b` }),
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     requirePersistedUser(req);
     if (!Buffer.isBuffer(req.body)) throw new AppError(400, 'Attachment bytes are required');
@@ -195,6 +223,8 @@ router.post(
       throw new AppError(400, error instanceof Error ? error.message : 'Invalid attachment');
     }
     const id = crypto.randomUUID();
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before uploading attachments');
     const stored = await persistMediaBuffer({
       organizationId: req.user!.organizationId!,
       messageId: `gmail/${id}`,
@@ -206,6 +236,7 @@ router.post(
       data: {
         id,
         organizationId: req.user!.organizationId!,
+        whatsappNumberId,
         createdById: req.user!.userId,
         originalName: valid.filename,
         mimeType: valid.mimeType,
@@ -222,9 +253,15 @@ router.post(
 
 router.get(
   '/contacts',
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const contacts = await prisma.contact.findMany({
-      where: { organizationId: req.user!.organizationId!, email: { not: null } },
+      where: {
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: req.activeWhatsappNumberId,
+        whatsappNumber: { isActive: true },
+        email: { not: null },
+      },
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -253,6 +290,7 @@ router.get(
 
 router.put(
   '/contacts/:id/email-consent',
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     const body = z.object({
       optedIn: z.boolean(),
@@ -260,13 +298,23 @@ router.put(
       version: z.string().trim().max(40).optional(),
     }).parse(req.body);
     const contact = await prisma.contact.findFirst({
-      where: { id: String(req.params.id), organizationId: req.user!.organizationId! },
+      where: {
+        id: String(req.params.id),
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: req.activeWhatsappNumberId,
+        whatsappNumber: { isActive: true },
+      },
       select: { id: true },
     });
     if (!contact) throw new AppError(404, 'Contact not found');
     const now = new Date();
-    const updated = await prisma.contact.update({
-      where: { id: contact.id },
+    const updated = await prisma.contact.updateMany({
+      where: {
+        id: contact.id,
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: req.activeWhatsappNumberId,
+        whatsappNumber: { isActive: true },
+      },
       data: body.optedIn
         ? {
             emailOptedIn: true,
@@ -276,9 +324,19 @@ router.put(
             emailOptOutAt: null,
           }
         : { emailOptedIn: false, emailOptOutAt: now },
+    });
+    if (updated.count !== 1) throw new AppError(404, 'Contact not found');
+    const consent = await prisma.contact.findFirst({
+      where: {
+        id: contact.id,
+        organizationId: req.user!.organizationId!,
+        whatsappNumberId: req.activeWhatsappNumberId,
+        whatsappNumber: { isActive: true },
+      },
       select: { id: true, emailOptedIn: true, emailConsentAt: true, emailOptOutAt: true },
     });
-    sendSuccess(res, updated);
+    if (!consent) throw new AppError(404, 'Contact not found');
+    sendSuccess(res, consent);
   })
 );
 
@@ -378,6 +436,7 @@ function fillTemplate(value: string, contact: { name: string | null; email: stri
 
 router.post(
   '/send',
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
     requirePersistedUser(req);
     const data = gmailSendSchema.parse(req.body);
@@ -394,9 +453,16 @@ router.post(
     const textBody = data.textBody ?? template?.textBody;
     const htmlBody = data.htmlBody !== undefined ? data.htmlBody : template?.htmlBody;
     if (!subject || !textBody) throw new AppError(400, 'Subject and plain text body are required');
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before sending');
 
     const contacts = await prisma.contact.findMany({
-      where: { organizationId, id: { in: [...new Set(data.contactIds)] } },
+      where: {
+        organizationId,
+        whatsappNumberId,
+        whatsappNumber: { isActive: true },
+        id: { in: [...new Set(data.contactIds)] },
+      },
       select: {
         id: true, name: true, email: true, phone: true,
         emailOptedIn: true, emailConsentSource: true, emailConsentAt: true,
@@ -417,7 +483,10 @@ router.post(
 
     const uploaded = data.attachmentIds.length
       ? await prisma.emailAttachment.findMany({
-          where: { id: { in: data.attachmentIds }, organizationId, deletedAt: null, emailSendId: null },
+          where: {
+            ...activeGmailAttachmentWhere(organizationId, whatsappNumberId),
+            id: { in: data.attachmentIds },
+          },
           select: { id: true, originalName: true, mimeType: true, sizeBytes: true, sha256: true, storagePath: true },
         })
       : [];
@@ -436,8 +505,13 @@ router.post(
       for (const contact of uniqueContacts) {
         const idempotencyKey = requestKey ? `${requestKey}:${contact.id}` : undefined;
         if (idempotencyKey) {
-          const existing = await tx.emailSend.findUnique({
-            where: { organizationId_idempotencyKey: { organizationId, idempotencyKey } },
+          const existing = await tx.emailSend.findFirst({
+            where: {
+              organizationId,
+              whatsappNumberId,
+              idempotencyKey,
+              whatsappNumber: { isActive: true },
+            },
           });
           if (existing) {
             created.push(existing);
@@ -447,6 +521,7 @@ router.post(
         const send = await tx.emailSend.create({
           data: {
             organizationId,
+            whatsappNumberId,
             mailboxId: mailbox.id,
             templateId: template?.id,
             contactId: contact.id,
@@ -463,6 +538,7 @@ router.post(
           await tx.emailAttachment.create({
             data: {
               organizationId,
+              whatsappNumberId,
               emailSendId: send.id,
               createdById: req.user!.userId,
               originalName: attachment.originalName,
@@ -478,7 +554,10 @@ router.post(
       }
       if (uploaded.length) {
         await tx.emailAttachment.updateMany({
-          where: { id: { in: uploaded.map((item) => item.id) } },
+          where: {
+            ...activeGmailAttachmentWhere(organizationId, whatsappNumberId),
+            id: { in: uploaded.map((item) => item.id) },
+          },
           data: { deletedAt: new Date() },
         });
       }
@@ -495,9 +574,12 @@ router.post(
 
 router.get(
   '/sends',
+  resolveActiveWhatsappNumber,
   asyncHandler(async (req: Request, res: Response) => {
+    const whatsappNumberId = req.activeWhatsappNumberId;
+    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before viewing sends');
     const sends = await prisma.emailSend.findMany({
-      where: { organizationId: req.user!.organizationId! },
+      where: activeGmailSendWhere(req.user!.organizationId!, whatsappNumberId),
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {

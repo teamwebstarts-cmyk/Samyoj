@@ -12,6 +12,7 @@ import {
   Instagram,
   MessageCircle,
   MessageSquare,
+  Play,
   Plus,
   Users,
 } from 'lucide-react';
@@ -183,11 +184,17 @@ function FbOverview({
 function MessengerCard({
   conversations,
   total,
+  period,
 }: {
   conversations: Conversation[];
   total: number;
+  period: MetricsPeriod;
 }) {
-  const unique = new Set(conversations.map((row) => row.contact?.id || row.contact?.name || row.id)).size;
+  const unique = new Set(
+    conversations
+      .filter((row) => conversationInMetricsPeriod(row.createdAt, period))
+      .map((row) => row.contact?.id || row.contact?.name || row.id),
+  ).size;
   return (
     <FbOverview
       icon={<MessageCircle className="h-5 w-5" />}
@@ -196,7 +203,7 @@ function MessengerCard({
       href="/facebook/inbox"
       stats={[
         { value: total.toLocaleString(), label: 'Conversations' },
-        { value: unique.toLocaleString(), label: 'Contacts' },
+        { value: unique.toLocaleString(), label: 'New contacts' },
         { value: '0', label: 'Active automations' },
       ]}
       empty={total === 0 ? { title: 'No Messenger data yet', description: 'Your first customer message will appear here.', action: 'Open Messenger' } : undefined}
@@ -333,6 +340,62 @@ function stringValue(row: Record<string, unknown>, ...keys: string[]) {
     if (typeof value === 'string' && value.trim()) return value;
   }
   return '';
+}
+
+function commentMediaFromRow(row: Record<string, unknown>) {
+  const media = row.media;
+  if (!media || typeof media !== 'object') return null;
+  return media as {
+    thumbnailUrl?: string | null;
+    mediaType?: string | null;
+    permalink?: string | null;
+    caption?: string | null;
+  };
+}
+
+function isVideoIgMedia(mediaType?: string | null) {
+  const t = (mediaType || '').toUpperCase();
+  return t === 'VIDEO' || t === 'REELS';
+}
+
+/** Post thumbnail for dashboard comment rows (replaces generic avatar/icon). */
+function InstagramCommentPostThumb({ row }: { row: Record<string, unknown> }) {
+  const media = commentMediaFromRow(row);
+  const src = media?.thumbnailUrl ? resolvePublicMediaUrl(media.thumbnailUrl) : '';
+  const [broken, setBroken] = useState(false);
+  const showImage = Boolean(src) && !broken;
+  const hasMedia = Boolean(stringValue(row, 'igMediaId') || media?.thumbnailUrl);
+
+  const fallback = (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#F9CE34] via-[#EE2A7B] to-[#6228D7] text-white"
+      aria-hidden
+    >
+      <Instagram className="h-4 w-4" />
+    </span>
+  );
+
+  if (!hasMedia) return fallback;
+
+  if (!showImage) return fallback;
+
+  return (
+    <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+      <img
+        src={src}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+      {isVideoIgMedia(media?.mediaType) ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25">
+          <Play className="h-3.5 w-3.5 fill-white text-white" />
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 type ChannelDashboardAccent = 'whatsapp' | 'facebook' | 'instagram';
@@ -507,6 +570,7 @@ function InstagramRecentActivity({
 }) {
   const activity = [
     ...conversations.slice(0, 3).map((row) => ({
+      kind: 'dm' as const,
       icon: Instagram,
       wrap: 'bg-[linear-gradient(135deg,#f09433,#dc2743,#bc1888)] text-white',
       title: 'New DM received',
@@ -515,11 +579,13 @@ function InstagramRecentActivity({
       unread: Boolean(row.unreadCount),
     })),
     ...comments.slice(0, 2).map((row) => ({
-      icon: MessageSquare,
-      wrap: 'bg-orange-50 text-orange-600',
+      kind: 'comment' as const,
+      row,
       title: 'New comment',
       subtitle: stringValue(row, 'text', 'message', 'caption') || 'New comment',
-      time: stringValue(row, 'createdAt', 'timestamp') ? ago(stringValue(row, 'createdAt', 'timestamp')) : 'Recently',
+      time: stringValue(row, 'commentedAt', 'createdAt', 'timestamp')
+        ? ago(stringValue(row, 'commentedAt', 'createdAt', 'timestamp'))
+        : 'Recently',
       unread: true,
     })),
   ].slice(0, 5);
@@ -528,10 +594,17 @@ function InstagramRecentActivity({
       <div className="mb-4 flex items-center justify-between"><h3 className="text-[15.5px] font-extrabold tracking-[-0.01em]">Recent activity</h3><Link to="/instagram/inbox" className="text-[12px] font-bold text-blue-500">View all →</Link></div>
       <div className="space-y-3.5">
         {activity.map((item, index) => {
-          const Icon = item.icon;
+          const lead =
+            item.kind === 'comment' ? (
+              <InstagramCommentPostThumb row={item.row} />
+            ) : (
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.wrap}`}>
+                <item.icon className="h-4 w-4" />
+              </span>
+            );
           return (
             <div key={`${item.title}-${index}`} className="flex items-center gap-3">
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.wrap}`}><Icon className="h-4 w-4" /></span>
+              {lead}
               <span className="min-w-0 flex-1"><strong className="block truncate text-[13px]">{item.title}</strong><small className="block truncate text-[12px] text-slate-500">{item.subtitle}</small></span>
               <span className="shrink-0 text-[11px] font-medium text-slate-400">{item.time}</span>
               {item.unread ? <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
@@ -573,7 +646,10 @@ function InstagramTrend({
   const days = metricsPeriodDayBuckets(period);
   const periodLabel = formatMetricsPeriodLabel(period);
   const dm = countsFor(days, conversations.map((row) => row.lastMessageAt || '').filter(Boolean));
-  const notes = countsFor(days, comments.map((row) => stringValue(row, 'createdAt', 'timestamp')).filter(Boolean));
+  const notes = countsFor(
+    days,
+    comments.map((row) => stringValue(row, 'commentedAt', 'createdAt', 'timestamp')).filter(Boolean),
+  );
   return (
     <section className="rounded-[18px] border border-slate-200 bg-white px-5 py-4 transition duration-300 hover:shadow-[0_10px_25px_-4px_rgba(0,0,0,0.06)]">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -613,13 +689,23 @@ function InstagramReview({ comments }: { comments: Array<Record<string, unknown>
       <div className="mb-3.5 flex items-center justify-between"><h3 className="text-[15.5px] font-extrabold tracking-[-0.01em] text-rose-500">Comments to review</h3><span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-500">{comments.length} new</span></div>
       <div className="space-y-3.5">
         {comments.slice(0, 3).map((row, index) => {
-          const name = stringValue(row, 'fromName', 'username', 'name') || 'Instagram user';
+          const name =
+            stringValue(row, 'fromUsername', 'fromName', 'username', 'name') || 'Instagram user';
           const text = stringValue(row, 'text', 'message') || 'New comment';
-          const when = stringValue(row, 'createdAt', 'timestamp');
+          const when = stringValue(row, 'commentedAt', 'createdAt', 'timestamp');
+          const postCaption = (commentMediaFromRow(row)?.caption || '').trim();
           return (
             <Link key={`${name}-${index}`} to="/instagram/comments" className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[11px] font-black text-rose-700">{name.slice(0, 2).toUpperCase()}</span>
-              <span className="min-w-0 flex-1"><strong className="block truncate text-[13px]">{name}</strong><small className="block truncate text-[12px] text-slate-500">{text}</small></span>
+              <InstagramCommentPostThumb row={row} />
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-[13px]">{name}</strong>
+                <small className="block truncate text-[12px] text-slate-500">{text}</small>
+                {postCaption ? (
+                  <small className="mt-0.5 block truncate text-[11px] font-medium text-slate-400">
+                    on: {postCaption}
+                  </small>
+                ) : null}
+              </span>
               <span className="text-[11px] text-slate-400">{when ? ago(when) : ''}</span>
               <i className="h-1.5 w-1.5 rounded-full bg-rose-500" />
             </Link>
@@ -770,7 +856,7 @@ function InstagramHome({
     conversationInMetricsPeriod(row.lastMessageAt, period)
   );
   const comments = (data?.comments ?? []).filter((row) =>
-    conversationInMetricsPeriod(stringValue(row, 'createdAt', 'timestamp'), period)
+    conversationInMetricsPeriod(stringValue(row, 'commentedAt', 'createdAt', 'timestamp'), period),
   );
   const inboxTotal = conversations.length;
   const unreadTotal = conversations.reduce((sum, row) => sum + (row.unreadCount ?? 0), 0);
@@ -936,7 +1022,7 @@ export default function DashboardChannelHome({
         {fbLoading && !fbLoadedRef.current && conversations.length === 0 ? <ChannelDataSkeleton channel="facebook" /> : (
           <>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <MessengerCard conversations={filteredFbConversations} total={filteredFbTotal} />
+              <MessengerCard conversations={conversations} total={filteredFbTotal} period={period} />
               <AdsCard snapshot={snapshot} periodLabel={periodLabel} />
             </div>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1.33fr_0.81fr]">

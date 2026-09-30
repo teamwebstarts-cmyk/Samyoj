@@ -23,6 +23,23 @@ export class GmailProviderError extends Error {
   }
 }
 
+/** Explicit 429/5xx responses are known negative outcomes and safe to retry. */
+export function isSafeGmailRetryStatus(status: number): boolean {
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+export function classifyGmailHttpError(
+  status: number,
+  message: string,
+): GmailProviderError {
+  return new GmailProviderError(
+    message,
+    isSafeGmailRetryStatus(status),
+    status === 403 ? 'GMAIL_FORBIDDEN' : `GMAIL_HTTP_${status}`,
+    false,
+  );
+}
+
 function requestSignal(): AbortSignal {
   if (typeof AbortSignal.timeout === 'function') {
     return AbortSignal.timeout(GMAIL_REQUEST_TIMEOUT_MS);
@@ -154,15 +171,11 @@ export async function sendGmailMessage(input: {
     throw new GmailReconnectRequiredError('Google rejected the token; reconnect Gmail');
   }
   if (!response.ok || !payload.id) {
-    const code =
-      response.status === 403
-        ? 'GMAIL_FORBIDDEN'
-        : String(payload.error?.code || response.status);
-    throw new GmailProviderError(
+    // An HTTP response is a known provider rejection. Only a timeout or
+    // network failure has an unknown outcome and must remain non-retryable.
+    throw classifyGmailHttpError(
+      response.status,
       payload.error?.message || 'Gmail did not accept the email',
-      false,
-      code,
-      true,
     );
   }
   return { id: payload.id, decodedBytes: mime.decodedBytes };

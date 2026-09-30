@@ -220,8 +220,11 @@ export default function DashboardKpiRow({ stats, activeCampaigns, campaigns = []
         href="/billing?tab=usage"
       />
       <KpiCard
-        label="Contacts"
-        value={stats.totalContacts}
+        label="New contacts"
+        value={
+          stats.newContacts ??
+          (stats.dailySeries ?? []).reduce((sum, point) => sum + (point.newContacts ?? 0), 0)
+        }
         delta={stats.deltas?.totalContacts}
         accent="sky"
         color="#3B82F6"

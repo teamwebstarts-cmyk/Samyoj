@@ -1,12 +1,8 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  Check,
-  ExternalLink,
   Info,
   Lock,
   Mail,
-  Ban,
   Send,
   ShieldCheck,
   UserRound,
@@ -15,8 +11,6 @@ import {
 import GmailGlyph from './GmailGlyph';
 import { gmailApi, type GmailStatus } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
-
-type GateTab = 'connection' | 'limits' | 'help';
 
 const HAPPENS = [
   { icon: Send, tone: 'green', text: 'You will be redirected to Google to allow access.' },
@@ -38,7 +32,6 @@ function GoogleMark() {
 }
 
 export default function EmailConnectScreen({ connectionStatus = 'disconnected' }: { connectionStatus?: GmailStatus['status'] }) {
-  const [tab, setTab] = useState<GateTab>('connection');
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
 
@@ -61,44 +54,22 @@ export default function EmailConnectScreen({ connectionStatus = 'disconnected' }
         <p>Connect and manage your Gmail mailbox for sending emails.</p>
       </header>
 
-      <div className="ema-gate__tabs" role="tablist" aria-label="Gmail connection">
-        {(
-          [
-            ['connection', 'Connection'],
-            ['limits', 'Sending Limits'],
-            ['help', 'Help & Support'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={tab === id ? 'is-on' : ''}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'connection' ? (
-        <ConnectionPane connectionStatus={connectionStatus} onLimits={() => setTab('limits')} connecting={connecting} error={error} onConnect={() => void connect()} />
-      ) : null}
-      {tab === 'limits' ? <LimitsPane /> : null}
-      {tab === 'help' ? <HelpPane /> : null}
+      <ConnectionPane
+        connectionStatus={connectionStatus}
+        connecting={connecting}
+        error={error}
+        onConnect={() => void connect()}
+      />
     </div>
   );
 }
 
 function ConnectionPane({
-  onLimits,
   connecting,
   error,
   onConnect,
   connectionStatus,
 }: {
-  onLimits: () => void;
   connecting: boolean;
   error: string;
   onConnect: () => void;
@@ -156,9 +127,6 @@ function ConnectionPane({
             <li>This is a sending-only channel. Samyoj does not read your inbox.</li>
           </ul>
         </div>
-        <button type="button" className="ema-gate__more" onClick={onLimits}>
-          Learn more <ExternalLink className="h-3.5 w-3.5" />
-        </button>
       </section>
     </div>
   );
@@ -184,40 +152,5 @@ function ConnectArt() {
         <ShieldCheck className="h-4 w-4" />
       </span>
     </div>
-  );
-}
-
-function LimitsPane() {
-  return (
-    <section className="ema-gate__panel">
-      <h2>Sending limits</h2>
-      <p>Google counts every email Samyoj sends from the connected mailbox. There is no remaining-quota number to show.</p>
-      <ul className="ema-gate__facts">
-        <li><Check className="h-4 w-4" /> About 500 emails a day on free Gmail.</li>
-        <li><Check className="h-4 w-4" /> About 2,000 emails a day on paid Google Workspace.</li>
-        <li><Check className="h-4 w-4" /> The limit rolls over 24 hours. If Google pauses sending, wait up to 24 hours.</li>
-        <li><Ban className="h-4 w-4" /> No attachments in this version. Each person gets their own email.</li>
-      </ul>
-    </section>
-  );
-}
-
-function HelpPane() {
-  return (
-    <section className="ema-gate__panel">
-      <h2>Help & Support</h2>
-      <ul className="ema-gate__facts">
-        <li><ShieldCheck className="h-4 w-4" /> Only an owner or admin can connect the mailbox.</li>
-        <li><Mail className="h-4 w-4" /> One Gmail or Workspace mailbox per organization.</li>
-        <li><Lock className="h-4 w-4" /> Samyoj can send. It cannot read, store, or open the inbox.</li>
-        <li><Info className="h-4 w-4" /> If Google blocks the app, a Workspace admin has to allow Samyoj first.</li>
-      </ul>
-      <Link to="/settings?tab=channels" className="ema-gate__cta ema-gate__cta--inline">
-        <span className="ema-gate__g">
-          <GoogleMark />
-        </span>
-        Connect Gmail
-      </Link>
-    </section>
   );
 }

@@ -1,13 +1,15 @@
 # Gmail send channel — official documentation recheck
 
 **Date:** 2026-09-29  
-**Status:** Research and planning only · not shipped  
+**Status:** Historical research baseline; implementation follow-on shipped 2026-09-30
 **Scope:** Google OAuth, Gmail API send-only access, limits, Workspace controls, sender requirements, and the Samyoj build plan.
 
 This recheck is the companion to:
 
 - `docs/product/GMAIL_SEND_CHANNEL_SPEC_2026-09-27.md` — full integration specification
 - `docs/product/GMAIL_EMAIL_UI_BRIEF_2026-09-29.md` — UI-only screen brief
+
+> Implementation update (2026-09-30): the follow-on Gmail attachments and template-library slice is now implemented in code. See `docs/product/GMAIL_ATTACHMENTS_LIBRARY_IMPLEMENTATION_2026-09-29.md`. The phase guidance below remains the original pre-build safety baseline; customer rollout is still blocked on Google verification and real-mail release gates.
 
 The official Google pages below were read on 2026-09-29. This document records what is safe to build, what must not be requested, and which earlier assumptions were corrected.
 
@@ -303,7 +305,7 @@ Requires a new review before any scope or product expansion:
 - Replies or inbox: would need restricted read scopes and a separate product/security review
 - Send-as aliases: would require Gmail settings scope and verification behavior
 - Outlook/Yahoo: separate provider integrations
-- Attachments: message-size/security/UX work
+- Attachments: the scoped Compose-only implementation is now shipped; future expansion still requires a new message-size/security/UX review
 - Open/click tracking: separate privacy and consent decision
 - Domain-wide delegation: enterprise-only, high-risk, not v1
 

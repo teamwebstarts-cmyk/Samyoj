@@ -32,7 +32,7 @@ import {
   topbarNotConnectedTitle,
 } from '../../utils/workspaceChannels';
 import { useMetaChannelStatus } from './MetaChannelChips';
-import { useMetaMock } from '../../contexts/MetaMockContext';
+import { useGmailChannelAvailable } from '../email/emailData';
 import type { OrgRole } from '../../types';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
@@ -136,12 +136,12 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const isApple = useIsApplePlatform();
   const isDashboard = pathname === '/' || pathname === '';
   const metaReady = facebook !== null && instagram !== null;
-  const { enabled: emailPreview } = useMetaMock();
+  const emailChannel = useGmailChannelAvailable();
   const channels = {
     whatsapp: hasConnectedNumber,
     facebook: facebook?.connected === true,
     instagram: instagram?.connected === true,
-    email: emailPreview,
+    email: emailChannel,
   };
   const connectionBadge = topbarConnectionBadge(pathname, channels, {
     numbersReady: !numbersLoading,

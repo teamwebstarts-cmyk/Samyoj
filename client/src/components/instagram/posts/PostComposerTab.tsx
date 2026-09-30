@@ -6,7 +6,6 @@ import { instagramApi } from '../../../services/api';
 import {
   AlertTriangle,
   CalendarClock,
-  CheckCircle2,
   Clapperboard,
   Clock3,
   ImagePlus,
@@ -14,8 +13,6 @@ import {
   Layers,
   Loader2,
   Maximize2,
-  MessageSquare,
-  Plus,
   Replace,
   Sparkles,
   Trash2,
@@ -31,7 +28,6 @@ import {
   type MediaType,
   type MediaUploadState,
 } from './types';
-import CommentAutomationFields from './CommentAutomationFields';
 import { FEED_RATIOS, cropImageToRatio, type FeedRatioId } from './cropImage';
 
 type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null };
@@ -62,15 +58,6 @@ type ComposerTabProps = {
   onOpenStudio: () => void;
   onPickStudio: (asset: StudioAsset) => void;
   lastError: string | null;
-  /** Inline comment automation (works on brand-new posts too). */
-  autoKeyword?: string;
-  onAutoKeywordChange?: (value: string) => void;
-  autoPublic?: string;
-  onAutoPublicChange?: (value: string) => void;
-  autoDm?: string;
-  onAutoDmChange?: (value: string) => void;
-  /** Existing rule (editing a saved post) — shown as a summary chip. */
-  autoConfigured?: boolean;
 };
 
 const TYPE_TABS: Array<{ id: MediaType; label: string; icon: typeof ImagePlus }> = [
@@ -143,17 +130,9 @@ export default function PostComposerTab({
   onOpenStudio,
   onPickStudio,
   lastError,
-  autoKeyword = '',
-  onAutoKeywordChange = () => {},
-  autoPublic = '',
-  onAutoPublicChange = () => {},
-  autoDm = '',
-  onAutoDmChange = () => {},
-  autoConfigured = false,
 }: ComposerTabProps) {
   const captionRef = useRef<HTMLTextAreaElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [autoOpen, setAutoOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [cropping, setCropping] = useState(false);
   const [captionBusy, setCaptionBusy] = useState<'polish' | 'generate' | null>(null);
@@ -715,60 +694,6 @@ export default function PostComposerTab({
               <AlertTriangle className="h-3.5 w-3.5" />
               Schedule at most 75 days ahead.
             </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Inline comment automation — set it up alongside the post itself */}
-      {composerMode && canEdit ? (
-        <div className="igp-auto-inline">
-          <button
-            type="button"
-            className={`igp-auto-inline__toggle ${autoKeyword.trim() || autoConfigured ? 'igp-auto-inline__toggle--set' : ''}`}
-            onClick={() => setAutoOpen((open) => !open)}
-            aria-expanded={autoOpen}
-          >
-            <span className="igp-auto-inline__icon">
-              <MessageSquare className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1 text-left">
-              <span className="igp-auto-inline__title">Comment automation</span>
-              <span className="igp-auto-inline__sub">
-                {autoConfigured
-                  ? 'Rule saved for this post'
-                  : autoKeyword.trim()
-                    ? `Trigger: ${autoKeyword.trim()}`
-                    : 'Optional — keyword → public reply and/or DM'}
-              </span>
-            </span>
-            {autoConfigured || autoKeyword.trim() ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--igp-green)]" />
-            ) : (
-              <Plus className={`h-4 w-4 shrink-0 transition-transform ${autoOpen ? 'rotate-45' : ''}`} />
-            )}
-          </button>
-
-          {autoOpen ? (
-            <div className="igp-auto-inline__body">
-              <CommentAutomationFields
-                idPrefix="igp-inline"
-                compact
-                keyword={autoKeyword}
-                onKeywordChange={onAutoKeywordChange}
-                publicReply={autoPublic}
-                onPublicReplyChange={onAutoPublicChange}
-                dm={autoDm}
-                onDmChange={onAutoDmChange}
-                disabled={!editable}
-              />
-              <p className="igp-tip">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--igp-accent)]" />
-                <span>
-                  <strong>Saves with the post.</strong> Publish now → active immediately; draft/scheduled → active the
-                  moment it publishes.
-                </span>
-              </p>
-            </div>
           ) : null}
         </div>
       ) : null}

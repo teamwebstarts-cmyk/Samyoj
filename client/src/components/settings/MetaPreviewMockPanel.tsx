@@ -7,7 +7,7 @@ export default function MetaPreviewMockPanel() {
 
   return (
     <SettingsPanel
-      title="Meta preview data"
+      title="Channel preview data"
       description="Sample rows for Messenger, Ads, Instagram, and Email (dashboard, compose, templates). Default is off. Live data still loads when a channel is really connected."
       icon={FlaskConical}
     >

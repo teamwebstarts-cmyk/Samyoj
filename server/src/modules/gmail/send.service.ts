@@ -6,12 +6,22 @@ import { GmailProviderError, GmailReconnectRequiredError, sendGmailMessage } fro
 
 async function cleanupAttachments(sendId: string): Promise<void> {
   const attachments = await prisma.emailAttachment.findMany({
-    where: { emailSendId: sendId, deletedAt: null },
+    where: {
+      emailSendId: sendId,
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+      deletedAt: null,
+    },
     select: { id: true, storagePath: true },
   });
   await Promise.all(attachments.map((attachment) => deleteMediaObject(attachment.storagePath)));
   await prisma.emailAttachment.updateMany({
-    where: { emailSendId: sendId, deletedAt: null },
+    where: {
+      emailSendId: sendId,
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+      deletedAt: null,
+    },
     data: { deletedAt: new Date() },
   });
 }
@@ -23,7 +33,12 @@ export async function markEmailSendFailed(
   errorCode?: string
 ): Promise<void> {
   const updated = await prisma.emailSend.updateMany({
-    where: { id: sendId, status: { in: ['QUEUED', 'SENDING'] } },
+    where: {
+      id: sendId,
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+      status: { in: ['QUEUED', 'SENDING'] },
+    },
     data: {
       status,
       statusReason: reason,
@@ -42,7 +57,12 @@ export async function claimGmailSend(
 ): Promise<string | null> {
   const leaseToken = crypto.randomUUID();
   const claimed = await prisma.emailSend.updateMany({
-    where: { id: sendId, status: 'QUEUED' },
+    where: {
+      id: sendId,
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+      status: 'QUEUED',
+    },
     data: {
       status: 'SENDING',
       attempts: { increment: 1 },
@@ -53,9 +73,19 @@ export async function claimGmailSend(
   return claimed.count === 1 ? leaseToken : null;
 }
 
-async function releaseGmailSendForRetry(sendId: string, leaseToken: string, reason: string): Promise<void> {
+async function releaseGmailSendForRetry(
+  sendId: string,
+  leaseToken: string,
+  reason: string,
+): Promise<void> {
   await prisma.emailSend.updateMany({
-    where: { id: sendId, status: 'SENDING', sendingLeaseToken: leaseToken },
+    where: {
+      id: sendId,
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+      status: 'SENDING',
+      sendingLeaseToken: leaseToken,
+    },
     data: {
       status: 'QUEUED',
       statusReason: reason,
@@ -67,14 +97,17 @@ async function releaseGmailSendForRetry(sendId: string, leaseToken: string, reas
 }
 
 export async function processGmailSend(sendId: string): Promise<void> {
-  const send = await prisma.emailSend.findUnique({
-    where: { id: sendId },
+  const send = await prisma.emailSend.findFirst({
+    where: {
+      id: sendId,
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+    },
     include: {
       mailbox: true,
-      attachments: true,
     },
   });
-  if (!send || send.status !== 'QUEUED') return;
+  if (!send || send.status !== 'QUEUED' || !send.whatsappNumberId) return;
 
   if (send.mailbox.status !== 'CONNECTED') {
     await markEmailSendFailed(
@@ -89,12 +122,35 @@ export async function processGmailSend(sendId: string): Promise<void> {
   const leaseToken = await claimGmailSend(sendId);
   if (!leaseToken) return;
 
+  const now = new Date();
+  const attachmentWhere = {
+    emailSendId: send.id,
+    organizationId: send.organizationId,
+    whatsappNumberId: send.whatsappNumberId,
+    whatsappNumber: { isActive: true },
+    deletedAt: null,
+  } as const;
+  const expiredAttachmentCount = await prisma.emailAttachment.count({
+    where: { ...attachmentWhere, expiresAt: { lte: now } },
+  });
+  if (expiredAttachmentCount > 0) {
+    await markEmailSendFailed(
+      sendId,
+      'FAILED',
+      'Attachment upload expired before send',
+      'ATTACHMENT_EXPIRED',
+    );
+    return;
+  }
+  const persistedAttachments = await prisma.emailAttachment.findMany({
+    where: { ...attachmentWhere, expiresAt: { gt: now } },
+    select: { originalName: true, mimeType: true, storagePath: true },
+  });
+
   let attachments: Array<{ filename: string; mimeType: string; buffer: Buffer }>;
   try {
     attachments = await Promise.all(
-      send.attachments
-        .filter((attachment) => !attachment.deletedAt)
-        .map(async (attachment) => ({
+      persistedAttachments.map(async (attachment) => ({
           filename: attachment.originalName,
           mimeType: attachment.mimeType,
           buffer: await fetchMediaBuffer(attachment.storagePath),
@@ -107,7 +163,13 @@ export async function processGmailSend(sendId: string): Promise<void> {
 
   try {
     const boundary = await prisma.emailSend.updateMany({
-      where: { id: sendId, status: 'SENDING', sendingLeaseToken: leaseToken },
+      where: {
+        id: sendId,
+        whatsappNumberId: send.whatsappNumberId,
+        whatsappNumber: { isActive: true },
+        status: 'SENDING',
+        sendingLeaseToken: leaseToken,
+      },
       data: { providerCallStartedAt: new Date() },
     });
     if (boundary.count !== 1) return;
@@ -122,7 +184,13 @@ export async function processGmailSend(sendId: string): Promise<void> {
       attachments,
     });
     const completed = await prisma.emailSend.updateMany({
-      where: { id: sendId, status: 'SENDING', sendingLeaseToken: leaseToken },
+      where: {
+        id: sendId,
+        whatsappNumberId: send.whatsappNumberId,
+        whatsappNumber: { isActive: true },
+        status: 'SENDING',
+        sendingLeaseToken: leaseToken,
+      },
       data: {
         status: 'ACCEPTED',
         gmailMessageId: result.id,
@@ -170,15 +238,11 @@ export async function processGmailSend(sendId: string): Promise<void> {
       }
       if (!error.providerBoundaryReached && error.retryable) {
         await releaseGmailSendForRetry(sendId, leaseToken, error.message);
-        // BullMQ retries only this safe pre-provider failure.
+        // BullMQ retries only explicit negative responses or failures before
+        // Gmail could accept the request. Network/timeouts remain ambiguous.
         throw error;
       }
-      const ambiguous =
-        error.providerBoundaryReached &&
-        (error.code === 'GMAIL_REQUEST_TIMEOUT' ||
-          error.code === 'GMAIL_REQUEST_FAILED' ||
-          error.code === '429' ||
-          Number(error.code) >= 500);
+      const ambiguous = error.providerBoundaryReached;
       await markEmailSendFailed(
         sendId,
         ambiguous ? 'AMBIGUOUS' : 'FAILED',
@@ -203,6 +267,8 @@ export async function reconcileGmailSends(): Promise<void> {
     where: {
       status: 'SENDING',
       sendingLeaseExpiresAt: { lt: now },
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
     },
     select: { id: true },
     take: 100,
@@ -217,7 +283,11 @@ export async function reconcileGmailSends(): Promise<void> {
   }
 
   const queued = await prisma.emailSend.findMany({
-    where: { status: 'QUEUED' },
+    where: {
+      status: 'QUEUED',
+      whatsappNumberId: { not: null },
+      whatsappNumber: { isActive: true },
+    },
     select: { id: true },
     orderBy: { createdAt: 'asc' },
     take: 100,

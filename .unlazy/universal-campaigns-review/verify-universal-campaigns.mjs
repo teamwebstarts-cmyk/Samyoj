@@ -53,9 +53,10 @@ if (mode === 'document') {
   assert(whatsappStart >= 0 && facebookStart > whatsappStart, 'WhatsApp navigation block not found');
   assert(contactsStart > 0, 'Contacts navigation block not found');
   const whatsappBlock = source.slice(whatsappStart, facebookStart);
-  const contactsBlock = source.slice(contactsStart);
-  assert(!whatsappBlock.includes("to: '/campaigns'"), 'Campaigns remains under WhatsApp');
-  assert(contactsBlock.includes("to: '/campaigns'"), 'Campaigns is missing under Contacts');
+  const supportStart = source.indexOf("label: 'Support'", contactsStart);
+  const contactsBlock = source.slice(contactsStart, supportStart > contactsStart ? supportStart : undefined);
+  assert(whatsappBlock.includes("to: '/campaigns'"), 'Campaigns is missing under WhatsApp');
+  assert(!contactsBlock.includes("to: '/campaigns'"), 'Campaigns should not be under Contacts nav section');
   assert(source.includes("to: '/campaigns/new'") || source.includes("to: '/campaigns'"), 'campaign route reference missing');
   console.log('universal campaigns navigation verification passed');
 } else if (mode === 'brief') {

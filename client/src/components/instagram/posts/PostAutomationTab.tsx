@@ -28,6 +28,8 @@ type AutomationTabProps = {
   dm: string;
   onDmChange: (value: string) => void;
   autoId: string | null;
+  /** Post row exists (draft saved at least once) — standalone Save is allowed. */
+  postPersisted: boolean;
   onSave: () => void;
   summary: {
     status: string | null;
@@ -59,6 +61,7 @@ export default function PostAutomationTab({
   dm,
   onDmChange,
   autoId,
+  postPersisted,
   onSave,
   summary,
 }: AutomationTabProps) {
@@ -81,11 +84,11 @@ export default function PostAutomationTab({
         <span className="igp-auto__emptyicon">
           <MessageSquare className="h-5 w-5" />
         </span>
-        <strong>Save the post first</strong>
+        <strong>Comment automation unavailable</strong>
         <p>
           {isRemote
             ? 'Connect this post to your Instagram account.'
-            : 'Then add a keyword and replies here.'}
+            : 'Open a draft or new post to set up keyword replies.'}
         </p>
       </div>
     );
@@ -95,7 +98,7 @@ export default function PostAutomationTab({
     <div className="igp-auto">
       <div className="igp-auto__head igp-auto__head--compact">
         <div className="flex flex-wrap items-center gap-2">
-          <h3>Comment replies</h3>
+          <h3>Comment automation</h3>
           {autoId ? (
             <span
               className={`igp-autosummary__state ${
@@ -165,10 +168,19 @@ export default function PostAutomationTab({
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--igp-amber)]" />
             <span>Sample post — create a real post to save this rule.</span>
           </p>
+        ) : !postPersisted ? (
+          <p className="igp-tip igp-tip--compact">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--igp-accent)]" />
+            <span>
+              Set your keyword and replies here. They also save when you use <strong>Save as Draft</strong>,{' '}
+              <strong>Schedule</strong>, or <strong>Publish</strong> from Create. Use Save below after the post is
+              saved once.
+            </span>
+          </p>
         ) : null}
       </section>
 
-      {canEdit ? (
+      {canEdit && postPersisted ? (
         <button
           type="button"
           className="igp-btn igp-btn--primary"
@@ -177,7 +189,7 @@ export default function PostAutomationTab({
           onClick={handleSave}
         >
           {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          Save
+          Save comment automation
         </button>
       ) : null}
     </div>

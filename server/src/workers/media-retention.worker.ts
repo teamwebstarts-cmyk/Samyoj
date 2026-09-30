@@ -137,6 +137,9 @@ export async function runMediaRetentionPass(): Promise<{
 
   const recordings = await purgeExpiredCallRecordings();
   const igComments = await purgeExpiredInstagramComments();
+  // This is a system-wide storage cleanup, so it intentionally scans
+  // disconnected workspaces too. User-facing attachment reads require an
+  // active workspace and expiresAt > now in the Gmail routes/worker.
   const expiredGmailAttachments = await prisma.emailAttachment.findMany({
     where: { expiresAt: { lt: new Date() }, deletedAt: null },
     select: { id: true, storagePath: true, emailSendId: true },
@@ -152,6 +155,8 @@ export async function runMediaRetentionPass(): Promise<{
     await prisma.emailSend.updateMany({
       where: {
         id: { in: expiredGmailAttachments.flatMap((attachment) => attachment.emailSendId ? [attachment.emailSendId] : []) },
+        whatsappNumberId: { not: null },
+        whatsappNumber: { isActive: true },
         status: 'QUEUED',
       },
       data: {

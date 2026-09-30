@@ -112,7 +112,6 @@ export default function InstagramPostsPage() {
 
   const [filter, setFilter] = useState<PostFilterId>('all');
   const [feedTab, setFeedTab] = useState<PostFeedTab>('posts');
-  const [query, setQuery] = useState('');
   const [feedRatio, setFeedRatio] = useState<FeedRatioId>('1:1');
 
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
@@ -668,22 +667,12 @@ export default function InstagramPostsPage() {
   );
 
   const visiblePosts = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return posts
-      .filter((post) => {
-        const statusOk = filter === 'all' || post.status === filter;
-        if (!statusOk) return false;
-        if (!q) return true;
-        return post.caption.toLowerCase().includes(q);
-      })
+      .filter((post) => filter === 'all' || post.status === filter)
       .sort((a, b) => postRecency(b) - postRecency(a));
-  }, [posts, filter, query]);
+  }, [posts, filter]);
 
-  const visibleLibrary = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return libraryTiles;
-    return libraryTiles.filter((item) => item.caption.toLowerCase().includes(q));
-  }, [libraryTiles, query]);
+  const visibleLibrary = libraryTiles;
 
   const previewUrl = resolvePublicMediaUrl(
     mediaType === 'REELS'
@@ -737,8 +726,7 @@ export default function InstagramPostsPage() {
     connected === true &&
     !loading &&
     posts.length === 0 &&
-    filter === 'all' &&
-    !query.trim();
+    filter === 'all';
 
   const automationSummaryDate =
     remoteItem
@@ -810,13 +798,12 @@ export default function InstagramPostsPage() {
 
   const renderPanelBody = () => {
     if (panelTab === 'automation') {
-      const canSavePending = Boolean(
-        selected && !remoteItem && !locked && ['DRAFT', 'SCHEDULED', 'FAILED', 'CANCELLED'].includes(selected.status),
-      );
+      const canConfigureAutomation = Boolean(canEdit && !locked && (remoteItem || composerMode));
       return (
         <PostAutomationTab
           ready={Boolean(automationMediaId)}
-          pendingOk={canSavePending}
+          pendingOk={canConfigureAutomation}
+          postPersisted={selectedId !== 'new' && selectedId !== null}
           isRemote={Boolean(remoteItem)}
           isMock={Boolean(selected && isMetaMockId(selected.id))}
           canEdit={canEdit}
@@ -887,13 +874,6 @@ export default function InstagramPostsPage() {
         onOpenStudio={() => void loadStudioImages()}
         onPickStudio={pickStudioImage}
         lastError={selected?.lastError ?? null}
-        autoKeyword={autoKeyword}
-        onAutoKeywordChange={onAutoKeywordChange}
-        autoPublic={autoPublic}
-        onAutoPublicChange={onAutoPublicChange}
-        autoDm={autoDm}
-        onAutoDmChange={onAutoDmChange}
-        autoConfigured={Boolean(autoId)}
       />
     );
   };
@@ -955,9 +935,8 @@ export default function InstagramPostsPage() {
                 <PostFeedBar
                   tab={feedTab}
                   onTabChange={setFeedTab}
+                  postsCount={counts.total}
                   liveCount={libraryTiles.length}
-                  query={query}
-                  onQueryChange={setQuery}
                   canEdit={canEdit}
                 />
 
@@ -969,11 +948,6 @@ export default function InstagramPostsPage() {
                     selectedId={selectedId}
                     onOpen={openRemote}
                     onRefresh={() => void loadLibrary()}
-                    emptyNote={
-                      query.trim()
-                        ? `No live posts match “${query.trim()}”.`
-                        : undefined
-                    }
                   />
                 ) : showZeroState ? (
                   <PostsZeroState canEdit={canEdit} onNewPost={() => openNew('IMAGE')} />
@@ -983,8 +957,6 @@ export default function InstagramPostsPage() {
                     loading={loading}
                     selectedId={selectedId}
                     onOpen={(post) => openExisting(post)}
-                    query={query}
-                    onClearQuery={() => setQuery('')}
                   />
                 )}
               </div>
@@ -996,7 +968,7 @@ export default function InstagramPostsPage() {
                 tab={panelTab}
                 onTabChange={setPanelTab}
                 showCreateTab={!remoteItem}
-                automationReady={Boolean(automationMediaId)}
+                automationReady={Boolean(autoId || inlineAutomationReady)}
                 body={renderPanelBody()}
                 footer={renderFooter()}
               />

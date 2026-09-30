@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useMetaMock } from '../../contexts/MetaMockContext';
 import { gmailApi, type GmailContact, type GmailSend, type GmailStatus, type GmailTemplate } from '../../services/api';
+import {
+  getGmailMockContacts,
+  getGmailMockSends,
+  getGmailMockStatus,
+  getGmailMockTemplates,
+} from '../../utils/gmailMockData';
 import { getErrorMessage } from '../../utils/errors';
 
 export const GMAIL_MAX_ATTACHMENTS = 5;
 export const GMAIL_MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 export const GMAIL_MAX_DECODED_MIME_BYTES = 20 * 1024 * 1024;
+export const GMAIL_EMAIL_CONSENT_SOURCE = 'EMAIL_COMPOSE';
+export const GMAIL_EMAIL_CONSENT_VERSION = 'email-consent-v1';
 
 export const GMAIL_ALLOWED_ATTACHMENT_MIMES = new Set([
   'application/pdf',
@@ -195,15 +204,52 @@ export interface GmailWorkspace {
   sends: GmailSend[];
   loading: boolean;
   error: string;
+  /** Sample mailbox from Settings → Channels preview (not a real Gmail connection). */
+  mockPreview: boolean;
   refresh: () => void;
 }
 
+/** Channel switcher / top bar: mock preview or a live connected mailbox. */
+export function useGmailChannelAvailable(): boolean {
+  const { enabled: mockEnabled } = useMetaMock();
+  const [liveConnected, setLiveConnected] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void gmailApi
+      .status()
+      .then((response) => {
+        if (active) setLiveConnected(response.data.data.status === 'connected');
+      })
+      .catch(() => {
+        if (active) setLiveConnected(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [mockEnabled]);
+
+  return mockEnabled || liveConnected;
+}
+
+function applyGmailMockWorkspace(): Pick<GmailWorkspace, 'status' | 'contacts' | 'templates' | 'sends' | 'mockPreview'> {
+  return {
+    status: getGmailMockStatus(),
+    contacts: getGmailMockContacts(),
+    templates: getGmailMockTemplates(),
+    sends: getGmailMockSends(),
+    mockPreview: true,
+  };
+}
+
 export function useGmailWorkspace(): GmailWorkspace {
+  const { enabled: mockEnabled } = useMetaMock();
   const [reloadKey, setReloadKey] = useState(0);
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [contacts, setContacts] = useState<GmailContact[]>([]);
   const [templates, setTemplates] = useState<GmailTemplate[]>([]);
   const [sends, setSends] = useState<GmailSend[]>([]);
+  const [mockPreview, setMockPreview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -213,10 +259,20 @@ export function useGmailWorkspace(): GmailWorkspace {
     setError('');
     void gmailApi.status()
       .then(async (statusResponse) => {
-        const nextStatus = statusResponse.data.data;
+        const liveStatus = statusResponse.data.data;
         if (!active) return;
-        setStatus(nextStatus);
-        if (nextStatus.status === 'disconnected') {
+        if (mockEnabled && liveStatus.status === 'disconnected') {
+          const mock = applyGmailMockWorkspace();
+          setStatus(mock.status);
+          setContacts(mock.contacts);
+          setTemplates(mock.templates);
+          setSends(mock.sends);
+          setMockPreview(true);
+          return;
+        }
+        setMockPreview(false);
+        setStatus(liveStatus);
+        if (liveStatus.status === 'disconnected') {
           setContacts([]);
           setTemplates([]);
           setSends([]);
@@ -241,8 +297,8 @@ export function useGmailWorkspace(): GmailWorkspace {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, mockEnabled]);
 
   const refresh = useCallback(() => setReloadKey((value) => value + 1), []);
-  return { status, contacts, templates, sends, loading, error, refresh };
+  return { status, contacts, templates, sends, loading, error, mockPreview, refresh };
 }
