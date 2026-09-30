@@ -1422,57 +1422,6 @@ export const teamApi = {
     api.post('/team/me/password', { currentPassword, newPassword }),
 };
 
-export const contentStudioApi = {
-  getBrandKit: () => api.get('/content-studio/brand-kit'),
-  updateBrandKit: (data: Record<string, unknown>) => api.put('/content-studio/brand-kit', data),
-  getCredits: () => api.get('/content-studio/credits'),
-  generate: (data: { prompt: string; kind?: string; locale?: string; templateCategory?: string }) =>
-    api.post('/content-studio/composer/generate', data),
-  runTool: (data: {
-    action: string;
-    text: string;
-    locale?: string;
-    kind?: string;
-    parentDraftId?: string;
-    templateCategory?: string;
-  }) => api.post('/content-studio/composer/tools', data),
-  listDrafts: (params?: Record<string, string>) =>
-    api.get('/content-studio/composer/drafts', { params }),
-  getDraft: (id: string) => api.get(`/content-studio/composer/drafts/${id}`),
-  updateDraft: (id: string, data: Record<string, unknown>) =>
-    api.patch(`/content-studio/composer/drafts/${id}`, data),
-  submitDraftToMeta: (id: string, data?: Record<string, unknown>) =>
-    api.post(`/content-studio/composer/drafts/${id}/submit-meta`, data || {}),
-  refreshDraftMetaStatus: (id: string) =>
-    api.get(`/content-studio/composer/drafts/${id}/meta-status`),
-  autofixDraft: (id: string, data?: { reason?: string }) =>
-    api.post(`/content-studio/composer/drafts/${id}/autofix`, data || {}),
-  generateImage: (data: Record<string, unknown>) =>
-    api.post('/content-studio/images/generate', data),
-  getImageJob: (id: string) => api.get(`/content-studio/images/jobs/${id}`),
-  generateVideo: (data: {
-    prompt: string;
-    aspectRatio?: string;
-    durationSeconds?: number;
-    provider?: string;
-  }) => api.post('/content-studio/videos/generate', data),
-  getVideoJob: (id: string) => api.get(`/content-studio/videos/jobs/${id}`),
-  listVoices: () => api.get('/content-studio/voices'),
-  generateVoice: (data: { script: string; voiceId?: string; language?: string; provider?: string }) =>
-    api.post('/content-studio/voices/generate', data),
-  getVoiceJob: (id: string) => api.get(`/content-studio/voices/jobs/${id}`),
-  listAssets: (params?: Record<string, string>) =>
-    api.get('/content-studio/library', { params }),
-  updateAsset: (id: string, data: Record<string, unknown>) =>
-    api.patch(`/content-studio/library/${id}`, data),
-  archiveAsset: (id: string) => api.delete(`/content-studio/library/${id}`),
-  getCalendar: (params?: Record<string, string>) =>
-    api.get('/content-studio/calendar', { params }),
-  getApprovalQueue: () => api.get('/content-studio/approvals'),
-  submitApproval: (data: Record<string, unknown>) =>
-    api.post('/content-studio/approvals', data),
-};
-
 export const catalogApi = {
   listCatalogs: () => api.get('/catalog/catalogs'),
   listProducts: (params?: Record<string, string>) => api.get('/catalog/products', { params }),

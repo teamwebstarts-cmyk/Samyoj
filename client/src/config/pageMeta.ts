@@ -74,7 +74,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/content-studio': {
     title: 'Content Studio',
-    description: 'Create on-brand copy and images',
+    description: 'Content Studio',
   },
   '/commerce': {
     title: 'Orders',

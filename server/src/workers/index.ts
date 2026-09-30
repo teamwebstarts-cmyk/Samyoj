@@ -909,59 +909,6 @@ const compliancePurgeWorker = new Worker(
 
 attachWorkerErrorHandlers(compliancePurgeWorker, 'compliance-purge');
 
-const contentImageWorker = new Worker(
-  'content-image',
-  async (job: Job) => {
-    const { processImageGenerationJob } = await import('../modules/content-studio/images/routes');
-    await processImageGenerationJob(job.data.jobId, job.data.organizationId);
-  },
-  {
-    connection,
-    concurrency: 3,
-    settings: {
-      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
-    },
-  }
-);
-
-attachWorkerErrorHandlers(contentImageWorker, 'content-image');
-
-const contentVoiceWorker = new Worker(
-  'content',
-  async (job: Job) => {
-    if (job.name === 'generate-voice') {
-      const { processVoiceGenerationJob } = await import('../modules/content-studio/voices/routes');
-      await processVoiceGenerationJob(job.data.jobId, job.data.organizationId);
-    }
-  },
-  {
-    connection,
-    concurrency: 2,
-    settings: {
-      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
-    },
-  }
-);
-
-attachWorkerErrorHandlers(contentVoiceWorker, 'content');
-
-const contentVideoWorker = new Worker(
-  'content-video',
-  async (job: Job) => {
-    const { processVideoGenerationJob } = await import('../modules/content-studio/videos/routes');
-    await processVideoGenerationJob(job.data.jobId, job.data.organizationId);
-  },
-  {
-    connection,
-    concurrency: 2,
-    settings: {
-      backoffStrategy: (attemptsMade: number) => getRetryDelay(attemptsMade),
-    },
-  }
-);
-
-attachWorkerErrorHandlers(contentVideoWorker, 'content-video');
-
 void reconcileGmailSends().catch((err) =>
   logError(err, { source: 'worker', action: 'reconcileGmailSends' })
 );
@@ -981,9 +928,6 @@ log.info('Workers started', {
     'flow-queue',
     'webhook-dispatch',
     'compliance-purge',
-    'content-image',
-    'content',
-    'content-video',
   ],
 });
 

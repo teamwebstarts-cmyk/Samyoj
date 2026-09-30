@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
 import MetaMockNotice from '../components/meta/MetaMockNotice';
 import { useMetaMock } from '../contexts/MetaMockContext';
-import { automationApi, contentStudioApi, instagramApi } from '../services/api';
+import { automationApi, instagramApi } from '../services/api';
 import { getInstagramMockLibrary, getInstagramMockPosts, isMetaMockId, mergeById } from '../utils/metaMockData';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -37,8 +37,6 @@ import {
 import type { FeedRatioId } from '../components/instagram/posts/cropImage';
 import './instagram-comments.css';
 import './instagram-posts.css';
-
-type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null };
 
 /** Newest activity first: published date, else schedule, else last edit. */
 function postRecency(post: PostRow): number {
@@ -127,8 +125,6 @@ export default function InstagramPostsPage() {
   const [saving, setSaving] = useState(false);
   const [mediaUpload, setMediaUpload] = useState<MediaUploadState | null>(null);
 
-  const [studioOpen, setStudioOpen] = useState(false);
-  const [studioAssets, setStudioAssets] = useState<StudioAsset[]>([]);
   const [autoKeyword, setAutoKeyword] = useState('');
   const [autoPublic, setAutoPublic] = useState('');
   const [autoDm, setAutoDm] = useState('');
@@ -242,7 +238,6 @@ export default function InstagramPostsPage() {
     setMediaMeta(null);
     setScheduleLocal('');
     setScheduleError(null);
-    setStudioOpen(false);
     setAutoKeyword('');
     setAutoPublic('');
     setAutoDm('');
@@ -271,7 +266,6 @@ export default function InstagramPostsPage() {
     setScheduleLocal(post.scheduledAt ? toLocalInput(post.scheduledAt) : '');
     setScheduleError(null);
     setMediaMeta(null);
-    setStudioOpen(false);
     setAutoKeyword('');
     setAutoPublic('');
     setAutoDm('');
@@ -406,26 +400,6 @@ export default function InstagramPostsPage() {
     setVideoUrl('');
     setMediaItems([]);
     setMediaMeta(null);
-  };
-
-  /* ---------------- AI Studio ---------------- */
-
-  const loadStudioImages = async () => {
-    setStudioOpen(true);
-    try {
-      const { data } = await contentStudioApi.listAssets({ kind: 'IMAGE', limit: '24' });
-      const assets =
-        ((data as { data?: { assets?: StudioAsset[] } }).data?.assets) || [];
-      setStudioAssets(assets.filter((asset) => asset.publicUrl));
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not load AI Studio images');
-    }
-  };
-
-  const pickStudioImage = (asset: StudioAsset) => {
-    if (asset.publicUrl) setImageUrl(asset.publicUrl);
-    setMediaMeta({ name: 'AI Studio image', meta: null });
-    setStudioOpen(false);
   };
 
   /* ---------------- automation ---------------- */
@@ -869,10 +843,6 @@ export default function InstagramPostsPage() {
         onScheduleChange={setScheduleLocal}
         scheduleError={scheduleError}
         onScheduleErrorChange={setScheduleError}
-        studioOpen={studioOpen}
-        studioAssets={studioAssets}
-        onOpenStudio={() => void loadStudioImages()}
-        onPickStudio={pickStudioImage}
         lastError={selected?.lastError ?? null}
       />
     );

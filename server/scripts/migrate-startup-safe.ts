@@ -106,6 +106,17 @@ if (
   process.exit();
 }
 
+const contentStudioDropMigration = '20260930160000_drop_content_studio';
+if (pending.length === 1 && pending[0] === contentStudioDropMigration) {
+  console.warn('Applying the approved Content Studio removal. Tables and studio feature flags will be dropped.');
+  const deploy = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
+  if (deploy.status !== 0) {
+    throw new Error(`Content Studio drop migration failed with exit code ${deploy.status ?? 1}`);
+  }
+  console.log(`Applied migrations: ${pending.join(', ')}`);
+  process.exit(0);
+}
+
 const destructivePending = pending.filter((name) => destructivePattern.test(migrationSql(name)));
 const blockedDestructivePending = destructivePending;
 if (blockedDestructivePending.length > 0) {

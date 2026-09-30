@@ -30,8 +30,6 @@ import {
 } from './types';
 import { FEED_RATIOS, cropImageToRatio, type FeedRatioId } from './cropImage';
 
-type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null };
-
 type ComposerTabProps = {
   mediaType: MediaType;
   onMediaTypeChange: (value: MediaType) => void;
@@ -53,10 +51,6 @@ type ComposerTabProps = {
   onScheduleChange: (value: string) => void;
   scheduleError: ScheduleError;
   onScheduleErrorChange: (value: ScheduleError) => void;
-  studioOpen: boolean;
-  studioAssets: StudioAsset[];
-  onOpenStudio: () => void;
-  onPickStudio: (asset: StudioAsset) => void;
   lastError: string | null;
 };
 
@@ -125,10 +119,6 @@ export default function PostComposerTab({
   onScheduleChange,
   scheduleError,
   onScheduleErrorChange,
-  studioOpen,
-  studioAssets,
-  onOpenStudio,
-  onPickStudio,
   lastError,
 }: ComposerTabProps) {
   const captionRef = useRef<HTMLTextAreaElement>(null);
@@ -522,35 +512,6 @@ export default function PostComposerTab({
               </label>
             ) : null}
           </div>
-        </div>
-      ) : null}
-
-      {/* AI Studio picker (Image only) */}
-      {mediaType === 'IMAGE' && editable ? (
-        <button type="button" className="igp-detail__edit mt-3" onClick={onOpenStudio}>
-          <Sparkles className="mr-1 inline h-3.5 w-3.5" />
-          Use an image from AI Studio
-        </button>
-      ) : null}
-      {mediaType === 'IMAGE' && studioOpen ? (
-        <div className="igp-slides">
-          {studioAssets.length === 0 ? (
-            <p className="igp-drop__hint">
-              No images yet. Generate one in AI Studio, then come back.
-            </p>
-          ) : (
-            studioAssets.map((asset) => (
-              <button
-                key={asset.id}
-                type="button"
-                className="igp-slide"
-                onClick={() => onPickStudio(asset)}
-                aria-label="Use this AI Studio image"
-              >
-                <img src={asset.publicUrl || ''} alt="" />
-              </button>
-            ))
-          )}
         </div>
       ) : null}
 

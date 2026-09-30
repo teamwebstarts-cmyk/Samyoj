@@ -1,9 +1,6 @@
 import prisma from '../../config/database';
 
 export const KNOWN_FEATURE_FLAGS = [
-  'content_studio',
-  'voice_studio',
-  'video_studio',
   'public_api',
   'zapier_integration',
   'commerce',
