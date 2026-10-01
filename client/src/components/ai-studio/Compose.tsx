@@ -14,7 +14,7 @@ import { HERO_SCENE_MARKUP } from "./heroScene";
 function HeroIllustration() {
   return (
     <svg
-      className="hero-svg h-full w-full overflow-visible"
+      className="hero-svg h-auto w-full overflow-visible"
       viewBox="0 0 460 240"
       role="img"
       aria-label="AI Studio creates social content for Instagram, WhatsApp, email and Facebook"
@@ -25,12 +25,12 @@ function HeroIllustration() {
 
 function Hero() {
   return (
-    <section className="hero-bg relative overflow-hidden rounded-[24px] border border-white/10 px-6 py-7 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:px-9 sm:py-9 lg:min-h-[248px] lg:pr-[420px] xl:pr-[450px]">
+    <section className="hero-bg relative overflow-hidden rounded-[24px] border border-white/10 px-5 py-6 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:px-8 sm:py-8 lg:min-h-[248px] lg:pr-[400px] xl:pr-[450px]">
       <div className="relative z-10 max-w-[520px]">
         <span className="mb-3 inline-flex items-center gap-2 rounded-md border border-[#6d3df2]/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6d3df2] backdrop-blur">
           <Sparkles size={12} /> AI creative studio
         </span>
-        <h2 className="text-[28px] font-extrabold leading-[1.08] tracking-tight text-[#241b3b] sm:text-[34px] 2xl:text-[38px]">
+        <h2 className="text-[26px] font-extrabold leading-[1.08] tracking-tight text-[#241b3b] sm:text-[32px] lg:text-[34px] 2xl:text-[38px]">
           Describe your idea,
           <br />
           we'll <span className="gradient-text">create the content.</span>
@@ -39,8 +39,7 @@ function Hero() {
           Share your product, offer, or campaign idea. Get polished visuals and ready-to-use copy for Instagram, WhatsApp, and Email — all from one brief.
         </p>
       </div>
-      {/* Illustration */}
-      <div className="hero-stage pointer-events-none absolute right-2 top-1/2 hidden h-[210px] w-[400px] -translate-y-1/2 lg:block xl:h-[224px] xl:w-[430px]" aria-hidden="true">
+      <div className="hero-stage pointer-events-none relative mx-auto mt-4 aspect-[460/240] w-full max-w-[460px] lg:absolute lg:right-2 lg:top-1/2 lg:mx-0 lg:mt-0 lg:w-[380px] lg:-translate-y-1/2 xl:w-[430px]" aria-hidden="true">
         <HeroIllustration />
       </div>
     </section>
