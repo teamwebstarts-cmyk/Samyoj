@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, Check, FileText, FolderOpen, History, Info, Plus, Search, Trash2, X } from "lucide-react";
-import type { Draft } from "./data/types";
+import { AlertCircle, Bookmark, Check, FileText, FolderOpen, History, Info, Plus, Search, Trash2, X } from "lucide-react";
+import type { Channel, Draft, OutputId, Pack } from "./data/types";
 import type { HistoryEntry } from "../../utils/aiStudioStore";
 import { outputSummary, timeAgo } from "./data/mock";
 import { ChannelIcon } from "./brand";
@@ -39,6 +39,45 @@ export function ToastHost({ toasts, onDismiss }: { toasts: ToastItem[]; onDismis
   );
 }
 
+const CHANNEL_ORDER: Channel[] = ["instagram", "whatsapp", "email"];
+
+function channelsForPack(pack: Pack): Channel[] {
+  const ids = new Set(pack.outputs ?? []);
+  const present = new Set<Channel>();
+  const add = (id: OutputId, channel: Channel) => {
+    if (ids.has(id)) present.add(channel);
+  };
+  add("ig_image", "instagram");
+  add("ig_carousel", "instagram");
+  add("whatsapp", "whatsapp");
+  add("email", "email");
+  return CHANNEL_ORDER.filter((channel) => present.has(channel));
+}
+
+function ChannelMarks({ pack }: { pack: Pack }) {
+  const channels = channelsForPack(pack);
+  if (!channels.length) {
+    return (
+      <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-white text-[var(--ai-primary)]">
+        <Bookmark size={14} />
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-none items-center -space-x-1.5" aria-hidden="true">
+      {channels.map((channel, index) => (
+        <span
+          key={channel}
+          className="relative grid h-6 w-6 place-items-center"
+          style={{ zIndex: channels.length - index }}
+        >
+          <ChannelIcon channel={channel} size={18} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function SessionShelf({
   drafts,
   history,
@@ -62,9 +101,9 @@ export function SessionShelf({
   return (
     <section className="card mb-4 overflow-hidden !border-[#e6defb] !bg-white" aria-label="Saved AI Studio sessions">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]">
-            <History size={17} />
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--ai-primary-soft)] text-[var(--ai-primary)] ring-1 ring-[#e4d8ff]">
+            <Bookmark size={16} strokeWidth={2.4} />
           </span>
           <div>
             <h2 className="text-[14px] font-extrabold">Saved sessions</h2>
@@ -78,17 +117,22 @@ export function SessionShelf({
         </button>
       </div>
       {recent.length > 0 ? (
-        <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-4">
+        <div className="space-y-2 p-3 sm:p-4">
           {recent.map((item) => (
             <button
               key={`${item.kind}-${item.id}`}
               type="button"
-              className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5 text-left transition-colors hover:border-[var(--ai-primary-ring)] hover:bg-[var(--ai-primary-soft)]"
+              className="flex w-full min-w-0 items-start gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5 text-left transition-colors hover:border-[var(--ai-primary-ring)] hover:bg-[var(--ai-primary-soft)]"
               onClick={() => item.kind === "draft" ? onOpenDraft(item.draft) : onOpenHistory(item.entry)}
             >
-              <span className="block truncate text-[12.5px] font-bold">{item.name}</span>
-              <span className="mt-1 block truncate text-[11px] text-[var(--text-soft)]">
-                {item.kind === "draft" ? "Draft" : "Generated"} · {timeAgo(item.savedAt)}
+              <span className="mt-0.5">
+                <ChannelMarks pack={item.kind === "draft" ? item.draft.pack : item.entry.pack} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block line-clamp-2 text-[12.5px] font-bold leading-snug text-[var(--text)]">{item.name}</span>
+                <span className="mt-1 block text-[11px] leading-tight text-[var(--text-soft)]">
+                  {item.kind === "draft" ? "Draft" : "Generated"} · Saved {timeAgo(item.savedAt)}
+                </span>
               </span>
             </button>
           ))}

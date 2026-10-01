@@ -463,7 +463,7 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
         role="img"
         aria-label={label ?? "Generated visual"}
       >
-        <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+        <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
       </div>
     );
   }

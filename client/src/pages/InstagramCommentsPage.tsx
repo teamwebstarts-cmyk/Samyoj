@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Check,
   ChevronDown,
@@ -209,6 +209,7 @@ function inboxHref(comment: CommentRow): string {
 }
 
 export default function InstagramCommentsPage() {
+  const [searchParams] = useSearchParams();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -276,6 +277,12 @@ export default function InstagramCommentsPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const commentId = searchParams.get('comment');
+    if (!commentId || loading) return;
+    if (comments.some((comment) => comment.id === commentId)) setSelectedId(commentId);
+  }, [comments, loading, searchParams]);
+
   useSocket((event) => {
     if (event !== 'instagram:comment') return;
     if (page > 1) setNewerOnFirstPage(true);
@@ -288,10 +295,10 @@ export default function InstagramCommentsPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedId && !comments.some((comment) => comment.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [comments, selectedId]);
+    if (!selectedId || loading) return;
+    if (searchParams.get('comment') === selectedId) return;
+    if (!comments.some((comment) => comment.id === selectedId)) setSelectedId(null);
+  }, [comments, loading, searchParams, selectedId]);
 
   const source = useMemo(() => {
     const base = mockEnabled ? mergeById(comments, getInstagramMockComments()) : comments;

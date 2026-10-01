@@ -145,6 +145,34 @@ export default function InboxPage() {
   const [newChatName, setNewChatName] = useState('');
 
   useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    if (!conversationId) return;
+    if (selected?.id === conversationId) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('conversation');
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    let cancelled = false;
+    void inboxApi
+      .get(conversationId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const full = (data?.data ?? null) as Conversation | null;
+        if (full?.id) void openConversation(full);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setSearchParams, openConversation, selected?.id]);
+
+  useEffect(() => {
     const isNew = searchParams.get('new');
     const phone = searchParams.get('phone');
     const name = searchParams.get('name');

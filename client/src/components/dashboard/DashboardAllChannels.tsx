@@ -26,6 +26,7 @@ type Activity = {
   title: string;
   body: string;
   when: string;
+  to: string;
 };
 
 type Step = { id: string; title: string; completed: boolean; href?: string };
@@ -149,13 +150,17 @@ export default function DashboardAllChannels({
           setActivity((prev) =>
             mergeActivity(
               prev,
-              rows.slice(0, 2).map((row) => ({
-                id: `igc-${String(row.id || row.igCommentId || '')}`,
-                channel: 'instagram' as const,
-                title: 'New comment',
-                body: String(row.text || row.message || 'Comment on a post'),
-                when: ago(String(row.commentedAt || row.createdAt || '')),
-              })),
+              rows.slice(0, 2).map((row) => {
+                const commentId = String(row.id || row.igCommentId || '');
+                return {
+                  id: `igc-${commentId}`,
+                  channel: 'instagram' as const,
+                  title: 'New comment',
+                  body: String(row.text || row.message || 'Comment on a post'),
+                  when: ago(String(row.commentedAt || row.createdAt || '')),
+                  to: `/instagram/comments?comment=${encodeURIComponent(commentId)}`,
+                };
+              }),
             ),
           );
         }).catch(() => undefined),
@@ -306,21 +311,22 @@ export default function DashboardAllChannels({
         </section>
 
         <section className="flex h-full flex-col rounded-2xl border border-[#e7eef8] bg-white p-3">
-          <div className="mb-2 flex min-h-[2.5rem] items-start justify-between gap-2">
+          <div className="mb-2 min-h-[2.5rem]">
             <h2 className="text-[14px] font-extrabold">Recent activity</h2>
-            <Link to="/inbox" className="shrink-0 text-[11px] font-bold text-[#1877F2]">View all</Link>
           </div>
           <ul className="flex flex-1 flex-col justify-center">
             {activity.slice(0, 3).map((row) => (
-              <li key={row.id} className="flex flex-1 items-start gap-2 border-t border-[#f3f6fb] py-1.5 first:border-0 first:pt-0 last:pb-0">
-                <ChannelMark channel={row.channel} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex justify-between gap-2">
-                    <strong className="truncate text-[12px]">{row.title}</strong>
-                    <span className="shrink-0 text-[10px] text-neutral-400">{row.when}</span>
+              <li key={row.id} className="border-t border-[#f3f6fb] first:border-0">
+                <Link to={row.to} className="flex flex-1 items-start gap-2 rounded-lg py-1.5 first:pt-0 last:pb-0 hover:bg-[#f8fbff]">
+                  <ChannelMark channel={row.channel} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex justify-between gap-2">
+                      <strong className="truncate text-[12px]">{row.title}</strong>
+                      <span className="shrink-0 text-[10px] text-neutral-400">{row.when}</span>
+                    </span>
+                    <span className="block truncate text-[11px] text-neutral-500">{row.body}</span>
                   </span>
-                  <span className="block truncate text-[11px] text-neutral-500">{row.body}</span>
-                </span>
+                </Link>
               </li>
             ))}
             {activity.length === 0 ? (
@@ -496,6 +502,13 @@ function Action({
   );
 }
 
+function activityHref(channel: Activity['channel'], id: string) {
+  const key = encodeURIComponent(id);
+  if (channel === 'whatsapp') return `/inbox?conversation=${key}`;
+  if (channel === 'facebook') return `/facebook/inbox?thread=${key}`;
+  return `/instagram/inbox?thread=${key}`;
+}
+
 function fromConversation(row: Conversation, channel: Activity['channel']): Activity {
   const preview = row.messages?.[row.messages.length - 1]?.content || 'New conversation';
   return {
@@ -504,6 +517,7 @@ function fromConversation(row: Conversation, channel: Activity['channel']): Acti
     title: channel === 'whatsapp' ? 'New message received' : channel === 'facebook' ? 'New page message' : 'New Instagram message',
     body: preview,
     when: ago(row.lastMessageAt),
+    to: activityHref(channel, row.id),
   };
 }
 

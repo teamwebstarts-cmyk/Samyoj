@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { resolveSidebarAccent, type SidebarChannelAccent } from '../../utils/sidebarChannelAccent';
 import type { LucideIcon } from 'lucide-react';
@@ -199,33 +199,9 @@ function PlatformDropdown({
   const childActive = section.items.some(
     (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
   );
-  const storageKey = `sidebar-dropdown:${section.label}`;
-  const [open, setOpen] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem(storageKey);
-      if (stored === '1') return true;
-      if (stored === '0') return false;
-    } catch {
-      /* ignore */
-    }
-    return true;
-  });
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (childActive) setOpen(true);
-  }, [childActive]);
-
-  const toggle = () => {
-    setOpen((prev) => {
-      const next = !prev;
-      try {
-        sessionStorage.setItem(storageKey, next ? '1' : '0');
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
+  const toggle = () => setOpen((prev) => !prev);
 
   if (!Icon) return null;
 

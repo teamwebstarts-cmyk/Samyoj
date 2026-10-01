@@ -217,8 +217,9 @@ export default function AiStudio() {
   }, []);
 
   /* ------------------------------ generation ------------------------------ */
-  const generate = async () => {
-    if (!brief.trim()) {
+  const generate = async (briefOverride?: string, opts?: { inPlace?: boolean }) => {
+    const idea = (typeof briefOverride === "string" ? briefOverride : brief).trim();
+    if (!idea) {
       setBriefError("Please describe your idea first.");
       document.getElementById("brief")?.focus();
       return;
@@ -228,18 +229,22 @@ export default function AiStudio() {
     genToken.current = token;
     setBriefError(null);
     setGenerateErrorHint(null);
-    setStep(0);
-    setScreen("generating");
+    const stay = !!opts?.inPlace;
+    if (stay) setBusy(true);
+    else {
+      setStep(0);
+      setScreen("generating");
+    }
     try {
       let result: Pack;
       if (mockEnabled) {
-        result = await generateStudioPack({ brief, language, outputs, photos }, setStep, token);
+        result = await generateStudioPack({ brief: idea, language, outputs, photos }, setStep, token);
         result.sample = true;
       } else {
         const referenceUrls = photos.length ? await uploadReferencePhotos(photos) : [];
         // Live path: persist references first so the image provider can fetch them.
         const { data } = await aiStudioApi.generate({
-          brief,
+          brief: idea,
           language,
           outputs: outputs as unknown as string[],
           photoNames: photos.map((photo) => photo.name).filter(Boolean),
@@ -258,7 +263,7 @@ export default function AiStudio() {
       setActiveState({ carousel: 0, image: 0 });
       setScreen("review");
       logHistory(result, "generation");
-      toast("Content pack generated");
+      toast(stay ? "Content pack updated" : "Content pack generated");
       if (!mockEnabled) {
         // Persist before handoff so the asset and copy have a server-side owner.
         await aiStudioApi.savePack(result as unknown as Record<string, unknown>).catch(() => undefined);
@@ -266,12 +271,18 @@ export default function AiStudio() {
     } catch (err) {
       if (token.cancelled || (err instanceof Error && err.message === "cancelled")) return;
       const ax = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
-      setGenerateErrorHint(
+      const message =
         ax.response?.data?.error?.message ??
-          ax.response?.data?.message ??
-          (err instanceof Error ? err.message : null),
-      );
-      setScreen("error");
+        ax.response?.data?.message ??
+        (err instanceof Error ? err.message : null);
+      if (stay) {
+        toast(message || "Couldn't regenerate. Your current pack is still here.", "error");
+      } else {
+        setGenerateErrorHint(message);
+        setScreen("error");
+      }
+    } finally {
+      if (stay) setBusy(false);
     }
   };
 
@@ -295,15 +306,16 @@ export default function AiStudio() {
     setScreen((s) => (s === "saved" ? "review" : s));
   }, [mockEnabled]);
 
-  const regenAll = () => {
+  const regenAll = (nextBrief?: string) => {
     if (!pack) return;
+    if (nextBrief) setBrief(nextBrief);
     if (!mockEnabled) {
-      toast("Regenerate a slide to get a new photo. Copy stays as the model wrote it.", "info");
+      void generate(nextBrief, { inPlace: true });
       return;
     }
     setBusy(true);
     window.setTimeout(() => {
-      update((p) => regenerateAll(p));
+      update((p) => regenerateAll(nextBrief ? { ...p, brief: nextBrief, imagePrompt: nextBrief } : p));
       setBusy(false);
       toast("Content pack regenerated");
     }, 1000);
@@ -569,6 +581,7 @@ export default function AiStudio() {
             onViewDrafts={() => setOverlay("drafts")}
             onNew={requestNew}
             onEditBrief={() => setScreen("compose")}
+            onBriefChange={setBrief}
             onHandoff={startHandoff}
             onToast={toast}
             useLiveImages={!mockEnabled}

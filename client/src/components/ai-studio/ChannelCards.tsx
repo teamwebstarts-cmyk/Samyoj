@@ -13,6 +13,7 @@ interface Props {
   onHandoff: (c: Channel) => void;
   onToast: (m: string, tone?: "success" | "info" | "error") => void;
   live?: boolean;
+  alwaysEdit?: boolean;
 }
 
 function CardShell({
@@ -24,6 +25,7 @@ function CardShell({
   onToggleEdit,
   onRegen,
   regenLabel,
+  alwaysEdit,
   children,
   footer,
 }: {
@@ -35,6 +37,7 @@ function CardShell({
   onToggleEdit: () => void;
   onRegen: () => void;
   regenLabel: string;
+  alwaysEdit?: boolean;
   children: ReactNode;
   footer: ReactNode;
 }) {
@@ -65,9 +68,11 @@ function CardShell({
         >
           <RefreshCw size={15} className={spin ? "spin" : ""} />
         </button>
-        <button type="button" className={`btn btn-sm ${editing ? "btn-soft" : ""}`} aria-pressed={editing} onClick={onToggleEdit}>
-          {editing ? <Check size={13} /> : <Pencil size={13} />} {editing ? "Done" : "Edit"}
-        </button>
+        {!alwaysEdit && (
+          <button type="button" className={`btn btn-sm ${editing ? "btn-soft" : ""}`} aria-pressed={editing} onClick={onToggleEdit}>
+            {editing ? <Check size={13} /> : <Pencil size={13} />} {editing ? "Done" : "Edit"}
+          </button>
+        )}
       </header>
       <div className={`flex-1 transition-opacity ${spin ? "opacity-40" : ""}`}>{children}</div>
       <footer className="mt-3 flex gap-2">{footer}</footer>
@@ -84,13 +89,14 @@ const readBox = "whitespace-pre-wrap break-words rounded-xl border border-[var(-
 
 /* ------------------------------ Instagram ------------------------------ */
 
-export function InstagramCopyCard({ pack, update, onHandoff, onToast, live }: Props) {
+export function InstagramCopyCard({ pack, update, onHandoff, onToast, live, alwaysEdit }: Props) {
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<"caption" | "hashtags">("caption");
   const ig = pack.instagram!;
   const total = ig.caption.length + (ig.hashtags ? 2 + ig.hashtags.length : 0);
   const over = total > IG_LIMIT;
   const kind = pack.carousel && pack.image ? "Carousel + Image" : pack.carousel ? "Carousel" : "Image";
+  const liveEdit = alwaysEdit || editing;
 
   const set = (patch: Partial<typeof ig>) => update((p) => ({ ...p, instagram: { ...p.instagram!, ...patch } }));
 
@@ -99,7 +105,8 @@ export function InstagramCopyCard({ pack, update, onHandoff, onToast, live }: Pr
       channel="instagram"
       title="Instagram"
       subtitle={`Post Copy (${kind})`}
-      editing={editing}
+      editing={liveEdit}
+      alwaysEdit={alwaysEdit}
       onToggleEdit={() => setEditing((e) => !e)}
       regenLabel="Regenerate Instagram copy"
       onRegen={() => {
@@ -129,7 +136,7 @@ export function InstagramCopyCard({ pack, update, onHandoff, onToast, live }: Pr
           </button>
         ))}
       </div>
-      {editing ? (
+      {liveEdit ? (
         <textarea
           className="input !min-h-[190px]"
           aria-label={tab === "caption" ? "Instagram caption" : "Instagram hashtags"}
@@ -155,12 +162,13 @@ function waHeaderSlide(pack: Pack) {
   return pack.carousel?.[0] ?? pack.image?.options[pack.image.selected] ?? null;
 }
 
-export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }: Props) {
+export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live, alwaysEdit }: Props) {
   const [editing, setEditing] = useState(false);
   const t = pack.whatsapp!;
   const thumb = waHeaderSlide(pack);
   const vars = Array.from(new Set(Array.from(t.body.matchAll(/\{\{(\d+)\}\}/g)).map((m) => m[1])));
   const set = (patch: Partial<typeof t>) => update((p) => ({ ...p, whatsapp: { ...p.whatsapp!, ...patch } }));
+  const liveEdit = alwaysEdit || editing;
   const row = "grid grid-cols-[62px_minmax(0,1fr)] gap-2 border-t border-[var(--border)] py-2.5 first:border-t-0";
   const lbl = "pt-0.5 text-[11.5px] font-bold text-[var(--text-muted)]";
 
@@ -173,7 +181,8 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }:
       title="WhatsApp Template"
       badge={t.category}
       subtitle="Draft structure — finalise in Templates"
-      editing={editing}
+      editing={liveEdit}
+      alwaysEdit={alwaysEdit}
       onToggleEdit={() => setEditing((e) => !e)}
       regenLabel="Regenerate WhatsApp template copy"
       onRegen={() => {
@@ -205,7 +214,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }:
         <div className={row}>
           <span className={lbl}>Body</span>
           <div>
-            {editing ? (
+            {liveEdit ? (
               <>
                 <textarea className="input !min-h-[130px]" aria-label="WhatsApp body" maxLength={1024} value={t.body} onChange={(e) => set({ body: e.target.value })} />
                 <p className="mt-1 text-right text-[11px] text-[var(--text-soft)]">{t.body.length}/1024</p>
@@ -217,7 +226,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }:
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11.5px]">
                 <span className="text-[var(--text-muted)]">Example values:</span>
                 {vars.map((v) =>
-                  editing ? (
+                  liveEdit ? (
                     <label key={v} className="inline-flex items-center gap-1">
                       <span className="rounded bg-[var(--ai-primary-soft)] px-1.5 py-0.5 font-bold text-[var(--ai-primary)]">{`{{${v}}}`}</span>
                       <input className="input !h-7 !w-[90px] !text-[12px]" aria-label={`Example value for {{${v}}}`} value={t.examples[v] ?? ""} onChange={(e) => set({ examples: { ...t.examples, [v]: e.target.value } })} />
@@ -238,7 +247,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }:
             <br />
             <span className="font-medium text-[var(--text-soft)]">(optional)</span>
           </span>
-          {editing ? (
+          {liveEdit ? (
             <div>
               <input className="input" aria-label="WhatsApp footer" maxLength={60} value={t.footer} onChange={(e) => set({ footer: e.target.value })} />
               <p className="mt-1 text-right text-[11px] text-[var(--text-soft)]">{t.footer.length}/60</p>
@@ -253,7 +262,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }:
             {t.buttons.map((b, i) => (
               <li key={b.id} className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold">
                 <Link2 size={14} className="flex-none text-[var(--ai-primary)]" />
-                {editing ? (
+                {liveEdit ? (
                   <input
                     className="input !h-7 min-w-0 flex-1 !border-transparent !bg-transparent !px-1 !text-[12.5px]"
                     aria-label={`Button ${i + 1} label`}
@@ -277,10 +286,11 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }:
 
 /* ------------------------------ Email ------------------------------ */
 
-export function EmailCopyCard({ pack, update, onHandoff, onToast, live }: Props) {
+export function EmailCopyCard({ pack, update, onHandoff, onToast, live, alwaysEdit }: Props) {
   const [editing, setEditing] = useState(false);
   const [tplSaved, setTplSaved] = useState(false);
   const e = pack.email!;
+  const liveEdit = alwaysEdit || editing;
   const set = (patch: Partial<typeof e>) => {
     setTplSaved(false);
     update((p) => ({ ...p, email: { ...p.email!, ...patch } }));
@@ -291,7 +301,8 @@ export function EmailCopyCard({ pack, update, onHandoff, onToast, live }: Props)
       channel="email"
       title="Email Copy"
       subtitle="Subject + Body"
-      editing={editing}
+      editing={liveEdit}
+      alwaysEdit={alwaysEdit}
       onToggleEdit={() => setEditing((x) => !x)}
       regenLabel="Regenerate email copy"
       onRegen={() => {
@@ -314,7 +325,7 @@ export function EmailCopyCard({ pack, update, onHandoff, onToast, live }: Props)
       <div className="space-y-3">
         <div>
           <span className="mb-1 block text-[11.5px] font-bold text-[var(--text-muted)]">Subject</span>
-          {editing ? (
+          {liveEdit ? (
             <input className="input" aria-label="Email subject" value={e.subject} onChange={(ev) => set({ subject: ev.target.value })} />
           ) : (
             <p className="text-[12.5px] font-semibold leading-snug">{e.subject}</p>
@@ -322,7 +333,7 @@ export function EmailCopyCard({ pack, update, onHandoff, onToast, live }: Props)
         </div>
         <div>
           <span className="mb-1 block text-[11.5px] font-bold text-[var(--text-muted)]">Body</span>
-          {editing ? (
+          {liveEdit ? (
             <textarea className="input !min-h-[210px]" aria-label="Email body" value={e.body} onChange={(ev) => set({ body: ev.target.value })} />
           ) : (
             <div className={`${readBox} thin-scroll max-h-[240px] min-h-[190px] overflow-y-auto`}>{e.body}</div>
@@ -340,5 +351,105 @@ export function EmailCopyCard({ pack, update, onHandoff, onToast, live }: Props)
         </button>
       </div>
     </CardShell>
+  );
+}
+
+function packHeroSlide(pack: Pack) {
+  return pack.carousel?.[0] ?? pack.image?.options[pack.image.selected] ?? null;
+}
+
+function fillWaBody(body: string, examples: Record<string, string>) {
+  return body.replace(/\{\{(\d+)\}\}/g, (_, n: string) => examples[n] || `{{${n}}}`);
+}
+
+function PreviewShell({
+  channel,
+  title,
+  hint,
+  children,
+}: {
+  channel: "instagram" | "whatsapp" | "email";
+  title: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="card overflow-hidden p-0" aria-label={title}>
+      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2.5">
+        <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--surface-subtle)]">
+          <ChannelIcon channel={channel} size={18} />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[12.5px] font-extrabold">{title}</p>
+          <p className="text-[11px] text-[var(--text-muted)]">{hint}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function InstagramPostPreview({ pack }: { pack: Pack }) {
+  const ig = pack.instagram;
+  const slide = packHeroSlide(pack);
+  if (!ig) return null;
+  return (
+    <PreviewShell channel="instagram" title="Preview" hint="Image and caption">
+      {slide && (
+        <div className="aspect-square bg-[#f7f4ff]">
+          <SlideArt slide={slide} label="Instagram visual" />
+        </div>
+      )}
+      <div className="space-y-2 px-3 py-3">
+        <p className="whitespace-pre-wrap text-[12.5px] leading-snug text-[var(--text)]">{ig.caption}</p>
+        {ig.hashtags && <p className="text-[12px] leading-snug text-[var(--text-muted)]">{ig.hashtags}</p>}
+      </div>
+    </PreviewShell>
+  );
+}
+
+export function WhatsAppMessagePreview({ pack }: { pack: Pack }) {
+  const t = pack.whatsapp;
+  const slide = packHeroSlide(pack);
+  if (!t) return null;
+  return (
+    <PreviewShell channel="whatsapp" title="Preview" hint="Header, message and button">
+      {slide && (
+        <div className="aspect-[4/3] bg-[#f7f4ff]">
+          <SlideArt slide={slide} label="WhatsApp header" />
+        </div>
+      )}
+      <div className="space-y-2 px-3 py-3">
+        <p className="whitespace-pre-wrap text-[12.5px] leading-snug">{fillWaBody(t.body, t.examples)}</p>
+        {t.footer && <p className="text-[11px] text-[var(--text-muted)]">{t.footer}</p>}
+        {t.buttons.map((b) => (
+          <div key={b.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] py-1.5 text-center text-[12px] font-bold text-[var(--text)]">
+            {b.label}
+          </div>
+        ))}
+      </div>
+    </PreviewShell>
+  );
+}
+
+export function EmailMessagePreview({ pack }: { pack: Pack }) {
+  const e = pack.email;
+  const slide = packHeroSlide(pack);
+  if (!e) return null;
+  return (
+    <PreviewShell channel="email" title="Preview" hint="Subject and body">
+      <div className="space-y-1 border-b border-[var(--border)] px-3 py-2.5">
+        <p className="text-[10.5px] font-bold text-[var(--text-soft)]">Subject</p>
+        <p className="text-[13px] font-extrabold leading-snug">{e.subject}</p>
+      </div>
+      {slide && (
+        <div className="aspect-[16/10] bg-[#f7f4ff]">
+          <SlideArt slide={slide} label="Email image" />
+        </div>
+      )}
+      <div className="thin-scroll max-h-[280px] overflow-y-auto whitespace-pre-wrap px-3 py-3 text-[12.5px] leading-relaxed text-[var(--text)]">
+        {e.body}
+      </div>
+    </PreviewShell>
   );
 }

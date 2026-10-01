@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PageShell from '../components/ui/PageShell';
 import { cannedRepliesApi, facebookApi, inboxApi, teamApi } from '../services/api';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -54,6 +55,7 @@ const TICKET_IDS = new Set<string>();
 
 export default function FacebookInboxPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const { enabled: mockEnabled } = useMetaMock();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<FbConversation[]>([]);
@@ -185,6 +187,11 @@ export default function FacebookInboxPage() {
       setThreadLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const thread = searchParams.get('thread');
+    if (thread) void openThread(thread);
+  }, [openThread, searchParams]);
 
   useSocket((event, raw) => {
     const payload = raw as {

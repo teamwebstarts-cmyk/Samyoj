@@ -20,12 +20,12 @@ export function buildStudioSystemPrompt(
     `Write only these modes: ${asked}.`,
     'Return ONE JSON object and nothing else. No markdown fences. No explanation.',
     'Keys: name, imagePrompt, ctx {occasion, pct, place}.',
-    'imagePrompt: short visual direction for the art director (subject, mood, palette, platform). Do not repeat the full caption.',
+    'imagePrompt: one sentence for ONE poster (one subject, one setting, mood, palette). Never a collage, carousel board, phone mockup, or several ads in one frame.',
     outputs.some((id) => id === 'ig_carousel' || id === 'ig_image')
       ? 'instagram: {caption, hashtags}. Caption is the full Instagram caption from the INSTAGRAM rules, with line breaks as \\n.'
       : '',
     outputs.includes('ig_carousel')
-      ? 'carouselSlides: 3 to 5 items of {headline, sub, offer?, cta?}. Headline ≤ 8 words. These lines are also rendered on the poster, so they must be exact and short.'
+      ? 'carouselSlides: 3 to 5 caption cards of {headline, sub, offer?, cta?}. Headline ≤ 8 words. These are copy only. imagePrompt stays one single poster scene, not one frame per slide.'
       : '',
     outputs.includes('ig_image') ? 'imageCopy: {headline, sub}.' : '',
     outputs.includes('whatsapp')

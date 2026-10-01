@@ -1,78 +1,47 @@
-import { useRef, useState } from "react";
-import type { DragEvent } from "react";
-import { AlertCircle, ArrowRight, Check, CheckCircle2, ChevronDown, Globe, ImagePlus, Lightbulb, Plus, Sparkles, X } from "lucide-react";
-import type { Language, OutputId, Photo, Slide } from "./data/types";
+import { useEffect, useRef, useState } from "react";
+import type { DragEvent, ReactNode } from "react";
+import { AlertCircle, ArrowRight, Check, CheckCircle2, ChevronDown, Flame, Globe, ImagePlus, Lightbulb, Megaphone, Plus, Sparkles, Store, X } from "lucide-react";
+import type { Language, OutputId, Photo } from "./data/types";
 import type { Draft } from "./data/types";
 import type { HistoryEntry } from "../../utils/aiStudioStore";
 import { EXAMPLE_IDEAS, LANGUAGES, MAX_BRIEF, MAX_PHOTOS, MAX_PHOTO_BYTES, OUTPUT_OPTIONS, uid } from "./data/mock";
-import { ChannelIcon, GmailIcon, InstagramIcon, WhatsAppIcon } from "./brand";
-import { SlideArt } from "./SlideArt";
+import { ChannelIcon } from "./brand";
 import { SessionShelf } from "./Overlays";
+import { HERO_SCENE_MARKUP } from "./heroScene";
 
 /* ------------------------------ Hero ------------------------------ */
 
-const heroSlide: Slide = {
-  id: "hero",
-  kind: "image",
-  bg: "cream",
-  art: "bottle",
-  layout: "left",
-  variant: 0,
-  elements: [
-    { id: "h", role: "headline", label: "Headline", text: "Glow Naturally", size: 36 },
-    { id: "o", role: "offer", label: "Offer", text: "20% OFF", size: 30 },
-  ],
-};
+function HeroIllustration() {
+  return (
+    <svg
+      className="hero-svg h-full w-full overflow-visible"
+      viewBox="0 0 460 240"
+      role="img"
+      aria-label="AI Studio creates social content for Instagram, WhatsApp, email and Facebook"
+      dangerouslySetInnerHTML={{ __html: HERO_SCENE_MARKUP }}
+    />
+  );
+}
 
 function Hero() {
   return (
-    <section className="hero-bg relative overflow-hidden rounded-[24px] border border-white/10 px-6 py-7 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:px-9 sm:py-9 lg:min-h-[210px] lg:pr-[300px] 2xl:pr-[340px]">
+    <section className="hero-bg relative overflow-hidden rounded-[24px] border border-white/10 px-6 py-7 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:px-9 sm:py-9 lg:min-h-[248px] lg:pr-[420px] xl:pr-[450px]">
       <div className="relative z-10 max-w-[520px]">
-        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#f6d8ff] backdrop-blur">
+        <span className="mb-3 inline-flex items-center gap-2 rounded-md border border-[#6d3df2]/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6d3df2] backdrop-blur">
           <Sparkles size={12} /> AI creative studio
         </span>
-        <h2 className="text-[28px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[34px] 2xl:text-[38px]">
+        <h2 className="text-[28px] font-extrabold leading-[1.08] tracking-tight text-[#241b3b] sm:text-[34px] 2xl:text-[38px]">
           Describe your idea,
           <br />
           we'll <span className="gradient-text">create the content.</span>
         </h2>
-        <p className="mt-3 max-w-[430px] text-[14px] leading-relaxed text-[#c8c6dc] sm:text-[15px]">
-          Generate stunning visuals and channel-ready copy for Instagram, WhatsApp, and Email — all in one place.
+        <p className="mt-3 max-w-[470px] text-[14px] leading-relaxed text-[#685f7d] sm:text-[15px]">
+          Share your product, offer, or campaign idea. Get polished visuals and ready-to-use copy for Instagram, WhatsApp, and Email — all from one brief.
         </p>
       </div>
       {/* Illustration */}
-      <div className="hero-stage pointer-events-none absolute right-[-10px] top-1/2 hidden h-[220px] w-[340px] origin-right -translate-y-1/2 scale-[0.84] lg:block 2xl:scale-100" aria-hidden="true">
-        <div className="hero-orbit hero-orbit--one" />
-        <div className="hero-orbit hero-orbit--two" />
-        <div className="hero-board anim-float absolute left-[88px] top-[18px] w-[166px] overflow-hidden rounded-[18px]">
-          <div className="flex items-center justify-between border-b border-white/10 bg-[#201c43]/90 px-3 py-2 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[#d9d3ff]">
-            <span>Creative board</span>
-            <span className="text-[#ffbd8b]">Live</span>
-          </div>
-          <div className="h-[146px] p-1.5">
-            <SlideArt slide={heroSlide} />
-          </div>
-          <div className="flex items-center gap-1.5 bg-[#15142c]/85 px-3 py-2 text-[9px] font-semibold text-[#d9d5ed]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#55e6ad] shadow-[0_0_10px_#55e6ad]" />
-            One brief · 3 channels
-          </div>
-        </div>
-        <div className="hero-channel-chip anim-float absolute left-[24px] top-[28px] grid h-12 w-12 -rotate-6 place-items-center rounded-2xl">
-          <InstagramIcon size={34} />
-        </div>
-        <div className="hero-channel-chip anim-float absolute right-[8px] top-[4px] grid h-12 w-12 rotate-6 place-items-center rounded-2xl" style={{ animationDelay: "0.8s" }}>
-          <WhatsAppIcon size={34} />
-        </div>
-        <div className="hero-channel-chip anim-float absolute left-[44px] top-[146px] grid h-12 w-12 rotate-3 place-items-center rounded-2xl" style={{ animationDelay: "1.6s" }}>
-          <GmailIcon size={34} />
-        </div>
-        <div className="hero-mini-label absolute right-[2px] top-[136px] rounded-xl px-3 py-2 text-[10px] font-bold leading-tight text-white">
-          One idea,
-          <br />
-          <span className="text-[#ffbd8b]">multiple channels</span>
-        </div>
-        <Sparkles size={16} className="absolute left-[10px] top-[102px] text-[#e9a9ff]" />
-        <Sparkles size={13} className="absolute right-[38px] top-[84px] text-[#ffbd8b]" />
+      <div className="hero-stage pointer-events-none absolute right-2 top-1/2 hidden h-[210px] w-[400px] -translate-y-1/2 lg:block xl:h-[224px] xl:w-[430px]" aria-hidden="true">
+        <HeroIllustration />
       </div>
     </section>
   );
@@ -80,15 +49,105 @@ function Hero() {
 
 /* ------------------------------ Pieces ------------------------------ */
 
-export function LanguageSelect({ value, onChange }: { value: Language; onChange: (l: Language) => void }) {
+function BriefMenu<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  icon?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((option) => option.value === value)?.label ?? String(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative flex-none">
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((next) => !next)}
+        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-2.5 text-[11px] font-bold text-[var(--text)] shadow-[0_1px_0_rgba(109,61,242,0.04)] transition-all duration-150 ${
+          open
+            ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)] shadow-[0_0_0_3px_rgba(109,61,242,0.12)]"
+            : "border-[#ddd6f3] hover:border-[var(--ai-primary-ring)] hover:bg-[#faf8ff]"
+        }`}
+      >
+        {icon}
+        <span className="whitespace-nowrap">{current}</span>
+        <ChevronDown size={13} className={`text-[var(--text-muted)] transition-transform duration-150 ${open ? "rotate-180 text-[var(--ai-primary)]" : ""}`} />
+      </button>
+      {open && (
+        <ul className="brief-menu absolute bottom-[calc(100%+6px)] left-0 z-30 min-w-[148px] overflow-hidden rounded-xl border border-[#e4dcf8] bg-white p-1 shadow-[0_16px_40px_rgba(55,32,110,0.16)]" role="listbox" aria-label={label}>
+          {options.map((option) => {
+            const on = option.value === value;
+            return (
+              <li key={String(option.value)}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold transition-colors duration-150 ${
+                    on ? "bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]" : "text-[var(--text)] hover:bg-[#f6f3ff]"
+                  }`}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  {option.label}
+                  {on && <Check size={13} strokeWidth={3} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function LanguageSelect({ value, onChange, compact = false }: { value: Language; onChange: (l: Language) => void; compact?: boolean }) {
+  if (compact) {
+    return (
+      <BriefMenu
+        label="Content language"
+        value={value}
+        onChange={onChange}
+        icon={<Globe size={13} className="text-[var(--ai-primary)]" />}
+        options={LANGUAGES.map((language) => ({ value: language, label: language }))}
+      />
+    );
+  }
   return (
     <div>
-      <label htmlFor="language" className="field-label">
-        Language
-      </label>
+      {!compact && <label htmlFor="language" className="field-label">Language</label>}
       <div className="relative">
-        <Globe size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-        <select id="language" className="input cursor-pointer appearance-none !pl-9 !pr-8 font-semibold" value={value} onChange={(e) => onChange(e.target.value as Language)}>
+        <Globe size={compact ? 13 : 15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+        <select id="language" aria-label="Content language" className={`input cursor-pointer appearance-none !pl-8 !pr-7 font-semibold ${compact ? "!h-8 !w-[118px] !rounded-lg !py-0 !text-[11px]" : ""}`} value={value} onChange={(e) => onChange(e.target.value as Language)}>
           {LANGUAGES.map((l) => (
             <option key={l}>{l}</option>
           ))}
@@ -114,10 +173,16 @@ export function PhotoUploader({
   photos,
   onChange,
   onError,
+  compact = false,
+  dropFiles,
+  onDropHandled,
 }: {
   photos: Photo[];
   onChange: (p: Photo[]) => void;
   onError: (m: string | null) => void;
+  compact?: boolean;
+  dropFiles?: FileList | null;
+  onDropHandled?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -155,6 +220,12 @@ export function PhotoUploader({
     onChange(photos.filter((x) => x.id !== id));
   };
 
+  useEffect(() => {
+    if (!dropFiles) return;
+    void addFiles(dropFiles);
+    onDropHandled?.();
+  }, [dropFiles]);
+
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDrag(false);
@@ -163,21 +234,23 @@ export function PhotoUploader({
 
   return (
     <div>
-      <span className="field-label" id="photos-label">
-        Add photos <small>(optional)</small>
-      </span>
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby="photos-label">
+      {!compact && (
+        <span className="field-label" id="photos-label">
+          Add photos <small>(optional)</small>
+        </span>
+      )}
+      <div className={`flex flex-wrap items-center gap-2 ${compact ? "min-w-0" : ""}`} role="group" aria-labelledby={compact ? undefined : "photos-label"}>
         <input ref={inputRef} id="photo-input" type="file" accept="image/png,image/jpeg,image/webp" multiple className="peer sr-only" onChange={(e) => e.target.files && void addFiles(e.target.files)} />
         {photos.map((p) => (
-          <div key={p.id} className="anim-fade-in group relative h-[56px] w-[56px] flex-none">
+          <div key={p.id} className={`anim-fade-in group relative flex-none ${compact ? "h-8 w-8" : "h-[56px] w-[56px]"}`}>
             <img src={p.url} alt={`Uploaded photo: ${p.name}`} className="h-full w-full rounded-xl border border-[var(--border)] object-cover" />
             <button
               type="button"
               aria-label={`Remove photo ${p.name}`}
               onClick={() => remove(p.id)}
-              className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-[var(--border-strong)] bg-white text-[var(--text-muted)] shadow-sm transition-colors hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+              className={`absolute -right-1.5 -top-1.5 grid place-items-center rounded-full border border-[var(--border-strong)] bg-white text-[var(--text-muted)] shadow-sm transition-colors hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] ${compact ? "h-4 w-4" : "h-5 w-5"}`}
             >
-              <X size={11} strokeWidth={3} />
+              <X size={compact ? 9 : 11} strokeWidth={3} />
             </button>
           </div>
         ))}
@@ -190,26 +263,26 @@ export function PhotoUploader({
             }}
             onDragLeave={() => setDrag(false)}
             onDrop={onDrop}
-            className={`flex min-h-[56px] flex-1 cursor-pointer items-center gap-3 rounded-xl border border-dashed px-3 py-2 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ai-primary)] ${
-              drag ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)]" : "border-[var(--border-strong)] bg-[var(--surface-subtle)] hover:border-[var(--ai-primary-ring)]"
+            className={`${compact ? "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border bg-white px-2.5 text-[11px] font-bold text-[var(--text)] shadow-[0_1px_0_rgba(109,61,242,0.04)]" : "flex min-h-[56px] flex-1 items-center gap-3 rounded-xl border border-dashed px-3 py-2"} cursor-pointer transition-all duration-150 peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ai-primary)] ${
+              drag ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]" : "border-[#ddd6f3] hover:border-[var(--ai-primary-ring)] hover:bg-[#faf8ff]"
             }`}
           >
-            <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]">
-              <ImagePlus size={18} />
+            <span className={compact ? "text-[var(--ai-primary)]" : "grid h-9 w-9 flex-none place-items-center rounded-lg bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]"}>
+              <ImagePlus size={compact ? 14 : 18} />
             </span>
-            <span className="leading-tight">
-              <span className="block text-[12.5px] font-semibold">Click to upload or drag &amp; drop</span>
-              <span className="text-[11px] text-[var(--text-muted)]">Product or brand photos · PNG, JPG, WebP (max {MAX_PHOTOS})</span>
+            <span className={compact ? "" : "leading-tight"}>
+              <span className={compact ? "" : "block text-[12.5px] font-semibold"}>{compact ? "Add image" : "Click to upload or drag & drop"}</span>
+              {!compact && <span className="text-[11px] text-[var(--text-muted)]">Product or brand photos · PNG, JPG, WebP (max {MAX_PHOTOS})</span>}
             </span>
           </label>
         ) : (
           photos.length < MAX_PHOTOS && (
             <label
               htmlFor="photo-input"
-              className="flex h-[56px] w-[72px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--ai-primary-ring)] hover:text-[var(--ai-primary)] peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ai-primary)]"
+              className={`${compact ? "inline-flex h-8 w-8" : "flex h-[56px] w-[72px]"} cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--ai-primary-ring)] hover:text-[var(--ai-primary)] peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ai-primary)]`}
             >
-              <Plus size={16} />
-              Add more
+              <Plus size={compact ? 14 : 16} />
+              {!compact && "Add more"}
             </label>
           )
         )}
@@ -225,7 +298,7 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
       <span className="field-label" id="outputs-label">
         What do you want to create? <small>(select one or more)</small>
       </span>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-labelledby="outputs-label">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4" role="group" aria-labelledby="outputs-label">
         {OUTPUT_OPTIONS.map((o) => {
           const on = value.includes(o.id);
           return (
@@ -235,25 +308,25 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
               role="checkbox"
               aria-checked={on}
               onClick={() => toggle(o.id)}
-              className={`relative flex min-w-0 items-center gap-1.5 rounded-xl border px-2 py-2 text-left transition-all duration-150 ${
+              className={`relative flex min-h-[132px] min-w-0 flex-col items-center justify-center rounded-2xl border px-3 py-3 text-center transition-all duration-150 ${
                 on
-                  ? "border-2 border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] px-[7px] py-[7px] shadow-[0_4px_14px_rgba(109,61,242,0.14)]"
-                  : "border-[var(--border-strong)] bg-white hover:border-[var(--ai-primary-ring)] hover:bg-[var(--surface-subtle)]"
+                  ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] shadow-[0_8px_20px_rgba(109,61,242,0.12)]"
+                  : "border-[#e4dcf8] bg-white hover:-translate-y-0.5 hover:border-[var(--ai-primary-ring)] hover:bg-[#faf8ff] hover:shadow-[0_8px_18px_rgba(109,61,242,0.08)]"
               }`}
             >
               <span
-                className={`absolute right-2 top-2 grid h-[18px] w-[18px] place-items-center rounded-full border transition-colors ${
-                  on ? "border-[var(--ai-primary)] bg-[var(--ai-primary)] text-white" : "border-[var(--border-strong)] bg-white text-transparent"
+                className={`absolute right-2.5 top-2.5 grid h-[18px] w-[18px] place-items-center rounded-full border transition-colors ${
+                  on ? "border-[var(--ai-primary)] bg-[var(--ai-primary)] text-white" : "border-[#ddd6f3] bg-white text-transparent"
                 }`}
                 aria-hidden="true"
               >
                 <Check size={11} strokeWidth={3.5} />
               </span>
-              <ChannelIcon channel={o.channel} size={19} />
-              <span className="min-w-0">
-                <span className="block truncate text-[10.5px] font-bold leading-tight">{o.title}</span>
-                <span className="mt-0.5 block truncate text-[9px] leading-snug text-[var(--text-muted)]">{o.desc}</span>
+              <span className={`grid h-11 w-11 place-items-center rounded-2xl ${on ? "bg-white shadow-sm" : "bg-[#f6f3ff]"}`}>
+                <ChannelIcon channel={o.channel} size={26} />
               </span>
+              <span className="mt-2 block text-[12.5px] font-extrabold leading-tight">{o.title}</span>
+              <span className="mt-1 line-clamp-2 max-w-[16ch] text-[11px] leading-snug text-[var(--text-muted)]">{o.desc}</span>
             </button>
           );
         })}
@@ -262,84 +335,98 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
   );
 }
 
+function ImageQualitySelect({ value, onChange }: { value: ComposeProps["imageQuality"]; onChange: (q: ComposeProps["imageQuality"]) => void }) {
+  return (
+    <BriefMenu
+      label="Image quality"
+      value={value}
+      onChange={onChange}
+      options={[
+        { value: "standard", label: "Standard · 1K" },
+        { value: "high", label: "High · 2K" },
+        { value: "story", label: "Story · 9:16" },
+      ]}
+    />
+  );
+}
+
 /* ------------------------------ Examples ------------------------------ */
 
-const sampleSlides: Record<string, Slide> = {
+const EXAMPLE_POSTERS: Record<string, { kicker: string; line: string; gradient: string; ink: string; icon: typeof Flame }> = {
   festival: {
-    id: "s1",
-    kind: "hook",
-    bg: "maroon",
-    art: "bottle",
-    layout: "left",
-    variant: 0,
-    elements: [
-      { id: "a", role: "headline", label: "H", text: "Diwali", size: 46 },
-      { id: "b", role: "offer", label: "O", text: "20% OFF", size: 30 },
-    ],
+    kicker: "This weekend",
+    line: "20% off",
+    gradient: "linear-gradient(145deg, #5a1020 0%, #9a2a18 55%, #e7b15a 140%)",
+    ink: "#fff6e8",
+    icon: Flame,
   },
   launch: {
-    id: "s2",
-    kind: "value",
-    bg: "minimal",
-    art: "bottles",
-    layout: "left",
-    variant: 0,
-    elements: [{ id: "a", role: "headline", label: "H", text: "New Serum", size: 34 }],
+    kicker: "New serum",
+    line: "₹899",
+    gradient: "linear-gradient(160deg, #f7f4ff 0%, #efe7ff 55%, #d9ccff 100%)",
+    ink: "#2a2150",
+    icon: Sparkles,
   },
   announce: {
-    id: "s3",
-    kind: "extra",
-    bg: "cream",
-    art: "flowers",
-    layout: "center",
-    variant: 0,
-    elements: [{ id: "a", role: "headline", label: "H", text: "Opening Soon", size: 38 }],
+    kicker: "Jaipur",
+    line: "Opening soon",
+    gradient: "linear-gradient(160deg, #fff7ee 0%, #ffe4c8 100%)",
+    ink: "#6a3418",
+    icon: Store,
   },
   tips: {
-    id: "s4",
-    kind: "extra",
-    bg: "gold",
-    art: "bottle",
-    layout: "left",
-    variant: 0,
-    elements: [
-      { id: "a", role: "headline", label: "H", text: "5 Skincare Tips", size: 34 },
-    ],
+    kicker: "5 winter tips",
+    line: "Glow guide",
+    gradient: "linear-gradient(160deg, #ffe7a8 0%, #f3b24a 100%)",
+    ink: "#5a2e08",
+    icon: Lightbulb,
   },
 };
 
 function Examples({ onUse }: { onUse: (id: string) => void }) {
   return (
     <section className="card p-5" aria-labelledby="examples-title">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 id="examples-title" className="text-[14px] font-extrabold">
-          Need inspiration? Try these examples
-        </h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 id="examples-title" className="text-[14px] font-extrabold">
+            Need a starting prompt?
+          </h3>
+          <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">Pick one. The brief and channels fill in, then you can edit before generating.</p>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {EXAMPLE_IDEAS.map((ex) => (
-          <button
-            key={ex.id}
-            type="button"
-            onClick={() => onUse(ex.id)}
-            className="group overflow-hidden rounded-xl border border-[var(--border)] bg-white text-left transition-all hover:-translate-y-0.5 hover:border-[var(--ai-primary-ring)] hover:shadow-[var(--shadow-card)]"
-          >
-            <div className="aspect-[16/8] overflow-hidden">
-              <div className="-mt-[8%]">
-                <SlideArt slide={sampleSlides[ex.id]} label={`${ex.title} example preview`} />
-              </div>
-            </div>
-            <div className="flex items-start gap-2 p-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-bold">{ex.title}</p>
-                <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-[var(--text-muted)]">{ex.desc}</p>
-              </div>
-              <span className="mt-0.5 grid h-6 w-6 flex-none place-items-center rounded-full bg-[var(--ai-primary-soft)] text-[var(--ai-primary)] transition-transform group-hover:translate-x-0.5">
-                <ArrowRight size={13} />
+        {EXAMPLE_IDEAS.map((ex) => {
+          const poster = EXAMPLE_POSTERS[ex.id];
+          const Icon = poster?.icon ?? Megaphone;
+          return (
+            <button
+              key={ex.id}
+              type="button"
+              onClick={() => onUse(ex.id)}
+              className="group overflow-hidden rounded-2xl border border-[#e6defb] bg-white text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--ai-primary-ring)] hover:shadow-[0_12px_28px_rgba(109,61,242,0.12)]"
+            >
+              <span className="relative block h-[92px] overflow-hidden" style={{ background: poster?.gradient }} aria-hidden="true">
+                <span className="pointer-events-none absolute -left-6 top-0 h-full w-10 -skew-x-12 bg-white/25 transition-transform duration-500 group-hover:translate-x-[220px]" />
+                <span className="absolute left-3 top-3 grid h-8 w-8 place-items-center rounded-xl bg-white/85 shadow-sm" style={{ color: poster?.ink }}>
+                  <Icon size={16} />
+                </span>
+                <span className="absolute bottom-3 left-3 right-3" style={{ color: poster?.ink }}>
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.12em] opacity-80">{poster?.kicker}</span>
+                  <span className="block text-[16px] font-extrabold leading-tight">{poster?.line}</span>
+                </span>
               </span>
-            </div>
-          </button>
-        ))}
+              <span className="flex items-start gap-2 p-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-bold">{ex.title}</span>
+                  <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug text-[var(--text-muted)]">{ex.desc}</span>
+                </span>
+                <span className="mt-0.5 grid h-6 w-6 flex-none place-items-center rounded-full bg-[var(--ai-primary-soft)] text-[var(--ai-primary)] transition-transform duration-200 group-hover:translate-x-0.5">
+                  <ArrowRight size={13} />
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -444,6 +531,8 @@ export interface ComposeProps {
 export function Compose(p: ComposeProps) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [briefDrag, setBriefDrag] = useState(false);
+  const [dropFiles, setDropFiles] = useState<FileList | null>(null);
   const noOutputs = p.outputs.length === 0;
   const count = p.brief.length;
 
@@ -466,99 +555,90 @@ export function Compose(p: ComposeProps) {
               <Lightbulb size={14} /> Try example
             </button>
           </div>
-          <div className="relative">
+          <div
+            className={`relative rounded-xl border bg-white transition-all duration-150 ${
+              p.error
+                ? "border-[var(--danger)]"
+                : briefDrag
+                  ? "border-[var(--ai-primary)]"
+                  : "border-[#d9d0ef] hover:border-[var(--ai-primary-ring)] focus-within:border-[var(--ai-primary)]"
+            }`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setBriefDrag(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget === e.target) setBriefDrag(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setBriefDrag(false);
+              if (e.dataTransfer.files?.length) setDropFiles(e.dataTransfer.files);
+            }}
+          >
             <textarea
               id="brief"
               ref={taRef}
-              className={`input !min-h-[124px] resize-y !pb-7 ${p.error ? "!border-[var(--danger)]" : ""}`}
+              className="min-h-[108px] w-full resize-y border-0 bg-transparent px-3 pb-2 pt-3 text-[13px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--text-soft)]"
               placeholder="Describe your product, offer or content idea..."
               maxLength={MAX_BRIEF}
               value={p.brief}
               aria-invalid={!!p.error}
-              aria-describedby="brief-help"
+              aria-describedby={p.error ? "brief-help" : undefined}
               onChange={(e) => {
                 p.setBrief(e.target.value);
                 if (p.error) p.setError(null);
               }}
             />
-            <span className={`pointer-events-none absolute bottom-2.5 right-3 text-[11px] font-semibold ${count >= MAX_BRIEF ? "text-[var(--danger)]" : "text-[var(--text-soft)]"}`} aria-live="polite">
-              {count}/{MAX_BRIEF}
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-[#efeaf8] px-2.5 py-2">
+              <PhotoUploader
+                photos={p.photos}
+                onChange={p.setPhotos}
+                onError={setPhotoError}
+                compact
+                dropFiles={dropFiles}
+                onDropHandled={() => setDropFiles(null)}
+              />
+              <LanguageSelect value={p.language} onChange={p.setLanguage} compact />
+              <ImageQualitySelect value={p.imageQuality} onChange={p.setImageQuality} />
+              <BriefMenu
+                label="Number of images"
+                value={p.imageCount}
+                onChange={p.setImageCount}
+                options={[
+                  { value: 1, label: "1 image" },
+                  { value: 2, label: "2 images" },
+                  { value: 4, label: "4 images" },
+                ]}
+              />
+              {photoError && <span className="flex-none text-[11px] font-semibold text-[var(--danger)]" role="alert">{photoError}</span>}
+              <span className={`ml-auto text-[11px] font-semibold ${count >= MAX_BRIEF ? "text-[var(--danger)]" : "text-[var(--text-soft)]"}`} aria-live="polite">
+                {count}/{MAX_BRIEF}
+              </span>
+            </div>
           </div>
-          <p id="brief-help" className="mt-1.5 min-h-[18px] text-[12px]">
-            {p.error ? (
+          {p.error && (
+            <p id="brief-help" className="mt-1.5 text-[12px]">
               <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--danger)]" role="alert">
                 <AlertCircle size={13} /> {p.error}
               </span>
-            ) : (
-              <span className="text-[var(--text-muted)]">Mention your product, offer, place and style. Say “5-slide carousel” to choose slide count.</span>
-            )}
-          </p>
-
-          <div className="mt-4 grid gap-5 sm:grid-cols-[170px_minmax(0,1fr)]">
-            <LanguageSelect value={p.language} onChange={p.setLanguage} />
-            <div>
-              <PhotoUploader photos={p.photos} onChange={p.setPhotos} onError={setPhotoError} />
-              {photoError && (
-                <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--danger)]" role="alert">
-                  <AlertCircle size={13} /> {photoError}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(170px,0.65fr)]">
-            <div className="min-w-0">
-              <span className="field-label">Image quality</span>
-              <div className="-mx-1 mt-1 flex gap-1.5 overflow-x-auto px-1 pb-1 thin-scroll" role="radiogroup" aria-label="Image quality">
-                {([
-                  ['standard', 'Standard', '1K'],
-                  ['high', 'High', '2K'],
-                  ['story', 'Story', '9:16'],
-                ] as const).map(([id, label, hint]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={p.imageQuality === id}
-                    title={`${label} · ${hint}`}
-                    className={`h-8 flex-none rounded-full border px-2.5 text-[11px] font-bold ${p.imageQuality === id ? 'border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]' : 'border-[#e6defb] text-[var(--text-muted)] hover:border-[var(--ai-primary-ring)]'}`}
-                    onClick={() => p.setImageQuality(id)}
-                  >
-                    {label} <span className="font-semibold opacity-65">{hint}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <span className="field-label">Images</span>
-              <div className="mt-1 flex gap-1.5" role="radiogroup" aria-label="Number of images">
-                {([1, 2, 4] as const).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    role="radio"
-                    aria-checked={p.imageCount === n}
-                    className={`h-8 flex-1 rounded-full border px-2 text-[11px] font-bold ${p.imageCount === n ? 'border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]' : 'border-[#e6defb] text-[var(--text-muted)] hover:border-[var(--ai-primary-ring)]'}`}
-                    onClick={() => p.setImageCount(n)}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <p className="mt-1 text-[11px] text-[var(--text-muted)]">Same brief, generated together · maximum 4 images · carousel uses this set.</p>
+            </p>
+          )}
 
           <div className="mt-5">
             <OutputSelector value={p.outputs} onChange={p.setOutputs} />
           </div>
 
           <div className="mt-5 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[12px] text-[var(--text-muted)]" aria-live="polite">
-              {noOutputs ? <span className="font-semibold text-[var(--warning)]">Select at least one content type.</span> : "Studio creates your content — you'll use it in each channel."}
-            </p>
+            {noOutputs ? (
+              <p className="text-[12px] font-semibold text-[var(--warning)]" aria-live="polite">
+                Select at least one content type.
+              </p>
+            ) : null}
             <button type="button" className="btn btn-primary btn-lg w-full sm:w-auto sm:min-w-[210px]" disabled={noOutputs} onClick={p.onGenerate}>
               <Sparkles size={17} /> Generate Content
             </button>

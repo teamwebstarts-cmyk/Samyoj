@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, RefreshCw, Sparkles, Pencil } from "lucide-react";
+import { AlertTriangle, Check, Lightbulb, RefreshCw, Pencil } from "lucide-react";
 import { GENERATION_STEPS } from "./data/mock";
-import { GmailIcon, InstagramIcon, WhatsAppIcon } from "./brand";
+import { CreativeHub3d } from "./CreativeHub3d";
 
 export function GenerationProgress({
   step,
@@ -30,68 +30,58 @@ export function GenerationProgress({
   }, [labels.length, liveImages]);
 
   const visibleStep = Math.min(Math.max(step, animatedStep), labels.length - 1);
-  const statusText = [
-    "Reading your idea and shaping the creative direction…",
-    hasVisuals ? "Generating your visual direction and image set…" : "Structuring your channel templates…",
-    "Writing platform-ready copy and calls to action…",
-    "Polishing the pack and connecting everything together…",
-  ][visibleStep];
+  const details = [
+    "Analyzing your idea, brand context and selected channels…",
+    hasVisuals ? "Generating engaging images and slide designs…" : "Structuring templates for the channels you picked…",
+    "Crafting captions, templates and email content…",
+    "Finalizing and organizing everything for you…",
+  ];
   const progress = Math.round(((visibleStep + 0.65) / labels.length) * 100);
   return (
-    <div className="anim-fade-in mx-auto flex max-w-[560px] flex-col items-center px-2 pb-6 pt-6 text-center sm:pt-12">
-      <div className="relative mb-6 h-[170px] w-[240px]" aria-hidden="true">
-        <div className="absolute left-1/2 top-1/2 h-[96px] w-[96px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ece3ff]" />
-        <div className="anim-pulse absolute left-1/2 top-1/2 grid h-[84px] w-[84px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-white" style={{ background: "linear-gradient(135deg,#7a4af5,#a67cff)" }}>
-          <Sparkles size={34} />
-        </div>
-        <div className="anim-float absolute left-[24px] top-[22px] grid h-11 w-11 -rotate-6 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]">
-          <InstagramIcon size={26} />
-        </div>
-        <div className="anim-float absolute right-[24px] top-[14px] grid h-11 w-11 rotate-6 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]" style={{ animationDelay: "0.8s" }}>
-          <WhatsAppIcon size={26} />
-        </div>
-        <div className="anim-float absolute bottom-[14px] right-[34px] grid h-11 w-11 rotate-3 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]" style={{ animationDelay: "1.6s" }}>
-          <GmailIcon size={26} />
-        </div>
-      </div>
+    <div className="anim-fade-in mx-auto flex max-w-[560px] flex-col items-center px-2 pb-8 pt-2 text-center">
+      <CreativeHub3d />
 
-      <h2 className="text-[26px] font-extrabold tracking-tight">Creating your content pack...</h2>
-      <p key={visibleStep} className="anim-fade-up mt-2 max-w-[400px] text-[14px] leading-relaxed text-[var(--text-muted)]" aria-live="polite">
-        {statusText}
-        <br />
-        {liveImages && hasVisuals
-          ? "Writing copy, then generating your photos together (about 20–60 seconds)."
-          : "This may take a few moments while we prepare your content."}
+      <h2 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#15112e] sm:text-[32px]">
+        Creating your <span className="bg-[linear-gradient(90deg,#7b46ea,#a06bff)] bg-clip-text text-transparent">content pack</span>...
+      </h2>
+      <p className="mt-2 max-w-[420px] text-[14px] leading-relaxed text-[#6b628f]">
+        This may take a few moments. We&apos;re generating visuals and channel-ready copy for you.
       </p>
 
-      <ol className="card mt-7 w-full max-w-[400px] space-y-0 p-5 text-left" aria-label="Generation progress">
-        {labels.map((l, i) => {
+      <ol className="mt-7 w-full max-w-[440px] text-left" aria-label="Generation progress" aria-valuenow={progress}>
+        {labels.map((label, i) => {
           const done = i < visibleStep;
           const current = i === visibleStep;
           return (
-            <li key={l} className="relative flex items-center gap-3 pb-5 last:pb-0" aria-current={current ? "step" : undefined}>
-              {i < labels.length - 1 && <span className={`absolute left-[11px] top-6 h-[calc(100%-18px)] w-[2px] ${done ? "bg-[var(--ai-primary)]" : "bg-[var(--border)]"}`} aria-hidden="true" />}
+            <li key={label} className="relative flex gap-3 pb-5 last:pb-0" aria-current={current ? "step" : undefined}>
+              {i < labels.length - 1 && (
+                <span className={`absolute left-[11px] top-7 h-[calc(100%-22px)] w-[2px] ${done ? "bg-[#7b46ea]" : "bg-[#e4dcf5]"}`} aria-hidden="true" />
+              )}
               <span
-                className={`relative z-10 grid h-6 w-6 flex-none place-items-center rounded-full border-2 transition-colors duration-200 ${
-                  done ? "border-[var(--ai-primary)] bg-[var(--ai-primary)] text-white" : current ? "border-[var(--ai-primary)] bg-white" : "border-[var(--border-strong)] bg-white"
+                className={`relative z-10 mt-0.5 grid h-6 w-6 flex-none place-items-center rounded-full border-2 ${
+                  done ? "border-[#7b46ea] bg-[#7b46ea] text-white" : current ? "border-[#7b46ea] bg-white shadow-[0_0_0_4px_rgba(123,70,234,0.12)]" : "border-[#ddd4ef] bg-white"
                 }`}
               >
-                {done ? <Check size={13} strokeWidth={3.5} /> : current ? <span className="anim-pulse h-2.5 w-2.5 rounded-full bg-[var(--ai-primary)]" /> : null}
+                {done ? <Check size={13} strokeWidth={3.5} /> : current ? <span className="anim-pulse h-2.5 w-2.5 rounded-full bg-[#7b46ea]" /> : null}
               </span>
-              <span className={`text-[14px] transition-colors ${current ? "font-bold text-[var(--text)]" : done ? "font-semibold text-[var(--text)]" : "text-[var(--text-soft)]"}`}>{l}</span>
+              <span className="min-w-0">
+                <span className={`block text-[14.5px] ${current || done ? "font-extrabold text-[#15112e]" : "font-bold text-[#9a93b3]"}`}>{label}</span>
+                <span className={`mt-0.5 block text-[12.5px] leading-snug ${current ? "text-[#6b628f]" : "text-[#a39cb8]"}`}>{details[i]}</span>
+              </span>
               <span className="sr-only">{done ? " — done" : current ? " — in progress" : " — waiting"}</span>
             </li>
           );
         })}
       </ol>
-      <div className="mt-4 h-1.5 w-full max-w-[400px] overflow-hidden rounded-full bg-[var(--border)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label="Generation progress">
-        <div className="h-full rounded-full bg-[linear-gradient(90deg,#6d3df2,#a67cff)] transition-[width] duration-700" style={{ width: `${progress}%` }} />
-      </div>
-      <p className="mt-2 text-[11px] font-semibold text-[var(--text-soft)]">
-        {liveImages ? "The image model is working on your visual direction." : "The creative engine is assembling your pack."}
-      </p>
 
-      <button type="button" className="btn btn-sm mt-6" onClick={onCancel}>
+      <div className="mt-2 flex w-full max-w-[440px] items-start gap-2 rounded-2xl border border-[#efe6c8] bg-[#fffaf0] px-3.5 py-3 text-left">
+        <Lightbulb size={16} className="mt-0.5 flex-none text-[#e0a100]" />
+        <p className="text-[12.5px] leading-snug text-[#6d6450]">
+          <strong className="font-extrabold text-[#3d3420]">Tip:</strong> You can leave this page. We&apos;ll keep generating your content.
+        </p>
+      </div>
+
+      <button type="button" className="btn btn-sm mt-4" onClick={onCancel}>
         Cancel and edit brief
       </button>
     </div>

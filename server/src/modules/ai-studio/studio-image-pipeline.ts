@@ -22,12 +22,8 @@ export function studioMediaPathFromUrl(url: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export function buildSlideImagePrompt(basePrompt: string, headline: string, _index = 0): string {
-  return composeMarketingImagePrompt(
-    headline
-      ? `${basePrompt}\nVisual message concept (do not render as text): ${headline}`
-      : basePrompt,
-  );
+export function buildSlideImagePrompt(basePrompt: string, _headline = '', _index = 0): string {
+  return composeMarketingImagePrompt(basePrompt);
 }
 
 async function downloadAndPersist(

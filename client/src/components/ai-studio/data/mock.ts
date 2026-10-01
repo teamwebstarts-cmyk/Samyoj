@@ -48,36 +48,37 @@ export const LANGUAGES: Language[] = ["English", "Hindi", "Hinglish"];
 export const EXAMPLE_IDEAS = [
   {
     id: "festival",
-    title: "Festival Offer",
-    desc: "Diwali sale with product images and festive theme.",
-    brief: mockBrief,
-    outputs: mockBriefOutputs,
+    title: "Diwali offer",
+    desc: "Festive sale poster, WhatsApp template, and email.",
+    brief:
+      "Diwali weekend offer for our Jaipur skincare store. 20% off the glow serum, valid Saturday and Sunday only. Warm gold and maroon, one diya, premium bottle as the hero. Create one Instagram poster, a WhatsApp template, and a short offer email. Keep the wording in Hinglish.",
+    outputs: ["ig_image", "whatsapp", "email"] as OutputId[],
     tone: "festive" as const,
   },
   {
     id: "launch",
-    title: "Product Launch",
-    desc: "Launch a new product with carousel and email.",
+    title: "Product launch",
+    desc: "Clean launch carousel plus an announcement email.",
     brief:
-      "Launch our new Vitamin C glow serum this week. Create a 4-slide Instagram carousel and an email announcing it to existing customers. Keep it clean and premium.",
+      "Launch our new Vitamin C glow serum this Friday. Audience is existing customers who already buy moisturiser. Create a 4-slide Instagram carousel and an email: what it is, who it is for, the first-week launch price of ₹899, and a Shop now line. Look clean, bright, and premium. No extra discounts.",
     outputs: ["ig_carousel", "email"] as OutputId[],
     tone: "launch" as const,
   },
   {
     id: "announce",
-    title: "Announcement",
-    desc: "New feature or service announcement.",
+    title: "Store opening",
+    desc: "One poster and a WhatsApp invite for regulars.",
     brief:
-      "Announce that our second skincare store is opening soon in Jaipur. Create an Instagram image and a WhatsApp template for existing customers.",
+      "Our second skincare store opens next Sunday in C Scheme, Jaipur. Invite existing customers to a morning preview, 11 am to 1 pm. Create one Instagram image and a WhatsApp template with the date, area, and a short RSVP line. Soft cream and floral, not a hard sale.",
     outputs: ["ig_image", "whatsapp"] as OutputId[],
     tone: "announce" as const,
   },
   {
     id: "tips",
-    title: "Tips & Education",
-    desc: "Share helpful tips or educational content.",
+    title: "Winter tips",
+    desc: "Five short carousel tips with a friendly caption.",
     brief:
-      "5 simple skincare tips for glowing skin in winter. Create a 5-slide Instagram carousel with a friendly caption.",
+      "Five simple winter skincare tips for dry skin: gentle cleanser, serum on damp skin, moisturiser, lip balm, and SPF even on cloudy days. Create a 5-slide Instagram carousel and a friendly caption. One tip per slide, short lines, warm gold background, no discount and no hard sell.",
     outputs: ["ig_carousel"] as OutputId[],
     tone: "tips" as const,
   },

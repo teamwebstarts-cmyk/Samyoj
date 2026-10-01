@@ -1,11 +1,10 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Check, ChevronLeft, ChevronRight, CopyPlus, Download, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { aiStudioApi } from "../../services/api";
 import type { ArtKey, Pack, VisualSet } from "./data/types";
 import { MAX_IMAGE_OPTIONS, MAX_SLIDES, MIN_SLIDES, getSlides, newBlankSlide, regenerateSlide, setSlides, variantSlide } from "./data/mock";
 import { InstagramIcon } from "./brand";
 import { SlideArt } from "./SlideArt";
-import { ImageLightbox } from "./ImageLightbox";
 import { downloadSlidePoster } from "../../utils/aiStudioPoster";
 
 interface Props {
@@ -28,8 +27,6 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
   const slides = getSlides(pack, set);
   const isCarousel = set === "carousel";
   const [busy, setBusy] = useState<string | null>(null);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const stripRef = useRef<HTMLDivElement>(null);
   const selectedImage = pack.image?.selected ?? 0;
   const optionCap = isCarousel ? MAX_SLIDES : MAX_IMAGE_OPTIONS;
 
@@ -53,7 +50,17 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
       : next;
   };
 
-  const scroll = (dir: number) => stripRef.current?.scrollBy({ left: dir * 260, behavior: "smooth" });
+  const selectGeneratedImage = (packValue: Pack, url: string, index: number): Pack => {
+    const next = updateGeneratedMedia(packValue, url, index);
+    if (set !== "image" || !next.image) return next;
+    return {
+      ...next,
+      image: { ...next.image, selected: index },
+      whatsapp: next.whatsapp
+        ? { ...next.whatsapp, header: { ...next.whatsapp.header, source: url } }
+        : next.whatsapp,
+    };
+  };
 
   const add = () => {
     if (slides.length >= MAX_SLIDES) return onToast(`A carousel can have up to ${MAX_SLIDES} slides.`, "error");
@@ -119,6 +126,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
 
   /** In-place regeneration of one slide/option. */
   const regen = (i: number) => {
+    if (!isCarousel) return variant(i);
     const id = slides[i].id;
     const headline = slides[i].elements.find((e) => e.role === "headline")?.text;
     setBusy(id);
@@ -170,7 +178,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
             const cur = getSlides(p, set);
             const v = { ...variantSlide(cur[i], p.ctx, i), image: url, art: "none" as ArtKey };
             const next = [...cur.slice(0, i + 1), v, ...cur.slice(i + 1)];
-            return setSlides(updateGeneratedMedia(p, url, i), set, next);
+            return setSlides(selectGeneratedImage(p, url, i + 1), set, next);
           });
           setActive(i + 1);
           onToast("New AI variant added", "success");
@@ -184,7 +192,10 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
         const cur = getSlides(p, set);
         const v = variantSlide(cur[i], p.ctx, i);
         const next = [...cur.slice(0, i + 1), v, ...cur.slice(i + 1)];
-        return setSlides(p, set, next);
+        const nextPack = setSlides(p, set, next);
+        return set === "image" && nextPack.image
+          ? { ...nextPack, image: { ...nextPack.image, selected: i + 1 } }
+          : nextPack;
       });
       setActive(i + 1);
       setBusy(null);
@@ -199,9 +210,8 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
       .then((ok) => onToast(ok ? "Poster downloaded (PNG · 1080 × 1080)" : "Couldn't render the poster.", ok ? "success" : "error"));
   };
 
-  const openPreview = (i: number, url?: string) => {
+  const openPreview = (i: number) => {
     setActive(i);
-    if (url) setLightboxUrl(url);
   };
 
   const itemActions = (i: number) => (
@@ -258,21 +268,18 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
 
       {isCarousel ? (
         <div className="relative">
-          <button type="button" aria-label="Scroll slides left" className="absolute -left-2 top-[44px] z-10 hidden h-7 w-7 place-items-center rounded-full border border-[var(--border)] bg-white shadow-md hover:bg-[var(--ai-primary-soft)] sm:grid" onClick={() => scroll(-1)}>
-            <ChevronLeft size={15} />
-          </button>
-          <div ref={stripRef} className="thin-scroll -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1" role="listbox" aria-label="Carousel slides" aria-orientation="horizontal">
+          <div className="thin-scroll -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 pt-1" role="listbox" aria-label="Carousel slides" aria-orientation="horizontal">
             {slides.map((s, i) => {
               const on = i === active;
               return (
-                <div key={s.id} className="w-[116px] flex-none sm:w-[124px]">
+                <div key={s.id} className="w-[136px] flex-none snap-start sm:w-[152px]">
                   <div className="relative">
                     <button
                       type="button"
                       role="option"
                       aria-selected={on}
                       aria-label={`Select slide ${i + 1}`}
-                      onClick={() => openPreview(i, s.image || undefined)}
+                      onClick={() => openPreview(i)}
                       className={`block w-full overflow-hidden rounded-xl border-2 transition-all duration-150 ${on ? "border-[var(--ai-primary)] shadow-[0_6px_16px_rgba(109,61,242,0.25)]" : "border-transparent hover:border-[var(--ai-primary-ring)]"} ${busy === s.id ? "opacity-40" : ""}`}
                     >
                       <SlideArt slide={s} label={`Slide ${i + 1}`} />
@@ -290,16 +297,13 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
                 onClick={add}
                 aria-label={busy === "add" ? "Generating new slide" : "Add slide"}
                 disabled={busy !== null}
-                className={`flex aspect-square w-[116px] flex-none flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] text-[12px] font-bold text-[var(--text-muted)] transition-colors hover:border-[var(--ai-primary)] hover:text-[var(--ai-primary)] sm:w-[124px] ${busy === "add" ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]" : ""}`}
+                className={`flex aspect-square w-[136px] flex-none snap-start flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] text-[12px] font-bold text-[var(--text-muted)] transition-colors hover:border-[var(--ai-primary)] hover:text-[var(--ai-primary)] sm:w-[152px] ${busy === "add" ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]" : ""}`}
               >
                 {busy === "add" ? <RefreshCw size={20} className="spin" /> : <Plus size={20} />}
                 {busy === "add" ? "Generating…" : "Add slide"}
               </button>
             )}
           </div>
-          <button type="button" aria-label="Scroll slides right" className="absolute -right-2 top-[44px] z-10 hidden h-7 w-7 place-items-center rounded-full border border-[var(--border)] bg-white shadow-md hover:bg-[var(--ai-primary-soft)] sm:grid" onClick={() => scroll(1)}>
-            <ChevronRight size={15} />
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Image options">
@@ -320,7 +324,6 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
                         ? { ...next, whatsapp: { ...next.whatsapp, header: { ...next.whatsapp.header, source: s.image || next.whatsapp.header.source } } }
                         : next;
                     });
-                    if (s.image) setLightboxUrl(s.image);
                   }}
                   className={`relative block w-full overflow-hidden rounded-xl border-2 transition-all duration-150 ${on ? "border-[var(--ai-primary)] shadow-[0_6px_16px_rgba(109,61,242,0.25)]" : "border-transparent hover:border-[var(--ai-primary-ring)]"} ${busy === s.id || busy === "all" ? "opacity-40" : ""}`}
                 >
@@ -361,8 +364,6 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
           })}
         </div>
       )}
-
-      <ImageLightbox url={lightboxUrl} title="Generated visual" onClose={() => setLightboxUrl(null)} />
     </section>
   );
 }
