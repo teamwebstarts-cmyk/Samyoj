@@ -1,0 +1,333 @@
+/*
+ * Samyoj AI Studio — design system.
+ * Ported 1:1 from the samyoj-ai-studio-implementation reference, but every
+ * selector is scoped under `.ai-studio` so tokens/classes never leak into the
+ * rest of the platform. The page root element carries the `.ai-studio` class.
+ */
+
+.ai-studio {
+  /* ---------- Tokens ---------- */
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-subtle: #f8f9fc;
+  --border: #e6e8f0;
+  --border-strong: #d5d9e6;
+  --text: #0f1535;
+  --text-muted: #6a7190;
+  --text-soft: #959bb5;
+  --ai-primary: #6d3df2;
+  --ai-primary-hover: #5b2fd9;
+  --ai-primary-soft: #f1ecff;
+  --ai-primary-ring: #c9b8ff;
+  --success: #12a366;
+  --success-soft: #e6f7ef;
+  --danger: #e5484d;
+  --danger-soft: #fdecec;
+  --warning: #d9890b;
+  --warning-soft: #fff4e0;
+  --ig: #e1306c;
+  --wa: #25d366;
+  --gm: #ea4335;
+  --radius-card: 16px;
+  --shadow-card: 0 1px 2px rgba(15, 21, 53, 0.04), 0 4px 16px rgba(15, 21, 53, 0.04);
+  --shadow-pop: 0 12px 40px rgba(15, 21, 53, 0.16);
+
+  /* The reference is light-only: pin the palette so the platform's dark mode
+     never leaks into this page. */
+  color-scheme: light;
+  color: var(--text);
+}
+
+.ai-studio button {
+  cursor: pointer;
+  font-family: inherit;
+}
+.ai-studio button:disabled {
+  cursor: not-allowed;
+}
+
+.ai-studio :focus-visible {
+  outline: 2px solid var(--ai-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ---------- Surfaces ---------- */
+.ai-studio .card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- Buttons ---------- */
+.ai-studio .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  transition: background-color 0.18s, border-color 0.18s, box-shadow 0.18s, transform 0.18s, color 0.18s;
+}
+.ai-studio .btn:hover:not(:disabled) {
+  background: var(--surface-subtle);
+  border-color: var(--ai-primary-ring);
+  filter: none;
+}
+.ai-studio .btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.ai-studio .btn:disabled {
+  opacity: 0.5;
+}
+.ai-studio .btn-primary {
+  background: var(--ai-primary);
+  border-color: var(--ai-primary);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(109, 61, 242, 0.28);
+}
+.ai-studio .btn-primary:hover:not(:disabled) {
+  background: var(--ai-primary-hover);
+  border-color: var(--ai-primary-hover);
+  box-shadow: 0 6px 16px rgba(109, 61, 242, 0.28);
+  filter: none;
+}
+.ai-studio .btn-primary:disabled {
+  box-shadow: none;
+  background: #b9a6f8;
+  border-color: #b9a6f8;
+  opacity: 1;
+}
+.ai-studio .btn-soft {
+  background: var(--ai-primary-soft);
+  border-color: transparent;
+  color: var(--ai-primary);
+}
+.ai-studio .btn-soft:hover:not(:disabled) {
+  background: #e6ddff;
+  border-color: transparent;
+}
+.ai-studio .btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 9px;
+}
+.ai-studio .btn-lg {
+  height: 46px;
+  padding: 0 24px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+.ai-studio .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background-color 0.18s, color 0.18s, border-color 0.18s;
+}
+.ai-studio .icon-btn:hover:not(:disabled) {
+  background: var(--ai-primary-soft);
+  color: var(--ai-primary);
+}
+.ai-studio .icon-btn:disabled {
+  opacity: 0.35;
+}
+
+/* ---------- Form ---------- */
+.ai-studio .field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  display: block;
+}
+.ai-studio .field-label small {
+  font-weight: 500;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.ai-studio .input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 38px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.ai-studio textarea.input {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.ai-studio .input:hover {
+  border-color: var(--ai-primary-ring);
+}
+.ai-studio .input:focus {
+  outline: none;
+  border-color: var(--ai-primary);
+  box-shadow: 0 0 0 3px rgba(109, 61, 242, 0.14);
+}
+.ai-studio .input::placeholder {
+  color: var(--text-soft);
+}
+
+/* ---------- Pills ---------- */
+.ai-studio .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ---------- Hero ---------- */
+.ai-studio .hero-bg {
+  background:
+    radial-gradient(600px 240px at 85% 20%, rgba(255, 196, 226, 0.65), transparent 70%),
+    radial-gradient(500px 260px at 60% 90%, rgba(186, 214, 255, 0.55), transparent 70%),
+    linear-gradient(120deg, #f4efff 0%, #f1f0ff 45%, #f7eefc 100%);
+}
+.ai-studio .gradient-text {
+  background: linear-gradient(90deg, #6d3df2, #8f5cf7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Motion ---------- */
+@keyframes ais-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ais-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ais-slide-in-right {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes ais-soft-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(109, 61, 242, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(109, 61, 242, 0);
+  }
+}
+@keyframes ais-float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes ais-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ai-studio .anim-fade-up {
+  animation: ais-fade-up 0.25s ease-out both;
+}
+.ai-studio .anim-fade-in {
+  animation: ais-fade-in 0.2s ease-out both;
+}
+.ai-studio .anim-slide-right {
+  animation: ais-slide-in-right 0.22s ease-out both;
+}
+.ai-studio .anim-pulse {
+  animation: ais-soft-pulse 2.2s ease-in-out infinite;
+}
+.ai-studio .anim-float {
+  animation: ais-float-y 4s ease-in-out infinite;
+}
+.ai-studio .spin {
+  animation: ais-spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-studio *,
+  .ai-studio *::before,
+  .ai-studio *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Scrollbars ---------- */
+.ai-studio .thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.ai-studio .hide-scroll {
+  scrollbar-width: none;
+}
+.ai-studio .hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- Slide art container (container queries drive live scaling) ---------- */
+.ai-studio .slide-box {
+  container-type: inline-size;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+/* ---------- Accessibility helper ---------- */
+.ai-studio .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

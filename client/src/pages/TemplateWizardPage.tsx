@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FileText,
   Save,
+  Sparkles,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import TemplateWizardCreateStep from '../components/templates/wizard/TemplateWizardCreateStep';
@@ -59,6 +60,8 @@ type LocationState = {
   mode?: TemplateWizardMode;
   studioBody?: string;
   studioLanguage?: string;
+  studioHandoff?: boolean;
+  studioName?: string;
 };
 
 export default function TemplateWizardPage() {
@@ -499,6 +502,12 @@ export default function TemplateWizardPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="template-wizard-scroll min-h-0 flex-1">
+        {state.studioHandoff && (
+          <p className="mb-4 flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-medium text-violet-800 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-200">
+            <Sparkles className="h-4 w-4 flex-none text-violet-600 dark:text-violet-300" />
+            Loaded from AI Studio{state.studioName ? ` — “${state.studioName}”` : ''}. Name, category, body, footer, buttons and example values are pre-filled. Add the header image, then submit for approval.
+          </p>
+        )}
         {templateGateMessage && (
           <EntitlementNotice className="mb-4" message={templateGateMessage} upgradePlan="starter" />
         )}

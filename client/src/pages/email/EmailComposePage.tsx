@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Search,
   X,
@@ -14,6 +14,7 @@ import {
   Italic,
   Link as LinkIcon,
   Upload,
+  Sparkles,
 } from 'lucide-react';
 import PageShell from '../../components/ui/PageShell';
 import MetaMockNotice from '../../components/meta/MetaMockNotice';
@@ -36,8 +37,20 @@ import {
   statusLabel,
   useGmailWorkspace,
 } from '../../components/email/emailData';
+import { useAuth } from '../../contexts/AuthContext';
 import { gmailApi, type GmailAttachment, type GmailContact, type GmailSend, type GmailTemplate } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
+import {
+  applyMergeFields,
+  buildAutoFill,
+  combinedFills,
+  EMAIL_COMPOSE_VARIABLES,
+  EMAIL_CONTACT_VARIABLES,
+  extractMergeKeys,
+  findUnresolvedMergeKeys,
+  keysNeedingUserInput,
+  mergePreviewValue,
+} from '../../utils/emailMergeFields';
 import { dedupeLatestSendPerEmail, filterRecentSends } from './emailList';
 import '../email/email.css';
 
@@ -97,14 +110,12 @@ type AttachmentItem = {
   controller: AbortController;
 };
 
-function previewNodes(text: string, contact: EmailContact | null, empty: string): ReactNode {
+function previewNodes(text: string, fills: Record<string, string>, empty: string): ReactNode {
   if (!text.trim()) return <span className="ema-mail__empty">{empty}</span>;
-  const fill: Record<string, string> = contact
-    ? { '{{name}}': contact.name, '{{email}}': contact.email }
-    : {};
   return text.split(/(\{\{[^}]+\}\})/g).map((part, i) => {
     if (!part) return null;
-    if (fill[part]) return <mark key={i} className="ema-fill">{fill[part]}</mark>;
+    const filled = mergePreviewValue(part, fills);
+    if (filled) return <mark key={i} className="ema-fill">{filled}</mark>;
     if (part.startsWith('{{') && part.endsWith('}}')) {
       return <mark key={i} className="ema-fill ema-fill--miss">{part}</mark>;
     }
@@ -112,7 +123,12 @@ function previewNodes(text: string, contact: EmailContact | null, empty: string)
   });
 }
 
+function mergeFieldLabel(key: string): string {
+  return key.replace(/_/g, ' ');
+}
+
 export default function EmailComposePage() {
+  const { organization } = useAuth();
   const { status, sends, templates: apiTemplates, contacts: apiContacts, loading, error: loadError, mockPreview, refresh } = useGmailWorkspace();
   const mailboxConnected = status?.status === 'connected';
   const mailboxEmail = status?.email || '';
@@ -163,8 +179,11 @@ export default function EmailComposePage() {
   const [consentContactId, setConsentContactId] = useState<string | null>(null);
   const [consentError, setConsentError] = useState('');
   const messageRef = useRef<HTMLTextAreaElement>(null);
+  const subjectInputRef = useRef<HTMLInputElement>(null);
+  const activeComposeField = useRef<'subject' | 'body'>('body');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [mergeFields, setMergeFields] = useState<Record<string, string>>({});
   const searchRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -231,12 +250,32 @@ export default function EmailComposePage() {
   );
 
   const previewContact = recipients[0] ?? null;
+  const templateKeys = useMemo(() => extractMergeKeys(subject, message), [subject, message]);
+  const autoFill = useMemo(
+    () => buildAutoFill(previewContact, organization?.companyName),
+    [previewContact, organization?.companyName],
+  );
+  const previewFills = useMemo(() => combinedFills(autoFill, mergeFields), [autoFill, mergeFields]);
+  const pendingMergeKeys = useMemo(
+    () => keysNeedingUserInput(templateKeys, autoFill, mergeFields),
+    [templateKeys, autoFill, mergeFields],
+  );
+  const unresolvedMergeKeys = useMemo(() => {
+    const mergedSubject = applyMergeFields(subject, previewFills);
+    const mergedMessage = applyMergeFields(message, previewFills);
+    return findUnresolvedMergeKeys(mergedSubject, mergedMessage);
+  }, [subject, message, previewFills]);
   const missing = [
     recipients.length === 0 ? 'a contact' : '',
     !subject.trim() ? 'a subject' : '',
     !message.trim() ? 'a message' : '',
+    pendingMergeKeys.length > 0 ? `values for ${pendingMergeKeys.map((k) => `{{${k}}}`).join(', ')}` : '',
   ].filter(Boolean);
-  const eligible = missing.length === 0 && mailboxConnected && attachments.every((item) => item.status === 'ready');
+  const eligible =
+    missing.length === 0 &&
+    unresolvedMergeKeys.length === 0 &&
+    mailboxConnected &&
+    attachments.every((item) => item.status === 'ready');
 
   const addFiles = async (files: File[]) => {
     const existingBytes = attachments.reduce((total, item) => total + item.file.size, 0);
@@ -288,11 +327,65 @@ export default function EmailComposePage() {
     }
   };
 
+  /* ---------------- AI Studio hand-off ----------------
+     Studio navigates here with subject + body and the generated poster PNG,
+     which is attached as a real file (uploads through the normal pipeline). */
+  const [studioHandoffName, setStudioHandoffName] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const handoffConsumedRef = useRef(false);
+  useEffect(() => {
+    if (handoffConsumedRef.current) return;
+    const state = (location.state || {}) as {
+      studioHandoff?: boolean;
+      studioName?: string;
+      subject?: string;
+      body?: string;
+      attachmentFile?: File;
+    };
+    if (!state.studioHandoff) return;
+    handoffConsumedRef.current = true;
+    setPanel('compose');
+    setComposeTab('write');
+    if (state.subject) setSubject(state.subject);
+    if (state.body) setMessage(state.body);
+    if (state.attachmentFile instanceof File) void addFiles([state.attachmentFile]);
+    setStudioHandoffName(state.studioName || 'AI Studio');
+    navigate(location.pathname, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const removeAttachment = (localId: string) => {
     setAttachments((current) => {
       const item = current.find((entry) => entry.localId === localId);
       item?.controller.abort();
       return current.filter((entry) => entry.localId !== localId);
+    });
+  };
+
+  const insertComposeVariable = (token: string) => {
+    if (activeComposeField.current === 'subject') {
+      const input = subjectInputRef.current;
+      const start = input?.selectionStart ?? subject.length;
+      const end = input?.selectionEnd ?? subject.length;
+      const next = `${subject.slice(0, start)}${token}${subject.slice(end)}`.slice(0, SUBJECT_MAX);
+      setSubject(next);
+      requestAnimationFrame(() => {
+        input?.focus();
+        const caret = Math.min(start + token.length, next.length);
+        input?.setSelectionRange(caret, caret);
+      });
+      return;
+    }
+    const input = messageRef.current;
+    const start = input?.selectionStart ?? message.length;
+    const end = input?.selectionEnd ?? message.length;
+    const next = `${message.slice(0, start)}${token}${message.slice(end)}`.slice(0, MESSAGE_MAX);
+    setMessage(next);
+    requestAnimationFrame(() => {
+      input?.focus();
+      const caret = Math.min(start + token.length, next.length);
+      input?.setSelectionRange(caret, caret);
     });
   };
 
@@ -325,6 +418,11 @@ export default function EmailComposePage() {
   };
 
   const sendEmail = async () => {
+    if (pendingMergeKeys.length > 0 || unresolvedMergeKeys.length > 0) {
+      setComposeTab('preview');
+      setSendError('Fill in every template field highlighted in orange before sending.');
+      return;
+    }
     if (!eligible || recipients.length === 0 || sendingRef.current) return;
     if (mockPreview) {
       setSendError(GMAIL_MOCK_PREVIEW_BLOCK);
@@ -335,12 +433,16 @@ export default function EmailComposePage() {
     setSendError('');
     setSendStatus('Sending…');
     try {
+      const outboundMergeFields = Object.fromEntries(
+        Object.entries(mergeFields).filter(([, value]) => value.trim()),
+      );
       const response = await gmailApi.send({
         contactIds: recipients.map((r) => r.id),
         subject: subject.trim(),
         textBody: plainTextFromMarkup(message).trim(),
         htmlBody: safeHtmlFromMarkup(message),
         attachmentIds: attachments.flatMap((item) => item.uploaded?.id || []),
+        ...(Object.keys(outboundMergeFields).length ? { mergeFields: outboundMergeFields } : {}),
       }, idempotencyKeyRef.current);
       const result = response.data.data[0];
       setSendStatus(result ? statusLabel(result.status) : 'Queued');
@@ -361,6 +463,7 @@ export default function EmailComposePage() {
 
   const applyTemplate = (id: string) => {
     setTemplateId(id);
+    setMergeFields({});
     const t = templates.find((x) => x.id === id);
     if (t) {
       setSubject(t.subject);
@@ -467,6 +570,12 @@ export default function EmailComposePage() {
     <PageShell list>
       <div className="ema-page ema-shell ema-shell--compose">
         {mockPreview ? <MetaMockNotice /> : null}
+        {studioHandoffName && (
+          <p className="mb-2 flex items-center gap-2 rounded-xl border border-[#e6defb] bg-[#f4efff] px-3 py-2 text-[12px] font-medium text-[#4c3a86]">
+            <Sparkles size={14} className="flex-none text-[#6d3df2]" />
+            Loaded from AI Studio — “{studioHandoffName}”. Subject, body and the generated poster (attachment) are pre-filled. Choose recipients and send when ready.
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-[19px] font-extrabold tracking-[-0.02em] text-[var(--ema-ink)]">
@@ -633,12 +742,73 @@ export default function EmailComposePage() {
                         </span>
                       </div>
                       <h2 className="ema-mail__subject">
-                        {previewNodes(subject, previewContact, 'Subject appears here')}
+                        {previewNodes(subject, previewFills, 'Subject appears here')}
                       </h2>
                       <div className="ema-mail__body">
-                        {previewNodes(message, previewContact, 'Write the message, then check it here before you send.')}
+                        {previewNodes(message, previewFills, 'Write the message, then check it here before you send.')}
                       </div>
                     </div>
+                    {pendingMergeKeys.length > 0 && (
+                      <div className="ema-field" style={{ marginTop: 14 }}>
+                        <span className="ema-field__label">Values for this email</span>
+                        <p className="ema-field__hint" style={{ marginBottom: 8 }}>
+                          Orange tags need a value here or in your text. Name and email come from the contact; company uses your org name when set.
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          {pendingMergeKeys.map((key) => (
+                            <label key={key} className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-[var(--ema-muted)]">
+                                <code>{`{{${key}}}`}</code>
+                              </span>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  className="ema-input flex-1"
+                                  value={mergeFields[key] ?? ''}
+                                  placeholder={`Enter ${mergeFieldLabel(key)}`}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    setMergeFields((current) => ({ ...current, [key]: value }));
+                                  }}
+                                />
+                                {key === 'date' ? (
+                                  <button
+                                    type="button"
+                                    className="ema-btn ema-btn--ghost shrink-0"
+                                    onClick={() => {
+                                      setMergeFields((current) => ({
+                                        ...current,
+                                        date: new Date().toLocaleDateString('en-CA'),
+                                      }));
+                                    }}
+                                  >
+                                    Today
+                                  </button>
+                                ) : null}
+                                {key === 'time' ? (
+                                  <button
+                                    type="button"
+                                    className="ema-btn ema-btn--ghost shrink-0"
+                                    onClick={() => {
+                                      setMergeFields((current) => ({
+                                        ...current,
+                                        time: new Date().toLocaleTimeString(undefined, {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          hour12: false,
+                                        }),
+                                      }));
+                                    }}
+                                  >
+                                    Now
+                                  </button>
+                                ) : null}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="ema-mail__legend" style={{ padding: '10px 2px 0' }}>
                       {previewContact && (
                         <span><mark className="ema-fill">{previewContact.name}</mark> is filled from this contact</span>
@@ -887,10 +1057,12 @@ export default function EmailComposePage() {
                     <span className="ema-field__counter">{subject.length}/{SUBJECT_MAX}</span>
                   </span>
                   <input
+                    ref={subjectInputRef}
                     className="ema-input"
                     placeholder="Enter email subject"
                     maxLength={SUBJECT_MAX}
                     value={subject}
+                    onFocus={() => { activeComposeField.current = 'subject'; }}
                     onChange={(e) => setSubject(e.target.value)}
                   />
                 </div>
@@ -907,8 +1079,32 @@ export default function EmailComposePage() {
                     maxLength={MESSAGE_MAX}
                     rows={8}
                     value={message}
+                    onFocus={() => { activeComposeField.current = 'body'; }}
                     onChange={(e) => setMessage(e.target.value)}
                   />
+                  <div className="ema-vars" style={{ marginTop: 8 }}>
+                    {EMAIL_CONTACT_VARIABLES.map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className="ema-var"
+                        onClick={() => insertComposeVariable(v)}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                    {EMAIL_COMPOSE_VARIABLES.map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className="ema-var ema-var--compose"
+                        onClick={() => insertComposeVariable(v)}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="ema-field__hint">Click subject or message first, then insert. Orange tags are filled in Preview before send.</span>
                   <div className="ema-formatbar" aria-label="Safe message formatting">
                     <button type="button" className="ema-formatbar__button" onClick={() => wrapSelection('**')} title="Bold">
                       <Bold className="h-3.5 w-3.5" /><span className="sr-only">Bold</span>

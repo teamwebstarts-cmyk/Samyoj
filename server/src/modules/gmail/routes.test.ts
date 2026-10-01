@@ -9,6 +9,18 @@ describe('Gmail send recipient contract', () => {
     expect(gmailSendSchema.safeParse({ contactIds: [contact] }).success).toBe(true);
     expect(gmailSendSchema.safeParse({ contactIds: [contact, other] }).success).toBe(true);
     expect(gmailSendSchema.safeParse({ contactIds: [] }).success).toBe(false);
+    expect(
+      gmailSendSchema.safeParse({
+        contactIds: [contact],
+        mergeFields: { order_id: 'ORD-1' },
+      }).success,
+    ).toBe(true);
+    expect(
+      gmailSendSchema.safeParse({
+        contactIds: [contact],
+        mergeFields: { 'bad key': 'x' },
+      }).success,
+    ).toBe(false);
   });
 });
 

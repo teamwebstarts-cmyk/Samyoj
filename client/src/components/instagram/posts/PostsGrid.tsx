@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   CalendarClock,
   Clapperboard,
@@ -33,6 +34,13 @@ function tileThumb(post: PostRow): string {
       ? post.mediaPayload[0].url
       : post.imageUrl || post.mediaPayload.find((item) => item.kind === 'image')?.url || '';
   return resolvePublicMediaUrl(raw);
+}
+
+function LibraryThumb({ url }: { url: string | null | undefined }) {
+  const src = resolvePublicMediaUrl(url);
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <span className="igp-lib__ph" aria-hidden />;
+  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 
 function metric(value: number | null | undefined): string {
@@ -252,7 +260,7 @@ export function PostsLibrary({ items, loading, error, selectedId, onOpen, onRefr
               onClick={() => onOpen(item)}
               aria-label={`Open live Instagram post${item.caption ? `: ${item.caption}` : ''}. ${metric(item.likes)} likes, ${metric(item.comments)} comments`}
             >
-              <img src={resolvePublicMediaUrl(item.thumbnailUrl)} alt="" loading="lazy" />
+              <LibraryThumb url={item.thumbnailUrl} />
               <span className="igp-lib__live">Live</span>
               <span className="igp-lib__ig" aria-hidden>
                 <InstagramGlyph className="h-3 w-3" />

@@ -421,6 +421,8 @@ model Organization {
   billingCharges                 BillingCharge[]
   invoices                       Invoice[]
   creditNotes                    CreditNote[]
+  aiStudioPacks                  AiStudioPack[]
+  aiStudioHandoffs               AiStudioHandoff[]
 
   planExpiresAt      DateTime? @map("plan_expires_at")
   subscriptionStatus String    @default("active") @map("subscription_status")
@@ -2315,6 +2317,7 @@ enum GenerationJobKind {
   CATALOG_DESCRIPTION
   FAQ_GENERATION
   POLICY_TEMPLATE
+  AI_STUDIO_PACK
 }
 
 enum GenerationJobStatus {
@@ -2586,4 +2589,43 @@ model PlatformLibraryTemplate {
 
   @@index([published, sortOrder])
   @@map("platform_library_templates")
+}
+
+/// Audited hand-off event for an AI Studio pack. Records the channel and destination
+/// payload snapshot so product can see which packs were sent where.
+model AiStudioHandoff {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  packId         String    @map("pack_id")
+  channel        String
+  payload        Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pack           AiStudioPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("ai_studio_handoffs")
+}
+
+/// Persisted AI Studio pack — the server-side draft/history record for a generated
+/// or hand-saved pack. `packData` holds the full client Pack JSON so the studio
+/// can restore exact visual state without re-generating.
+model AiStudioPack {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  brief          String
+  language       String
+  outputs        String[] @default([])
+  photoNames     String[] @default([]) @map("photo_names")
+  packData       Json     @map("pack_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  handoffs       AiStudioHandoff[]
+
+  @@index([organizationId, createdAt])
+  @@map("ai_studio_packs")
 }

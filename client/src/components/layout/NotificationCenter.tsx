@@ -5,6 +5,7 @@ import { ticketApi } from '../../services/api';
 import { isOverdue, type TicketItem } from '../tickets/ticketUi';
 import { useSocket } from '../../hooks/useSocket';
 import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
+import { useAuth } from '../../contexts/AuthContext';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import {
   dismissInboxNotification,
@@ -20,6 +21,7 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ unreadInbox = 0 }: NotificationCenterProps) {
+  const { user } = useAuth();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [open, setOpen] = useState(false);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
@@ -30,7 +32,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
   const messageAlerts = useInboxMessageNotifications();
 
   const load = useCallback(() => {
-    if (!resolved || !activeNumber) return;
+    if (!user || !resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     const generation = ++requestGenerationRef.current;
     ticketApi
@@ -44,7 +46,7 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
         }
       })
       .catch(() => {});
-  }, [activeNumber, resolved]);
+  }, [activeNumber, resolved, user]);
 
   useEffect(() => {
     load();

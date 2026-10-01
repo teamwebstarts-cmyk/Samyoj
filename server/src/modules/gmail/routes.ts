@@ -31,6 +31,7 @@ import {
 import { encrypt } from '../../utils/crypto';
 import { sanitizeEmailHtml } from './mime';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
+import { applyGmailMerge, unresolvedAfterGmailMerge } from './merge-fields';
 
 const router = Router();
 
@@ -453,6 +454,9 @@ router.delete(
 
 const GMAIL_SEND_MAX_RECIPIENTS = 50;
 
+const mergeFieldKeySchema = z.string().regex(/^[a-zA-Z0-9_]+$/).max(64);
+const mergeFieldValueSchema = z.string().max(500);
+
 export const gmailSendSchema = z.object({
   contactIds: z.array(z.string().uuid()).min(1).max(GMAIL_SEND_MAX_RECIPIENTS),
   subject: z.string().min(1).max(998).optional(),
@@ -460,14 +464,8 @@ export const gmailSendSchema = z.object({
   htmlBody: z.string().max(100_000).nullable().optional(),
   templateId: z.string().uuid().optional(),
   attachmentIds: z.array(z.string().uuid()).max(MAX_ATTACHMENTS).default([]),
+  mergeFields: z.record(mergeFieldKeySchema, mergeFieldValueSchema).optional(),
 });
-
-function fillTemplate(value: string, contact: { name: string | null; email: string | null; phone: string }): string {
-  return value
-    .replaceAll('{{name}}', contact.name || '')
-    .replaceAll('{{email}}', contact.email || '')
-    .replaceAll('{{phone}}', contact.phone);
-}
 
 router.post(
   '/send',
@@ -530,6 +528,22 @@ router.post(
       throw new AppError(400, `Attachments exceed the ${MAX_DECODED_MIME_BYTES} byte decoded MIME budget`);
     }
 
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { companyName: true },
+    });
+    const mergeOptions = { companyName: org?.companyName ?? null, mergeFields: data.mergeFields };
+    for (const contact of contacts) {
+      const unresolved = unresolvedAfterGmailMerge(subject, textBody, htmlBody, contact, mergeOptions);
+      if (unresolved.length) {
+        throw new AppError(
+          400,
+          `Fill in template fields before sending: ${unresolved.map((k) => `{{${k}}}`).join(', ')}`,
+          'GMAIL_UNRESOLVED_MERGE_FIELDS',
+        );
+      }
+    }
+
     const requestKey = String(req.headers['idempotency-key'] || req.body.idempotencyKey || '').trim();
     if (requestKey && (requestKey.length < 8 || requestKey.length > 200)) {
       throw new AppError(400, 'Idempotency-Key must be between 8 and 200 characters');
@@ -563,9 +577,9 @@ router.post(
             createdById: req.user!.userId,
             recipientEmail: contact.email!,
             recipientName: contact.name,
-            subject: fillTemplate(subject, contact),
-            textBody: fillTemplate(textBody, contact),
-            htmlBody: htmlBody ? fillTemplate(htmlBody, contact) : null,
+            subject: applyGmailMerge(subject, contact, mergeOptions),
+            textBody: applyGmailMerge(textBody, contact, mergeOptions),
+            htmlBody: htmlBody ? applyGmailMerge(htmlBody, contact, mergeOptions) : null,
             idempotencyKey,
           },
         });

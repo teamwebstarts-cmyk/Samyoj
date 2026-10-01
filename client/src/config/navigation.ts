@@ -125,7 +125,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         to: '/content-studio',
         icon: Sparkles,
-        label: 'Content Studio',
+        label: 'AI Studio',
         hideForRoles: ['AGENT'],
       },
     ],
@@ -214,7 +214,7 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/calls', icon: Phone, label: 'Calls' },
   { to: '/ai-bot', icon: Bot, label: 'AI Bots', hideForRoles: ['AGENT'] },
   { to: '/automations', icon: Workflow, label: 'Automations' },
-  { to: '/content-studio', icon: Sparkles, label: 'Content Studio', hideForRoles: ['AGENT'] },
+  { to: '/content-studio', icon: Sparkles, label: 'AI Studio', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },
   { to: '/tickets', icon: Ticket, label: 'Tickets' },
   { to: '/commerce', icon: Package, label: 'Orders', hidden: true },

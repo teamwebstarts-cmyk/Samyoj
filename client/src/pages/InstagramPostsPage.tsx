@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CalendarClock, FileText, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AlertCircle, CalendarClock, FileText, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { useAuth } from '../contexts/AuthContext';
 import { useMetaChannelConnect } from '../components/layout/MetaChannelChips';
@@ -248,6 +249,38 @@ export default function InstagramPostsPage() {
     setAutoDm('');
     setAutoId(null);
   };
+
+  /* ---------------- AI Studio hand-off ----------------
+     Studio navigates here with the generated pack: media (rendered PNGs) +
+     caption prefill the composer; the user reviews, then posts or schedules. */
+  const [studioHandoffName, setStudioHandoffName] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const state = (location.state || {}) as {
+      studioHandoff?: boolean;
+      studioName?: string;
+      mediaType?: MediaType;
+      caption?: string;
+      mediaUrls?: string[];
+    };
+    if (!state.studioHandoff) return;
+    openNew(state.mediaType === 'CAROUSEL' ? 'CAROUSEL' : 'IMAGE');
+    if (state.caption) setCaption(state.caption);
+    const urls = (state.mediaUrls || []).filter((u) => typeof u === 'string' && u.length > 0);
+    if (urls.length > 0) {
+      setMediaItems(urls.map((url) => ({ url, kind: 'image' as const })));
+      setImageUrl(urls[0]);
+      setMediaMeta({
+        name: `${state.studioName || 'AI Studio'} visuals`,
+        meta: `${urls.length} image${urls.length > 1 ? 's' : ''} from AI Studio`,
+      });
+    }
+    setStudioHandoffName(state.studioName || 'AI Studio');
+    // Consume the state so refresh doesn't re-prefill.
+    navigate(location.pathname, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const closePanel = () => {
     if (isDesktop) {
@@ -891,6 +924,13 @@ export default function InstagramPostsPage() {
     <PageShell list>
       <div className="igc-page igp-page">
         <MetaMockNotice />
+
+        {studioHandoffName && (
+          <p className="mt-2 flex items-center gap-2 rounded-xl border border-[#e6defb] bg-[#f4efff] px-3 py-2 text-[12px] font-medium text-[#4c3a86]">
+            <Sparkles size={14} className="flex-none text-[#6d3df2]" />
+            Loaded from AI Studio — “{studioHandoffName}”. Your visuals and caption are pre-filled below. Review everything, then post when ready.
+          </p>
+        )}
 
         <PostBanner
           connected={connected}

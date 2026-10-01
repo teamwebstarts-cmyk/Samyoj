@@ -17,6 +17,7 @@ import {
   deleteChannelInboxMessages,
   removeMessagesFromState,
 } from '../components/inbox/metaChannelMessageDelete';
+import { mergeThreadMessage, replaceOptimisticMessage } from '../components/inbox/metaChannelThread';
 import {
   META_CHANNEL_ATTACH,
   validateMetaDmAttachment,
@@ -203,9 +204,7 @@ export default function InstagramInboxPage() {
     void loadList();
     if (payload.conversationId && payload.conversationId === selectedIdRef.current) {
       if (event === 'message:new' && payload.message) {
-        setMessages((prev) =>
-          prev.some((m) => m.id === payload.message!.id) ? prev : [...prev, payload.message!]
-        );
+        setMessages((prev) => mergeThreadMessage(prev, payload.message!));
       } else {
         void openThread(payload.conversationId);
       }
@@ -279,9 +278,7 @@ export default function InstagramInboxPage() {
     try {
       const { data } = await instagramApi.inbox.send(selectedId, text, idempotencyKeyRef.current);
       const confirmed = data.data as Message;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimisticId ? confirmed : m))
-      );
+      setMessages((prev) => replaceOptimisticMessage(prev, optimisticId, confirmed));
       idempotencyKeyRef.current = crypto.randomUUID();
       void loadList();
     } catch (err) {
@@ -409,7 +406,7 @@ export default function InstagramInboxPage() {
         idempotencyKeyRef.current
       );
       const confirmed = sent.data as Message;
-      setMessages((prev) => prev.map((m) => (m.id === optimisticId ? confirmed : m)));
+      setMessages((prev) => replaceOptimisticMessage(prev, optimisticId, confirmed));
       idempotencyKeyRef.current = crypto.randomUUID();
       void loadList();
     } catch (err) {

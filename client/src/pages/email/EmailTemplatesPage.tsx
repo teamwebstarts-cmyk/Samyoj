@@ -20,6 +20,11 @@ import {
 } from '../../components/email/emailData';
 import { gmailApi, type GmailTemplate } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
+import {
+  EMAIL_COMPOSE_VARIABLES,
+  EMAIL_CONTACT_VARIABLES,
+  EMAIL_TEMPLATE_INSERT_VARIABLES,
+} from '../../utils/emailMergeFields';
 import './email.css';
 
 const NAME_MAX = 50;
@@ -29,7 +34,7 @@ const BODY_MAX = 2000;
 const TIPS = [
   'Use a clear and relevant subject line',
   'Keep the message short and to the point',
-  'Personalize with variables',
+  'Use {{name}}, {{email}}, {{phone}}; other {{fields}} are filled in Compose before send',
   'Keep attachments in Compose, not saved templates',
 ] as const;
 
@@ -37,6 +42,10 @@ const SAMPLE_FILL: Record<string, string> = {
   '{{name}}': 'Asha',
   '{{email}}': 'asha@example.com',
   '{{phone}}': '+91 98765 43210',
+  '{{company}}': 'Your company',
+  '{{order_id}}': 'ORD-1042',
+  '{{date}}': '2026-10-01',
+  '{{time}}': '15:30',
 };
 
 function renderPreview(text: string, empty: string): ReactNode {
@@ -51,8 +60,6 @@ function renderPreview(text: string, empty: string): ReactNode {
     return <span key={i}>{part}</span>;
   });
 }
-
-const TEMPLATE_VARIABLES = ['{{name}}', '{{email}}', '{{phone}}'] as const;
 
 type EmailTemplate = GmailTemplate;
 
@@ -222,7 +229,7 @@ export default function EmailTemplatesPage() {
 
   const copyVariables = async () => {
     try {
-      await navigator.clipboard.writeText(TEMPLATE_VARIABLES.join(' '));
+      await navigator.clipboard.writeText(EMAIL_TEMPLATE_INSERT_VARIABLES.join(' '));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -451,13 +458,35 @@ export default function EmailTemplatesPage() {
                       )}
                     </button>
                   </span>
-                  <div className="ema-vars">
-                    {TEMPLATE_VARIABLES.map((v) => (
+                  <p className="ema-field__hint" style={{ marginBottom: 6 }}>
+                    Contact fields fill from the recipient. Company uses your org name when set; order, date, and time are filled in Compose before send.
+                  </p>
+                  <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ema-muted)]" style={{ marginBottom: 4 }}>
+                    From contact
+                  </p>
+                  <div className="ema-vars" style={{ marginBottom: 8 }}>
+                    {EMAIL_CONTACT_VARIABLES.map((v) => (
                       <button
                         key={v}
                         type="button"
                         className="ema-var"
-                        title={`Insert ${v} into the field you are editing`}
+                        title={`Insert ${v} — filled from the contact when you send`}
+                        onClick={() => insertVariable(v)}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10.5px] font-bold uppercase tracking-wide text-[var(--ema-muted)]" style={{ marginBottom: 4 }}>
+                    Fill when sending
+                  </p>
+                  <div className="ema-vars">
+                    {EMAIL_COMPOSE_VARIABLES.map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className="ema-var ema-var--compose"
+                        title={`Insert ${v} — you enter the value in Compose before send`}
                         onClick={() => insertVariable(v)}
                       >
                         {v}
@@ -535,7 +564,7 @@ export default function EmailTemplatesPage() {
               <span><mark className="ema-fill">Asha</mark> filled from the sample contact</span>
               {previewUnknownVars.length > 0 && (
                 <span className="ema-mail__warn">
-                  {previewUnknownVars.join(', ')} will be sent as written. Use {'{{name}}'}, {'{{email}}'}, or {'{{phone}}'}.
+                  {previewUnknownVars.join(', ')} — you will enter these in Compose before send (or use the standard variable chips).
                 </span>
               )}
             </div>

@@ -3,6 +3,7 @@ import { createModuleLogger } from '../../utils/logger';
 import { fetchInstagramMedia, instagramMediaThumbnailUrl } from '../facebook/page-client';
 import { extractPublicMediaRelative, refreshSignedPublicMediaUrl } from './posts.media-url';
 import { getPublicMediaUrl, mediaExists, persistMediaBuffer } from '../media/storage-adapter';
+import { thumbnailFetchUrl } from './media-cache.download';
 
 const log = createModuleLogger('instagram-media-cache');
 
@@ -42,23 +43,25 @@ async function downloadRemoteThumbnail(
   sourceUrl: string,
   pageAccessToken: string
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  try {
-    const url = new URL(sourceUrl);
-    if (!url.searchParams.has('access_token')) {
-      url.searchParams.set('access_token', pageAccessToken);
+  const candidates = [sourceUrl];
+  const withAuth = thumbnailFetchUrl(sourceUrl, pageAccessToken);
+  if (withAuth !== sourceUrl) candidates.push(withAuth);
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(candidate, { redirect: 'follow' });
+      if (!res.ok) continue;
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (!bytes.length) continue;
+      const mimeType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim() || 'image/jpeg';
+      if (!mimeType.startsWith('image/') && mimeType !== 'application/octet-stream') continue;
+      return { buffer: bytes, mimeType: mimeType === 'application/octet-stream' ? 'image/jpeg' : mimeType };
+    } catch (err) {
+      log.warn('Instagram thumbnail download failed', {
+        err: err instanceof Error ? err.message : String(err),
+      });
     }
-    const res = await fetch(url.toString(), { redirect: 'follow' });
-    if (!res.ok) return null;
-    const bytes = Buffer.from(await res.arrayBuffer());
-    if (!bytes.length) return null;
-    const mimeType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim() || 'image/jpeg';
-    return { buffer: bytes, mimeType };
-  } catch (err) {
-    log.warn('Instagram thumbnail download failed', {
-      err: err instanceof Error ? err.message : String(err),
-    });
-    return null;
   }
+  return null;
 }
 
 /** Graph CDN URLs expire; keep a Samyoj-signed copy for dashboard/comments UI. */

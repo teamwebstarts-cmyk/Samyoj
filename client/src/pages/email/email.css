@@ -1686,6 +1686,14 @@
 .ema-var:hover {
   border-color: var(--ema-blue);
 }
+.ema-var--compose {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: #fffbeb;
+  color: #b45309;
+}
+.ema-var--compose:hover {
+  border-color: #d97706;
+}
 .ema-vars__copy {
   display: inline-flex;
   align-items: center;

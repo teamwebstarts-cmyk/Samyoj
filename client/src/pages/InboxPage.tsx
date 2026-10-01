@@ -352,7 +352,7 @@ export default function InboxPage() {
         }
         setTicketConversationIds(ids);
       })
-      .catch(console.error);
+      .catch(() => {});
   }, [activeNumber, resolved, setTicketConversationIds]);
 
   const { socketState, socketRef } = useInboxRealtime({

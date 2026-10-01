@@ -7,6 +7,7 @@ import { requireFeatureOnMutation } from '../../middleware/plan-guard';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { persistMediaBuffer, getPublicMediaUrl } from '../media/storage-adapter';
+import { loadInstagramMediaPreviews } from './media-cache';
 import { randomUUID } from 'crypto';
 import {
   CAPTION_MAX,
@@ -294,7 +295,23 @@ router.get(
         });
       }
     }
-    sendSuccess(res, { items });
+    const previews = await loadInstagramMediaPreviews({
+      channelId: channel.id,
+      organizationId: orgId,
+      pageAccessToken: token,
+      igMediaIds: items.map((item) => item.igMediaId),
+    });
+    sendSuccess(res, {
+      items: items.map((item) => {
+        const cached = previews.get(item.igMediaId);
+        return {
+          ...item,
+          thumbnailUrl: cached?.thumbnailUrl || item.thumbnailUrl,
+          caption: cached?.caption ?? item.caption,
+          permalink: cached?.permalink ?? item.permalink,
+        };
+      }),
+    });
   })
 );
 

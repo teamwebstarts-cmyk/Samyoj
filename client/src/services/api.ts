@@ -48,6 +48,7 @@ function isExpectedApiNoise(error: unknown): boolean {
   const url = String(error.config?.url || '');
   if (status === 404 && /\/calling\/[^/?]+\/signaling(?:\?|$)/.test(url)) return true;
   if (status === 401 && /\/auth\/(?:me|refresh|login)(?:\?|$)/.test(url)) return true;
+  if (status === 401 && /\/(?:team\/heartbeat|inbox\/unread-total|tickets)(?:\?|$)/.test(url)) return true;
   if (status === 429 && /\/auth\/(?:refresh|login)(?:\?|$)/.test(url)) return true;
   if (status === 402) return true;
   if (status === 429 && /too many calls|80008|rate limit/i.test(JSON.stringify(error.response?.data ?? ''))) {
@@ -314,6 +315,8 @@ export interface GmailSendPayload {
   htmlBody?: string | null;
   templateId?: string;
   attachmentIds?: string[];
+  /** Values for custom {{placeholders}} (e.g. order_id, date). Contact fields are filled server-side. */
+  mergeFields?: Record<string, string>;
 }
 
 export const gmailApi = {
@@ -1498,8 +1501,22 @@ export const contentStudioApi = {
     api.post('/content-studio/approvals', data),
 };
 
-export const catalogApi = {
-  listCatalogs: () => api.get('/catalog/catalogs'),
-  listProducts: (params?: Record<string, string>) => api.get('/catalog/products', { params }),
-  sync: (catalogId: string) => api.post('/catalog/sync', { catalogId }),
+/**
+ * AI Studio (pack-based generation). Backend contract:
+ *  - POST   /ai-studio/generate        { brief, language, outputs[], photoNames[] } → Pack
+ *  - GET    /ai-studio/packs           → { packs: Pack[] }           (drafts + history sync)
+ *  - POST   /ai-studio/packs           { pack }                      → { pack }     (upsert draft)
+ *  - DELETE /ai-studio/packs/:id       → 204
+ *  - POST   /ai-studio/handoffs        { packId, channel, payload }  → 204          (audit log)
+ * Until these are deployed the client degrades gracefully: mock engine when
+ * sample data is on, otherwise a clear error state (see AiStudio.tsx).
+ */
+export const aiStudioApi = {
+  generate: (data: { brief: string; language: string; outputs: string[]; photoNames?: string[] }) =>
+    api.post('/ai-studio/generate', data),
+  listPacks: () => api.get('/ai-studio/packs'),
+  savePack: (pack: Record<string, unknown>) => api.post('/ai-studio/packs', { pack }),
+  deletePack: (id: string) => api.delete(`/ai-studio/packs/${id}`),
+  logHandoff: (data: { packId: string; channel: string; payload: Record<string, unknown> }) =>
+    api.post('/ai-studio/handoffs', data),
 };
