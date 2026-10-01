@@ -293,6 +293,7 @@ model User {
   emailTemplatesCreated   EmailTemplate[]          @relation("EmailTemplateCreatedBy")
   emailSendsCreated       EmailSend[]              @relation("EmailSendCreatedBy")
   emailAttachmentsCreated EmailAttachment[]        @relation("EmailAttachmentCreatedBy")
+  studioPacksCreated      StudioPack[]             @relation("StudioPackCreatedBy")
 
   @@map("users")
 }
@@ -406,6 +407,8 @@ model Organization {
   emailTemplates                 EmailTemplate[]
   emailSends                     EmailSend[]
   emailAttachments               EmailAttachment[]
+  studioPacks                    StudioPack[]
+  brandKit                       BrandKit?
   planPeriods                    PlanPeriod[]
   billingEvents                  BillingEvent[]
   inboundContactOverflows        InboundContactOverflow[]
@@ -1879,6 +1882,66 @@ model AiBotAuditLog {
 
   @@index([botId, createdAt])
   @@map("ai_bot_audit_logs")
+}
+
+enum StudioPackStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
+enum StudioOutputType {
+  IG_IMAGE
+  IG_CAROUSEL
+  WA_TEMPLATE
+  EMAIL
+}
+
+/// AI Studio: one brief → one content pack with per-channel variants.
+/// Hand-off only — this row never sends, publishes, or submits anything.
+model StudioPack {
+  id             String           @id @default(uuid())
+  organizationId String           @map("organization_id")
+  createdById    String           @map("created_by_id")
+  brief          String           @db.Text
+  language       String           @default("en")
+  status         StudioPackStatus @default(GENERATING)
+  error          String?          @db.Text
+  slides         Json?
+  photos         Json?
+  caption        String?          @db.Text
+  hashtags       Json?
+  waName         String?          @map("wa_name")
+  waBody         String?          @map("wa_body")
+  waFooter       String?          @map("wa_footer")
+  waButtons      Json?
+  emailSubject   String?          @map("email_subject")
+  emailBody      String?          @map("email_body")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("StudioPackCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("studio_packs")
+}
+
+/// Minimal brand profile persisted after the old Content Studio wipe.
+/// Keeps audience/value-props for AI context and org profile completeness.
+model BrandKit {
+  id             String   @id @default(uuid())
+  organizationId String   @unique @map("organization_id")
+  companyName    String   @default("My Company") @map("company_name")
+  audience       String?
+  valueProps     String[] @default([]) @map("value_props")
+  defaultLocale  String   @default("en-IN") @map("default_locale")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("brand_kits")
 }
 
 model AiUsageLog {

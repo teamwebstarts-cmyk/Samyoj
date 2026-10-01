@@ -42,7 +42,7 @@ import { invalidateFlowReferenceData } from '../components/flows/flowReferenceDa
 import { settingsApi, templateApi } from '../services/api';
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
-import { formFromMessageTemplate, persistTemplateVariableMeta } from '../utils/templateForm';
+import { emptyTemplateButton, formFromMessageTemplate, persistTemplateVariableMeta } from '../utils/templateForm';
 import { getTemplateRejectedReason } from '../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../utils/templateRejectionGuide';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
@@ -59,6 +59,9 @@ type LocationState = {
   mode?: TemplateWizardMode;
   studioBody?: string;
   studioLanguage?: string;
+  studioFooter?: string;
+  studioName?: string;
+  studioButtons?: Array<{ text: string; type: 'URL' | 'QUICK_REPLY'; url?: string }>;
 };
 
 export default function TemplateWizardPage() {
@@ -77,11 +80,23 @@ export default function TemplateWizardPage() {
   const [form, setForm] = useState<TemplateFormState>(() => {
     if (state.form) return state.form;
     if (state.studioBody) {
+      // AI Studio hand-off: body copy + suggested name/footer/buttons prefilled.
+      // The human still completes examples and submits to Meta on this wizard.
+      const buttons = (state.studioButtons || [])
+        .slice(0, 2)
+        .map((button) => ({
+          ...emptyTemplateButton(button.type === 'URL' ? 'URL' : 'QUICK_REPLY'),
+          text: button.text,
+          url: button.url || '',
+        }));
       return {
         ...createEmptyWizardForm(),
+        name: state.studioName ? state.studioName.slice(0, 512) : '',
         body: state.studioBody,
+        footer: state.studioFooter || '',
         language: state.studioLanguage || 'en_US',
-        category: 'MARKETING',
+        category: 'MARKETING' as const,
+        buttons,
       };
     }
     return createEmptyWizardForm();

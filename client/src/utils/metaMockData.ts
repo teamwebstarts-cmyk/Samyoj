@@ -903,3 +903,171 @@ const MOCK_ADS_CAMPAIGNS: MockAdsCampaign[] = [
 export function getFacebookAdsMockCampaigns(): MockAdsCampaign[] {
   return MOCK_ADS_CAMPAIGNS;
 }
+
+/* ============ AI Studio mock packs ============
+   Same preview contract: sample Studio packs merge behind real ones when
+   "With mock data" is on. Mock ids carry META_MOCK_ID_PREFIX so generate,
+   edit, and delete actions on them are blocked client-side. */
+
+export type MockStudioSlide = { title: string; body: string; photo?: string; style?: 'none' | 'festival' | 'minimal' | 'modern' | 'premium' };
+
+export type MockStudioPack = {
+  id: string;
+  brief: string;
+  language: string;
+  status: 'GENERATING' | 'READY' | 'FAILED';
+  error: string | null;
+  photos: Array<{ url: string; name?: string }>;
+  slides: MockStudioSlide[];
+  caption: string | null;
+  hashtags: string[];
+  waTemplate: {
+    name: string | null;
+    body: string;
+    footer: string | null;
+    buttons: Array<{ text: string; type: 'URL' | 'QUICK_REPLY'; url?: string }>;
+  } | null;
+  email: { subject: string; body: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const MOCK_STUDIO_PACKS: MockStudioPack[] = [
+  {
+    id: `${META_MOCK_ID_PREFIX}studio-diwali`,
+    brief:
+      'Diwali 20% off this weekend at our Jaipur store. Create a 5-slide Instagram carousel, a WhatsApp template and an email with a special offer. Use festive theme, warm colors and product images.',
+    language: 'en',
+    status: 'READY',
+    error: null,
+    photos: [
+      {
+        url:
+          'data:image/svg+xml;utf8,' +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><radialGradient id="g" cx="70%" cy="20%" r="90%"><stop offset="0%" stop-color="#fbbf24"/><stop offset="55%" stop-color="#b45309"/><stop offset="100%" stop-color="#4c1d95"/></radialGradient></defs><rect width="400" height="400" fill="url(#g)"/><circle cx="320" cy="80" r="46" fill="#fde68a" opacity="0.85"/><path d="M60 330 q40 -26 80 0 q40 -26 80 0 q40 -26 80 0" stroke="#f59e0b" stroke-width="10" fill="none" opacity="0.7"/></svg>'
+          ),
+        name: 'diwali-offer.svg',
+      },
+      {
+        url:
+          'data:image/svg+xml;utf8,' +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fda4af"/><stop offset="100%" stop-color="#fdba74"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><rect x="150" y="120" width="100" height="200" rx="18" fill="#fff" opacity="0.85"/><rect x="170" y="90" width="60" height="34" rx="8" fill="#fff" opacity="0.7"/></svg>'
+          ),
+        name: 'product-bottle.svg',
+      },
+    ],
+    slides: [
+      { title: 'Diwali Special Offer', body: 'Flat 20% off this weekend only.', photo: undefined, style: 'festival' },
+      {
+        title: 'Glow Naturally',
+        body: 'Premium skincare for brighter you.',
+        photo:
+          'data:image/svg+xml;utf8,' +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fda4af"/><stop offset="100%" stop-color="#fdba74"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><rect x="150" y="120" width="100" height="200" rx="18" fill="#fff" opacity="0.85"/><rect x="170" y="90" width="60" height="34" rx="8" fill="#fff" opacity="0.7"/></svg>'
+          ),
+      },
+      { title: 'Natural Ingredients', body: 'Real results, gentle skin.', style: 'minimal' },
+      { title: 'Perfect Gifts', body: 'For your loved ones this Diwali.', style: 'premium' },
+      { title: 'Visit Our Jaipur Store', body: 'This weekend only. Shop now.', style: 'modern' },
+    ],
+    caption:
+      '✨ Diwali Special Offer ✨\nGet FLAT 20% OFF on all our premium skincare products at our Jaipur store! 🪔\n\nCelebrate the festival of lights with healthy, glowing skin. Natural ingredients, real results. Perfect gifts for your loved ones. ❤️\n\n⚠ Visit our Jaipur store this weekend only!',
+    hashtags: ['#DiwaliOffer', '#Skincare', '#Jaipur', '#FestivalGlow', '#HealthySkin'],
+    waTemplate: {
+      name: 'diwali_special_offer',
+      body: '🪔 Diwali Special Offer! ✨\nGet 20% OFF on all our premium skincare products this weekend at our Jaipur store.\n\nCelebrate the festival of lights with healthy, glowing skin. Natural ingredients, real results. Perfect gifts for your loved ones. 🎁\n\nVisit our Jaipur store and make this Diwali brighter! ✨',
+      footer: 'Limited time offer. T&C apply.',
+      buttons: [
+        { text: 'Visit Store', type: 'URL', url: 'https://example.com/store' },
+        { text: 'View Products', type: 'QUICK_REPLY' },
+      ],
+    },
+    email: {
+      subject: 'Diwali Special Offer — Flat 20% OFF at Our Jaipur Store 🪔',
+      body:
+        'Hi {{name}},\n\nThis Diwali, treat yourself and your loved ones with our premium skincare collection. Get FLAT 20% OFF on all products at our Jaipur store this weekend.\n\nNatural ingredients, real results, and the perfect gifts for the festive season.\n\nVisit our Jaipur store and make this Diwali brighter! ✨\n\nWarm regards,\nSamyoj Team',
+    },
+    createdAt: ago(25),
+    updatedAt: ago(25),
+  },
+  {
+    id: `${META_MOCK_ID_PREFIX}studio-launch`,
+    brief:
+      'Launching our new aloe vera skincare range this Friday. Tell the natural ingredients story across the carousel and draft a WhatsApp template plus email announcement.',
+    language: 'en',
+    status: 'READY',
+    error: null,
+    photos: [],
+    slides: [
+      { title: 'Something New', body: 'Fresh from nature, arriving Friday.' },
+      { title: 'Aloe Vera Range', body: 'One plant. Five ways to glow.' },
+      { title: 'Cold-Pressed Goodness', body: 'No fillers, no shortcuts.' },
+      { title: 'Friday Launch', body: 'Be first in line. Doors open 10 AM.' },
+    ],
+    caption:
+      'New drop alert 🌿\nOur aloe vera skincare range lands this Friday.\n\nOne plant, five products, zero fillers. Cold-pressed aloe, straight into the bottle.\n\nFriday, 10 AM. See you there.',
+    hashtags: ['#AloeVera', '#NewLaunch', '#NaturalSkincare'],
+    waTemplate: {
+      name: 'aloe_range_launch',
+      body: 'Hi {{1}}, our new aloe vera range launches this Friday. Reply {{2}} to reserve yours before the first batch sells out.',
+      footer: 'Launch offer valid Friday only',
+      buttons: [{ text: 'View Products', type: 'QUICK_REPLY' }],
+    },
+    email: {
+      subject: 'Friday: the aloe vera range arrives 🌿',
+      body:
+        'Hi {{name}},\n\nThis Friday our aloe vera skincare range goes live — one plant, five products, zero fillers.\n\nThe first batch is small. Reply to this email and we will hold one aside for you.\n\n— Samyoj Team',
+    },
+    createdAt: ago(28 * 60),
+    updatedAt: ago(28 * 60),
+  },
+  {
+    id: `${META_MOCK_ID_PREFIX}studio-hinglish`,
+    brief:
+      'Haldi ceremony season offer — haldi-turmeric face packs ka combo pack 30% off. Hinglish mein content chahiye.',
+    language: 'hinglish',
+    status: 'READY',
+    error: null,
+    photos: [],
+    slides: [
+      { title: 'Haldi Season Ready', body: 'Turmeric face pack combo — 30% off.' },
+      { title: 'Glow Ki Guarantee', body: 'Purane nuskhe, naya pack.' },
+      { title: 'Combo Pack', body: 'Three packs, one glow-up.' },
+      { title: 'Order Karo Aaj', body: 'Free delivery is week tak.' },
+    ],
+    caption:
+      'Haldi season aa gaya hai 🌼\nIs baar glow bhi traditional, offer bhi special.\n\nTurmeric face pack combo — ab 30% OFF. Purane nuskhe ki goodness, naye pack mein.\n\nAaj order karo, is week tak free delivery!',
+    hashtags: ['#HaldiGlow', '#TurmericPack', '#DesiSkincare'],
+    waTemplate: {
+      name: 'haldi_combo_offer',
+      body: 'Namaste {{1}}! 🌼 Haldi season special — turmeric face pack combo ab 30% OFF ke saath. Aapka order {{2}} tak free deliver hoga.',
+      footer: null,
+      buttons: [{ text: 'Order Now', type: 'URL', url: 'https://example.com/haldi' }],
+    },
+    email: null,
+    createdAt: ago(3 * 24 * 60),
+    updatedAt: ago(3 * 24 * 60),
+  },
+  {
+    id: `${META_MOCK_ID_PREFIX}studio-failed`,
+    brief: 'Sample pack that failed so the failure state can be tested.',
+    language: 'en',
+    status: 'FAILED',
+    error: 'Sarvam AI rate limit reached — please try again in a moment',
+    photos: [],
+    slides: [],
+    caption: null,
+    hashtags: [],
+    waTemplate: null,
+    email: null,
+    createdAt: ago(2 * 24 * 60),
+    updatedAt: ago(2 * 24 * 60),
+  },
+];
+
+export function getStudioMockPacks(): MockStudioPack[] {
+  return MOCK_STUDIO_PACKS.map((pack) => ({ ...pack, slides: [...pack.slides], hashtags: [...pack.hashtags] }));
+}

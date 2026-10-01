@@ -12,6 +12,7 @@ export const AI_USAGE_ACTIONS = [
   'generate_training',
   'call_summary',
   'support_help',
+  'ai_studio',
 ] as const;
 
 export type AiUsageAction = (typeof AI_USAGE_ACTIONS)[number];
@@ -29,6 +30,7 @@ export const AI_USAGE_LABELS: Record<AiUsageAction, string> = {
   generate_training: 'Write training answers',
   call_summary: 'Call summary',
   support_help: 'Help Center',
+  ai_studio: 'AI Studio',
 };
 
 export function canonicalAiUsageAction(action: string): AiUsageAction | string {

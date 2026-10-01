@@ -886,6 +886,70 @@ export const instagramApi = {
   },
 };
 
+export type StudioPackStatus = 'GENERATING' | 'READY' | 'FAILED';
+
+/** Visual theme key for a slide poster — rendered with CSS, no AI image generation. */
+export type StudioSlideStyle = 'none' | 'festival' | 'minimal' | 'modern' | 'premium';
+
+export interface StudioSlide {
+  title: string;
+  body: string;
+  /** Optional photo (from the pack's own uploads) shown behind the slide copy. */
+  photo?: string;
+  style?: StudioSlideStyle;
+}
+
+export interface StudioWaTemplate {
+  name: string | null;
+  body: string;
+  footer: string | null;
+  buttons: Array<{ text: string; type: 'URL' | 'QUICK_REPLY'; url?: string }>;
+}
+
+export interface StudioPack {
+  id: string;
+  brief: string;
+  language: string;
+  status: StudioPackStatus;
+  error: string | null;
+  slides: StudioSlide[];
+  photos: Array<{ url: string; name?: string }>;
+  caption: string | null;
+  hashtags: string[];
+  waTemplate: StudioWaTemplate | null;
+  email: { subject: string; body: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const studioApi = {
+  generate: (data: {
+    brief: string;
+    language: string;
+    slides: number;
+    carousel: boolean;
+    waTemplate: boolean;
+    email: boolean;
+    photos: Array<{ url: string; name?: string }>;
+  }) => api.post<{ success: true; data: StudioPack }>('/studio/generate', data),
+  list: (take = 20) =>
+    api.get<{ success: true; data: { packs: StudioPack[] } }>('/studio', {
+      params: { take: String(take) },
+    }),
+  get: (id: string) => api.get<{ success: true; data: StudioPack }>(`/studio/${id}`),
+  update: (
+    id: string,
+    data: Partial<{
+      caption: string;
+      emailSubject: string;
+      emailBody: string;
+      waBody: string;
+      slides: Array<{ title: string; body: string; photo?: string; style?: StudioSlideStyle }>;
+    }>,
+  ) => api.patch<{ success: true; data: StudioPack }>(`/studio/${id}`, data),
+  remove: (id: string) => api.delete<{ success: true; data: { ok: boolean } }>(`/studio/${id}`),
+};
+
 export const automationApi = {
   list: (params?: Record<string, string>) => api.get('/automations', { params }),
   create: (data: Record<string, unknown>) => api.post('/automations', data),

@@ -8,6 +8,7 @@ const CHAT_ACTIONS = new Set([
   'generate_personality',
   'generate_training',
   'instagram_caption',
+  'ai_studio',
 ]);
 
 const CALLING_ACTIONS = new Set(['calling_llm', 'stt', 'tts']);

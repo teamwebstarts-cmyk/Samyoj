@@ -38,7 +38,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
 
-    const [whatsappNumbers, contacts, teamMembers, testMessage, contentTemplates, campaignsWithTemplate] =
+    const [whatsappNumbers, contacts, teamMembers, testMessage, campaignsWithTemplate] =
       await Promise.all([
         prisma.whatsappNumber.count({ where: { organizationId: orgId, isActive: true } }),
         prisma.contact.count({ where: { organizationId: orgId } }),
@@ -49,21 +49,12 @@ router.get(
             conversation: { organizationId: orgId },
           },
         }),
-        prisma.contentDraft.count({
-          where: {
-            organizationId: orgId,
-            OR: [
-              { metaTemplateName: { not: null } },
-              { metaTemplateStatus: { not: null } },
-            ],
-          },
-        }),
         prisma.campaign.count({
           where: { organizationId: orgId, templateName: { not: '' } },
         }),
       ]);
 
-    const hasTemplateSignal = contentTemplates > 0 || campaignsWithTemplate > 0;
+    const hasTemplateSignal = campaignsWithTemplate > 0;
 
     const steps: OnboardingStep[] = [
       {
@@ -76,7 +67,7 @@ router.get(
       {
         id: 'approve_template',
         title: 'Add a message template',
-        description: 'Create a template in Content Studio or use one in a campaign',
+        description: 'Create a template in Templates or use one in a campaign',
         completed: hasTemplateSignal,
         href: '/templates',
       },
@@ -108,11 +99,11 @@ router.get(
       totalSteps: steps.length,
       stats: {
         whatsappNumbers,
-        templateCount: contentTemplates + campaignsWithTemplate,
+        templateCount: campaignsWithTemplate,
         contacts,
         teamMembers,
         testMessage,
-        approvedTemplate: contentTemplates + campaignsWithTemplate,
+        approvedTemplate: campaignsWithTemplate,
       },
     });
   })

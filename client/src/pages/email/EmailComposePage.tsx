@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Search,
   X,
@@ -91,6 +91,7 @@ function previewNodes(text: string, contact: EmailContact | null, empty: string)
 
 export default function EmailComposePage() {
   const { status, sends, templates: apiTemplates, contacts: apiContacts, loading, error: loadError, mockPreview, refresh } = useGmailWorkspace();
+  const location = useLocation();
   const mailboxConnected = status?.status === 'connected';
   const mailboxEmail = status?.email || '';
   const templates = apiTemplates;
@@ -122,8 +123,14 @@ export default function EmailComposePage() {
   );
   const [recipients, setRecipients] = useState<EmailContact[]>([]);
   const [templateId, setTemplateId] = useState('');
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
+  const [subject, setSubject] = useState(
+    () =>
+      ((location.state as { studioSubject?: string } | null)?.studioSubject || '').slice(0, SUBJECT_MAX),
+  );
+  const [message, setMessage] = useState(
+    () =>
+      ((location.state as { studioBody?: string } | null)?.studioBody || '').slice(0, MESSAGE_MAX),
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [panel, setPanel] = useState<'sent' | 'compose'>('compose');

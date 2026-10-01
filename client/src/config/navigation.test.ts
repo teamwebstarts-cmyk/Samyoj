@@ -31,10 +31,15 @@ describe('Meta navigation', () => {
     const messenger = facebook?.items.find((item) => item.to === '/facebook/inbox');
     expect(messenger?.label).toBe('Messenger');
 
-    const aiStudio = sections.find((s) => s.label === 'AI Studio');
-    expect(aiStudio?.items.map((i) => i.to)).toEqual(
+    const aiSection = sections.find((s) => s.label === 'AI');
+    expect(aiSection?.items.map((i) => i.to)).toEqual(
       expect.arrayContaining(['/ai-bot', '/automations', '/content-studio'])
     );
+
+    // Section heading must not repeat the page name (no "AI Studio" inside "AI Studio").
+    const studioItem = aiSection?.items.find((i) => i.to === '/content-studio');
+    expect(studioItem?.label).toBe('AI Studio');
+    expect(aiSection?.label).not.toBe(studioItem?.label);
 
     const contacts = sections.find((s) => s.label === 'Contacts');
     expect(contacts?.items.some((i) => i.to === '/contacts')).toBe(true);

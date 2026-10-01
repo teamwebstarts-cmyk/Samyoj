@@ -22,7 +22,7 @@ interface SidebarProps {
 /** Abbreviated section titles keep header height when collapsed so icons never jump up. */
 const SECTION_SHORT: Record<string, string> = {
   Channels: 'CH',
-  'AI Studio': 'AI',
+  AI: 'AI',
   Contacts: 'CON',
   WhatsApp: 'WA',
   Facebook: 'FB',
@@ -516,13 +516,13 @@ export default function Sidebar({
             }
 
             const sectionAccent: SidebarChannelAccent =
-              section.label === 'AI Studio'
+              section.label === 'AI'
                 ? 'studio'
                 : section.label
                   ? 'neutral'
                   : channelAccent;
             const sectionClass =
-              section.label === 'AI Studio' ? 'sidebar-section sidebar-section--studio' : 'sidebar-section';
+              section.label === 'AI' ? 'sidebar-section sidebar-section--studio' : 'sidebar-section';
 
             return (
               <div key={section.label || section.items[0]?.to || 'nav'} className={sectionClass}>
@@ -530,7 +530,7 @@ export default function Sidebar({
                   <SectionTitle
                     label={section.label}
                     collapsed={collapsed}
-                    accent={section.label === 'AI Studio' ? 'studio' : section.accent}
+                    accent={section.label === 'AI' ? 'studio' : section.accent}
                   />
                 ) : null}
                 <div className="flex flex-col gap-1">

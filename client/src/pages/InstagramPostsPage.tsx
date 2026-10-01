@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CalendarClock, FileText, RefreshCw, Send, Trash2 } from 'lucide-react';
 import PageShell from '../components/ui/PageShell';
 import { useAuth } from '../contexts/AuthContext';
@@ -98,6 +99,7 @@ export default function InstagramPostsPage() {
   const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
   const { enabled: mockEnabled } = useMetaMock();
   const isDesktop = useIsDesktopPanel();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [connected, setConnected] = useState<boolean | null>(null);
   const [handle, setHandle] = useState<string | null>(null);
@@ -183,6 +185,29 @@ export default function InstagramPostsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /* -------- AI Studio hand-off (?studioPack=<id>) --------
+     Prefills the composer with the pack caption. Media stays manual:
+     Studio v1 produces slide copy, not image files. */
+  useEffect(() => {
+    const studioPackId = searchParams.get('studioPack');
+    if (!studioPackId) return;
+    try {
+      const raw = sessionStorage.getItem('aiStudioHandoff');
+      if (raw) {
+        const handoff = JSON.parse(raw) as { packId?: string; caption?: string };
+        if (handoff.packId === studioPackId && handoff.caption) {
+          openNew('CAROUSEL');
+          setCaption(handoff.caption.slice(0, CAPTION_MAX));
+          toastSuccess('Caption added from AI Studio. Add your slides, then publish here.');
+        }
+      }
+    } catch {
+      /* ignore malformed handoff */
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (connected) void loadLibrary();

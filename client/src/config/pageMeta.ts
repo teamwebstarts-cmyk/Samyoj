@@ -73,8 +73,8 @@ export const PAGE_META: Record<string, PageMeta> = {
     description: 'Pre-approved Meta templates you can add and send immediately',
   },
   '/content-studio': {
-    title: 'Content Studio',
-    description: 'Content Studio',
+    title: 'AI Studio',
+    description: 'Describe your idea — get channel-ready content to use in Posts, Templates, and Compose',
   },
   '/commerce': {
     title: 'Orders',
