@@ -1,6 +1,13 @@
 import { Link2, MessageCircle, MessageSquare, Send } from 'lucide-react';
+import InfoTip from '../../ui/InfoTip';
 
 const KEYWORD_SUGGESTIONS = ['PRICE', 'LINK', 'OFFER', 'DETAILS', 'YES'] as const;
+
+const KEYWORD_MATCH_TIP =
+  'Matches whole words only (not case-sensitive). “price” matches “What’s the price?” but not “priced”.';
+
+const PRIVATE_DM_TIP =
+  'Instagram allows one private reply per commenter, within 7 days of their comment. Use this for links or offers.';
 
 export type CommentAutomationFieldsProps = {
   idPrefix: string;
@@ -15,6 +22,8 @@ export type CommentAutomationFieldsProps = {
   replyError?: boolean;
   /** Shorter layout for the composer accordion */
   compact?: boolean;
+  /** Hide the 3-step flow strip (post automation panel) */
+  hideFlow?: boolean;
 };
 
 export default function CommentAutomationFields({
@@ -29,6 +38,7 @@ export default function CommentAutomationFields({
   keywordError = false,
   replyError = false,
   compact = false,
+  hideFlow = false,
 }: CommentAutomationFieldsProps) {
   const keywordId = `${idPrefix}-keyword`;
   const publicId = `${idPrefix}-public`;
@@ -36,6 +46,7 @@ export default function CommentAutomationFields({
   const kw = keyword.trim();
   const hasPublic = Boolean(publicReply.trim());
   const hasDm = Boolean(dm.trim());
+  const showFlow = !compact && !hideFlow;
 
   const applySuggestion = (word: string) => {
     if (disabled) return;
@@ -44,33 +55,36 @@ export default function CommentAutomationFields({
 
   return (
     <div className={`igp-auto-fields ${compact ? 'igp-auto-fields--compact' : ''}`}>
-      <div className="igp-auto-fields__flow" aria-hidden={compact}>
-        <div className="igp-auto-fields__flow-step">
-          <span className="igp-auto-fields__flow-ico">
-            <MessageSquare className="h-3.5 w-3.5" />
-          </span>
-          <span>Comment matches keyword</span>
+      {showFlow ? (
+        <div className="igp-auto-fields__flow" aria-hidden={compact}>
+          <div className="igp-auto-fields__flow-step">
+            <span className="igp-auto-fields__flow-ico">
+              <MessageSquare className="h-3.5 w-3.5" />
+            </span>
+            <span>Keyword in comment</span>
+          </div>
+          <span className="igp-auto-fields__flow-arrow" />
+          <div className="igp-auto-fields__flow-step">
+            <span className="igp-auto-fields__flow-ico igp-auto-fields__flow-ico--green">
+              <Send className="h-3.5 w-3.5" />
+            </span>
+            <span>Comment reply (optional)</span>
+          </div>
+          <span className="igp-auto-fields__flow-arrow" />
+          <div className="igp-auto-fields__flow-step">
+            <span className="igp-auto-fields__flow-ico igp-auto-fields__flow-ico--violet">
+              <MessageCircle className="h-3.5 w-3.5" />
+            </span>
+            <span>Private DM (optional)</span>
+          </div>
         </div>
-        <span className="igp-auto-fields__flow-arrow" />
-        <div className="igp-auto-fields__flow-step">
-          <span className="igp-auto-fields__flow-ico igp-auto-fields__flow-ico--green">
-            <Send className="h-3.5 w-3.5" />
-          </span>
-          <span>Public reply (optional)</span>
-        </div>
-        <span className="igp-auto-fields__flow-arrow" />
-        <div className="igp-auto-fields__flow-step">
-          <span className="igp-auto-fields__flow-ico igp-auto-fields__flow-ico--violet">
-            <MessageCircle className="h-3.5 w-3.5" />
-          </span>
-          <span>Private DM (optional)</span>
-        </div>
-      </div>
+      ) : null}
 
       <div className={`igp-field ${keywordError ? 'igp-field--error' : ''}`}>
-        <label htmlFor={keywordId}>
-          Trigger keyword <span>word in their comment</span>
-        </label>
+        <div className="igp-field__label-row">
+          <label htmlFor={keywordId}>Trigger keyword</label>
+          <InfoTip content={KEYWORD_MATCH_TIP} label="How keyword matching works" />
+        </div>
         <input
           id={keywordId}
           name={keywordId}
@@ -97,19 +111,21 @@ export default function CommentAutomationFields({
           ))}
         </div>
         {keywordError ? (
-          <span className="igp-field__error">Add the word to match in comments.</span>
-        ) : (
-          <p className="igp-field__hint">Case-insensitive · matches whole word (e.g. “price” in “What’s the price?”)</p>
-        )}
+          <span className="igp-field__error">Add a keyword to match in comments.</span>
+        ) : null}
       </div>
 
       <div className="igp-auto-fields__responses">
         <div className={`igp-auto-fields__card ${replyError ? 'igp-auto-fields__card--error' : ''}`}>
-          <label className="igp-auto-fields__card-head" htmlFor={publicId}>
+          <div className="igp-auto-fields__card-head">
             <Send className="h-3.5 w-3.5 text-[var(--igp-green)]" aria-hidden />
-            <strong>Public reply</strong>
-            <span>Visible under their comment</span>
-          </label>
+            <div className="igp-auto-fields__card-titles">
+              <label htmlFor={publicId}>
+                <strong>Comment reply</strong>
+              </label>
+              <span>Shown under their comment</span>
+            </div>
+          </div>
           <textarea
             id={publicId}
             name={publicId}
@@ -123,11 +139,16 @@ export default function CommentAutomationFields({
         </div>
 
         <div className={`igp-auto-fields__card ${replyError ? 'igp-auto-fields__card--error' : ''}`}>
-          <label className="igp-auto-fields__card-head" htmlFor={dmId}>
+          <div className="igp-auto-fields__card-head">
             <Link2 className="h-3.5 w-3.5 text-[var(--igp-violet)]" aria-hidden />
-            <strong>Private DM</strong>
-            <span>Only the commenter · links & offers OK</span>
-          </label>
+            <div className="igp-auto-fields__card-titles">
+              <label htmlFor={dmId} className="igp-field__label-row igp-field__label-row--tight">
+                <strong>Private DM</strong>
+                <InfoTip content={PRIVATE_DM_TIP} label="Private reply rules" />
+              </label>
+              <span>Only the commenter sees this</span>
+            </div>
+          </div>
           <textarea
             id={dmId}
             name={dmId}
@@ -135,38 +156,35 @@ export default function CommentAutomationFields({
             autoComplete="off"
             value={dm}
             disabled={disabled}
-            placeholder="Hi! Here’s the price list: https://…"
+            placeholder="Hi! Here’s the link: https://…"
             onChange={(event) => onDmChange(event.target.value)}
           />
-          <p className="igp-field__hint">
-            Sent via Instagram’s private reply (within 7 days of their comment). One DM per commenter per post.
-          </p>
         </div>
       </div>
 
       {replyError ? (
-        <span className="igp-field__error">Add a public reply, a private DM, or both.</span>
+        <span className="igp-field__error">Add a comment reply, a private DM, or both.</span>
       ) : null}
 
       <div className="igp-auto-live" aria-live="polite">
         <p className="igp-auto-live__label">Preview</p>
         <ol className="igp-auto-live__list">
           <li>
-            Someone comments <em>{kw ? `“…${kw}…”` : 'with your keyword'}</em> on this post
+            Comment includes <em>{kw || 'your keyword'}</em>
           </li>
           {hasPublic ? (
             <li>
-              Samyoj posts publicly: <span className="igp-auto-live__quote">{publicReply.trim()}</span>
+              Reply on post: <span className="igp-auto-live__quote">{publicReply.trim()}</span>
             </li>
           ) : (
-            <li className="igp-auto-live__muted">No public reply (skip if you only use DM)</li>
+            <li className="igp-auto-live__muted">No comment reply</li>
           )}
           {hasDm ? (
             <li>
-              Samyoj sends a private DM: <span className="igp-auto-live__quote">{dm.trim()}</span>
+              DM: <span className="igp-auto-live__quote">{dm.trim()}</span>
             </li>
           ) : (
-            <li className="igp-auto-live__muted">No private DM (skip if public reply is enough)</li>
+            <li className="igp-auto-live__muted">No DM</li>
           )}
         </ol>
       </div>

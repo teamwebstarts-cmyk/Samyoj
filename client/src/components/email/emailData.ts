@@ -130,6 +130,13 @@ export function formatDate(value: string) {
     : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+export function gmailCallbackErrorFromSearch(search: string): string {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  if (params.get('status') !== 'failed') return '';
+  const reason = params.get('reason')?.trim();
+  return reason || 'Gmail could not connect. Click Connect Gmail again.';
+}
+
 export function statusLabel(status: GmailSend['status']) {
   switch (status) {
     case 'accepted':
@@ -255,7 +262,7 @@ export function useGmailWorkspace(): GmailWorkspace {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    if (reloadKey === 0) setLoading(true);
     setError('');
     void gmailApi.status()
       .then(async (statusResponse) => {
@@ -298,6 +305,14 @@ export function useGmailWorkspace(): GmailWorkspace {
       active = false;
     };
   }, [reloadKey, mockEnabled]);
+
+  useEffect(() => {
+    if (mockPreview) return;
+    const pending = sends.some((send) => send.status === 'queued' || send.status === 'sending');
+    if (!pending) return;
+    const timer = window.setInterval(() => setReloadKey((value) => value + 1), 8_000);
+    return () => window.clearInterval(timer);
+  }, [sends, mockPreview]);
 
   const refresh = useCallback(() => setReloadKey((value) => value + 1), []);
   return { status, contacts, templates, sends, loading, error, mockPreview, refresh };

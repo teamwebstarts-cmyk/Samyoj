@@ -812,17 +812,41 @@ export async function dispatchInstagramWebhookFields(
       const message = event.message as Record<string, unknown> | undefined;
       const field = 'messages';
       const isSelf = (event as { is_self?: boolean }).is_self === true;
-      if (!message || message.is_echo === true) continue;
-      if (isSelf) continue;
+      if (!message || message.is_echo === true) {
+        log.info('Instagram DM skipped', {
+          reason: !message ? 'missing_message' : 'echo',
+          entryId: entryIgId ?? null,
+        });
+        continue;
+      }
+      if (isSelf) {
+        log.info('Instagram DM skipped', { reason: 'self', entryId: entryIgId ?? null });
+        continue;
+      }
       const text = typeof message.text === 'string' ? message.text.trim() : '';
       const attachment = channelMessageAttachment(message);
       const content = text || attachment?.content || '';
-      if (!content || !sender) continue;
-      if (sender === entryIgId) continue;
+      if (!content || !sender) {
+        log.info('Instagram DM skipped', {
+          reason: !sender ? 'missing_sender' : 'empty',
+          entryId: entryIgId ?? null,
+        });
+        continue;
+      }
+      if (sender === entryIgId) {
+        log.info('Instagram DM skipped', { reason: 'sender_is_business', entryId: entryIgId ?? null });
+        continue;
+      }
 
       const channel = await resolveOrgFromIgChannel(entryIgId);
       if (!channel) {
         unmatched += 1;
+        log.warn('Instagram DM webhook unmatched — no active Channel', {
+          field,
+          entryId: entryIgId ?? null,
+          entryIdType: typeof entry.id,
+          sender,
+        });
         continue;
       }
 

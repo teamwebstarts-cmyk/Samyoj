@@ -4,10 +4,11 @@ import { activeGmailAttachmentWhere, activeGmailSendWhere, gmailSendSchema } fro
 describe('Gmail send recipient contract', () => {
   const contact = '11111111-1111-4111-8111-111111111111';
 
-  it('requires exactly one contact for each Gmail v1 send', () => {
+  it('requires one to fifty contacts per send request', () => {
+    const other = '22222222-2222-4222-8222-222222222222';
     expect(gmailSendSchema.safeParse({ contactIds: [contact] }).success).toBe(true);
+    expect(gmailSendSchema.safeParse({ contactIds: [contact, other] }).success).toBe(true);
     expect(gmailSendSchema.safeParse({ contactIds: [] }).success).toBe(false);
-    expect(gmailSendSchema.safeParse({ contactIds: [contact, contact] }).success).toBe(false);
   });
 });
 

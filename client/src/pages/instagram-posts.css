@@ -3397,6 +3397,25 @@ button.igp-stat--on:focus-visible {
   font-weight: 600;
   color: var(--igp-muted);
 }
+.igp-field__label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+}
+.igp-field__label-row label,
+.igp-field__label-row > label {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--igp-ink);
+}
+.igp-field__label-row--tight {
+  margin-bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 /* Shared comment automation fields (composer + automation tab) */
 .igp-auto-fields {
@@ -3509,23 +3528,31 @@ button.igp-stat--on:focus-visible {
   box-shadow: 0 0 0 1px rgba(225, 48, 108, 0.12);
 }
 .igp-auto-fields__card-head {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 6px;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.igp-auto-fields__card-head > svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.igp-auto-fields__card-titles {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+.igp-auto-fields__card-titles label {
+  margin: 0;
   cursor: pointer;
 }
-.igp-auto-fields__card-head svg {
-  grid-row: 1 / span 2;
-}
-.igp-auto-fields__card-head strong {
+.igp-auto-fields__card-titles strong {
   font-size: 11.5px;
   font-weight: 800;
   color: var(--igp-ink);
 }
-.igp-auto-fields__card-head span {
-  grid-column: 2;
+.igp-auto-fields__card-titles > span {
   font-size: 10px;
   font-weight: 600;
   line-height: 1.35;
@@ -3533,16 +3560,17 @@ button.igp-stat--on:focus-visible {
 }
 .igp-auto-fields__card textarea {
   width: 100%;
-  min-height: 72px;
+  min-height: 76px;
   border: 1px solid var(--igp-line-strong);
-  border-radius: 10px;
-  background: var(--igp-wash);
-  padding: 8px 10px;
+  border-radius: 11px;
+  background: #fff;
+  padding: 10px 11px;
   font-size: 12.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--igp-ink);
   resize: vertical;
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .igp-auto-fields__card textarea:focus {
   border-color: var(--igp-accent);

@@ -20,6 +20,12 @@ export function gmailRedirectUri(): string {
   return process.env.GMAIL_REDIRECT_URI?.trim() || `${config.baseUrl.replace(/\/$/, '')}/api/gmail/oauth/callback`;
 }
 
+export function gmailOAuthFailureRedirect(reason: string, returnUri?: string): string {
+  const base = (returnUri?.trim() || `${config.clientUrl.replace(/\/$/, '')}/settings?tab=channels&gmail=1`).split('#')[0];
+  const joiner = base.includes('?') ? '&' : '?';
+  return `${base}${joiner}status=failed&reason=${encodeURIComponent(reason)}`;
+}
+
 export function googleCredentials(): { clientId: string; clientSecret: string } {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || '';
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || '';
@@ -36,7 +42,7 @@ export function signGmailOAuthState(
       nonce: crypto.randomBytes(24).toString('hex'),
       type: 'gmail_connect',
       redirectUri: gmailRedirectUri(),
-      returnUri: `${config.clientUrl.replace(/\/$/, '')}/settings?gmail=1`,
+      returnUri: `${config.clientUrl.replace(/\/$/, '')}/settings?tab=channels&gmail=1`,
     },
     config.jwt.oauthStateSecret,
     { algorithm: 'HS256', expiresIn: '10m', audience: 'samyoj-gmail-oauth' }

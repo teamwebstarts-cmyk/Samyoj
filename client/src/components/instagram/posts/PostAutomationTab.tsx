@@ -1,16 +1,6 @@
 import { useState } from 'react';
-import {
-  AlertCircle,
-  CalendarClock,
-  CheckCircle2,
-  Globe,
-  Info,
-  MessageSquare,
-  RefreshCw,
-  Type as TypeIcon,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, MessageSquare, RefreshCw } from 'lucide-react';
 import CommentAutomationFields from './CommentAutomationFields';
-import { statusLabel, statusModifier, type MediaType } from './types';
 
 type AutomationTabProps = {
   /** igMediaId present — automation can be saved for this post. */
@@ -31,17 +21,6 @@ type AutomationTabProps = {
   /** Post row exists (draft saved at least once) — standalone Save is allowed. */
   postPersisted: boolean;
   onSave: () => void;
-  summary: {
-    status: string | null;
-    mediaType: MediaType;
-    dateLabel: string | null;
-  };
-};
-
-const TYPE_LABEL: Record<MediaType, string> = {
-  IMAGE: 'Image',
-  REELS: 'Reel',
-  CAROUSEL: 'Carousel',
 };
 
 /**
@@ -63,7 +42,6 @@ export default function PostAutomationTab({
   autoId,
   postPersisted,
   onSave,
-  summary,
 }: AutomationTabProps) {
   const [showErrors, setShowErrors] = useState(false);
   const keywordError = showErrors && !keyword.trim();
@@ -110,36 +88,10 @@ export default function PostAutomationTab({
           ) : null}
         </div>
         {!ready && pendingOk ? (
-          <p className="igp-auto__sub">Saves now · runs when the post is live on Instagram</p>
+          <p className="igp-auto__sub">Saved with the post · runs when it is live</p>
         ) : ready ? (
-          <p className="igp-auto__sub">Keyword on this post → public comment reply and/or private DM via Meta</p>
+          <p className="igp-auto__sub">Keyword in a comment → reply and/or DM</p>
         ) : null}
-      </div>
-
-      <div className="igp-auto__chips">
-        {summary.status ? (
-          <span className="igp-auto__chip">
-            <span
-              className={`igp-status igp-status--${statusModifier(summary.status)} igp-detail__status`}
-            >
-              {isRemote ? 'Live' : statusLabel(summary.status)}
-            </span>
-          </span>
-        ) : (
-          <span className="igp-auto__chip">New post</span>
-        )}
-        <span className="igp-auto__chip">
-          <TypeIcon className="h-3 w-3" />
-          {TYPE_LABEL[summary.mediaType]}
-        </span>
-        <span className="igp-auto__chip">
-          <CalendarClock className="h-3 w-3" />
-          {summary.status === 'SCHEDULED' ? (summary.dateLabel ?? 'Scheduled') : (summary.dateLabel ?? 'Not scheduled')}
-        </span>
-        <span className="igp-auto__chip">
-          <Globe className="h-3 w-3" />
-          Public
-        </span>
       </div>
 
       <section className="igp-auto__card igp-auto__card--flat">
@@ -161,6 +113,7 @@ export default function PostAutomationTab({
           disabled={!canEdit || saving}
           keywordError={keywordError}
           replyError={replyError}
+          hideFlow
         />
 
         {isMock ? (
@@ -171,11 +124,7 @@ export default function PostAutomationTab({
         ) : !postPersisted ? (
           <p className="igp-tip igp-tip--compact">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--igp-accent)]" />
-            <span>
-              Set your keyword and replies here. They also save when you use <strong>Save as Draft</strong>,{' '}
-              <strong>Schedule</strong>, or <strong>Publish</strong> from Create. Use Save below after the post is
-              saved once.
-            </span>
+            <span>Saves with Draft, Schedule, or Publish. Use Save below once the post exists.</span>
           </p>
         ) : null}
       </section>
@@ -189,7 +138,7 @@ export default function PostAutomationTab({
           onClick={handleSave}
         >
           {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          Save comment automation
+          Save automation
         </button>
       ) : null}
     </div>

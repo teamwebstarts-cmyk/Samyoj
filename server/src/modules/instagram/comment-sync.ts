@@ -3,8 +3,28 @@ import { listInstagramMediaIds, listMediaComments } from '../facebook/page-clien
 import { isOwnInstagramComment, metaScalarId } from '../whatsapp/webhook-dispatcher';
 import { ingestInstagramComment } from './comment-ingest';
 import { instagramCommentRetentionCutoff } from './comment-retention';
+import getRedis from '../../config/redis';
 
 const log = createModuleLogger('instagram-comment-sync');
+const SYNC_LOCK_PREFIX = 'ig-comment-sync:';
+const SYNC_LOCK_TTL_SEC = 120;
+
+export async function withInstagramCommentSyncLock<T>(
+  channelId: string,
+  fn: () => Promise<T>
+): Promise<T | 'busy'> {
+  const redis = getRedis();
+  const key = `${SYNC_LOCK_PREFIX}${channelId}`;
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const acquired = await redis.set(key, token, 'EX', SYNC_LOCK_TTL_SEC, 'NX');
+  if (acquired !== 'OK') return 'busy';
+  try {
+    return await fn();
+  } finally {
+    const current = await redis.get(key);
+    if (current === token) await redis.del(key);
+  }
+}
 
 /**
  * Pull comments already on Instagram into the list.

@@ -15,6 +15,26 @@ const STATE_KEY = 'fb_page_oauth_state';
 
 type PageOption = { id: string; name: string };
 
+function facebookConnectNotice(result: {
+  pageName?: unknown;
+  subscribed?: unknown;
+  subscribeError?: unknown;
+  igSubscribed?: unknown;
+}): string {
+  const connectedName =
+    typeof result.pageName === 'string' ? `Connected ${result.pageName}` : 'Facebook Page connected';
+  const parts = [connectedName];
+  if (result.subscribed === false && typeof result.subscribeError === 'string') {
+    parts.push('Page message subscribe failed — reconnect or check App Review.');
+  }
+  if (result.igSubscribed === false) {
+    parts.push(
+      'Instagram DMs are not subscribed. Comments can still sync; Meta must allow Instagram messaging on the app.',
+    );
+  }
+  return parts.join(' ');
+}
+
 const inflight = new Map<string, Promise<Record<string, unknown>>>();
 
 function exchangeOnce(code: string, state: string) {
@@ -87,13 +107,7 @@ export default function FacebookCallbackPage() {
         sessionStorage.removeItem(CODE_KEY);
         sessionStorage.removeItem(STATE_KEY);
         setStatus('success');
-        const connectedName =
-          typeof result.pageName === 'string' ? `Connected ${result.pageName}` : 'Facebook Page connected';
-        setMessage(
-          result.subscribed === false && typeof result.subscribeError === 'string'
-            ? `${connectedName}. Leadgen subscribe failed — reconnect or check App Review permissions.`
-            : connectedName
-        );
+        setMessage(facebookConnectNotice(result));
         window.setTimeout(() => {
           const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
           sessionStorage.removeItem('fb_connect_return');
@@ -116,15 +130,7 @@ export default function FacebookCallbackPage() {
       sessionStorage.removeItem(CODE_KEY);
       sessionStorage.removeItem(STATE_KEY);
       setStatus('success');
-      const connectedName =
-        typeof data.data.pageName === 'string'
-          ? `Connected ${data.data.pageName}`
-          : 'Facebook Page connected';
-      setMessage(
-        data.data.subscribed === false && typeof data.data.subscribeError === 'string'
-          ? `${connectedName}. Leadgen subscribe failed — reconnect or check App Review permissions.`
-          : connectedName
-      );
+      setMessage(facebookConnectNotice(data.data));
         window.setTimeout(() => {
           const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
           sessionStorage.removeItem('fb_connect_return');

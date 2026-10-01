@@ -134,17 +134,15 @@ function FbOverview({
   subtitle,
   href,
   stats,
-  empty,
 }: {
   icon: ReactNode;
   title: string;
   subtitle: string;
   href: string;
   stats: Array<{ value: string; label: string; extra?: ReactNode }>;
-  empty?: { title: string; description: string; action: string };
 }) {
   return (
-    <section className="overflow-hidden rounded-[18px] border border-[#e6ebf2] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03),0_4px_14px_rgba(15,23,42,0.035)]">
+    <section className="flex h-full flex-col overflow-hidden rounded-[18px] border border-[#e6ebf2] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03),0_4px_14px_rgba(15,23,42,0.035)]">
       <div className="flex items-center justify-between gap-3 border-b border-[#eef2f7] px-3.5 py-3.5">
         <div className="flex min-w-0 items-center gap-3.5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#d3e3fb] bg-gradient-to-br from-[#eef5ff] to-[#dceafe] text-[#1877F2]">{icon}</span>
@@ -152,31 +150,17 @@ function FbOverview({
         </div>
         <Link to={href} aria-label={`Open ${title}`} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dbe6f7] bg-[#f7faff] text-[#1877F2]"><ArrowRight className="h-3.5 w-3.5" /></Link>
       </div>
-      {empty ? (
-        <div className="px-3 py-3">
-          <ChannelEmptyState
-            icon={icon}
-            title={empty.title}
-            description={empty.description}
-            to={href}
-            action={empty.action}
-            accent="facebook"
-            compact
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 items-start">
-          {stats.map((stat) => (
-            <div key={stat.label} className="relative flex min-w-0 flex-col px-4 py-3.5 [&+&]:before:absolute [&+&]:before:bottom-3.5 [&+&]:before:left-0 [&+&]:before:top-3.5 [&+&]:before:w-px [&+&]:before:bg-[#eef2f7]">
-              <strong className="block text-[17px] font-extrabold leading-none tabular-nums text-slate-950">
-                {stat.value === '—' ? '0' : stat.value}
-              </strong>
-              <p className="mt-1 truncate text-[12px] font-medium text-slate-500">{stat.label}</p>
-              {stat.extra ? <div className="mt-1">{stat.extra}</div> : null}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid min-h-[76px] flex-1 grid-cols-3 items-start">
+        {stats.map((stat) => (
+          <div key={stat.label} className="relative flex min-w-0 flex-col px-4 py-3.5 [&+&]:before:absolute [&+&]:before:bottom-3.5 [&+&]:before:left-0 [&+&]:before:top-3.5 [&+&]:before:w-px [&+&]:before:bg-[#eef2f7]">
+            <strong className="block text-[17px] font-extrabold leading-none tabular-nums text-slate-950">
+              {stat.value === '—' ? '0' : stat.value}
+            </strong>
+            <p className="mt-1 truncate text-[12px] font-medium text-slate-500">{stat.label}</p>
+            {stat.extra ? <div className="mt-1.5 flex min-h-[22px] items-center">{stat.extra}</div> : null}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -206,7 +190,6 @@ function MessengerCard({
         { value: unique.toLocaleString(), label: 'New contacts' },
         { value: '0', label: 'Active automations' },
       ]}
-      empty={total === 0 ? { title: 'No Messenger data yet', description: 'Your first customer message will appear here.', action: 'Open Messenger' } : undefined}
     />
   );
 }
@@ -223,7 +206,6 @@ function AdsCard({ snapshot, periodLabel }: { snapshot: AdsSnapshot | null; peri
         { value: (snapshot?.leads ?? 0).toLocaleString(), label: 'Leads' },
         { value: snapshot ? money(snapshot.cpl ?? 0, snapshot.currency) : '—', label: 'Cost per lead' },
       ]}
-      empty={!snapshot ? { title: 'Ads data is not available yet', description: 'Connect or open Meta Ads to start loading performance data.', action: 'Open Ads' } : undefined}
     />
   );
 }
@@ -594,21 +576,40 @@ function InstagramRecentActivity({
       <div className="mb-4 flex items-center justify-between"><h3 className="text-[15.5px] font-extrabold tracking-[-0.01em]">Recent activity</h3><Link to="/instagram/inbox" className="text-[12px] font-bold text-blue-500">View all →</Link></div>
       <div className="space-y-3.5">
         {activity.map((item, index) => {
-          const lead =
-            item.kind === 'comment' ? (
-              <InstagramCommentPostThumb row={item.row} />
-            ) : (
+          if (item.kind === 'comment') {
+            const name =
+              stringValue(item.row, 'fromUsername', 'fromName', 'username', 'name') || 'Instagram user';
+            const text = stringValue(item.row, 'text', 'message', 'caption') || 'New comment';
+            const postCaption = (commentMediaFromRow(item.row)?.caption || '').trim();
+            return (
+              <Link key={`comment-${name}-${index}`} to="/instagram/comments" className="flex items-center gap-3">
+                <InstagramCommentPostThumb row={item.row} />
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-[13px]">{name}</strong>
+                  <small className="block truncate text-[12px] text-slate-500">{text}</small>
+                  {postCaption ? (
+                    <small className="mt-0.5 block truncate text-[11px] font-medium text-slate-400">
+                      on: {postCaption}
+                    </small>
+                  ) : null}
+                </span>
+                <span className="shrink-0 text-[11px] font-medium text-slate-400">{item.time}</span>
+                {item.unread ? <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
+              </Link>
+            );
+          }
+          return (
+            <Link key={`dm-${index}`} to="/instagram/inbox" className="flex items-center gap-3">
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.wrap}`}>
                 <item.icon className="h-4 w-4" />
               </span>
-            );
-          return (
-            <div key={`${item.title}-${index}`} className="flex items-center gap-3">
-              {lead}
-              <span className="min-w-0 flex-1"><strong className="block truncate text-[13px]">{item.title}</strong><small className="block truncate text-[12px] text-slate-500">{item.subtitle}</small></span>
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-[13px]">{item.title}</strong>
+                <small className="block truncate text-[12px] text-slate-500">{item.subtitle}</small>
+              </span>
               <span className="shrink-0 text-[11px] font-medium text-slate-400">{item.time}</span>
               {item.unread ? <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
-            </div>
+            </Link>
           );
         })}
         {!activity.length ? (
@@ -1021,7 +1022,7 @@ export default function DashboardChannelHome({
         />
         {fbLoading && !fbLoadedRef.current && conversations.length === 0 ? <ChannelDataSkeleton channel="facebook" /> : (
           <>
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-2">
               <MessengerCard conversations={conversations} total={filteredFbTotal} period={period} />
               <AdsCard snapshot={snapshot} periodLabel={periodLabel} />
             </div>

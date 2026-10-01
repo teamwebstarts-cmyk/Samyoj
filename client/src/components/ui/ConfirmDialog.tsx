@@ -84,6 +84,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const inFlightRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -91,6 +92,14 @@ export default function ConfirmDialog({
   const Icon = icon ?? styles.defaultIcon;
   const DetailIcon = variant === 'danger' ? XCircle : Info;
   const PositiveIcon = CheckCircle2;
+
+  useEffect(() => {
+    if (!loading) inFlightRef.current = false;
+  }, [loading]);
+
+  useEffect(() => {
+    if (!open) inFlightRef.current = false;
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -221,7 +230,11 @@ export default function ConfirmDialog({
             </AppButton>
             <AppButton
               variant={variant === 'danger' ? 'danger' : 'primary'}
-              onClick={onConfirm}
+              onClick={() => {
+                if (loading || inFlightRef.current) return;
+                inFlightRef.current = true;
+                onConfirm();
+              }}
               loading={loading}
               disabled={loading}
               fullWidth

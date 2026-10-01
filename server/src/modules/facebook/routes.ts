@@ -192,6 +192,9 @@ router.post(
         pageName: saved.pageName,
         subscribed: saved.subscribed,
         subscribeError: saved.subscribeError,
+        igUserId: saved.igUserId,
+        igSubscribed: saved.igSubscribed,
+        igSubscribeError: saved.igSubscribeError,
       });
     }
 
@@ -250,6 +253,9 @@ router.post(
       pageName: saved.pageName,
       subscribed: saved.subscribed,
       subscribeError: saved.subscribeError,
+      igUserId: saved.igUserId,
+      igSubscribed: saved.igSubscribed,
+      igSubscribeError: saved.igSubscribeError,
     });
   })
 );

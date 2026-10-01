@@ -31,6 +31,14 @@ vi.mock('./page-client', () => ({
   subscribeInstagramAccount: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../config/redis', () => ({
+  default: () => ({
+    set: vi.fn().mockResolvedValue('OK'),
+    get: vi.fn().mockResolvedValue(null),
+    del: vi.fn().mockResolvedValue(1),
+  }),
+}));
+
 const channelMock = vi.mocked(prisma.channel);
 
 describe('saveFacebookPageChannel', () => {

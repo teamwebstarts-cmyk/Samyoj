@@ -25,7 +25,6 @@ import {
   REMOTE_PREFIX,
   VIDEO_MAX_MB,
   countHashtags,
-  formatPostDate,
   isRemoteId,
   type LibraryItem,
   type MediaItem,
@@ -125,6 +124,7 @@ export default function InstagramPostsPage() {
   const [scheduleLocal, setScheduleLocal] = useState('');
   const [scheduleError, setScheduleError] = useState<ScheduleError>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [mediaUpload, setMediaUpload] = useState<MediaUploadState | null>(null);
 
   const [studioOpen, setStudioOpen] = useState(false);
@@ -488,6 +488,12 @@ export default function InstagramPostsPage() {
       toastError('Add a comment word, plus a public reply or a private DM.');
       return;
     }
+    const nested = Boolean(opts);
+    if (!nested) {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setSaving(true);
+    }
     const config: Record<string, string> = {
       platform: 'IG',
       keyword: autoKeyword.trim(),
@@ -499,9 +505,12 @@ export default function InstagramPostsPage() {
     } else if (postId) {
       config.igPostId = postId;
     } else {
+      if (!nested) {
+        savingRef.current = false;
+        setSaving(false);
+      }
       return;
     }
-    setSaving(true);
     try {
       const savedName = `Post comment · ${autoKeyword.trim()}`;
       if (autoId) {
@@ -527,7 +536,10 @@ export default function InstagramPostsPage() {
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not save comment automation');
     } finally {
-      setSaving(false);
+      if (!nested) {
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   };
 
@@ -596,6 +608,8 @@ export default function InstagramPostsPage() {
       scheduledAt = new Date(scheduleLocal).toISOString();
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const payload = { ...body, scheduledAt: mode === 'draft' ? null : scheduledAt };
@@ -626,6 +640,7 @@ export default function InstagramPostsPage() {
     } catch (err) {
       toastError(getErrorMessage(err) || (mode === 'now' ? 'Could not publish post' : 'Could not save post'));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -728,11 +743,6 @@ export default function InstagramPostsPage() {
     posts.length === 0 &&
     filter === 'all';
 
-  const automationSummaryDate =
-    remoteItem
-      ? null
-      : formatPostDate(selected?.scheduledAt || selected?.publishedAt || selected?.createdAt);
-
   /* ---------------- footer actions ---------------- */
 
   const renderFooter = () => {
@@ -816,11 +826,6 @@ export default function InstagramPostsPage() {
           onDmChange={onAutoDmChange}
           autoId={autoId}
           onSave={() => void savePostAutomation()}
-          summary={{
-            status: remoteItem ? 'PUBLISHED' : selected?.status ?? null,
-            mediaType: remoteItem ? 'IMAGE' : mediaType,
-            dateLabel: automationSummaryDate,
-          }}
         />
       );
     }

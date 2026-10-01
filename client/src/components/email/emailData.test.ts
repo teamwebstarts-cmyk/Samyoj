@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMAIL_TEMPLATE_LIBRARY,
+  gmailCallbackErrorFromSearch,
   nextTemplateName,
   safeHtmlFromMarkup,
 } from './emailData';
@@ -25,5 +26,12 @@ describe('email data helpers', () => {
     expect(nextTemplateName('Welcome', [
       { id: '1', name: 'Welcome', subject: '', textBody: '', htmlBody: null, createdAt: '', updatedAt: '' },
     ])).toBe('Welcome (Copy)');
+  });
+
+  it('reads a failed Gmail OAuth callback reason', () => {
+    expect(
+      gmailCallbackErrorFromSearch('gmail=1&status=failed&reason=Invalid%20or%20expired%20Gmail%20connection%20state')
+    ).toMatch(/expired Gmail connection state/);
+    expect(gmailCallbackErrorFromSearch('gmail=1&status=connected')).toBe('');
   });
 });

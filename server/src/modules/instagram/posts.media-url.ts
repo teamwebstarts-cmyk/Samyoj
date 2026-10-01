@@ -47,3 +47,12 @@ export function mediaUrlForMeta(url: string): string {
   if (!relative) return url.trim();
   return getPublicMediaUrl(relative, publicApiOrigin());
 }
+
+/** Fresh signed URL for browser previews (API may return an older origin or expiry). */
+export function refreshSignedPublicMediaUrl(url: string | null | undefined): string | null {
+  const trimmed = (url ?? '').trim();
+  if (!trimmed) return null;
+  const relative = extractPublicMediaRelative(trimmed);
+  if (!relative) return trimmed;
+  return getPublicMediaUrl(relative);
+}

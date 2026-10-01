@@ -18,6 +18,11 @@ import {
   deliverChannelMedia,
   markConversationSeen,
 } from './channel-inbox-actions';
+import {
+  findMessageByIdempotencyKey,
+  isIdempotencyConflict,
+  replayOutboundIfKeyed,
+} from '../messages/outbound-idempotency';
 
 const router = Router();
 
@@ -272,6 +277,11 @@ router.post(
     if (!identity?.externalId) {
       throw new AppError(400, 'Messenger identity missing for this contact');
     }
+    const { idempotencyKey, replay } = await replayOutboundIfKeyed(req, conversation.id);
+    if (replay) {
+      sendSuccess(res, replay);
+      return;
+    }
     if (body.mediaUrl) {
       const message = await deliverChannelMedia({
         organizationId: orgId,
@@ -284,6 +294,7 @@ router.post(
         filename: body.filename,
         mimeType: body.mimeType,
         kind: body.kind || 'image',
+        idempotencyKey,
       });
       sendSuccess(res, message);
       return;
@@ -291,15 +302,28 @@ router.post(
     if (!body.content) throw new AppError(400, 'Message is required');
 
     const pageToken = MetaWhatsAppService.decryptToken(channel.accessToken);
-    const pending = await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'OUTBOUND',
-        type: 'TEXT',
-        content: body.content,
-        status: 'PENDING',
-      },
-    });
+    let pending;
+    try {
+      pending = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'OUTBOUND',
+          type: 'TEXT',
+          content: body.content,
+          status: 'PENDING',
+          idempotencyKey,
+        },
+      });
+    } catch (err) {
+      if (idempotencyKey && isIdempotencyConflict(err)) {
+        const existing = await findMessageByIdempotencyKey(conversation.id, idempotencyKey);
+        if (existing) {
+          sendSuccess(res, existing);
+          return;
+        }
+      }
+      throw err;
+    }
 
     // Irreversibility boundary: record that a provider call is in flight *before* it happens,
     // so a crash mid-send can never look like a never-attempted message (S-09 / G-09).

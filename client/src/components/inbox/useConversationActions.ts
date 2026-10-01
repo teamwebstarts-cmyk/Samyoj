@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useState, useRef, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
 import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
@@ -31,6 +31,7 @@ export function useConversationActions({
   const [botToggling, setBotToggling] = useState(false);
   const [botAssigning, setBotAssigning] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
+  const callingBackRef = useRef(false);
   const [deleting, setDeleting] = useState(false);
 
   const extractError = (err: unknown, fallback: string) =>
@@ -156,7 +157,8 @@ export function useConversationActions({
   };
 
   const handleCallBack = async () => {
-    if (!selected || callingBack) return;
+    if (!selected || callingBackRef.current) return;
+    callingBackRef.current = true;
     const contactLabel = selected.contact.name?.trim() || selected.contact.phone || 'contact';
     setCallingBack(true);
     beginOutboundDialing({
@@ -246,6 +248,7 @@ export function useConversationActions({
       }
       toastError(extractError(err, 'Could not start call.'));
     } finally {
+      callingBackRef.current = false;
       setCallingBack(false);
     }
   };

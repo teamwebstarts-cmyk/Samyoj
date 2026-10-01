@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { LogOut, Link2, MailPlus, LayoutTemplate, AlertCircle, LoaderCircle } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import GmailGlyph from '../email/GmailGlyph';
 import { gmailApi, type GmailStatus } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
+import { gmailCallbackErrorFromSearch } from '../email/emailData';
 
 export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
+  const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => gmailCallbackErrorFromSearch(searchParams.toString()));
 
   const loadStatus = async () => {
     setLoading(true);
     try {
-      setStatus((await gmailApi.status()).data.data);
-      setError('');
+      const live = (await gmailApi.status()).data.data;
+      setStatus(live);
+      if (live.status === 'connected') setError('');
     } catch (cause) {
       setError(getErrorMessage(cause, 'Could not load Gmail connection status.'));
     } finally {

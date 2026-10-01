@@ -24,14 +24,14 @@ export function getGmailMockContacts(): GmailContact[] {
     emailOptOutAt: null,
   };
   return [
-    { id: 'gmail-mock-contact-01', name: 'Rohit Sharma', email: 'rohit.sharma@gmail.com', emailOptedIn: true, eligible: true, ...base },
-    { id: 'gmail-mock-contact-02', name: 'Priya Patel', email: 'priya.patel@acme.in', emailOptedIn: true, eligible: true, ...base },
-    { id: 'gmail-mock-contact-03', name: 'Amit Kumar', email: 'amit.kumar@gmail.com', emailOptedIn: true, eligible: true, ...base },
-    { id: 'gmail-mock-contact-04', name: 'Neha Singh', email: 'neha.singh@startup.io', emailOptedIn: true, eligible: true, ...base },
-    { id: 'gmail-mock-contact-05', name: 'Vikram Mehta', email: 'vikram.mehta@example.com', emailOptedIn: false, eligible: false, ...base, emailConsentAt: null },
-    { id: 'gmail-mock-contact-06', name: 'Ananya Iyer', email: 'ananya.iyer@design.co', emailOptedIn: true, eligible: true, ...base },
-    { id: 'gmail-mock-contact-07', name: 'Karan Joshi', email: 'karan.joshi@shop.com', emailOptedIn: true, eligible: true, ...base },
-    { id: 'gmail-mock-contact-08', name: 'Sneha Reddy', email: 'sneha.reddy@health.in', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-01', name: 'Rohit Sharma', email: 'rohit.sharma@gmail.com', tags: ['vip'], optedIn: true, source: 'INBOUND', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-02', name: 'Priya Patel', email: 'priya.patel@acme.in', tags: ['lead'], optedIn: true, source: 'MANUAL', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-03', name: 'Amit Kumar', email: 'amit.kumar@gmail.com', tags: ['vip'], optedIn: false, source: 'IMPORT', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-04', name: 'Neha Singh', email: 'neha.singh@startup.io', tags: ['lead'], optedIn: true, source: 'INBOUND', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-05', name: 'Vikram Mehta', email: 'vikram.mehta@example.com', tags: [], optedIn: false, source: 'MANUAL', emailOptedIn: false, eligible: false, ...base, emailConsentAt: null },
+    { id: 'gmail-mock-contact-06', name: 'Ananya Iyer', email: 'ananya.iyer@design.co', tags: ['design'], optedIn: true, source: 'OUTBOUND', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-07', name: 'Karan Joshi', email: 'karan.joshi@shop.com', tags: ['lead', 'shop'], optedIn: true, source: 'INBOUND', emailOptedIn: true, eligible: true, ...base },
+    { id: 'gmail-mock-contact-08', name: 'Sneha Reddy', email: 'sneha.reddy@health.in', tags: [], optedIn: true, source: 'MANUAL', emailOptedIn: true, eligible: true, ...base },
   ];
 }
 

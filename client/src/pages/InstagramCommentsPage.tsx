@@ -33,6 +33,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import './instagram-comments.css';
+import { resolvePublicMediaUrl } from '../utils/publicMediaUrl';
 import { useMetaMock } from '../contexts/MetaMockContext';
 import MetaMockNotice from '../components/meta/MetaMockNotice';
 import InstagramCommentsListSkeleton from '../components/instagram/InstagramCommentsListSkeleton';
@@ -137,7 +138,7 @@ function IgMediaThumb({
 }) {
   const [failed, setFailed] = useState(false);
   const dims = size === 'detail' ? 'h-24 w-24' : size === 'lg' ? 'h-12 w-12' : 'h-10 w-10';
-  const url = media?.thumbnailUrl;
+  const url = media?.thumbnailUrl ? resolvePublicMediaUrl(media.thumbnailUrl) : '';
   const show = igMediaId || url;
   if (!show) return null;
 
@@ -222,6 +223,8 @@ export default function InstagramCommentsPage() {
   const [draft, setDraft] = useState('');
   const [publicDraft, setPublicDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const syncingRef = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -309,6 +312,8 @@ export default function InstagramCommentsPage() {
   }, [source, filter, debouncedQ, mockEnabled]);
 
   const syncOlder = async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncing(true);
     try {
       const { data } = await instagramApi.comments.sync();
@@ -324,6 +329,7 @@ export default function InstagramCommentsPage() {
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not load older comments');
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
   };
@@ -338,6 +344,8 @@ export default function InstagramCommentsPage() {
   const sendReply = async (id: string) => {
     const text = draft.trim();
     if (!text) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusyId(id);
     if (isMetaMockId(id)) {
       setMockCommentPatch((prev) => ({
@@ -346,6 +354,7 @@ export default function InstagramCommentsPage() {
       }));
       setDraft('');
       toastSuccess('Sample comment — reply not sent to Instagram');
+      busyRef.current = false;
       setBusyId(null);
       return;
     }
@@ -359,6 +368,7 @@ export default function InstagramCommentsPage() {
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not send private reply');
     } finally {
+      busyRef.current = false;
       setBusyId(null);
     }
   };
@@ -366,6 +376,8 @@ export default function InstagramCommentsPage() {
   const sendPublic = async (id: string) => {
     const text = publicDraft.trim();
     if (!text) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusyId(id);
     if (isMetaMockId(id)) {
       setMockCommentPatch((prev) => ({
@@ -374,6 +386,7 @@ export default function InstagramCommentsPage() {
       }));
       setPublicDraft('');
       toastSuccess('Sample comment — reply not posted on Instagram');
+      busyRef.current = false;
       setBusyId(null);
       return;
     }
@@ -385,6 +398,7 @@ export default function InstagramCommentsPage() {
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not reply on the post');
     } finally {
+      busyRef.current = false;
       setBusyId(null);
     }
   };
@@ -395,9 +409,12 @@ export default function InstagramCommentsPage() {
   };
 
   const hide = async (id: string, next: boolean) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusyId(id);
     if (isMetaMockId(id)) {
       setMockCommentPatch((prev) => ({ ...prev, [id]: { hidden: next } }));
+      busyRef.current = false;
       setBusyId(null);
       return;
     }
@@ -409,6 +426,7 @@ export default function InstagramCommentsPage() {
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not hide comment');
     } finally {
+      busyRef.current = false;
       setBusyId(null);
     }
   };

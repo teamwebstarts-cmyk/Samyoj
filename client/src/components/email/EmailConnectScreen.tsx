@@ -1,16 +1,10 @@
-import { useState } from 'react';
-import {
-  Info,
-  Lock,
-  Mail,
-  Send,
-  ShieldCheck,
-  UserRound,
-  Users,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Info, Lock, Mail, Send, ShieldCheck, UserRound, Users } from 'lucide-react';
 import GmailGlyph from './GmailGlyph';
 import { gmailApi, type GmailStatus } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
+import { gmailCallbackErrorFromSearch } from './emailData';
 
 const HAPPENS = [
   { icon: Send, tone: 'green', text: 'You will be redirected to Google to allow access.' },
@@ -32,8 +26,14 @@ function GoogleMark() {
 }
 
 export default function EmailConnectScreen({ connectionStatus = 'disconnected' }: { connectionStatus?: GmailStatus['status'] }) {
+  const [searchParams] = useSearchParams();
   const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => gmailCallbackErrorFromSearch(searchParams.toString()));
+
+  useEffect(() => {
+    const fromCallback = gmailCallbackErrorFromSearch(searchParams.toString());
+    if (fromCallback) setError(fromCallback);
+  }, [searchParams]);
 
   const connect = async () => {
     setConnecting(true);

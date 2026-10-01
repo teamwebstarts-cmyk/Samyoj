@@ -12,6 +12,10 @@ import { httpsMediaUrl, markPageSeen, sendPageAttachment, sendPageAttachmentId, 
 import { readMediaFile } from '../media/storage';
 import { findParentPageChannel } from './parent-page';
 import { deleteMediaObject } from '../media/storage-adapter';
+import {
+  findMessageByIdempotencyKey,
+  isIdempotencyConflict,
+} from '../messages/outbound-idempotency';
 
 const deleteMessagesSchema = z.object({
   messageIds: z.array(z.string().uuid()).min(1).max(200),
@@ -463,7 +467,12 @@ export async function deliverChannelMedia(opts: {
   filename?: string;
   mimeType?: string;
   kind: 'image' | 'video' | 'audio' | 'file';
+  idempotencyKey?: string;
 }) {
+  if (opts.idempotencyKey) {
+    const replay = await findMessageByIdempotencyKey(opts.conversationId, opts.idempotencyKey);
+    if (replay) return replay;
+  }
   const url = httpsMediaUrl(opts.mediaUrl);
   // Same rule as text: the conversation's own channel decides the Page (S-02 / G-02).
   const page =
@@ -534,23 +543,33 @@ export async function deliverChannelMedia(opts: {
   const bodyLabel =
     opts.filename?.trim() ||
     (opts.kind === 'file' ? 'Document' : opts.kind === 'image' ? 'Photo' : opts.kind === 'video' ? 'Video' : 'Audio');
-  const message = await prisma.message.create({
-    data: {
-      conversationId: opts.conversationId,
-      direction: 'OUTBOUND',
-      type: msgType,
-      content: bodyLabel,
-      status: 'SENT',
-      metadata: {
-        mediaPath: opts.mediaPath,
-        externalUrl: opts.mediaPath ? undefined : url,
-        mimeType:
-          opts.mimeType ||
-          (opts.kind === 'file' ? 'application/pdf' : undefined),
-        filename: opts.filename,
+  let message;
+  try {
+    message = await prisma.message.create({
+      data: {
+        conversationId: opts.conversationId,
+        direction: 'OUTBOUND',
+        type: msgType,
+        content: bodyLabel,
+        status: 'SENT',
+        idempotencyKey: opts.idempotencyKey,
+        metadata: {
+          mediaPath: opts.mediaPath,
+          externalUrl: opts.mediaPath ? undefined : url,
+          mimeType:
+            opts.mimeType ||
+            (opts.kind === 'file' ? 'application/pdf' : undefined),
+          filename: opts.filename,
+        },
       },
-    },
-  });
+    });
+  } catch (err) {
+    if (opts.idempotencyKey && isIdempotencyConflict(err)) {
+      const existing = await findMessageByIdempotencyKey(opts.conversationId, opts.idempotencyKey);
+      if (existing) return existing;
+    }
+    throw err;
+  }
   try {
     const { markFirstResponse } = await import('../sla/service');
     await markFirstResponse(opts.conversationId);

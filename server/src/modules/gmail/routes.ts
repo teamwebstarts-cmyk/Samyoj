@@ -6,9 +6,11 @@ import prisma from '../../config/database';
 import { authenticate, loadOrgRole, requireOrg, requireOrgRole } from '../../middleware/auth';
 import { AppError, asyncHandler, sendSuccess } from '../../utils/response';
 import { persistMediaBuffer } from '../media/storage-adapter';
-import { gmailSendQueue } from '../../config/queues';
+import { enqueueGmailSend } from './send.service';
 import {
   ATTACHMENT_TTL_MS,
+  GMAIL_ENQUEUE_FAILED,
+  GMAIL_ENQUEUE_FAILED_MESSAGE,
   GMAIL_SCOPES,
   MAX_ATTACHMENTS,
   MAX_ATTACHMENT_BYTES,
@@ -24,6 +26,7 @@ import {
   signGmailOAuthState,
   storeGmailOAuthState,
   verifyGmailOAuthState,
+  gmailOAuthFailureRedirect,
 } from './oauth';
 import { encrypt } from '../../utils/crypto';
 import { sanitizeEmailHtml } from './mime';
@@ -98,16 +101,27 @@ router.get(
     try {
       state = verifyGmailOAuthState(stateValue);
     } catch {
-      throw new AppError(400, 'Invalid or expired Gmail connection state');
+      return res.redirect(
+        gmailOAuthFailureRedirect('Invalid or expired Gmail connection state. Click Connect Gmail again.'),
+      );
     }
     if (!(await consumeGmailOAuthState(state))) {
-      throw new AppError(400, 'Invalid or already-used Gmail connection state');
+      return res.redirect(
+        gmailOAuthFailureRedirect(
+          'Invalid or already-used Gmail connection state. Click Connect Gmail again.',
+          state.returnUri,
+        ),
+      );
     }
     if (error) {
       return res.redirect(`${state.returnUri}&status=failed&reason=${encodeURIComponent('Google cancelled Gmail connection')}`);
     }
     const code = typeof req.query.code === 'string' ? req.query.code : '';
-    if (!code) throw new AppError(400, 'Google did not return an authorization code');
+    if (!code) {
+      return res.redirect(
+        gmailOAuthFailureRedirect('Google did not return an authorization code. Click Connect Gmail again.', state.returnUri),
+      );
+    }
 
     const membership = await prisma.organizationUser.findUnique({
       where: { organizationId_userId: { organizationId: state.organizationId, userId: state.userId } },
@@ -117,11 +131,27 @@ router.get(
       !membership ||
       (membership.role !== OrgRole.OWNER && membership.role !== OrgRole.ADMIN)
     ) {
-      throw new AppError(403, 'Gmail connection requires an active OWNER or ADMIN role');
+      return res.redirect(
+        gmailOAuthFailureRedirect(
+          'Gmail connection requires an active OWNER or ADMIN role.',
+          state.returnUri,
+        ),
+      );
     }
 
-    const token = await exchangeGmailCode(code);
-    const identity = await fetchGoogleIdentity(token.access_token);
+    let token;
+    let identity;
+    try {
+      token = await exchangeGmailCode(code);
+      identity = await fetchGoogleIdentity(token.access_token);
+    } catch (cause) {
+      return res.redirect(
+        gmailOAuthFailureRedirect(
+          cause instanceof Error ? cause.message : 'Google did not finish Gmail connection. Click Connect Gmail again.',
+          state.returnUri,
+        ),
+      );
+    }
     const existing = await prisma.gmailMailbox.findFirst({
       where: activeMailboxWhere(state.organizationId),
       select: { id: true },
@@ -267,6 +297,9 @@ router.get(
         id: true,
         name: true,
         email: true,
+        tags: true,
+        optedIn: true,
+        source: true,
         emailOptedIn: true,
         emailConsentSource: true,
         emailConsentAt: true,
@@ -418,8 +451,10 @@ router.delete(
   })
 );
 
+const GMAIL_SEND_MAX_RECIPIENTS = 50;
+
 export const gmailSendSchema = z.object({
-  contactIds: z.array(z.string().uuid()).length(1),
+  contactIds: z.array(z.string().uuid()).min(1).max(GMAIL_SEND_MAX_RECIPIENTS),
   subject: z.string().min(1).max(998).optional(),
   textBody: z.string().min(1).max(100_000).optional(),
   htmlBody: z.string().max(100_000).nullable().optional(),
@@ -563,11 +598,21 @@ router.post(
       }
       return created;
     });
-    await Promise.all(
-      sends
-        .filter((send) => send.status === 'QUEUED')
-        .map((send) => gmailSendQueue.add('send-email', { emailSendId: send.id }, { jobId: `gmail-send:${send.id}` }))
-    );
+    try {
+      await Promise.all(
+        sends
+          .filter((send) => send.status === 'QUEUED')
+          .map((send) =>
+            enqueueGmailSend(send.id, {
+              source: 'api',
+              organizationId,
+              path: '/api/gmail/send',
+            }),
+          ),
+      );
+    } catch {
+      throw new AppError(500, GMAIL_ENQUEUE_FAILED_MESSAGE, GMAIL_ENQUEUE_FAILED);
+    }
     sendSuccess(res, sends.map((send) => ({ id: send.id, recipientEmail: send.recipientEmail, status: sendStatus(send.status) })), 202);
   })
 );

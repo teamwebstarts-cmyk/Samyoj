@@ -38,7 +38,7 @@ import {
 } from '../../components/email/emailData';
 import { gmailApi, type GmailAttachment, type GmailContact, type GmailSend, type GmailTemplate } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
-import { filterRecentSends, priorSendsFor } from './emailList';
+import { dedupeLatestSendPerEmail, filterRecentSends } from './emailList';
 import '../email/email.css';
 
 const SUBJECT_MAX = 200;
@@ -46,6 +46,29 @@ const MESSAGE_MAX = 2000;
 
 const LIMITS_COPY =
   'Google limits this mailbox — about 500 emails/day on free Gmail, about 2,000/day on paid Workspace. If sending stops, wait up to 24 hours.';
+
+function formatSentListWhen(iso: string): string {
+  const at = new Date(iso).getTime();
+  if (!Number.isFinite(at)) return '';
+  const mins = Math.floor(Math.max(0, Date.now() - at) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 14) return `${days}d`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+type PickerAudience = 'all' | 'ready' | 'whatsapp-opted-in' | 'tagged' | 'inbound';
+
+const PICKER_FILTERS: { id: PickerAudience; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ready', label: 'Ready to send' },
+  { id: 'whatsapp-opted-in', label: 'WhatsApp opted in' },
+  { id: 'tagged', label: 'By tag' },
+  { id: 'inbound', label: 'From chat' },
+];
 
 type EmailContact = GmailContact & {
   name: string;
@@ -126,12 +149,17 @@ export default function EmailComposePage() {
   const [message, setMessage] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [pickerAudience, setPickerAudience] = useState<PickerAudience>('all');
+  const [pickerTags, setPickerTags] = useState<string[]>([]);
   const [panel, setPanel] = useState<'sent' | 'compose'>('compose');
   const [composeTab, setComposeTab] = useState<'write' | 'preview'>('write');
   const [selectedId, setSelectedId] = useState('');
   const [sentQuery, setSentQuery] = useState('');
   const [sendStatus, setSendStatus] = useState('');
   const [sendError, setSendError] = useState('');
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const idempotencyKeyRef = useRef(crypto.randomUUID());
   const [consentContactId, setConsentContactId] = useState<string | null>(null);
   const [consentError, setConsentError] = useState('');
   const messageRef = useRef<HTMLTextAreaElement>(null);
@@ -140,22 +168,67 @@ export default function EmailComposePage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
+  const [sentListExpanded, setSentListExpanded] = useState(false);
   const selected = recentSends.find((s) => s.id === selectedId) ?? recentSends[0] ?? null;
-  const visibleSends = filterRecentSends(recentSends, sentQuery, 'ALL');
-  const template: EmailTemplate | null = templates.find((t) => t.id === templateId) ?? null;
-  const priorSends = recipients.flatMap((contact) =>
-    priorSendsFor(recentSends, contact.email).map((send) => ({ ...send, who: contact.name }))
+  const filteredSends = useMemo(
+    () => filterRecentSends(recentSends, sentQuery, 'ALL'),
+    [recentSends, sentQuery],
   );
+  const dedupedSends = useMemo(() => dedupeLatestSendPerEmail(filteredSends), [filteredSends]);
+  const visibleSends = sentListExpanded ? filteredSends : dedupedSends;
+  const hiddenSendCount = sentListExpanded ? 0 : Math.max(0, filteredSends.length - dedupedSends.length);
+  const selectedRecipientEmails = useMemo(
+    () => new Set(recipients.map((r) => r.email.trim().toLowerCase())),
+    [recipients],
+  );
+  const template: EmailTemplate | null = templates.find((t) => t.id === templateId) ?? null;
+  const emailedBefore = useMemo(() => {
+    const set = new Set<string>();
+    for (const send of recentSends) {
+      const email = send.email.trim().toLowerCase();
+      if (email) set.add(email);
+    }
+    return set;
+  }, [recentSends]);
+
+  const contactTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const contact of contacts) {
+      for (const tag of contact.tags ?? []) {
+        const key = tag.trim();
+        if (!key) continue;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([tag, count]) => ({ tag, count }));
+  }, [contacts]);
 
   const filteredContacts = useMemo(() => {
+    let list = contacts;
+    if (pickerAudience === 'ready') list = list.filter((c) => c.eligible);
+    else if (pickerAudience === 'whatsapp-opted-in') list = list.filter((c) => c.optedIn);
+    else if (pickerAudience === 'tagged') {
+      list = list.filter((c) => (c.tags?.length ?? 0) > 0);
+      if (pickerTags.length > 0) {
+        list = list.filter((c) => pickerTags.some((tag) => (c.tags ?? []).includes(tag)));
+      }
+    } else if (pickerAudience === 'inbound') list = list.filter((c) => c.source === 'INBOUND');
     const q = query.trim().toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter(
+    if (!q) return list;
+    return list.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q)
+        c.email.toLowerCase().includes(q) ||
+        (c.tags ?? []).some((tag) => tag.toLowerCase().includes(q)),
     );
-  }, [contacts, query]);
+  }, [contacts, pickerAudience, pickerTags, query]);
+
+  const visibleReadyCount = useMemo(
+    () => filteredContacts.filter((c) => c.eligible).length,
+    [filteredContacts],
+  );
 
   const previewContact = recipients[0] ?? null;
   const missing = [
@@ -252,29 +325,37 @@ export default function EmailComposePage() {
   };
 
   const sendEmail = async () => {
-    if (!eligible || !recipients[0]) return;
+    if (!eligible || recipients.length === 0 || sendingRef.current) return;
     if (mockPreview) {
       setSendError(GMAIL_MOCK_PREVIEW_BLOCK);
       return;
     }
+    sendingRef.current = true;
+    setSending(true);
     setSendError('');
     setSendStatus('Sending…');
     try {
       const response = await gmailApi.send({
-        contactIds: [recipients[0].id] as [string],
+        contactIds: recipients.map((r) => r.id),
         subject: subject.trim(),
         textBody: plainTextFromMarkup(message).trim(),
         htmlBody: safeHtmlFromMarkup(message),
         attachmentIds: attachments.flatMap((item) => item.uploaded?.id || []),
-      }, crypto.randomUUID());
+      }, idempotencyKeyRef.current);
       const result = response.data.data[0];
       setSendStatus(result ? statusLabel(result.status) : 'Queued');
       setSelectedId(result?.id || '');
       setPanel('sent');
+      idempotencyKeyRef.current = crypto.randomUUID();
       refresh();
     } catch (cause) {
       setSendStatus('');
-      setSendError(getErrorMessage(cause, 'Email could not be queued.'));
+      setSendError(getErrorMessage(cause, 'Email could not be queued. Try again.'));
+      idempotencyKeyRef.current = crypto.randomUUID();
+      refresh();
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   };
 
@@ -290,6 +371,8 @@ export default function EmailComposePage() {
   const openPicker = () => {
     setPickerOpen(true);
     setQuery('');
+    setPickerAudience('all');
+    setPickerTags([]);
     setConsentError('');
     setTimeout(() => searchRef.current?.focus(), 0);
   };
@@ -310,11 +393,21 @@ export default function EmailComposePage() {
     };
   }, [pickerOpen]);
 
-  const pickContact = (c: EmailContact) => {
+  const toggleContactPick = (c: EmailContact) => {
     if (!c.eligible) return;
-    setRecipients([c]);
-    setPickerOpen(false);
-    setQuery('');
+    setRecipients((prev) => {
+      const picked = prev.some((r) => r.id === c.id);
+      if (picked) return prev.filter((r) => r.id !== c.id);
+      return [...prev, c];
+    });
+  };
+
+  const addAllVisibleReady = () => {
+    setRecipients((prev) => {
+      const ids = new Set(prev.map((r) => r.id));
+      const toAdd = filteredContacts.filter((c) => c.eligible && !ids.has(c.id));
+      return [...prev, ...toAdd];
+    });
   };
 
   const enableEmailPermission = async (contact: EmailContact) => {
@@ -411,13 +504,17 @@ export default function EmailComposePage() {
                   <History className="h-[15px] w-[15px] text-[var(--ema-blue)]" />
                   Recently sent
                 </div>
-                <p className="ema-card__sub">{visibleSends.length} of {recentSends.length} saved</p>
+                <p className="ema-card__sub">
+                  {sentListExpanded
+                    ? `${visibleSends.length} sends`
+                    : `${visibleSends.length} people · ${recentSends.length} sends total`}
+                </p>
               </div>
             </div>
             <div className="ema-sent__filters">
               <input
                 className="ema-input ema-input--compact"
-                placeholder="Search name, email, or subject"
+                placeholder="Search sent mail"
                 value={sentQuery}
                 onChange={(e) => setSentQuery(e.target.value)}
                 aria-label="Search sent emails"
@@ -436,41 +533,55 @@ export default function EmailComposePage() {
               )}
               {visibleSends.map((send) => {
                 const on = panel === 'sent' && send.id === selected?.id;
+                const matchRecipient = selectedRecipientEmails.has(send.email.trim().toLowerCase());
+                const statusClass =
+                  send.status === 'accepted'
+                    ? 'ema-sent__dot--ok'
+                    : send.status === 'failed'
+                      ? 'ema-sent__dot--fail'
+                      : send.status === 'reconnect-required'
+                        ? 'ema-sent__dot--warn'
+                        : 'ema-sent__dot--pending';
                 return (
                   <button
                     key={send.id}
                     type="button"
                     role="option"
                     aria-selected={on}
-                    className={`ema-sent__item ${on ? 'ema-sent__item--on' : ''}`}
+                    aria-label={`${send.name}, ${send.subject}, ${statusLabel(send.status)}`}
+                    className={`ema-sent__item ema-sent__item--compact ${on ? 'ema-sent__item--on' : ''} ${matchRecipient ? 'ema-sent__item--match' : ''}`}
                     onClick={() => openSent(send.id)}
                   >
-                    <span className={`ema-avatar ema-avatar--${send.avatar}`}>
-                      {initials(send.name)}
-                    </span>
+                    <span className={`ema-sent__dot ${statusClass}`} title={statusLabel(send.status)} />
                     <span className="min-w-0 flex-1">
-                      <span className="ema-sent__top">
+                      <span className="ema-sent__row">
                         <span className="ema-sent__name">{send.name}</span>
-                        <span className={`ema-chip ${
-                          send.status === 'accepted'
-                            ? 'ema-chip--accepted'
-                            : send.status === 'failed'
-                              ? 'ema-chip--failed'
-                              : send.status === 'reconnect-required'
-                                ? 'ema-chip--reconnect'
-                                : 'ema-chip--blue'
-                        }`}>{statusLabel(send.status)}</span>
+                        <span className="ema-sent__time">{formatSentListWhen(send.createdAt)}</span>
                       </span>
                       <span className="ema-sent__subject">{send.subject}</span>
-                      <span className="ema-sent__meta">
-                        <span className="ema-sent__email">{send.email}</span>
-                        <span className="ema-sent__time">{send.sentAt}</span>
-                      </span>
                     </span>
                   </button>
                 );
               })}
             </div>
+            {hiddenSendCount > 0 && !sentListExpanded ? (
+              <button
+                type="button"
+                className="ema-sent__expand"
+                onClick={() => setSentListExpanded(true)}
+              >
+                Show all {filteredSends.length} sends
+              </button>
+            ) : null}
+            {sentListExpanded && filteredSends.length > dedupedSends.length ? (
+              <button
+                type="button"
+                className="ema-sent__expand"
+                onClick={() => setSentListExpanded(false)}
+              >
+                Group by person
+              </button>
+            ) : null}
           </section>
 
           <section className="ema-card ema-pane" aria-live="polite">
@@ -513,9 +624,11 @@ export default function EmailComposePage() {
                         <span className="min-w-0">
                           <span className="ema-mail__from">From {mailboxEmail}</span>
                           <span className="ema-mail__to">
-                            {previewContact
-                              ? `To ${previewContact.name} · ${previewContact.email}`
-                              : 'Add a contact to see who this goes to'}
+                            {recipients.length === 0
+                              ? 'Add contacts to see who this goes to'
+                              : recipients.length === 1 && previewContact
+                                ? `To ${previewContact.name} · ${previewContact.email}`
+                                : `To ${recipients.length} contacts (preview shows ${previewContact?.name ?? 'first'})`}
                           </span>
                         </span>
                       </div>
@@ -611,10 +724,74 @@ export default function EmailComposePage() {
                         <input
                           ref={searchRef}
                           className="ema-picker__search"
-                          placeholder="Search contacts by name or email..."
+                          placeholder="Search by name, email, or tag..."
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
                         />
+                        <div className="ema-picker__filters" role="tablist" aria-label="Contact filters">
+                          {PICKER_FILTERS.map((filter) => (
+                            <button
+                              key={filter.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={pickerAudience === filter.id}
+                              className={`ema-picker__chip ${pickerAudience === filter.id ? 'ema-picker__chip--on' : ''}`}
+                              onClick={() => {
+                                setPickerAudience(filter.id);
+                                if (filter.id !== 'tagged') setPickerTags([]);
+                              }}
+                            >
+                              {filter.label}
+                            </button>
+                          ))}
+                        </div>
+                        {pickerAudience === 'tagged' ? (
+                          <div className="ema-picker__tags" aria-label="Choose contact tags">
+                            <span className="ema-picker__tags-label">Pick tag(s)</span>
+                            {contactTags.length > 0 ? (
+                              <div className="ema-picker__tags-scroll">
+                                {contactTags.map(({ tag, count }) => {
+                                  const on = pickerTags.includes(tag);
+                                  return (
+                                    <button
+                                      key={tag}
+                                      type="button"
+                                      className={`ema-picker__tag ${on ? 'ema-picker__tag--on' : ''}`}
+                                      aria-pressed={on}
+                                      onClick={() => {
+                                        setPickerTags((current) =>
+                                          current.includes(tag)
+                                            ? current.filter((t) => t !== tag)
+                                            : [...current, tag],
+                                        );
+                                      }}
+                                    >
+                                      {tag}
+                                      <span className="ema-picker__tag-count">{count}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] font-semibold text-[var(--ema-muted)]">
+                                No tags on contacts yet. Add tags in Contacts first.
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                        <div className="ema-picker__toolbar">
+                          <span className="ema-picker__toolbar-meta">
+                            {filteredContacts.length} shown · {visibleReadyCount} ready
+                          </span>
+                          <button
+                            type="button"
+                            className="ema-picker__toolbar-btn"
+                            disabled={visibleReadyCount === 0}
+                            onClick={addAllVisibleReady}
+                          >
+                            Add all shown (ready)
+                          </button>
+                        </div>
                         {consentError ? (
                           <div className="ema-notice ema-notice--fail" role="alert" style={{ margin: '8px 8px 0' }}>
                             <Info className="h-[15px] w-[15px] shrink-0" />
@@ -629,15 +806,16 @@ export default function EmailComposePage() {
                           )}
                           {filteredContacts.map((c) => {
                             const picked = recipients.some((r) => r.id === c.id);
+                            const sentBefore = emailedBefore.has(c.email.trim().toLowerCase());
                             return (
                               <button
                                 key={c.id}
                                 type="button"
-                                className={`ema-picker__item ${picked ? 'ema-picker__item--on' : ''} ${!c.eligible ? 'ema-picker__item--disabled' : ''}`}
+                                className={`ema-picker__item ${picked ? 'ema-picker__item--on' : ''} ${sentBefore ? 'ema-picker__item--sent' : ''} ${!c.eligible ? 'ema-picker__item--disabled' : ''}`}
                                 aria-pressed={picked}
                                 aria-disabled={!c.eligible}
                                 disabled={consentContactId !== null}
-                                onClick={() => c.eligible ? pickContact(c) : void enableEmailPermission(c)}
+                                onClick={() => (c.eligible ? toggleContactPick(c) : void enableEmailPermission(c))}
                               >
                                 <span className={`ema-avatar ema-avatar--${c.avatar}`}>
                                   {initials(c.name)}
@@ -646,6 +824,11 @@ export default function EmailComposePage() {
                                   <span className="block text-[12px] font-bold text-[var(--ema-ink)]">{c.name}</span>
                                   <span className="block text-[11px] font-semibold text-[var(--ema-muted)]">{c.email}</span>
                                 </span>
+                                {sentBefore ? (
+                                  <span className="ema-picker__sent-pill" title="You emailed this contact before">
+                                    Sent before
+                                  </span>
+                                ) : null}
                                 {picked && (
                                   <Check className="h-4 w-4 shrink-0 text-[var(--ema-primary)]" strokeWidth={2.6} />
                                 )}
@@ -660,7 +843,7 @@ export default function EmailComposePage() {
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t border-[var(--ema-line)] px-3 py-2">
                           <p className="text-[10.5px] font-semibold text-[var(--ema-muted)]">
-                            Contacts with an email are shown. Permission is required before sending.
+                            Select multiple contacts, then Done. Highlighted rows were emailed before (see Sent on the left).
                           </p>
                           <button
                             type="button"
@@ -674,27 +857,6 @@ export default function EmailComposePage() {
                       </div>
                     )}
                   </div>
-                  {priorSends.length > 0 && (
-                    <div className="ema-prior">
-                      <span className="ema-field__label">Already sent to this contact</span>
-                      {priorSends.map((send) => (
-                        <button
-                          key={send.id}
-                          type="button"
-                          className="ema-prior__item"
-                          onClick={() => openSent(send.id)}
-                        >
-                          <span className="min-w-0">
-                            <span className="ema-prior__subject">{send.subject}</span>
-                            <span className="ema-prior__meta">{send.who} · {send.sentAt}</span>
-                          </span>
-                          <span className={`ema-chip ${send.status === 'accepted' ? 'ema-chip--accepted' : send.status === 'failed' ? 'ema-chip--failed' : 'ema-chip--blue'}`}>
-                            {statusLabel(send.status)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 <div className="ema-field">
@@ -829,9 +991,9 @@ export default function EmailComposePage() {
                   <button type="button" className="ema-btn ema-btn--ghost" onClick={() => setPanel('sent')}>
                     Cancel
                   </button>
-                  <button type="button" className="ema-btn ema-btn--primary" disabled={!eligible} onClick={() => void sendEmail()}>
+                  <button type="button" className="ema-btn ema-btn--primary" disabled={!eligible || sending} onClick={() => void sendEmail()}>
                     <SendHorizontal className="h-4 w-4" strokeWidth={2.2} />
-                    Send Email
+                    {sending ? 'Sending…' : 'Send Email'}
                   </button>
                 </div>
               </div>

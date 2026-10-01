@@ -183,6 +183,26 @@ describe('Phase 4 Instagram', () => {
     );
   });
 
+  it('counts unmatched Instagram DMs when no Channel exists', async () => {
+    channelMock.findMany.mockResolvedValue([] as never);
+    const result = await dispatchInstagramWebhookFields(igMessageFixture());
+    expect(result.claimed).toBe(0);
+    expect(result.unmatched).toBe(1);
+    expect(conversationMock.create).not.toHaveBeenCalled();
+  });
+
+  it('skips Instagram DM echoes without creating a thread', async () => {
+    channelMock.findMany.mockResolvedValue([
+      { id: 'ch_ig', organizationId: 'org_1', accessToken: 'enc:tok' },
+    ] as never);
+    const payload = igMessageFixture();
+    (payload.entry[0].messaging[0].message as { is_echo?: boolean }).is_echo = true;
+    const result = await dispatchInstagramWebhookFields(payload);
+    expect(result.claimed).toBe(0);
+    expect(result.unmatched).toBe(0);
+    expect(conversationMock.create).not.toHaveBeenCalled();
+  });
+
   it('same IGSID twice → one thread', async () => {
     identityMock.findUnique.mockResolvedValue({ contactId: 'ct_ig' } as never);
     conversationMock.findFirst

@@ -1,6 +1,8 @@
 import prisma from '../../config/database';
 import { createModuleLogger } from '../../utils/logger';
 import { fetchInstagramMedia, instagramMediaThumbnailUrl } from '../facebook/page-client';
+import { extractPublicMediaRelative, refreshSignedPublicMediaUrl } from './posts.media-url';
+import { getPublicMediaUrl, mediaExists, persistMediaBuffer } from '../media/storage-adapter';
 
 const log = createModuleLogger('instagram-media-cache');
 
@@ -15,18 +17,88 @@ export type InstagramMediaPreview = {
   caption: string | null;
 };
 
-function toPreview(row: { igMediaId: string; mediaType: string | null; thumbnailUrl: string | null; permalink: string | null; caption: string | null }): InstagramMediaPreview {
+function toPreview(row: {
+  igMediaId: string;
+  mediaType: string | null;
+  thumbnailUrl: string | null;
+  permalink: string | null;
+  caption: string | null;
+}): InstagramMediaPreview {
   return {
     igMediaId: row.igMediaId,
     mediaType: row.mediaType,
-    thumbnailUrl: row.thumbnailUrl,
+    thumbnailUrl: refreshSignedPublicMediaUrl(row.thumbnailUrl),
     permalink: row.permalink,
     caption: row.caption,
   };
 }
 
+function storageKeyForIgMedia(igMediaId: string): string {
+  const safe = igMediaId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+  return `ig-thumb-${safe}`;
+}
+
+async function downloadRemoteThumbnail(
+  sourceUrl: string,
+  pageAccessToken: string
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  try {
+    const url = new URL(sourceUrl);
+    if (!url.searchParams.has('access_token')) {
+      url.searchParams.set('access_token', pageAccessToken);
+    }
+    const res = await fetch(url.toString(), { redirect: 'follow' });
+    if (!res.ok) return null;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (!bytes.length) return null;
+    const mimeType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim() || 'image/jpeg';
+    return { buffer: bytes, mimeType };
+  } catch (err) {
+    log.warn('Instagram thumbnail download failed', {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/** Graph CDN URLs expire; keep a Samyoj-signed copy for dashboard/comments UI. */
+async function ensurePersistedThumbnail(opts: {
+  organizationId: string;
+  igMediaId: string;
+  sourceUrl: string | null;
+  pageAccessToken: string;
+}): Promise<string | null> {
+  const relativeExisting = opts.sourceUrl ? extractPublicMediaRelative(opts.sourceUrl) : null;
+  if (relativeExisting && (await mediaExists(relativeExisting))) {
+    return getPublicMediaUrl(relativeExisting);
+  }
+  if (!opts.sourceUrl || relativeExisting) return opts.sourceUrl;
+
+  const downloaded = await downloadRemoteThumbnail(opts.sourceUrl, opts.pageAccessToken);
+  if (!downloaded) return opts.sourceUrl;
+
+  const stored = await persistMediaBuffer({
+    organizationId: opts.organizationId,
+    messageId: storageKeyForIgMedia(opts.igMediaId),
+    buffer: downloaded.buffer,
+    mimeType: downloaded.mimeType,
+  });
+  return getPublicMediaUrl(stored.mediaPath);
+}
+
+function rowNeedsGraphRefresh(
+  row: { fetchedAt: Date; thumbnailUrl: string | null } | undefined,
+  staleBefore: Date
+): boolean {
+  if (!row) return true;
+  if (row.fetchedAt < staleBefore) return true;
+  if (row.thumbnailUrl && !extractPublicMediaRelative(row.thumbnailUrl)) return true;
+  return false;
+}
+
 export async function loadInstagramMediaPreviews(opts: {
   channelId: string;
+  organizationId: string;
   pageAccessToken: string;
   igMediaIds: string[];
 }): Promise<Map<string, InstagramMediaPreview>> {
@@ -40,10 +112,7 @@ export async function loadInstagramMediaPreviews(opts: {
   });
   const byId = new Map(cached.map((row) => [row.igMediaId, row]));
 
-  const needsFetch = unique.filter((id) => {
-    const row = byId.get(id);
-    return !row || row.fetchedAt < staleBefore;
-  });
+  const needsFetch = unique.filter((id) => rowNeedsGraphRefresh(byId.get(id), staleBefore));
 
   for (let i = 0; i < needsFetch.length; i += FETCH_BATCH) {
     const batch = needsFetch.slice(i, i + FETCH_BATCH);
@@ -52,6 +121,7 @@ export async function loadInstagramMediaPreviews(opts: {
         try {
           const media = await fetchInstagramMedia(igMediaId, opts.pageAccessToken);
           if (!media?.id) return;
+          const remoteThumb = instagramMediaThumbnailUrl(media);
           const fetchedAt = new Date();
           const saved = await prisma.instagramMediaCache.upsert({
             where: { channelId_igMediaId: { channelId: opts.channelId, igMediaId } },
@@ -59,14 +129,14 @@ export async function loadInstagramMediaPreviews(opts: {
               channelId: opts.channelId,
               igMediaId,
               mediaType: media.media_type || null,
-              thumbnailUrl: instagramMediaThumbnailUrl(media),
+              thumbnailUrl: remoteThumb,
               permalink: media.permalink || null,
               caption: media.caption?.slice(0, 500) || null,
               fetchedAt,
             },
             update: {
               mediaType: media.media_type || null,
-              thumbnailUrl: instagramMediaThumbnailUrl(media),
+              thumbnailUrl: remoteThumb,
               permalink: media.permalink || null,
               caption: media.caption?.slice(0, 500) || null,
               fetchedAt,
@@ -81,6 +151,31 @@ export async function loadInstagramMediaPreviews(opts: {
         }
       })
     );
+  }
+
+  for (const igMediaId of unique) {
+    const row = byId.get(igMediaId);
+    if (!row?.thumbnailUrl) continue;
+    try {
+      const persisted = await ensurePersistedThumbnail({
+        organizationId: opts.organizationId,
+        igMediaId,
+        sourceUrl: row.thumbnailUrl,
+        pageAccessToken: opts.pageAccessToken,
+      });
+      if (persisted && persisted !== row.thumbnailUrl) {
+        const updated = await prisma.instagramMediaCache.update({
+          where: { channelId_igMediaId: { channelId: opts.channelId, igMediaId } },
+          data: { thumbnailUrl: persisted },
+        });
+        byId.set(igMediaId, updated);
+      }
+    } catch (err) {
+      log.warn('Instagram thumbnail persist failed', {
+        igMediaId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   for (const id of unique) {

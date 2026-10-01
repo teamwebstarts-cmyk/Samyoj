@@ -78,6 +78,7 @@ export function useInboxSender({
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const retryKeyRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
 
   const resetComposer = useCallback(() => {
     setAttachment((prev) => {
@@ -273,6 +274,8 @@ export function useInboxSender({
       return false;
     }
     if (!draft.trim() && !attachment) return false;
+    if (sendingRef.current) return false;
+    sendingRef.current = true;
 
     const text = draft.trim();
     const pendingAttachment = attachment;
@@ -280,6 +283,7 @@ export function useInboxSender({
     const optimisticId = makeOptimisticId();
     const idempotencyKey = retryKeyRef.current || makeIdempotencyKey();
     retryKeyRef.current = null;
+    try {
     const replyMeta = pendingReply
       ? {
           replyToMessageId: pendingReply.id,
@@ -359,23 +363,33 @@ export function useInboxSender({
       };
     }
 
-    return sendPayload(payload, optimisticId, {
-      lockComposer: false,
-      idempotencyKey,
-    });
+      return await sendPayload(payload, optimisticId, {
+        lockComposer: false,
+        idempotencyKey,
+      });
+    } finally {
+      sendingRef.current = false;
+    }
   };
 
   const handleSendTemplate = async (payload: {
     templateName: string;
     templateLanguage: string;
     templateParams?: TemplateParams;
-  }) =>
-    sendPayload({
-      type: 'TEMPLATE',
-      templateName: payload.templateName,
-      templateLanguage: payload.templateLanguage,
-      templateParams: payload.templateParams,
-    });
+  }) => {
+    if (sendingRef.current) return false;
+    sendingRef.current = true;
+    try {
+      return await sendPayload({
+        type: 'TEMPLATE',
+        templateName: payload.templateName,
+        templateLanguage: payload.templateLanguage,
+        templateParams: payload.templateParams,
+      });
+    } finally {
+      sendingRef.current = false;
+    }
+  };
 
   const handleReact = async (message: Message, emoji: string) => {
     if (!selected || !canSend) {

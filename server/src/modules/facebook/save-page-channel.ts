@@ -61,7 +61,16 @@ export async function saveFacebookPageChannel(opts: {
   pageName: string;
   pageAccessToken: string;
   userAccessToken?: string;
-}): Promise<{ channelId: string; pageId: string; pageName: string; subscribed: boolean; subscribeError?: string }> {
+}): Promise<{
+  channelId: string;
+  pageId: string;
+  pageName: string;
+  subscribed: boolean;
+  subscribeError?: string;
+  igUserId?: string;
+  igSubscribed?: boolean;
+  igSubscribeError?: string;
+}> {
   const encrypted = MetaWhatsAppService.encryptToken(opts.pageAccessToken);
 
   await assertActiveChannelOwnership('FB', opts.pageId, opts.organizationId);
@@ -120,6 +129,9 @@ export async function saveFacebookPageChannel(opts: {
 
   let subscribed = false;
   let subscribeError: string | undefined;
+  let igUserId: string | undefined;
+  let igSubscribed: boolean | undefined;
+  let igSubscribeError: string | undefined;
   try {
     await subscribePageToLeadgen(opts.pageId, opts.pageAccessToken);
     subscribed = true;
@@ -154,6 +166,10 @@ export async function saveFacebookPageChannel(opts: {
         },
         data: { isActive: false },
       });
+    } else {
+      igUserId = linkedInstagram.igUserId;
+      igSubscribed = linkedInstagram.subscribed;
+      igSubscribeError = linkedInstagram.subscribeError;
     }
   } catch (err) {
     if (err instanceof AppError && err.statusCode === 409) throw err;
@@ -170,6 +186,9 @@ export async function saveFacebookPageChannel(opts: {
     pageName: opts.pageName,
     subscribed,
     subscribeError,
+    igUserId,
+    igSubscribed,
+    igSubscribeError,
   };
 }
 
@@ -249,16 +268,24 @@ export async function saveLinkedInstagramChannel(opts: {
   }
 
   try {
-    const { syncInstagramComments } = await import('../instagram/comment-sync');
-    await syncInstagramComments({
-      organizationId: opts.organizationId,
-      channelId: channel.id,
-      igUserId: ig.id,
-      pageAccessToken: opts.pageAccessToken,
-      businessUsername: ig.username,
-      maxMedia: 10,
-      maxScan: 200,
-    });
+    const { syncInstagramComments, withInstagramCommentSyncLock } = await import('../instagram/comment-sync');
+    const synced = await withInstagramCommentSyncLock(channel.id, () =>
+      syncInstagramComments({
+        organizationId: opts.organizationId,
+        channelId: channel.id,
+        igUserId: ig.id,
+        pageAccessToken: opts.pageAccessToken,
+        businessUsername: ig.username,
+        maxMedia: 10,
+        maxScan: 200,
+      })
+    );
+    if (synced === 'busy') {
+      log.info('IG comment history sync skipped — already running', {
+        organizationId: opts.organizationId,
+        igUserId: ig.id,
+      });
+    }
   } catch (err) {
     log.warn('IG comment history sync deferred', {
       organizationId: opts.organizationId,

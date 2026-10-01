@@ -121,6 +121,7 @@ export default function CallsPage() {
   const [ending, setEnding] = useState(false);
   const [callingBack, setCallingBack] = useState(false);
   const [callingBackId, setCallingBackId] = useState<string | null>(null);
+  const callingBackRef = useRef(false);
   const [selectedCallId, setSelectedCallId] = useState<string | null>(routeCallId ?? null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
@@ -611,6 +612,8 @@ export default function CallsPage() {
 
   async function handleCallBack() {
     if (!selectedCall || !canUseCalling) return;
+    if (callingBackRef.current) return;
+    callingBackRef.current = true;
     const contactId = selectedCall.contact?.id;
     const phone = selectedCall.contact?.phone || selectedCall.fromPhone;
     const conversationId = selectedCall.conversation?.id;
@@ -654,12 +657,15 @@ export default function CallsPage() {
         toastError(body?.message || 'Could not start the call.');
       }
     } finally {
+      callingBackRef.current = false;
       setCallingBack(false);
     }
   }
 
   async function handleCallListItemCallBack(call: CallRecord) {
     if (!canUseCalling) return;
+    if (callingBackRef.current) return;
+    callingBackRef.current = true;
     const contactId = call.contact?.id;
     const phone = call.contact?.phone || call.fromPhone;
     const conversationId = call.conversation?.id;
@@ -703,6 +709,7 @@ export default function CallsPage() {
         toastError(body?.message || 'Could not start the call.');
       }
     } finally {
+      callingBackRef.current = false;
       setCallingBackId(null);
     }
   }

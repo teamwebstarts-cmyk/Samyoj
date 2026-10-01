@@ -11,6 +11,11 @@ import { sendInstagramTextMessage } from '../facebook/page-client';
 import { findParentPageChannel } from '../facebook/parent-page';
 import { refreshInstagramContactNameIfNeeded } from './contact-name';
 import {
+  findMessageByIdempotencyKey,
+  isIdempotencyConflict,
+  replayOutboundIfKeyed,
+} from '../messages/outbound-idempotency';
+import {
   attachChannelInboxActions,
   channelListScope,
   deliverChannelMedia,
@@ -256,6 +261,11 @@ router.post(
     if (!identity?.externalId) {
       throw new AppError(400, 'Instagram identity missing for this contact');
     }
+    const { idempotencyKey, replay } = await replayOutboundIfKeyed(req, conversation.id);
+    if (replay) {
+      sendSuccess(res, replay);
+      return;
+    }
     if (body.mediaUrl) {
       const message = await deliverChannelMedia({
         organizationId: orgId,
@@ -268,6 +278,7 @@ router.post(
         filename: body.filename,
         mimeType: body.mimeType,
         kind: body.kind || 'image',
+        idempotencyKey,
       });
       sendSuccess(res, message);
       return;
@@ -282,15 +293,28 @@ router.post(
     }
 
     const pageToken = MetaWhatsAppService.decryptToken(tokenCipher);
-    const pending = await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'OUTBOUND',
-        type: 'TEXT',
-        content: body.content,
-        status: 'PENDING',
-      },
-    });
+    let pending;
+    try {
+      pending = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'OUTBOUND',
+          type: 'TEXT',
+          content: body.content,
+          status: 'PENDING',
+          idempotencyKey,
+        },
+      });
+    } catch (err) {
+      if (idempotencyKey && isIdempotencyConflict(err)) {
+        const existing = await findMessageByIdempotencyKey(conversation.id, idempotencyKey);
+        if (existing) {
+          sendSuccess(res, existing);
+          return;
+        }
+      }
+      throw err;
+    }
 
     // Irreversibility boundary: record that a provider call is in flight *before* it happens,
     // so a crash mid-send can never look like a never-attempted message (S-09 / G-09).

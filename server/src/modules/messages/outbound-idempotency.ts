@@ -23,6 +23,15 @@ export async function findMessageByIdempotencyKey(conversationId: string, key: s
   });
 }
 
+export async function replayOutboundIfKeyed(req: Request, conversationId: string) {
+  const idempotencyKey = readIdempotencyKey(req);
+  if (!idempotencyKey) return { idempotencyKey: undefined as string | undefined, replay: null };
+  return {
+    idempotencyKey,
+    replay: await findMessageByIdempotencyKey(conversationId, idempotencyKey),
+  };
+}
+
 export async function findCampaignBySendIdempotencyKey(organizationId: string, key: string) {
   return prisma.campaign.findFirst({
     where: { organizationId, sendIdempotencyKey: key },

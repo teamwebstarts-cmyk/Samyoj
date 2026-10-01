@@ -198,6 +198,9 @@ export default function SettingsPage() {
       legacy ||
       (SETTINGS_TAB_IDS.includes((raw || '') as SettingsTab) ? (raw as SettingsTab) : null)
     ) as SettingsTab | null;
+    if (searchParams.get('gmail') === '1' && tabs.some((t) => t.id === 'channels')) {
+      return 'channels';
+    }
     if (candidate && tabs.some((t) => t.id === candidate)) return candidate;
     if (searchParams.get('resetPassword') === '1' && tabs.some((t) => t.id === 'security')) {
       return 'security';

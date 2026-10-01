@@ -8,6 +8,8 @@ import {
   manualCampaignRunClaimWhere,
   materializedCampaignRunVersion,
 } from './worker-safety';
+import { gmailSendJobId } from '../gmail/constants';
+import { flowDelayJobId, inboundLockRetryJobId } from '../flows/inbound-wait';
 
 const job = {
   campaignId: 'campaign-1',
@@ -84,5 +86,15 @@ describe('campaign worker safety', () => {
     const jobId = buildCampaignJobId(campaignId, 3, 'batch', recipientId);
     expect(isValidBullMqJobId(jobId)).toBe(true);
     expect(jobId).not.toContain(':');
+  });
+
+  it('keeps Gmail and flow job ids inside the BullMQ alphabet', () => {
+    const gmailId = gmailSendJobId('27b7daa5-6cff-4143-84e4-a82598871bbc');
+    const delayId = flowDelayJobId('conv-1');
+    const retryId = inboundLockRetryJobId('conv-1', 'msg-1');
+    for (const jobId of [gmailId, delayId, retryId]) {
+      expect(isValidBullMqJobId(jobId)).toBe(true);
+      expect(jobId).not.toContain(':');
+    }
   });
 });

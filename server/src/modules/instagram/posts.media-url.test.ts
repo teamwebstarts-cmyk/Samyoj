@@ -13,7 +13,12 @@ vi.mock('../media/storage-adapter', () => ({
     `${origin || 'http://localhost:8000'}/api/media/public/${relative}?exp=1&sig=abc`,
 }));
 
-import { extractPublicMediaRelative, mediaUrlForMeta, publicApiOrigin } from './posts.media-url';
+import {
+  extractPublicMediaRelative,
+  mediaUrlForMeta,
+  publicApiOrigin,
+  refreshSignedPublicMediaUrl,
+} from './posts.media-url';
 
 describe('extractPublicMediaRelative', () => {
   it('reads the path from a Codespace UI rewrite', () => {
@@ -39,6 +44,19 @@ describe('publicApiOrigin', () => {
   it('falls back when the webhook is local', () => {
     expect(publicApiOrigin('http://localhost:8000/api/whatsapp/webhook')).toBe(
       'http://localhost:8000',
+    );
+  });
+});
+
+describe('refreshSignedPublicMediaUrl', () => {
+  it('re-signs stored media and leaves external URLs alone', () => {
+    expect(
+      refreshSignedPublicMediaUrl(
+        'http://localhost:8000/api/media/public/org/file.jpg?exp=old&sig=old',
+      ),
+    ).toBe('http://localhost:8000/api/media/public/org/file.jpg?exp=1&sig=abc');
+    expect(refreshSignedPublicMediaUrl('https://cdn.example.com/x.jpg')).toBe(
+      'https://cdn.example.com/x.jpg',
     );
   });
 });

@@ -1,8 +1,43 @@
 import crypto from 'crypto';
 import prisma from '../../config/database';
+import { logError } from '../../errors';
 import { deleteMediaObject, fetchMediaBuffer } from '../media/storage-adapter';
-import { GMAIL_SEND_LEASE_MS } from './constants';
+import {
+  GMAIL_ENQUEUE_FAILED,
+  GMAIL_ENQUEUE_FAILED_MESSAGE,
+  GMAIL_SEND_LEASE_MS,
+  gmailSendJobId,
+} from './constants';
 import { GmailProviderError, GmailReconnectRequiredError, sendGmailMessage } from './provider';
+
+export async function enqueueGmailSend(
+  emailSendId: string,
+  context?: { source?: 'api' | 'worker'; organizationId?: string; path?: string; action?: string },
+): Promise<void> {
+  const { gmailSendQueue } = await import('../../config/queues');
+  try {
+    await gmailSendQueue.add(
+      'send-email',
+      { emailSendId },
+      { jobId: gmailSendJobId(emailSendId) },
+    );
+  } catch (error) {
+    await markEmailSendFailed(
+      emailSendId,
+      'FAILED',
+      GMAIL_ENQUEUE_FAILED_MESSAGE,
+      GMAIL_ENQUEUE_FAILED,
+    );
+    logError(error, {
+      source: context?.source ?? 'api',
+      path: context?.path ?? '/api/gmail/send',
+      organizationId: context?.organizationId,
+      action: context?.action ?? 'enqueueGmailSend',
+      emailSendId,
+    });
+    throw error;
+  }
+}
 
 async function cleanupAttachments(sendId: string): Promise<void> {
   const attachments = await prisma.emailAttachment.findMany({
@@ -293,13 +328,12 @@ export async function reconcileGmailSends(): Promise<void> {
     take: 100,
   });
   if (!queued.length) return;
-  const { gmailSendQueue } = await import('../../config/queues');
   for (const send of queued) {
-    await gmailSendQueue.add(
-      'send-email',
-      { emailSendId: send.id },
-      { jobId: `gmail-send:${send.id}` },
-    );
+    try {
+      await enqueueGmailSend(send.id, { source: 'worker', action: 'reconcileGmailSends' });
+    } catch {
+      // Row is already FAILED + logged. Do not rethrow or reconcile will 500 every minute.
+    }
   }
 }
 

@@ -73,6 +73,12 @@ export default function InstagramInboxPage() {
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const idempotencyKeyRef = useRef(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `ig-send-${Date.now()}`
+  );
   const [threadLoading, setThreadLoading] = useState(false);
   const [agents, setAgents] = useState<TeamAgent[]>([]);
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
@@ -233,6 +239,10 @@ export default function InstagramInboxPage() {
   const onSend = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedId || !draft.trim()) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    try {
     if (isMetaMockId(selectedId)) {
       const content = draft.trim().slice(0, 1000);
       const msg: Message = {
@@ -266,21 +276,24 @@ export default function InstagramInboxPage() {
     };
     setMessages((prev) => [...prev, optimistic]);
     setDraft('');
-    setSending(true);
     try {
-      const { data } = await instagramApi.inbox.send(selectedId, text);
+      const { data } = await instagramApi.inbox.send(selectedId, text, idempotencyKeyRef.current);
       const confirmed = data.data as Message;
       setMessages((prev) =>
         prev.map((m) => (m.id === optimisticId ? confirmed : m))
       );
+      idempotencyKeyRef.current = crypto.randomUUID();
       void loadList();
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) => (m.id === optimisticId ? { ...m, status: 'FAILED' } : m))
       );
       setDraft(text);
+      idempotencyKeyRef.current = crypto.randomUUID();
       toastError(getErrorMessage(err) || 'Send failed');
+    }
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -343,6 +356,10 @@ export default function InstagramInboxPage() {
       if (!windowOpen) toastError('Wait for the customer to message again.');
       return;
     }
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    try {
     if (isMetaMockId(selectedId)) {
       toastSuccess('Sample thread — attachments are not sent in mock mode');
       return;
@@ -380,15 +397,20 @@ export default function InstagramInboxPage() {
       const uploaded = up.data as { publicUrl?: string; mediaPath?: string };
       const mediaUrl = uploaded.publicUrl;
       if (!mediaUrl) throw new Error('Upload did not return a URL');
-      const { data: sent } = await instagramApi.inbox.sendMedia(selectedId, {
-        mediaUrl,
-        kind,
-        mediaPath: uploaded.mediaPath,
-        filename: file.name,
-        mimeType: file.type || undefined,
-      });
+      const { data: sent } = await instagramApi.inbox.sendMedia(
+        selectedId,
+        {
+          mediaUrl,
+          kind,
+          mediaPath: uploaded.mediaPath,
+          filename: file.name,
+          mimeType: file.type || undefined,
+        },
+        idempotencyKeyRef.current
+      );
       const confirmed = sent.data as Message;
       setMessages((prev) => prev.map((m) => (m.id === optimisticId ? confirmed : m)));
+      idempotencyKeyRef.current = crypto.randomUUID();
       void loadList();
     } catch (err) {
       const reason = getErrorMessage(err) || 'Could not send the file';
@@ -399,7 +421,12 @@ export default function InstagramInboxPage() {
             : m
         )
       );
+      idempotencyKeyRef.current = crypto.randomUUID();
       toastError(reason);
+    }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   };
 

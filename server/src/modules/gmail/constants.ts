@@ -7,6 +7,17 @@ export const MAX_DECODED_MIME_BYTES = 20 * 1024 * 1024;
 export const ATTACHMENT_TTL_MS = 24 * 60 * 60 * 1000;
 export const GMAIL_REQUEST_TIMEOUT_MS = 30_000;
 export const GMAIL_SEND_LEASE_MS = 15 * 60 * 1000;
+export const GMAIL_ENQUEUE_FAILED = 'GMAIL_ENQUEUE_FAILED';
+export const GMAIL_ENQUEUE_FAILED_MESSAGE = 'Email could not be queued. Try again.';
+
+/** BullMQ 5 rejects custom job ids that contain `:`. */
+export function gmailSendJobId(sendId: string): string {
+  const id = sendId.trim();
+  if (!id || id.includes(':')) {
+    throw new Error('Gmail send job id cannot contain a colon');
+  }
+  return `gmail-send-${id}`;
+}
 
 export const ALLOWED_ATTACHMENT_MIMES = new Set([
   'application/pdf',

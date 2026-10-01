@@ -46,11 +46,11 @@ export default function InboxListEmpty({
       <div className="flex flex-col items-center px-6 py-12 text-center">
         <InboxEmptyIcon icon={MessageSquarePlus} size="md" />
         <h3 className="mt-5 text-[15px] font-bold tracking-tight text-theme-fg">
-          {pageConnected ? 'No Instagram chats yet.' : 'Connect Instagram'}
+          {pageConnected ? 'No Instagram DMs yet.' : 'Connect Instagram'}
         </h3>
-        <p className="mt-2 max-w-[260px] text-[13px] leading-relaxed text-theme-secondary">
+        <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-theme-secondary">
           {pageConnected
-            ? 'When someone DMs your professional account, it shows up here.'
+            ? 'Comments on posts appear under Comments, not here. DMs show up only after a customer messages this account. Reconnect will not help if Meta still rejects Instagram messaging on the app.'
             : 'Instagram uses the Facebook Page already linked to this workspace.'}
         </p>
         {!pageConnected && (
@@ -77,9 +77,9 @@ export default function InboxListEmpty({
         <h3 className="mt-5 text-[15px] font-bold tracking-tight text-theme-fg">
           {pageConnected ? 'No Messenger chats yet.' : 'Connect a Facebook Page'}
         </h3>
-        <p className="mt-2 max-w-[260px] text-[13px] leading-relaxed text-theme-secondary">
+        <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-theme-secondary">
           {pageConnected
-            ? 'When someone messages your Page, it shows up here.'
+            ? 'A customer has to message this Page. Comments and ads are not Messenger chats. If the Page is connected but chats never arrive, reconnect Facebook so messages are subscribed.'
             : 'Connect the Page here. Messenger chats land in this inbox, not WhatsApp.'}
         </p>
         {!pageConnected && (

@@ -14,7 +14,7 @@ import {
   sendPrivateReplyForComment,
   sendPublicReplyForComment,
 } from './comment-ingest';
-import { syncInstagramComments } from './comment-sync';
+import { syncInstagramComments, withInstagramCommentSyncLock } from './comment-sync';
 import { loadInstagramMediaPreviews, type InstagramMediaPreview } from './media-cache';
 import {
   getInstagramCommentRetentionDays,
@@ -95,6 +95,7 @@ router.get(
         const token = MetaWhatsAppService.decryptToken(tokenCipher);
         mediaById = await loadInstagramMediaPreviews({
           channelId: channel.id,
+          organizationId: orgId,
           pageAccessToken: token,
           igMediaIds: mediaIds,
         });
@@ -150,15 +151,20 @@ router.post(
     const tokenCipher = fbPage?.accessToken;
     if (!tokenCipher) throw new AppError(400, 'Connect the Facebook Page linked to Instagram first');
     const token = MetaWhatsAppService.decryptToken(tokenCipher);
-    const result = await syncInstagramComments({
-      organizationId: orgId,
-      channelId: channel.id,
-      igUserId: channel.platformAccountId,
-      pageAccessToken: token,
-      businessUsername: channel.name,
-      maxMedia: 40,
-      maxScan: 1000,
-    });
+    const result = await withInstagramCommentSyncLock(channel.id, () =>
+      syncInstagramComments({
+        organizationId: orgId,
+        channelId: channel.id,
+        igUserId: channel.platformAccountId,
+        pageAccessToken: token,
+        businessUsername: channel.name,
+        maxMedia: 40,
+        maxScan: 1000,
+      })
+    );
+    if (result === 'busy') {
+      throw new AppError(409, 'Already loading older comments.');
+    }
     sendSuccess(res, result);
   })
 );

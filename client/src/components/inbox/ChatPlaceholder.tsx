@@ -40,12 +40,12 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
     },
     facebook: {
       title: 'Messenger inbox is ready',
-      body: 'Page messages, 24-hour reply window, photos, video, PDF, and audio — same rules as Meta Messenger.',
+      body: 'Page messages land here after a customer writes the Page. Comments and lead ads are not this inbox.',
       hint: 'Pick a chat on the left to reply',
     },
     instagram: {
       title: 'Instagram DMs are ready',
-      body: 'DMs from your professional account — reply, automate, and keep notes in one place.',
+      body: 'Comments stay under Comments. Direct messages appear here only after someone DMs this account.',
       hint: 'Select a conversation to begin replying',
     },
   }[platform];

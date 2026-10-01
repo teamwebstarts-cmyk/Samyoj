@@ -255,6 +255,9 @@ export interface GmailContact {
   id: string;
   name: string | null;
   email: string | null;
+  tags?: string[];
+  optedIn?: boolean;
+  source?: 'MANUAL' | 'IMPORT' | 'INBOUND' | 'OUTBOUND';
   emailOptedIn: boolean;
   emailConsentSource: string | null;
   emailConsentAt: string | null;
@@ -305,7 +308,7 @@ export interface GmailAttachment {
 }
 
 export interface GmailSendPayload {
-  contactIds: [string];
+  contactIds: string[];
   subject?: string;
   textBody?: string;
   htmlBody?: string | null;
@@ -541,6 +544,9 @@ export const facebookApi = {
         pageName?: string;
         subscribed?: boolean;
         subscribeError?: string;
+        igUserId?: string;
+        igSubscribed?: boolean;
+        igSubscribeError?: string;
       };
     }>('/facebook/connect/callback', { code, state }),
   selectConnect: (pendingToken: string, pageId: string) =>
@@ -552,6 +558,9 @@ export const facebookApi = {
         pageName?: string;
         subscribed?: boolean;
         subscribeError?: string;
+        igUserId?: string;
+        igSubscribed?: boolean;
+        igSubscribeError?: string;
       };
     }>('/facebook/connect/select', { pendingToken, pageId }),
   disconnect: (channelId?: string) =>
@@ -582,10 +591,12 @@ export const facebookApi = {
       api.get<{ data: { messages: import('../types').Message[] } }>(
         `/facebook/inbox/${id}/messages`
       ),
-    send: (id: string, content: string) =>
-      api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, {
-        content,
-      }),
+    send: (id: string, content: string, idempotencyKey?: string) =>
+      api.post<{ data: import('../types').Message }>(
+        `/facebook/inbox/${id}/messages`,
+        { content },
+        idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+      ),
     sendMedia: (
       id: string,
       payload: {
@@ -594,8 +605,14 @@ export const facebookApi = {
         mediaPath?: string;
         filename?: string;
         mimeType?: string;
-      }
-    ) => api.post<{ data: import('../types').Message }>(`/facebook/inbox/${id}/messages`, payload),
+      },
+      idempotencyKey?: string
+    ) =>
+      api.post<{ data: import('../types').Message }>(
+        `/facebook/inbox/${id}/messages`,
+        payload,
+        idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+      ),
     deleteMessages: (id: string, messageIds: string[]) =>
       api.post<{ data: { deleted: number; messageIds: string[] } }>(
         `/facebook/inbox/${id}/messages/delete`,
@@ -756,10 +773,12 @@ export const instagramApi = {
       api.get<{ data: { messages: import('../types').Message[] } }>(
         `/instagram/inbox/${id}/messages`
       ),
-    send: (id: string, content: string) =>
-      api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, {
-        content,
-      }),
+    send: (id: string, content: string, idempotencyKey?: string) =>
+      api.post<{ data: import('../types').Message }>(
+        `/instagram/inbox/${id}/messages`,
+        { content },
+        idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+      ),
     sendMedia: (
       id: string,
       payload: {
@@ -768,8 +787,14 @@ export const instagramApi = {
         mediaPath?: string;
         filename?: string;
         mimeType?: string;
-      }
-    ) => api.post<{ data: import('../types').Message }>(`/instagram/inbox/${id}/messages`, payload),
+      },
+      idempotencyKey?: string
+    ) =>
+      api.post<{ data: import('../types').Message }>(
+        `/instagram/inbox/${id}/messages`,
+        payload,
+        idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+      ),
     deleteMessages: (id: string, messageIds: string[]) =>
       api.post<{ data: { deleted: number; messageIds: string[] } }>(
         `/instagram/inbox/${id}/messages/delete`,
