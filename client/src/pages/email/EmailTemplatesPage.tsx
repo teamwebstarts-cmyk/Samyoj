@@ -132,7 +132,7 @@ export default function EmailTemplatesPage() {
   // Not-connected gate — no template management until the mailbox is connected.
   if (!connected) {
     return (
-      <PageShell>
+      <PageShell className="h-full min-h-0 overflow-y-auto">
         <div className="ema-page ema-shell">
           <EmailConnectScreen connectionStatus={status?.status} />
         </div>

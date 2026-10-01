@@ -95,7 +95,12 @@ export default function TemplateWizardPage() {
   const [maxReachableStep, setMaxReachableStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
-  const [headerPreviewUrl, setHeaderPreviewUrl] = useState<string | null>(null);
+  const [headerPreviewUrl, setHeaderPreviewUrl] = useState<string | null>(
+    () => (state.studioHandoff && state.headerMediaUrl ? state.headerMediaUrl : null),
+  );
+  const [studioHeaderPhase, setStudioHeaderPhase] = useState<'idle' | 'loading' | 'ready' | 'failed'>(
+    () => (state.studioHandoff && state.headerMediaUrl ? 'loading' : 'idle'),
+  );
   const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(null);
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [resubmitBlocked, setResubmitBlocked] = useState<string | null>(null);
@@ -145,6 +150,8 @@ export default function TemplateWizardPage() {
         reader.readAsDataURL(blob);
       });
 
+    setHeaderPreviewUrl(source);
+    setStudioHeaderPhase('loading');
     void (async () => {
       try {
         const response = await fetch(source);
@@ -163,9 +170,11 @@ export default function TemplateWizardPage() {
           headerFormat: 'IMAGE',
           headerMediaHandle: uploaded.data.handle,
         }));
+        setStudioHeaderPhase('ready');
       } catch (error) {
         studioHeaderLoadedRef.current = false;
         if (!cancelled) {
+          setStudioHeaderPhase('failed');
           toastWarning(
             error instanceof Error
               ? `${error.message}. You can upload the header image manually.`
@@ -246,10 +255,20 @@ export default function TemplateWizardPage() {
   });
 
   useEffect(() => {
-    if (state.form) {
-      setForm(syncFormExamples({ ...createEmptyWizardForm(), ...state.form, variableMeta: state.form.variableMeta || [] }));
-    }
-  }, [state.form]);
+    if (!state.form) return;
+    setForm((current) => {
+      const next = syncFormExamples({
+        ...createEmptyWizardForm(),
+        ...state.form,
+        variableMeta: state.form?.variableMeta || [],
+      });
+      if (state.studioHandoff && current.headerMediaHandle) {
+        next.headerFormat = current.headerFormat;
+        next.headerMediaHandle = current.headerMediaHandle;
+      }
+      return next;
+    });
+  }, [state.form, state.studioHandoff]);
 
   useEffect(() => {
     if (state.form || isResubmit || state.studioBody) return;
@@ -423,6 +442,10 @@ export default function TemplateWizardPage() {
       return;
     }
     if (activeStep === 0) {
+      if (studioHeaderPhase === 'loading') {
+        toastWarning('The generated header image is still attaching. Wait a moment, then continue.');
+        return;
+      }
       if (!validateStep(0)) return;
       const withSamples = autoFillTemplateSamples(form);
       setForm(withSamples);
@@ -564,7 +587,14 @@ export default function TemplateWizardPage() {
         {state.studioHandoff && (
           <p className="mb-4 flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-medium text-violet-800 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-200">
             <Sparkles className="h-4 w-4 flex-none text-violet-600 dark:text-violet-300" />
-            Loaded from AI Studio{state.studioName ? ` — “${state.studioName}”` : ''}. Name, category, body, footer, buttons and example values are pre-filled. Add the header image, then submit for approval.
+            Loaded from AI Studio{state.studioName ? ` — “${state.studioName}”` : ''}. Name, category, body, footer, buttons and example values are pre-filled.
+            {state.headerMediaUrl
+              ? studioHeaderPhase === 'loading'
+                ? ' The generated header image is being attached — you can still replace it.'
+                : studioHeaderPhase === 'failed'
+                  ? ' Header is set to Image. The generated file did not attach, so upload a sample before submitting.'
+                  : ' The generated header image is selected. Replace it if you want a different one, then submit for approval.'
+              : ' Add the header image, then submit for approval.'}
           </p>
         )}
         {templateGateMessage && (
@@ -702,7 +732,7 @@ export default function TemplateWizardPage() {
               <AppButton
                 type="button"
                 size="sm"
-                loading={saving}
+                loading={saving || (activeStep === 0 && studioHeaderPhase === 'loading')}
                 icon={
                   activeStep === 0 ? (
                     <ChevronRight className="h-3.5 w-3.5" />
@@ -714,7 +744,9 @@ export default function TemplateWizardPage() {
                 onClick={() => void handleContinue()}
                 disabled={!canManageTemplates}
               >
-                {activeStep === 0
+                {activeStep === 0 && studioHeaderPhase === 'loading'
+                  ? 'Attaching image…'
+                  : activeStep === 0
                   ? 'Continue to review'
                   : mode === 'resubmit'
                     ? 'Resubmit for review'

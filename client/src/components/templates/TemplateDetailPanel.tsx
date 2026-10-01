@@ -78,6 +78,20 @@ export default function TemplateDetailPanel({
 
   useEffect(() => {
     let cancelled = false;
+    setHeaderMediaUrl('');
+    setCouponCode('');
+    setButtonUrlSuffixes(Array.from({ length: templateDynamicUrlButtons(template).length }, () => ''));
+    if (needsMedia) {
+      templateApi
+        .studioMedia(template.name)
+        .then(({ data }) => {
+          const mediaUrl = data.data?.mediaUrl;
+          if (!cancelled && typeof mediaUrl === 'string' && mediaUrl) {
+            setHeaderMediaUrl((current) => current || mediaUrl);
+          }
+        })
+        .catch(() => undefined);
+    }
     fetchTemplateVariableMeta(template.name, template.language).then((meta) => {
       if (cancelled) return;
       setBodyParams(
@@ -92,14 +106,11 @@ export default function TemplateDetailPanel({
           return tokenForMeta(mapped);
         }),
       );
-      setHeaderMediaUrl('');
-      setCouponCode('');
-      setButtonUrlSuffixes(Array.from({ length: templateDynamicUrlButtons(template).length }, () => ''));
     });
     return () => {
       cancelled = true;
     };
-  }, [template]);
+  }, [needsMedia, template]);
 
   const filledPreview = getFilledTemplatePreview(template, {
     bodyParams: previewParams(bodyParams),

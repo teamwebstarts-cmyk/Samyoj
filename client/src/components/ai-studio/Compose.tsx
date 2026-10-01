@@ -25,21 +25,21 @@ function HeroIllustration() {
 
 function Hero() {
   return (
-    <section className="hero-bg relative overflow-hidden rounded-[24px] border border-white/10 px-5 py-6 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:px-8 sm:py-8 lg:min-h-[248px] lg:pr-[400px] xl:pr-[450px]">
-      <div className="relative z-10 max-w-[520px]">
+    <section className="hero-bg relative overflow-hidden rounded-[18px] border border-white/10 px-4 py-5 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:rounded-[24px] sm:px-6 sm:py-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(168px,40%)] md:items-center md:gap-2 md:px-6 lg:block lg:min-h-[248px] lg:px-8 lg:py-8 lg:pr-[400px] xl:pr-[450px]">
+      <div className="relative z-10 min-w-0 max-w-[520px]">
         <span className="mb-3 inline-flex items-center gap-2 rounded-md border border-[#6d3df2]/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6d3df2] backdrop-blur">
           <Sparkles size={12} /> AI creative studio
         </span>
-        <h2 className="text-[26px] font-extrabold leading-[1.08] tracking-tight text-[#241b3b] sm:text-[32px] lg:text-[34px] 2xl:text-[38px]">
+        <h2 className="text-[22px] font-extrabold leading-[1.12] tracking-tight text-[#241b3b] sm:text-[28px] lg:text-[34px] 2xl:text-[38px]">
           Describe your idea,
           <br />
           we'll <span className="gradient-text">create the content.</span>
         </h2>
-        <p className="mt-3 max-w-[470px] text-[14px] leading-relaxed text-[#685f7d] sm:text-[15px]">
+        <p className="mt-3 max-w-[470px] text-[13px] leading-relaxed text-[#685f7d] sm:text-[15px]">
           Share your product, offer, or campaign idea. Get polished visuals and ready-to-use copy for Instagram, WhatsApp, and Email — all from one brief.
         </p>
       </div>
-      <div className="hero-stage pointer-events-none relative mx-auto mt-4 aspect-[460/240] w-full max-w-[460px] lg:absolute lg:right-2 lg:top-1/2 lg:mx-0 lg:mt-0 lg:w-[380px] lg:-translate-y-1/2 xl:w-[430px]" aria-hidden="true">
+      <div className="hero-stage pointer-events-none relative mx-auto mt-4 aspect-[460/240] w-full max-w-[280px] sm:max-w-[360px] md:mx-0 md:mt-0 md:max-w-none md:w-full lg:absolute lg:right-2 lg:top-1/2 lg:mx-0 lg:mt-0 lg:w-[380px] lg:-translate-y-1/2 xl:w-[430px]" aria-hidden="true">
         <HeroIllustration />
       </div>
     </section>
@@ -297,7 +297,7 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
       <span className="field-label" id="outputs-label">
         What do you want to create? <small>(select one or more)</small>
       </span>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4" role="group" aria-labelledby="outputs-label">
+      <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4" role="group" aria-labelledby="outputs-label">
         {OUTPUT_OPTIONS.map((o) => {
           const on = value.includes(o.id);
           return (
@@ -307,7 +307,7 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
               role="checkbox"
               aria-checked={on}
               onClick={() => toggle(o.id)}
-              className={`relative flex min-h-[132px] min-w-0 flex-col items-center justify-center rounded-2xl border px-3 py-3 text-center transition-all duration-150 ${
+              className={`relative flex min-h-[96px] min-w-0 flex-col items-center justify-center rounded-2xl border px-3 py-3 text-center transition-all duration-150 sm:min-h-[132px] ${
                 on
                   ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] shadow-[0_8px_20px_rgba(109,61,242,0.12)]"
                   : "border-[#e4dcf8] bg-white hover:-translate-y-0.5 hover:border-[var(--ai-primary-ring)] hover:bg-[#faf8ff] hover:shadow-[0_8px_18px_rgba(109,61,242,0.08)]"
@@ -393,7 +393,7 @@ function Examples({ onUse }: { onUse: (id: string) => void }) {
           <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">Pick one. The brief and channels fill in, then you can edit before generating.</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {EXAMPLE_IDEAS.map((ex) => {
           const poster = EXAMPLE_POSTERS[ex.id];
           const Icon = poster?.icon ?? Megaphone;
@@ -545,7 +545,7 @@ export function Compose(p: ComposeProps) {
         )}
         <Hero />
 
-        <section className="card p-5 sm:p-6" aria-label="Create content">
+        <section className="card p-4 sm:p-5 lg:p-6" aria-label="Create content">
           <div className="mb-2 flex items-center justify-between gap-3">
             <label htmlFor="brief" className="text-[14px] font-extrabold">
               Your idea or brief
@@ -614,8 +614,8 @@ export function Compose(p: ComposeProps) {
                   { value: 4, label: "4 images" },
                 ]}
               />
-              {photoError && <span className="flex-none text-[11px] font-semibold text-[var(--danger)]" role="alert">{photoError}</span>}
-              <span className={`ml-auto text-[11px] font-semibold ${count >= MAX_BRIEF ? "text-[var(--danger)]" : "text-[var(--text-soft)]"}`} aria-live="polite">
+              {photoError && <span className="w-full text-[11px] font-semibold text-[var(--danger)] sm:w-auto" role="alert">{photoError}</span>}
+              <span className={`w-full text-right text-[11px] font-semibold sm:ml-auto sm:w-auto ${count >= MAX_BRIEF ? "text-[var(--danger)]" : "text-[var(--text-soft)]"}`} aria-live="polite">
                 {count}/{MAX_BRIEF}
               </span>
             </div>

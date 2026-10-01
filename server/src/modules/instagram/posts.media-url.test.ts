@@ -18,6 +18,7 @@ import {
   mediaUrlForMeta,
   publicApiOrigin,
   refreshSignedPublicMediaUrl,
+  studioTemplateHeaderUrl,
 } from './posts.media-url';
 
 describe('extractPublicMediaRelative', () => {
@@ -62,6 +63,26 @@ describe('refreshSignedPublicMediaUrl', () => {
       ),
     ).toBe('http://localhost:8000/api/media/public/org/file.jpg?exp=1&sig=abc');
     expect(refreshSignedPublicMediaUrl('https://cdn.example.com/x.jpg')).toBe(
+      'https://cdn.example.com/x.jpg',
+    );
+  });
+});
+
+describe('studioTemplateHeaderUrl', () => {
+  it('uses the header the user picked, not the first generated slide', () => {
+    expect(
+      studioTemplateHeaderUrl({
+        headerMediaUrl: '/api/media/public/org/b.png?exp=1&sig=old',
+        mediaPaths: ['org/a.png', 'org/b.png'],
+      }),
+    ).toBe('https://example-8000.app.github.dev/api/media/public/org/b.png?exp=1&sig=abc');
+  });
+
+  it('falls back to the first stored path when the header is not a Samyoj file', () => {
+    expect(studioTemplateHeaderUrl({ mediaPaths: ['org/a.png'] })).toBe(
+      'https://example-8000.app.github.dev/api/media/public/org/a.png?exp=1&sig=abc',
+    );
+    expect(studioTemplateHeaderUrl({ headerMediaUrl: 'https://cdn.example.com/x.jpg' })).toBe(
       'https://cdn.example.com/x.jpg',
     );
   });

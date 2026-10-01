@@ -52,6 +52,27 @@ export function mediaUrlForMeta(url: string): string {
   return getPublicMediaUrl(relative, publicApiOrigin());
 }
 
+/**
+ * Public https URL for a WhatsApp template that came from AI Studio.
+ * The image the user picked as the header wins over the first generated slide.
+ */
+export function studioTemplateHeaderUrl(payload: {
+  headerMediaUrl?: unknown;
+  mediaPaths?: unknown;
+}): string | null {
+  const headerMediaUrl = typeof payload.headerMediaUrl === 'string' ? payload.headerMediaUrl.trim() : '';
+  const fromHeader = headerMediaUrl ? extractPublicMediaRelative(headerMediaUrl) : null;
+  const paths = Array.isArray(payload.mediaPaths)
+    ? payload.mediaPaths.filter(
+        (value): value is string => typeof value === 'string' && value.length > 0 && !value.includes('..'),
+      )
+    : [];
+  const path = fromHeader || paths[0] || null;
+  if (path) return getPublicMediaUrl(path, publicApiOrigin());
+  if (headerMediaUrl.startsWith('https://')) return headerMediaUrl;
+  return null;
+}
+
 /** Fresh signed URL for browser previews (API may return an older origin or expiry). */
 export function refreshSignedPublicMediaUrl(url: string | null | undefined): string | null {
   const trimmed = (url ?? '').trim();

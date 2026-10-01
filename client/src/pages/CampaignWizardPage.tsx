@@ -365,6 +365,31 @@ export default function CampaignWizardPage() {
     }));
   }, [selectedTemplate]);
 
+  const appliedStudioHeader = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedTemplate || !templateNeedsHeaderMedia(selectedTemplate)) return;
+    const name = selectedTemplate.name;
+    let cancelled = false;
+    templateApi
+      .studioMedia(name)
+      .then(({ data }) => {
+        const mediaUrl = typeof data.data?.mediaUrl === 'string' ? data.data.mediaUrl : '';
+        if (cancelled) return;
+        setForm((previous) => {
+          if (previous.templateName !== name) return previous;
+          const untouched =
+            !previous.headerMediaUrl.trim() || appliedStudioHeader.current === previous.headerMediaUrl;
+          if (!untouched) return previous;
+          appliedStudioHeader.current = mediaUrl || null;
+          return { ...previous, headerMediaUrl: mediaUrl };
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTemplate]);
+
   const navigateToStep = (step: number) => {
     if (step <= activeStep) {
       setStageError(null);

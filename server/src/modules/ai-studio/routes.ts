@@ -7,8 +7,7 @@ import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
 import { recordUsage } from '../content-studio/shared/cost-guard';
 import { resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
-import { getPublicMediaUrl } from '../media/storage-adapter';
-import { publicApiOrigin } from '../instagram/posts.media-url';
+import { studioTemplateHeaderUrl } from '../instagram/posts.media-url';
 import { isImageQuality, type ImageQuality } from './hunyuan-image';
 import { buildSlideImagePrompt, generateOneStudioImage, isImageCount, stampPackWithModelImages, type ImageCount } from './studio-image-pipeline';
 import { buildStudioSystemPrompt } from './studio-prompts';
@@ -399,15 +398,7 @@ router.get(
       ) {
         continue;
       }
-      const paths = Array.isArray(payload.mediaPaths)
-        ? payload.mediaPaths.filter((value): value is string => typeof value === 'string' && value.length > 0)
-        : [];
-      const mediaUrl =
-        paths.length > 0
-          ? getPublicMediaUrl(paths[0], publicApiOrigin())
-          : typeof payload.headerMediaUrl === 'string'
-            ? payload.headerMediaUrl
-            : null;
+      const mediaUrl = studioTemplateHeaderUrl(payload);
       sendSuccess(res, { mediaUrl, packId: payload.packId || null });
       return;
     }

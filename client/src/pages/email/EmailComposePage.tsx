@@ -575,7 +575,7 @@ export default function EmailComposePage() {
 
   if (!mailboxConnected) {
     return (
-      <PageShell>
+      <PageShell className="h-full min-h-0 overflow-y-auto">
         <div className="ema-page ema-shell">
           {loadError ? <div className="ema-notice ema-notice--fail" role="alert">{loadError}</div> : null}
           <EmailConnectScreen connectionStatus={status?.status} />
@@ -594,7 +594,7 @@ export default function EmailComposePage() {
             Loaded from AI Studio — “{studioHandoffName}”. Subject, body and the generated poster (attachment) are pre-filled. Choose recipients and send when ready.
           </p>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="ema-compose-head flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-[19px] font-extrabold tracking-[-0.02em] text-[var(--ema-ink)]">
               Email

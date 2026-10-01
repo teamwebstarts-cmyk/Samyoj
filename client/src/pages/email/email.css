@@ -73,12 +73,17 @@
   min-height: 0;
   height: 100%;
   width: 100%;
+  overflow: hidden;
+}
+.ema-compose-head {
+  flex-shrink: 0;
 }
 .ema-shell--templates {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 /* ============ Buttons ============ */
@@ -922,6 +927,7 @@
   min-height: 0;
   height: 100%;
   max-height: 100%;
+  overflow: hidden;
 }
 .ema-split--viewport > .ema-card {
   min-height: 0;
@@ -931,15 +937,16 @@
 @media (max-width: 900px) {
   .ema-split {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 32%) minmax(0, 1fr);
     min-height: 0;
   }
   .ema-split--viewport {
-    height: auto;
-    max-height: none;
-    flex: 1 1 auto;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
   }
   .ema-split--viewport .ema-sent {
-    max-height: min(52vh, 520px);
+    max-height: 100%;
   }
 }
 
@@ -1004,6 +1011,7 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 2px 8px 6px;
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.45) transparent;

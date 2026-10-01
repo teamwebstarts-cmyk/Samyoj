@@ -285,7 +285,7 @@ export function PackView(p: Props) {
         <div className="min-w-0 space-y-4">
           {/* tabs */}
           <div className="thin-scroll -mx-1 overflow-x-auto px-1" onKeyDown={onTabKey}>
-            <div role="tablist" aria-label="Content pack sections" className="flex min-w-[560px] w-full gap-1.5 rounded-xl border border-[var(--border)] bg-white p-1.5">
+            <div role="tablist" aria-label="Content pack sections" className="grid w-full grid-cols-2 gap-1.5 rounded-xl border border-[var(--border)] bg-white p-1.5 sm:flex">
               {visibleTabs.map((t) => (
                 <button
                   key={t.id}

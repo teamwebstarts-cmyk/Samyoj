@@ -489,6 +489,22 @@ export function newBlankSlide(pack: Pack, count: number): Slide {
 /* Hand-off payloads (shape of the future deep-link payloads)          */
 /* ------------------------------------------------------------------ */
 
+function usableImageUrl(value: string | null | undefined): string | undefined {
+  const url = value?.trim();
+  if (!url) return undefined;
+  if (url.startsWith("/api/media/") || /^https?:\/\//.test(url)) return url;
+  return undefined;
+}
+
+/** Selected header path first, so later sends attach that image, not slide 1. */
+function headerPathFirst(pack: Pack, headerUrl?: string): string[] {
+  const paths = (pack.mediaPaths || []).filter((path) => path && !path.includes(".."));
+  const match = headerUrl?.match(/\/api\/media\/public\/([^?#]+)/);
+  const selected = match ? decodeURIComponent(match[1]) : "";
+  if (!selected) return paths;
+  return [selected, ...paths.filter((path) => path !== selected)];
+}
+
 export function buildHandoff(pack: Pack, channel: Channel): HandoffPayload {
   if (channel === "instagram") {
     const slides = pack.carousel ?? [];
@@ -515,20 +531,19 @@ export function buildHandoff(pack: Pack, channel: Channel): HandoffPayload {
   }
   if (channel === "whatsapp") {
     const t = pack.whatsapp!;
+    const headerMediaUrl = usableImageUrl(t.header.source);
     return {
       channel,
       destination: "WhatsApp Templates",
-      summary: [`Category · ${t.category}`, `Header · ${t.header.source}`, `Body · ${t.body.length} characters`, `Buttons · ${t.buttons.map((b) => b.label).join(", ")}`],
+      summary: [`Category · ${t.category}`, `Header · ${headerMediaUrl || "none"}`, `Body · ${t.body.length} characters`, `Buttons · ${t.buttons.map((b) => b.label).join(", ")}`],
       data: {
         route: `/templates/new?studioPack=${pack.id}`,
         packId: pack.id,
         name: t.name,
         category: t.category,
         language: t.language,
-        headerMediaUrl: t.header.source,
-        mediaPaths: Array.isArray((pack as Pack & { mediaPaths?: string[] }).mediaPaths)
-          ? (pack as Pack & { mediaPaths?: string[] }).mediaPaths
-          : [],
+        headerMediaUrl,
+        mediaPaths: headerPathFirst(pack, headerMediaUrl),
         components: [
           { type: "HEADER", format: "IMAGE" },
           { type: "BODY", text: t.body, example: { body_text: [Object.values(t.examples)] } },
@@ -596,17 +611,20 @@ export function buildHandoffState(pack: Pack, channel: Channel): HandoffNavState
   }
   if (channel === "whatsapp") {
     const t = pack.whatsapp!;
+    const headerMediaUrl = usableImageUrl(t.header.source);
     return {
       studioPack: pack.id,
       studioHandoff: true,
       studioName: pack.name,
+      headerMediaUrl,
+      mediaPaths: headerPathFirst(pack, headerMediaUrl),
       form: {
         name: t.name,
         language: wizardLanguage(t.language),
         category: "MARKETING",
         body: t.body,
         header: "",
-        headerFormat: "NONE",
+        headerFormat: headerMediaUrl ? "IMAGE" : "NONE",
         headerMediaHandle: "",
         footer: t.footer,
         buttons: t.buttons.map((b) => ({ type: b.type, text: b.label, url: b.url, phone_number: "", example: "" })),

@@ -156,6 +156,11 @@ export function isInboxRoute(pathname: string): boolean {
   );
 }
 
+/** Email compose and templates fill the viewport; the panes scroll, not the app shell. */
+export function isEmailShellRoute(pathname: string): boolean {
+  return pathname === '/email/compose' || pathname === '/email/templates';
+}
+
 /** Calls uses the same full-viewport shell card as Inbox — lock main scroll. */
 export function isCallsShellRoute(pathname: string): boolean {
   return pathname === '/calls' || pathname.startsWith('/calls/');

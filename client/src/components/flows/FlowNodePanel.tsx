@@ -10,6 +10,7 @@ import TemplateButtonExtras from '../templates/TemplateButtonExtras';
 import { templateDynamicUrlButtons } from '../../utils/templateForm';
 import { templateNeedsHeaderMedia } from '../campaigns/campaignPreviewUtils';
 import { getFlowReferenceData } from './flowReferenceData';
+import { templateApi } from '../../services/api';
 import { nodeMeta } from './flowMeta';
 import type { AiBot, Flow, FlowNode, MessageTemplate, TeamAgent } from '../../types';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
@@ -135,6 +136,34 @@ function FlowNodePanelForm({
       })
       .catch(() => {});
   }, [activeNumber, organization?.id, resolved]);
+
+  const appliedFlowHeader = useRef<string | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    if (node.type !== 'template' || !node.templateName) return;
+    const selected = templates.find((item) => item.name === node.templateName);
+    if (!selected || !templateNeedsHeaderMedia(selected)) return;
+    const name = node.templateName;
+    const currentUrl = node.templateHeaderMediaUrl || '';
+    let cancelled = false;
+    templateApi
+      .studioMedia(name)
+      .then(({ data }) => {
+        const mediaUrl = typeof data.data?.mediaUrl === 'string' ? data.data.mediaUrl : '';
+        if (cancelled || !mediaUrl || currentUrl === mediaUrl) return;
+        const untouched = !currentUrl.trim() || appliedFlowHeader.current === currentUrl;
+        if (!untouched) return;
+        appliedFlowHeader.current = mediaUrl;
+        onChangeRef.current({ templateHeaderMediaUrl: mediaUrl });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // currentUrl is read for this template selection; user edits should not refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.templateName, node.type, templates]);
 
   const gotoFlowOptions = flows.filter(
     (f) =>

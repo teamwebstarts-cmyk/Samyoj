@@ -451,7 +451,7 @@ export default function Sidebar({
       </div>
 
       <nav
-        className="sidebar-scroll relative z-[2] min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2.5"
+        className="sidebar-scroll relative z-[2] min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-2.5"
         aria-label="Primary"
       >
         <div className="flex flex-col gap-3.5">
