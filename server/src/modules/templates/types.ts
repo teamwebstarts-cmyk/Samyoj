@@ -88,6 +88,7 @@ export const createTemplateSchema = z
     headerExamples: z.array(z.string().max(60)).optional(),
     authType: z.enum(['OTP', 'ONE_TAP']).optional(),
     addSecurityRecommendation: z.boolean().optional(),
+    studioPackId: z.string().max(100).optional(),
   })
   .superRefine((data, ctx) => {
     const bodyVarCount = (data.body.match(/\{\{\d+\}\}/g) || []).length;
@@ -184,6 +185,7 @@ export const createFromLibrarySchema = z.object({
   libraryTemplateName: z.string().min(1),
   libraryTemplateButtonInputs: z.array(libraryButtonInputSchema).max(10).optional(),
   category: z.enum(['UTILITY', 'AUTHENTICATION']).optional(),
+  studioPackId: z.string().max(100).optional(),
 });
 
 export const testSendSchema = z.object({

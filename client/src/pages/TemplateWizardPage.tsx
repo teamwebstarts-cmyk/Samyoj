@@ -62,6 +62,8 @@ type LocationState = {
   studioLanguage?: string;
   studioHandoff?: boolean;
   studioName?: string;
+  headerMediaUrl?: string;
+  studioPack?: string;
 };
 
 export default function TemplateWizardPage() {
@@ -103,6 +105,7 @@ export default function TemplateWizardPage() {
   const [mapFirstBodyVariableToName, setMapFirstBodyVariableToName] = useState(true);
   const errorRef = useRef<HTMLDivElement>(null);
   const activeNumberIdRef = useRef<string | null>(null);
+  const studioHeaderLoadedRef = useRef(false);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const canManageTemplates =
     entitlementsLoading || !entitlements || entitlements.canUseFeature('templates');
@@ -126,6 +129,59 @@ export default function TemplateWizardPage() {
         /* keep names already loaded — a failed refresh is not an empty account */
       });
   }, [activeNumber, resolved]);
+
+  useEffect(() => {
+    const source = state.studioHandoff ? state.headerMediaUrl : undefined;
+    if (!source || studioHeaderLoadedRef.current) return;
+    studioHeaderLoadedRef.current = true;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    const blobToBase64 = (blob: Blob) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(reader.error || new Error('Could not read image'));
+        reader.readAsDataURL(blob);
+      });
+
+    void (async () => {
+      try {
+        const response = await fetch(source);
+        if (!response.ok) throw new Error('Generated header image could not be loaded');
+        const blob = await response.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setHeaderPreviewUrl(objectUrl);
+        const uploaded = await templateApi.uploadHeader({
+          data: await blobToBase64(blob),
+          mimeType: blob.type || 'image/png',
+        });
+        if (cancelled) return;
+        setForm((current) => ({
+          ...current,
+          headerFormat: 'IMAGE',
+          headerMediaHandle: uploaded.data.handle,
+        }));
+      } catch (error) {
+        studioHeaderLoadedRef.current = false;
+        if (!cancelled) {
+          toastWarning(
+            error instanceof Error
+              ? `${error.message}. You can upload the header image manually.`
+              : 'Generated header image could not be prepared. Upload it manually.',
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // The handoff state is intentionally consumed once per mounted wizard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     settingsApi
@@ -381,6 +437,9 @@ export default function TemplateWizardPage() {
       const savedName = form.name;
       try {
         const payload = buildCreatePayload(form);
+        if (state.studioHandoff && state.studioPack) {
+          (payload as Record<string, unknown>).studioPackId = state.studioPack;
+        }
         if (mode === 'resubmit' && resubmitNameParam) {
           await templateApi.resubmit(resubmitNameParam, payload);
         } else {

@@ -140,6 +140,15 @@ export default function TemplateComposer({
     setCouponCode('');
     setButtonUrlSuffixes(Array.from({ length: templateDynamicUrlButtons(selected).length }, () => ''));
     let cancelled = false;
+    templateApi
+      .studioMedia(selected.name)
+      .then(({ data }) => {
+        const mediaUrl = data.data?.mediaUrl;
+        if (!cancelled && typeof mediaUrl === 'string' && mediaUrl) {
+          setHeaderMediaUrl((current) => current || mediaUrl);
+        }
+      })
+      .catch(() => undefined);
     fetchTemplateVariableMeta(selected.name, selected.language).then((meta) => {
       if (cancelled) return;
       setVariableMeta(meta);

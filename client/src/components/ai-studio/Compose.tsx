@@ -23,38 +23,53 @@ const heroSlide: Slide = {
 
 function Hero() {
   return (
-    <section className="hero-bg relative overflow-hidden rounded-[20px] border border-[#e6defb] px-6 py-7 sm:px-9 sm:py-9 lg:min-h-[210px] lg:pr-[300px] 2xl:pr-[340px]">
+    <section className="hero-bg relative overflow-hidden rounded-[24px] border border-white/10 px-6 py-7 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:px-9 sm:py-9 lg:min-h-[210px] lg:pr-[300px] 2xl:pr-[340px]">
       <div className="relative z-10 max-w-[520px]">
-        <h2 className="text-[28px] font-extrabold leading-[1.12] tracking-tight sm:text-[34px] 2xl:text-[38px]">
+        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#f6d8ff] backdrop-blur">
+          <Sparkles size={12} /> AI creative studio
+        </span>
+        <h2 className="text-[28px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[34px] 2xl:text-[38px]">
           Describe your idea,
           <br />
           we'll <span className="gradient-text">create the content.</span>
         </h2>
-        <p className="mt-3 max-w-[460px] text-[14px] leading-relaxed text-[var(--text-muted)] sm:text-[15px]">
+        <p className="mt-3 max-w-[430px] text-[14px] leading-relaxed text-[#c8c6dc] sm:text-[15px]">
           Generate stunning visuals and channel-ready copy for Instagram, WhatsApp, and Email — all in one place.
         </p>
       </div>
       {/* Illustration */}
-      <div className="pointer-events-none absolute right-0 top-1/2 hidden h-[200px] w-[340px] origin-right -translate-y-1/2 scale-[0.84] lg:block 2xl:scale-100" aria-hidden="true">
-        <div className="anim-float absolute left-[96px] top-[22px] w-[150px] overflow-hidden rounded-2xl border-4 border-white shadow-[0_14px_30px_rgba(109,61,242,0.22)]">
-          <SlideArt slide={heroSlide} />
+      <div className="hero-stage pointer-events-none absolute right-[-10px] top-1/2 hidden h-[220px] w-[340px] origin-right -translate-y-1/2 scale-[0.84] lg:block 2xl:scale-100" aria-hidden="true">
+        <div className="hero-orbit hero-orbit--one" />
+        <div className="hero-orbit hero-orbit--two" />
+        <div className="hero-board anim-float absolute left-[88px] top-[18px] w-[166px] overflow-hidden rounded-[18px]">
+          <div className="flex items-center justify-between border-b border-white/10 bg-[#201c43]/90 px-3 py-2 text-[8px] font-extrabold uppercase tracking-[0.12em] text-[#d9d3ff]">
+            <span>Creative board</span>
+            <span className="text-[#ffbd8b]">Live</span>
+          </div>
+          <div className="h-[146px] p-1.5">
+            <SlideArt slide={heroSlide} />
+          </div>
+          <div className="flex items-center gap-1.5 bg-[#15142c]/85 px-3 py-2 text-[9px] font-semibold text-[#d9d5ed]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#55e6ad] shadow-[0_0_10px_#55e6ad]" />
+            One brief · 3 channels
+          </div>
         </div>
-        <div className="absolute left-[34px] top-[30px] grid h-14 w-14 -rotate-6 place-items-center rounded-2xl bg-white shadow-[0_10px_24px_rgba(15,21,53,0.14)]">
+        <div className="hero-channel-chip anim-float absolute left-[24px] top-[28px] grid h-12 w-12 -rotate-6 place-items-center rounded-2xl">
           <InstagramIcon size={34} />
         </div>
-        <div className="absolute right-[10px] top-[8px] grid h-14 w-14 rotate-6 place-items-center rounded-2xl bg-white shadow-[0_10px_24px_rgba(15,21,53,0.14)]">
+        <div className="hero-channel-chip anim-float absolute right-[8px] top-[4px] grid h-12 w-12 rotate-6 place-items-center rounded-2xl" style={{ animationDelay: "0.8s" }}>
           <WhatsAppIcon size={34} />
         </div>
-        <div className="absolute left-[56px] top-[126px] grid h-14 w-14 rotate-3 place-items-center rounded-2xl bg-white shadow-[0_10px_24px_rgba(15,21,53,0.14)]">
+        <div className="hero-channel-chip anim-float absolute left-[44px] top-[146px] grid h-12 w-12 rotate-3 place-items-center rounded-2xl" style={{ animationDelay: "1.6s" }}>
           <GmailIcon size={34} />
         </div>
-        <div className="absolute right-[6px] top-[120px] rounded-xl bg-white px-3 py-2 text-[11px] font-bold leading-tight shadow-[0_10px_24px_rgba(15,21,53,0.14)]">
+        <div className="hero-mini-label absolute right-[2px] top-[136px] rounded-xl px-3 py-2 text-[10px] font-bold leading-tight text-white">
           One idea,
           <br />
-          <span className="text-[var(--ai-primary)]">multiple channels</span>
+          <span className="text-[#ffbd8b]">multiple channels</span>
         </div>
-        <Sparkles size={16} className="absolute left-[10px] top-[92px] text-[#f3b6dd]" />
-        <Sparkles size={13} className="absolute right-[40px] top-[84px] text-[#f5c46b]" />
+        <Sparkles size={16} className="absolute left-[10px] top-[102px] text-[#e9a9ff]" />
+        <Sparkles size={13} className="absolute right-[38px] top-[84px] text-[#ffbd8b]" />
       </div>
     </section>
   );
@@ -207,7 +222,7 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
       <span className="field-label" id="outputs-label">
         What do you want to create? <small>(select one or more)</small>
       </span>
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" role="group" aria-labelledby="outputs-label">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 thin-scroll" role="group" aria-labelledby="outputs-label">
         {OUTPUT_OPTIONS.map((o) => {
           const on = value.includes(o.id);
           return (
@@ -217,9 +232,9 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
               role="checkbox"
               aria-checked={on}
               onClick={() => toggle(o.id)}
-              className={`relative flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all duration-150 ${
+              className={`relative flex min-w-[142px] flex-none items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all duration-150 ${
                 on
-                  ? "border-2 border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] p-[11px] shadow-[0_4px_14px_rgba(109,61,242,0.14)]"
+                  ? "border-2 border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] px-[9px] py-[7px] shadow-[0_4px_14px_rgba(109,61,242,0.14)]"
                   : "border-[var(--border-strong)] bg-white hover:border-[var(--ai-primary-ring)] hover:bg-[var(--surface-subtle)]"
               }`}
             >
@@ -231,10 +246,10 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
               >
                 <Check size={11} strokeWidth={3.5} />
               </span>
-              <ChannelIcon channel={o.channel} size={26} />
+              <ChannelIcon channel={o.channel} size={21} />
               <span>
-                <span className="block text-[13px] font-bold leading-tight">{o.title}</span>
-                <span className="mt-0.5 block text-[11.5px] leading-snug text-[var(--text-muted)]">{o.desc}</span>
+                <span className="block whitespace-nowrap text-[11.5px] font-bold leading-tight">{o.title}</span>
+                <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-snug text-[var(--text-muted)]">{o.desc}</span>
               </span>
             </button>
           );
@@ -387,6 +402,10 @@ export interface ComposeProps {
   setPhotos: (p: Photo[]) => void;
   outputs: OutputId[];
   setOutputs: (o: OutputId[]) => void;
+  imageQuality: 'standard' | 'high' | 'story';
+  setImageQuality: (q: 'standard' | 'high' | 'story') => void;
+  imageCount: 1 | 2 | 4;
+  setImageCount: (n: 1 | 2 | 4) => void;
   error: string | null;
   setError: (e: string | null) => void;
   onGenerate: () => void;
@@ -460,6 +479,50 @@ export function Compose(p: ComposeProps) {
               )}
             </div>
           </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(170px,0.65fr)]">
+            <div className="min-w-0">
+              <span className="field-label">Image quality</span>
+              <div className="-mx-1 mt-1 flex gap-1.5 overflow-x-auto px-1 pb-1 thin-scroll" role="radiogroup" aria-label="Image quality">
+                {([
+                  ['standard', 'Standard', '1K'],
+                  ['high', 'High', '2K'],
+                  ['story', 'Story', '9:16'],
+                ] as const).map(([id, label, hint]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={p.imageQuality === id}
+                    title={`${label} · ${hint}`}
+                    className={`h-8 flex-none rounded-full border px-2.5 text-[11px] font-bold ${p.imageQuality === id ? 'border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]' : 'border-[#e6defb] text-[var(--text-muted)] hover:border-[var(--ai-primary-ring)]'}`}
+                    onClick={() => p.setImageQuality(id)}
+                  >
+                    {label} <span className="font-semibold opacity-65">{hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <span className="field-label">Images</span>
+              <div className="mt-1 flex gap-1.5" role="radiogroup" aria-label="Number of images">
+                {([1, 2, 4] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={p.imageCount === n}
+                    className={`h-8 flex-1 rounded-full border px-2 text-[11px] font-bold ${p.imageCount === n ? 'border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]' : 'border-[#e6defb] text-[var(--text-muted)] hover:border-[var(--ai-primary-ring)]'}`}
+                    onClick={() => p.setImageCount(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--text-muted)]">Same brief, generated together · maximum 4 images · carousel uses this set.</p>
 
           <div className="mt-5">
             <OutputSelector value={p.outputs} onChange={p.setOutputs} />

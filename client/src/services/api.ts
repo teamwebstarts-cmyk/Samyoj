@@ -1244,6 +1244,8 @@ export const templateApi = {
   ) => api.post(`/templates/${name}/test-send`, data),
   uploadHeader: (data: { data: string; mimeType: string }) =>
     api.post('/templates/upload-header', data),
+  studioMedia: (name: string) =>
+    api.get(`/ai-studio/handoffs/template-media/${encodeURIComponent(name)}`),
   delete: (name: string) => api.delete(`/templates/${name}`),
 };
 
@@ -1512,11 +1514,27 @@ export const contentStudioApi = {
  * sample data is on, otherwise a clear error state (see AiStudio.tsx).
  */
 export const aiStudioApi = {
-  generate: (data: { brief: string; language: string; outputs: string[]; photoNames?: string[] }) =>
-    api.post('/ai-studio/generate', data),
+  generate: (data: {
+    brief: string;
+    language: string;
+    outputs: string[];
+    photoNames?: string[];
+    referenceUrls?: string[];
+    imageQuality?: 'standard' | 'high' | 'story';
+    imageCount?: 1 | 2 | 4;
+  }) => api.post('/ai-studio/generate', data),
+  regenerateVisual: (data: {
+    imagePrompt: string;
+    headline?: string;
+    slideIndex?: number;
+    packId?: string;
+    imageQuality?: 'standard' | 'high' | 'story';
+  }) => api.post('/ai-studio/regenerate-visual', data),
   listPacks: () => api.get('/ai-studio/packs'),
   savePack: (pack: Record<string, unknown>) => api.post('/ai-studio/packs', { pack }),
   deletePack: (id: string) => api.delete(`/ai-studio/packs/${id}`),
   logHandoff: (data: { packId: string; channel: string; payload: Record<string, unknown> }) =>
     api.post('/ai-studio/handoffs', data),
+  templateMedia: (name: string) =>
+    api.get(`/ai-studio/handoffs/template-media/${encodeURIComponent(name)}`),
 };

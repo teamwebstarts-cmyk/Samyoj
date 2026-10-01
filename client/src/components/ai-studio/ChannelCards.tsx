@@ -12,6 +12,7 @@ interface Props {
   update: (fn: (p: Pack) => Pack) => void;
   onHandoff: (c: Channel) => void;
   onToast: (m: string, tone?: "success" | "info" | "error") => void;
+  live?: boolean;
 }
 
 function CardShell({
@@ -83,7 +84,7 @@ const readBox = "whitespace-pre-wrap break-words rounded-xl border border-[var(-
 
 /* ------------------------------ Instagram ------------------------------ */
 
-export function InstagramCopyCard({ pack, update, onHandoff, onToast }: Props) {
+export function InstagramCopyCard({ pack, update, onHandoff, onToast, live }: Props) {
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<"caption" | "hashtags">("caption");
   const ig = pack.instagram!;
@@ -102,6 +103,7 @@ export function InstagramCopyCard({ pack, update, onHandoff, onToast }: Props) {
       onToggleEdit={() => setEditing((e) => !e)}
       regenLabel="Regenerate Instagram copy"
       onRegen={() => {
+        if (live) return onToast("This copy came from the live model. Edit it here.", "info");
         update((p) => regenerateCopy(p, "instagram"));
         onToast("Instagram copy regenerated");
       }}
@@ -153,7 +155,7 @@ function waHeaderSlide(pack: Pack) {
   return pack.carousel?.[0] ?? pack.image?.options[pack.image.selected] ?? null;
 }
 
-export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast }: Props) {
+export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live }: Props) {
   const [editing, setEditing] = useState(false);
   const t = pack.whatsapp!;
   const thumb = waHeaderSlide(pack);
@@ -175,6 +177,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast }: Props
       onToggleEdit={() => setEditing((e) => !e)}
       regenLabel="Regenerate WhatsApp template copy"
       onRegen={() => {
+        if (live) return onToast("This copy came from the live model. Edit it here.", "info");
         update((p) => regenerateCopy(p, "whatsapp"));
         onToast("WhatsApp template regenerated");
       }}
@@ -274,7 +277,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast }: Props
 
 /* ------------------------------ Email ------------------------------ */
 
-export function EmailCopyCard({ pack, update, onHandoff, onToast }: Props) {
+export function EmailCopyCard({ pack, update, onHandoff, onToast, live }: Props) {
   const [editing, setEditing] = useState(false);
   const [tplSaved, setTplSaved] = useState(false);
   const e = pack.email!;
@@ -292,6 +295,7 @@ export function EmailCopyCard({ pack, update, onHandoff, onToast }: Props) {
       onToggleEdit={() => setEditing((x) => !x)}
       regenLabel="Regenerate email copy"
       onRegen={() => {
+        if (live) return onToast("This copy came from the live model. Edit it here.", "info");
         update((p) => regenerateCopy(p, "email"));
         setTplSaved(false);
         onToast("Email copy regenerated");

@@ -164,4 +164,12 @@ export const config = {
   sentry: {
     dsn: process.env.SENTRY_DSN || '',
   },
+  /** GMI Cloud — Hunyuan image generation for AI Studio. */
+  gmi: {
+    imageApiKey: process.env.GMI_IMAGE_API_KEY || '',
+    imageModel: process.env.GMI_IMAGE_MODEL || 'hy-image-v3.5-preview',
+    imageEndpoint:
+      process.env.GMI_IMAGE_ENDPOINT ||
+      'https://console.gmicloud.ai/api/v1/ie/requestqueue/apikey/requests',
+  },
 };

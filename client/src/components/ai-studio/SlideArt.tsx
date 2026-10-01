@@ -453,13 +453,16 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
   const headline = slide.elements.find((e) => e.role === "headline")?.text ?? "Slide";
   const w = ART_WIDTH[slide.art][left ? "left" : "center"];
 
-  const textStyle: CSSProperties = left
-    ? { left: "8%", top: "9%", width: "56%", alignItems: "flex-start", textAlign: "left" }
-    : { left: "6%", right: "6%", top: "8%", alignItems: "center", textAlign: "center" };
+  const photo = Boolean(slide.image);
+  const textStyle: CSSProperties = photo
+    ? { left: "6%", right: "6%", bottom: "7%", top: "auto", alignItems: "flex-start", textAlign: "left" }
+    : left
+      ? { left: "8%", top: "9%", width: "56%", alignItems: "flex-start", textAlign: "left" }
+      : { left: "6%", right: "6%", top: "8%", alignItems: "center", textAlign: "center" };
 
   return (
     <div className={`slide-box ${className}`} style={{ background: p.bg }} role="img" aria-label={label ?? `Slide: ${headline}`}>
-      <Decor dark={p.dark} />
+      {!photo && <Decor dark={p.dark} />}
 
       {/* depth: top light + bottom vignette */}
       <div
@@ -473,16 +476,14 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
 
       {/* Art / photo */}
       {slide.image ? (
-        <div
-          className="absolute overflow-hidden bg-white"
-          style={
-            left
-              ? { right: "5%", bottom: "6%", width: "42%", aspectRatio: "1", borderRadius: "4cqw", border: "1.2cqw solid #fff", boxShadow: "0 2cqw 5cqw rgba(0,0,0,.28)" }
-              : { left: "50%", transform: "translateX(-50%)", bottom: "6%", width: "48%", aspectRatio: "1", borderRadius: "4cqw", border: "1.2cqw solid #fff", boxShadow: "0 2cqw 5cqw rgba(0,0,0,.28)" }
-          }
-        >
-          <img src={slide.image} alt="" className="h-full w-full object-cover" draggable={false} />
-        </div>
+        <>
+          <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-[55%]"
+            style={{ background: "linear-gradient(180deg, rgba(8,10,20,0) 0%, rgba(8,10,20,0.78) 100%)" }}
+          />
+        </>
       ) : slide.art !== "none" ? (
         <div
           className="absolute"
@@ -504,7 +505,7 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
             fontFamily: `"${r.font}", ${r.font === "Playfair Display" ? "serif" : "sans-serif"}`,
             fontSize: `${r.size / 4}cqw`,
             fontWeight: r.weight,
-            color: r.color,
+            color: slide.image && (e.role === "headline" || e.role === "sub") ? "#ffffff" : r.color,
             lineHeight: e.role === "headline" ? 1.05 : 1.2,
             overflowWrap: "anywhere",
           };

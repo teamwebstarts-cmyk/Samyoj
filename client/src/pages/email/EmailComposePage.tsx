@@ -342,6 +342,7 @@ export default function EmailComposePage() {
       subject?: string;
       body?: string;
       attachmentFile?: File;
+      mediaUrl?: string;
     };
     if (!state.studioHandoff) return;
     handoffConsumedRef.current = true;
@@ -350,6 +351,23 @@ export default function EmailComposePage() {
     if (state.subject) setSubject(state.subject);
     if (state.body) setMessage(state.body);
     if (state.attachmentFile instanceof File) void addFiles([state.attachmentFile]);
+    if (!(state.attachmentFile instanceof File) && state.mediaUrl) {
+      void fetch(state.mediaUrl)
+        .then((response) => {
+          if (!response.ok) throw new Error('Generated poster could not be loaded');
+          return response.blob();
+        })
+        .then((blob) =>
+          addFiles([
+            new File(
+              [blob],
+              `${(state.studioName || 'ai-studio').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-poster.png`,
+              { type: blob.type || 'image/png' },
+            ),
+          ]),
+        )
+        .catch(() => undefined);
+    }
     setStudioHandoffName(state.studioName || 'AI Studio');
     navigate(location.pathname, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps

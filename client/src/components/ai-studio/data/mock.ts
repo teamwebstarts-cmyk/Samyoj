@@ -491,7 +491,7 @@ export function newBlankSlide(pack: Pack, count: number): Slide {
 export function buildHandoff(pack: Pack, channel: Channel): HandoffPayload {
   if (channel === "instagram") {
     const slides = pack.carousel ?? [];
-    const useCarousel = slides.length > 0;
+    const useCarousel = slides.length > 1;
     const caption = `${pack.instagram?.caption ?? ""}\n\n${pack.instagram?.hashtags ?? ""}`.trim();
     const mediaCount = useCarousel ? slides.length : 1;
     return {
@@ -504,6 +504,7 @@ export function buildHandoff(pack: Pack, channel: Channel): HandoffPayload {
       ],
       data: {
         route: `/instagram/posts?studioPack=${pack.id}`,
+        packId: pack.id,
         mediaType: useCarousel ? "CAROUSEL" : "IMAGE",
         slideUrls: useCarousel ? slides.map((s) => `studio://${pack.id}/${s.id}.png`) : [`studio://${pack.id}/image-${(pack.image?.selected ?? 0) + 1}.png`],
         caption,
@@ -519,9 +520,14 @@ export function buildHandoff(pack: Pack, channel: Channel): HandoffPayload {
       summary: [`Category · ${t.category}`, `Header · ${t.header.source}`, `Body · ${t.body.length} characters`, `Buttons · ${t.buttons.map((b) => b.label).join(", ")}`],
       data: {
         route: `/templates/new?studioPack=${pack.id}`,
+        packId: pack.id,
         name: t.name,
         category: t.category,
         language: t.language,
+        headerMediaUrl: t.header.source,
+        mediaPaths: Array.isArray((pack as Pack & { mediaPaths?: string[] }).mediaPaths)
+          ? (pack as Pack & { mediaPaths?: string[] }).mediaPaths
+          : [],
         components: [
           { type: "HEADER", format: "IMAGE" },
           { type: "BODY", text: t.body, example: { body_text: [Object.values(t.examples)] } },
@@ -536,7 +542,16 @@ export function buildHandoff(pack: Pack, channel: Channel): HandoffPayload {
     channel,
     destination: "Email Compose",
     summary: [`Subject · ${e.subject.length} characters`, `Body · ${e.body.split(/\s+/).length} words`, "Personalisation · {{name}}"],
-    data: { route: `/email/compose?studioPack=${pack.id}`, subject: e.subject, body: e.body },
+      data: {
+        route: `/email/compose?studioPack=${pack.id}`,
+        packId: pack.id,
+        subject: e.subject,
+        body: e.body,
+        mediaUrl:
+          pack.carousel?.[0]?.image ||
+          pack.image?.options[pack.image.selected]?.image ||
+          undefined,
+      },
   };
 }
 
@@ -550,6 +565,9 @@ export interface HandoffNavState {
   studioPack: string;
   studioHandoff: true;
   studioName: string;
+  headerMediaUrl?: string;
+  mediaUrl?: string;
+  mediaPaths?: string[];
   [key: string]: unknown;
 }
 
@@ -563,11 +581,13 @@ export interface HandoffNavState {
 export function buildHandoffState(pack: Pack, channel: Channel): HandoffNavState {
   if (channel === "instagram") {
     const caption = `${pack.instagram?.caption ?? ""}\n\n${pack.instagram?.hashtags ?? ""}`.trim();
-    const useCarousel = (pack.carousel?.length ?? 0) > 0;
+    const useCarousel = (pack.carousel?.length ?? 0) > 1;
     return {
       studioPack: pack.id,
       studioHandoff: true,
       studioName: pack.name,
+      headerMediaUrl: pack.whatsapp?.header.source,
+      mediaPaths: (pack as Pack & { mediaPaths?: string[] }).mediaPaths,
       mediaType: useCarousel ? "CAROUSEL" : "IMAGE",
       caption,
       mediaCount: useCarousel ? pack.carousel!.length : 1,
@@ -603,6 +623,7 @@ export function buildHandoffState(pack: Pack, channel: Channel): HandoffNavState
     studioName: pack.name,
     subject: pack.email!.subject,
     body: pack.email!.body,
+    mediaUrl: (pack as Pack & { mediaPaths?: string[] }).mediaPaths?.[0],
   };
 }
 
@@ -615,6 +636,7 @@ const DAY = 86400000;
 function seedDraft(name: string, brief: string, outputs: OutputId[], ago: number): Draft {
   const pack = buildPack({ brief, language: "English", outputs, photos: [] });
   pack.name = name;
+  pack.sample = true;
   return { id: uid(), name, pack, savedAt: Date.now() - ago };
 }
 

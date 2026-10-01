@@ -1,3 +1,30 @@
+# Gates: AI Studio asset handoff
+
+OWNS: server/src/modules/ai-studio/**, server/src/modules/templates/**, client/src/components/ai-studio/**, client/src/pages/InstagramPostsPage.tsx, client/src/pages/TemplateWizardPage.tsx, client/src/pages/CampaignsPage.tsx, client/src/components/inbox/TemplateComposer.tsx, client/src/pages/email/EmailComposePage.tsx, client/src/services/api.ts, client/src/utils/aiStudioPoster.ts, client/src/utils/aiStudioStore.ts
+
+Scope: Preserve generated AI Studio media and copy across Instagram, WhatsApp template approval, WhatsApp campaigns/inbox sends, and email attachments.
+
+- [x] G1: Server-side AI Studio tests cover durable media paths and handoff payloads.
+  CHECK: npm test -- --run src/modules/ai-studio/ src/modules/templates/
+  EXPECT: Test Files
+  CWD: server
+  EVIDENCE: exit=0; 9 test files, 72 tests passed (includes AI Studio, template, and Instagram media URL coverage)
+
+- [x] G2: Client handoff tests cover direct generated image URLs instead of mock poster re-rendering.
+  CHECK: npx vitest run src/utils/aiStudioPoster.handoff.test.ts
+  EXPECT: Test Files 1 passed
+  CWD: client
+  EVIDENCE: exit=0; 1 test file, 1 test passed
+
+- [x] G3: TypeScript builds for server and client pass.
+  CHECK: npm run build
+  EXPECT: built
+  CWD: server
+  EVIDENCE: server tsc exit=0; client tsc + Vite build exit=0
+
+- [ ] G4: Manual browser flow confirms generated image appears in Instagram Posts, WhatsApp template header preview, campaign header preview, and email attachment.
+  EVIDENCE: not run in this pass; requires authenticated browser session and live Meta/Gmail connections. Hunyuan API smoke test passed separately: 1024x1024 response in 16.6s.
+
 # Gates: Gmail attachments and template library
 
 OWNS: client/src/pages/email/**, client/src/components/email/**, server/src/modules/gmail/**, server/src/workers/**, server/src/config/queues.ts, server/src/index.ts, server/prisma/schema.prisma, server/prisma/migrations/**, docs/product/GMAIL_*.md

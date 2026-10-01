@@ -80,6 +80,10 @@ export function addHistoryEntry(entry: HistoryEntry): HistoryEntry[] {
   return history;
 }
 
+export function persistHistory(history: HistoryEntry[]): void {
+  writeStore({ ...readStudioStore(), history });
+}
+
 export function removeHistoryEntry(id: string): HistoryEntry[] {
   const history = loadStoredHistory().filter((h) => h.id !== id);
   writeStore({ ...readStudioStore(), history });
@@ -89,4 +93,34 @@ export function removeHistoryEntry(id: string): HistoryEntry[] {
 export function clearStoredHistory(): HistoryEntry[] {
   writeStore({ ...readStudioStore(), history: [] });
   return [];
+}
+
+const WORKSPACE_KEY = 'samyoj-ai-studio-workspace';
+
+export function loadWorkspace(): { pack: Pack; screen: 'review' | 'saved' } | null {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { pack?: Pack; screen?: string };
+    if (!parsed.pack?.id || !parsed.pack.brief) return null;
+    return { pack: parsed.pack, screen: parsed.screen === 'saved' ? 'saved' : 'review' };
+  } catch {
+    return null;
+  }
+}
+
+export function saveWorkspace(pack: Pack, screen: 'review' | 'saved'): void {
+  try {
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ pack, screen }));
+  } catch {
+    /* storage full */
+  }
+}
+
+export function clearWorkspace(): void {
+  try {
+    localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    /* ignore */
+  }
 }

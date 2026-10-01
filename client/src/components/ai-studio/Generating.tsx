@@ -1,9 +1,42 @@
+import { useEffect, useState } from "react";
 import { AlertTriangle, Check, RefreshCw, Sparkles, Pencil } from "lucide-react";
 import { GENERATION_STEPS } from "./data/mock";
 import { GmailIcon, InstagramIcon, WhatsAppIcon } from "./brand";
 
-export function GenerationProgress({ step, hasVisuals, onCancel }: { step: number; hasVisuals: boolean; onCancel: () => void }) {
+export function GenerationProgress({
+  step,
+  hasVisuals,
+  onCancel,
+  liveImages,
+}: {
+  step: number;
+  hasVisuals: boolean;
+  onCancel: () => void;
+  liveImages?: boolean;
+}) {
   const labels = GENERATION_STEPS.map((l, i) => (i === 1 && !hasVisuals ? "Structuring your templates" : l));
+  const [animatedStep, setAnimatedStep] = useState(step);
+
+  useEffect(() => {
+    setAnimatedStep(step);
+  }, [step]);
+
+  useEffect(() => {
+    if (!liveImages) return;
+    const timer = window.setInterval(() => {
+      setAnimatedStep((current) => Math.min(current + 1, labels.length - 1));
+    }, 4200);
+    return () => window.clearInterval(timer);
+  }, [labels.length, liveImages]);
+
+  const visibleStep = Math.min(Math.max(step, animatedStep), labels.length - 1);
+  const statusText = [
+    "Reading your idea and shaping the creative direction…",
+    hasVisuals ? "Generating your visual direction and image set…" : "Structuring your channel templates…",
+    "Writing platform-ready copy and calls to action…",
+    "Polishing the pack and connecting everything together…",
+  ][visibleStep];
+  const progress = Math.round(((visibleStep + 0.65) / labels.length) * 100);
   return (
     <div className="anim-fade-in mx-auto flex max-w-[560px] flex-col items-center px-2 pb-6 pt-6 text-center sm:pt-12">
       <div className="relative mb-6 h-[170px] w-[240px]" aria-hidden="true">
@@ -11,26 +44,30 @@ export function GenerationProgress({ step, hasVisuals, onCancel }: { step: numbe
         <div className="anim-pulse absolute left-1/2 top-1/2 grid h-[84px] w-[84px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-white" style={{ background: "linear-gradient(135deg,#7a4af5,#a67cff)" }}>
           <Sparkles size={34} />
         </div>
-        <div className="absolute left-[24px] top-[22px] grid h-11 w-11 -rotate-6 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]">
+        <div className="anim-float absolute left-[24px] top-[22px] grid h-11 w-11 -rotate-6 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]">
           <InstagramIcon size={26} />
         </div>
-        <div className="absolute right-[24px] top-[14px] grid h-11 w-11 rotate-6 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]">
+        <div className="anim-float absolute right-[24px] top-[14px] grid h-11 w-11 rotate-6 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]" style={{ animationDelay: "0.8s" }}>
           <WhatsAppIcon size={26} />
         </div>
-        <div className="absolute bottom-[14px] right-[34px] grid h-11 w-11 rotate-3 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]">
+        <div className="anim-float absolute bottom-[14px] right-[34px] grid h-11 w-11 rotate-3 place-items-center rounded-xl bg-white shadow-[0_8px_20px_rgba(15,21,53,0.14)]" style={{ animationDelay: "1.6s" }}>
           <GmailIcon size={26} />
         </div>
       </div>
 
       <h2 className="text-[26px] font-extrabold tracking-tight">Creating your content pack...</h2>
-      <p className="mt-2 max-w-[400px] text-[14px] leading-relaxed text-[var(--text-muted)]">
-        This may take a few moments. We're generating visuals and channel-ready copy for you.
+      <p key={visibleStep} className="anim-fade-up mt-2 max-w-[400px] text-[14px] leading-relaxed text-[var(--text-muted)]" aria-live="polite">
+        {statusText}
+        <br />
+        {liveImages && hasVisuals
+          ? "Writing copy, then generating your photos together (about 20–60 seconds)."
+          : "This may take a few moments while we prepare your content."}
       </p>
 
       <ol className="card mt-7 w-full max-w-[400px] space-y-0 p-5 text-left" aria-label="Generation progress">
         {labels.map((l, i) => {
-          const done = i < step;
-          const current = i === step;
+          const done = i < visibleStep;
+          const current = i === visibleStep;
           return (
             <li key={l} className="relative flex items-center gap-3 pb-5 last:pb-0" aria-current={current ? "step" : undefined}>
               {i < labels.length - 1 && <span className={`absolute left-[11px] top-6 h-[calc(100%-18px)] w-[2px] ${done ? "bg-[var(--ai-primary)]" : "bg-[var(--border)]"}`} aria-hidden="true" />}
@@ -47,6 +84,12 @@ export function GenerationProgress({ step, hasVisuals, onCancel }: { step: numbe
           );
         })}
       </ol>
+      <div className="mt-4 h-1.5 w-full max-w-[400px] overflow-hidden rounded-full bg-[var(--border)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label="Generation progress">
+        <div className="h-full rounded-full bg-[linear-gradient(90deg,#6d3df2,#a67cff)] transition-[width] duration-700" style={{ width: `${progress}%` }} />
+      </div>
+      <p className="mt-2 text-[11px] font-semibold text-[var(--text-soft)]">
+        {liveImages ? "The image model is working on your visual direction." : "The creative engine is assembling your pack."}
+      </p>
 
       <button type="button" className="btn btn-sm mt-6" onClick={onCancel}>
         Cancel and edit brief

@@ -34,6 +34,12 @@ describe('extractPublicMediaRelative', () => {
       extractPublicMediaRelative('http://localhost:8000/api/media/public/org/file.png'),
     ).toBe('org/file.png');
   });
+
+  it('reads the relative URL used by AI Studio handoffs', () => {
+    expect(extractPublicMediaRelative('/api/media/public/org/file.png?exp=9&sig=aa')).toBe(
+      'org/file.png',
+    );
+  });
 });
 
 describe('publicApiOrigin', () => {
@@ -70,5 +76,12 @@ describe('mediaUrlForMeta', () => {
       true,
     );
     expect(out).not.toContain('-3000.');
+  });
+
+  it('re-hosts a relative AI Studio URL onto the public API origin', () => {
+    const out = mediaUrlForMeta('/api/media/public/org/file.png?exp=old&sig=old');
+    expect(out.startsWith('https://example-8000.app.github.dev/api/media/public/org/file.png')).toBe(
+      true,
+    );
   });
 });

@@ -511,6 +511,25 @@ export default function CampaignsPage() {
     }));
   }, [selectedTemplate, viewOnly]);
 
+  useEffect(() => {
+    if (!selectedTemplate || viewOnly || !templateNeedsHeaderMedia(selectedTemplate) || form.headerMediaUrl.trim()) {
+      return;
+    }
+    let cancelled = false;
+    templateApi
+      .studioMedia(selectedTemplate.name)
+      .then(({ data }) => {
+        const mediaUrl = data.data?.mediaUrl;
+        if (!cancelled && typeof mediaUrl === 'string' && mediaUrl) {
+          setForm((previous) => ({ ...previous, headerMediaUrl: mediaUrl }));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [form.headerMediaUrl, selectedTemplate, viewOnly]);
+
   const handleSocketEvent = useCallback(
     (event: string) => {
       if (event === 'campaign:status' || event === 'campaign:progress') {

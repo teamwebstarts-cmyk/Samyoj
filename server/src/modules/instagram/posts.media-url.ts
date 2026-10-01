@@ -7,6 +7,10 @@ const PUBLIC_MARKER = '/api/media/public/';
 export function extractPublicMediaRelative(url: string): string | null {
   const trimmed = url.trim();
   if (!trimmed) return null;
+  if (trimmed.startsWith(PUBLIC_MARKER)) {
+    const relative = trimmed.slice(PUBLIC_MARKER.length).split('?')[0];
+    return relative && !relative.includes('..') ? decodeURIComponent(relative) : null;
+  }
   try {
     const parsed = new URL(trimmed);
     const idx = parsed.pathname.indexOf(PUBLIC_MARKER);

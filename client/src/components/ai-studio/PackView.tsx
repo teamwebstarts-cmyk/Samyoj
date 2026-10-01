@@ -6,6 +6,7 @@ import { outputSummary } from "./data/mock";
 import { ChannelIcon } from "./brand";
 import { EmailCopyCard, InstagramCopyCard, WhatsAppTemplateCard } from "./ChannelCards";
 import { VisualGallery } from "./VisualGallery";
+import { SlideArt } from "./SlideArt";
 
 export type PackTab = "all" | "visuals" | "instagram" | "whatsapp" | "email";
 
@@ -26,6 +27,8 @@ interface Props {
   onEditBrief: () => void;
   onHandoff: (c: Channel) => void;
   onToast: (m: string, tone?: "success" | "info" | "error") => void;
+  useLiveImages?: boolean;
+  imageQuality?: "standard" | "high" | "story";
 }
 
 const STEPS = ["Describe", "Generate", "Review & Edit", "Use in your channels"];
@@ -68,6 +71,7 @@ export function PackView(p: Props) {
   ];
   const visibleTabs = tabs.filter((t) => t.show);
   const tab = visibleTabs.some((t) => t.id === p.tab) ? p.tab : "all";
+  const selectedPreview = pack.carousel?.[p.active.carousel] ?? pack.image?.options[pack.image.selected] ?? null;
 
   const onTabKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -77,7 +81,7 @@ export function PackView(p: Props) {
     (e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[n])?.focus();
   };
 
-  const cardProps = { pack, update: p.update, onHandoff: p.onHandoff, onToast: p.onToast };
+  const cardProps = { pack, update: p.update, onHandoff: p.onHandoff, onToast: p.onToast, live: p.useLiveImages };
   const showVisuals = hasVisuals && (tab === "all" || tab === "visuals");
   const channelCards = [
     hasIg && (tab === "all" || tab === "instagram") && <InstagramCopyCard key="ig" {...cardProps} />,
@@ -110,7 +114,7 @@ export function PackView(p: Props) {
         </div>
         <div className="ml-auto flex gap-2">
           <button type="button" className="btn btn-sm" onClick={p.onViewDrafts}>
-            <FolderOpen size={14} /> My Drafts
+            <FolderOpen size={14} /> Sessions
           </button>
           {!p.saved && (
             <button
@@ -134,7 +138,7 @@ export function PackView(p: Props) {
           <p className="truncate text-[12.5px] text-[var(--text-muted)]">
             {p.saved ? (
               <>
-                Saved as <strong className="text-[var(--text)]">{pack.name}</strong> — you can continue anytime from My Drafts.
+                Saved as <strong className="text-[var(--text)]">{pack.name}</strong> — you can continue anytime from Sessions.
               </>
             ) : (
               "Review, edit and use this content in your channels."
@@ -148,7 +152,7 @@ export function PackView(p: Props) {
                 <Plus size={14} /> Create New
               </button>
               <button type="button" className="btn btn-sm btn-primary" onClick={p.onViewDrafts}>
-                <FolderOpen size={14} /> View My Drafts
+                <FolderOpen size={14} /> View sessions
               </button>
             </>
           ) : (
@@ -200,10 +204,10 @@ export function PackView(p: Props) {
 
           <div role="tabpanel" aria-labelledby={`tab-${tab}`} className="space-y-4">
             {showVisuals && pack.carousel && (
-              <VisualGallery pack={pack} set="carousel" active={p.active.carousel} setActive={(i) => p.setActive("carousel", i)} update={p.update} onToast={p.onToast} />
+              <VisualGallery pack={pack} set="carousel" active={p.active.carousel} setActive={(i) => p.setActive("carousel", i)} update={p.update} onToast={p.onToast} useLiveImages={p.useLiveImages} imageQuality={p.imageQuality} />
             )}
             {showVisuals && pack.image && (
-              <VisualGallery pack={pack} set="image" active={p.active.image} setActive={(i) => p.setActive("image", i)} update={p.update} onToast={p.onToast} />
+              <VisualGallery pack={pack} set="image" active={p.active.image} setActive={(i) => p.setActive("image", i)} update={p.update} onToast={p.onToast} useLiveImages={p.useLiveImages} imageQuality={p.imageQuality} />
             )}
 
             {channelCards.length > 0 && (
@@ -225,6 +229,16 @@ export function PackView(p: Props) {
         {/* hand-off column */}
         <aside className="space-y-4 xl:sticky xl:top-[88px]" aria-label="Hand-off">
           <section className="card p-4 sm:p-5">
+            {selectedPreview && (
+              <div className="mb-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)]">
+                <div className="relative aspect-square max-h-[220px]">
+                  <SlideArt slide={selectedPreview} label="Selected visual preview" />
+                  <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">
+                    Selected visual
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="flex items-start gap-3">
               <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]">
                 <CheckCircle2 size={19} />

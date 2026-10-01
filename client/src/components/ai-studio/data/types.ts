@@ -72,6 +72,8 @@ export interface PackContext {
 
 export interface Pack {
   id: string;
+  /** True only for local Sample data; live packs must never be marked this way. */
+  sample?: boolean;
   name: string;
   brief: string;
   language: Language;
@@ -79,6 +81,11 @@ export interface Pack {
   photos: Photo[];
   ctx: PackContext;
   copyVariant: number;
+  /** Server-side Hunyuan prompt seed for slide image regen */
+  imagePrompt?: string;
+  /** Durable relative paths for refreshing signed media URLs after handoff. */
+  mediaPaths?: string[];
+  imageCount?: number;
   carousel?: Slide[];
   image?: { options: Slide[]; selected: number };
   instagram?: InstagramPack;

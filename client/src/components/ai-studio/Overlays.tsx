@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, Check, FileText, History, Info, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, FileText, FolderOpen, History, Info, Plus, Search, Trash2, X } from "lucide-react";
 import type { Draft } from "./data/types";
 import type { HistoryEntry } from "../../utils/aiStudioStore";
 import { outputSummary, timeAgo } from "./data/mock";
@@ -36,6 +36,70 @@ export function ToastHost({ toasts, onDismiss }: { toasts: ToastItem[]; onDismis
         </div>
       ))}
     </div>
+  );
+}
+
+export function SessionShelf({
+  drafts,
+  history,
+  onOpenDraft,
+  onOpenHistory,
+  onViewAll,
+}: {
+  drafts: Draft[];
+  history: HistoryEntry[];
+  onOpenDraft: (draft: Draft) => void;
+  onOpenHistory: (entry: HistoryEntry) => void;
+  onViewAll: () => void;
+}) {
+  const recent = [
+    ...drafts.map((draft) => ({ kind: "draft" as const, id: draft.id, name: draft.name, savedAt: draft.savedAt, draft })),
+    ...history.map((entry) => ({ kind: "history" as const, id: entry.id, name: entry.name, savedAt: entry.savedAt, entry })),
+  ]
+    .sort((a, b) => b.savedAt - a.savedAt)
+    .slice(0, 4);
+
+  return (
+    <section className="card mb-4 overflow-hidden !border-[#e6defb] !bg-white" aria-label="Saved AI Studio sessions">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]">
+            <History size={17} />
+          </span>
+          <div>
+            <h2 className="text-[14px] font-extrabold">Saved sessions</h2>
+            <p className="text-[11.5px] text-[var(--text-muted)]">
+              Continue a previous generation without losing its copy or images.
+            </p>
+          </div>
+        </div>
+        <button type="button" className="btn btn-sm" onClick={onViewAll}>
+          <FolderOpen size={14} /> View all
+        </button>
+      </div>
+      {recent.length > 0 ? (
+        <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-4">
+          {recent.map((item) => (
+            <button
+              key={`${item.kind}-${item.id}`}
+              type="button"
+              className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5 text-left transition-colors hover:border-[var(--ai-primary-ring)] hover:bg-[var(--ai-primary-soft)]"
+              onClick={() => item.kind === "draft" ? onOpenDraft(item.draft) : onOpenHistory(item.entry)}
+            >
+              <span className="block truncate text-[12.5px] font-bold">{item.name}</span>
+              <span className="mt-1 block truncate text-[11px] text-[var(--text-soft)]">
+                {item.kind === "draft" ? "Draft" : "Generated"} · {timeAgo(item.savedAt)}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-4 py-4 text-[12px] text-[var(--text-muted)] sm:px-5">
+          <FileText size={16} className="text-[var(--text-soft)]" />
+          Your generated sessions will appear here. Save a pack as a draft to keep it ready for later.
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -188,12 +252,12 @@ export function DraftDrawer({
         ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label="Drafts and history"
+        aria-label="Saved AI Studio sessions"
         className="anim-slide-right absolute inset-y-0 right-0 flex w-full max-w-[440px] flex-col bg-white text-[var(--text)] shadow-[var(--shadow-pop)]"
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <div>
-            <h2 className="text-[17px] font-extrabold tracking-tight">Drafts &amp; History</h2>
+            <h2 className="text-[17px] font-extrabold tracking-tight">Saved sessions</h2>
             <p className="text-[12px] text-[var(--text-muted)]">Saved packs and every generation — pick up where you left off.</p>
           </div>
           <button type="button" className="icon-btn" aria-label="Close drafts and history" onClick={onClose}>

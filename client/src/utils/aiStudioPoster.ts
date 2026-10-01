@@ -190,6 +190,14 @@ export async function slideToPngFile(slide: Slide, fileName: string, size = POST
   return svgToPngFile(slideToSvgString(slide, size), fileName, size);
 }
 
+/** Real generated photos, when every slide already has one. Otherwise the caller renders a poster. */
+export function directSlideImageUrls(slides: Array<{ image?: string | null }>): string[] | null {
+  if (slides.length === 0) return null;
+  const urls = slides.map((slide) => (typeof slide.image === 'string' ? slide.image.trim() : ''));
+  if (urls.some((url) => !url.startsWith('/') && !url.startsWith('http'))) return null;
+  return urls;
+}
+
 /** Render a set of slides to PNG object URLs (for media pickers). */
 export async function slidesToPngUrls(slides: Slide[], prefix: string): Promise<string[]> {
   const urls: string[] = [];

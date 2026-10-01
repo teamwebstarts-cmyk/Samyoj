@@ -5,7 +5,7 @@ import { useMetaMock } from "../../contexts/MetaMockContext";
 import { useWhatsAppNumber } from "../../contexts/WhatsAppNumberContext";
 import { useMetaChannelStatus } from "../layout/MetaChannelChips";
 import { useGmailChannelAvailable } from "../email/emailData";
-import { aiStudioApi } from "../../services/api";
+import { aiStudioApi, inboxApi } from "../../services/api";
 import type { Channel, Draft, Language, OutputId, Pack, Photo, VisualSet } from "./data/types";
 import {
   EXAMPLE_IDEAS,
@@ -22,18 +22,22 @@ import { Compose } from "./Compose";
 import { GenerationError, GenerationProgress } from "./Generating";
 import { PackView } from "./PackView";
 import type { PackTab } from "./PackView";
-import { DraftDrawer, ToastHost } from "./Overlays";
+import { DraftDrawer, SessionShelf, ToastHost } from "./Overlays";
 import type { ToastItem } from "./Overlays";
 import { HandoffModal, NewPackModal, RefineModal } from "./Modals";
 import type { HandoffState } from "./Modals";
-import { slideToPngFile, slidesToPngUrls } from "../../utils/aiStudioPoster";
+import { slideToPngFile, slidesToPngUrls, directSlideImageUrls } from "../../utils/aiStudioPoster";
 import {
   addHistoryEntry,
   clearStoredHistory,
+  clearWorkspace,
   loadStoredDrafts,
   loadStoredHistory,
+  loadWorkspace,
   persistDrafts,
+  persistHistory,
   removeHistoryEntry,
+  saveWorkspace,
   type HistoryEntry,
 } from "../../utils/aiStudioStore";
 import "../../styles/ai-studio.css";
@@ -66,25 +70,53 @@ const HANDOFF_ROUTE: Record<Channel, string> = {
   email: "/email/compose",
 };
 
+async function uploadReferencePhotos(photos: Photo[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const photo of photos.slice(0, 5)) {
+    const response = await fetch(photo.url);
+    if (!response.ok) throw new Error(`Could not read reference image “${photo.name}”.`);
+    const blob = await response.blob();
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    const uploaded = await inboxApi.uploadMedia({
+      mimeType: blob.type || 'image/jpeg',
+      data: btoa(binary),
+      filename: photo.name,
+    });
+    const publicUrl = (uploaded.data as { data?: { publicUrl?: string } }).data?.publicUrl;
+    if (!publicUrl) throw new Error(`Reference image “${photo.name}” could not be uploaded.`);
+    urls.push(publicUrl);
+  }
+  return urls;
+}
+
 export default function AiStudio() {
   const navigate = useNavigate();
   const { enabled: mockEnabled } = useMetaMock();
-  const { hasConnectedNumber } = useWhatsAppNumber();
+  const { activeNumber, hasConnectedNumber } = useWhatsAppNumber();
   const { instagram } = useMetaChannelStatus();
   const emailConnected = useGmailChannelAvailable();
 
-  const [screen, setScreen] = useState<Screen>("compose");
-  const [brief, setBrief] = useState("");
-  const [language, setLanguage] = useState<Language>("English");
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [outputs, setOutputs] = useState<OutputId[]>(DEFAULT_OUTPUTS);
+  const restoredWorkspace = loadWorkspace();
+  const usableWorkspace = !mockEnabled && restoredWorkspace?.pack.sample ? null : restoredWorkspace;
+  const [screen, setScreen] = useState<Screen>(usableWorkspace?.screen ?? "compose");
+  const [brief, setBrief] = useState(usableWorkspace?.pack.brief ?? "");
+  const [language, setLanguage] = useState<Language>(usableWorkspace?.pack.language ?? "English");
+  const [photos, setPhotos] = useState<Photo[]>(usableWorkspace?.pack.photos ?? []);
+  const [outputs, setOutputs] = useState<OutputId[]>(usableWorkspace?.pack.outputs?.length ? usableWorkspace.pack.outputs : DEFAULT_OUTPUTS);
+  const [imageQuality, setImageQuality] = useState<'standard' | 'high' | 'story'>('standard');
+  const [imageCount, setImageCount] = useState<1 | 2 | 4>(1);
   const [briefError, setBriefError] = useState<string | null>(null);
+  const [generateErrorHint, setGenerateErrorHint] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  const [pack, setPack] = useState<Pack | null>(null);
+  const [pack, setPack] = useState<Pack | null>(usableWorkspace?.pack ?? null);
   const [tab, setTab] = useState<PackTab>("all");
   const [active, setActiveState] = useState<Record<VisualSet, number>>({ carousel: 0, image: 0 });
-  const [drafts, setDrafts] = useState<Draft[]>(() => loadStoredDrafts());
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadStoredHistory());
+  const [drafts, setDrafts] = useState<Draft[]>(() => mockEnabled ? loadStoredDrafts() : loadStoredDrafts().filter((draft) => !draft.pack.sample));
+  const [history, setHistory] = useState<HistoryEntry[]>(() => mockEnabled ? loadStoredHistory() : loadStoredHistory().filter((entry) => !entry.pack.sample));
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [handoff, setHandoff] = useState<HandoffState | null>(null);
   const [connections, setConnections] = useState<Record<Channel, boolean>>({ instagram: false, whatsapp: false, email: false });
@@ -107,6 +139,10 @@ export default function AiStudio() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [screen]);
+
+  useEffect(() => {
+    if (pack && (screen === "review" || screen === "saved")) saveWorkspace(pack, screen);
+  }, [pack, screen]);
 
   useEffect(() => {
     setConnections({
@@ -136,7 +172,6 @@ export default function AiStudio() {
             };
           })
           .filter((row): row is Draft => Boolean(row));
-        if (restored.length === 0) return;
         setDrafts(restored);
         persistDrafts(restored);
       })
@@ -157,6 +192,25 @@ export default function AiStudio() {
     });
   }, [mockEnabled]);
 
+  useEffect(() => {
+    if (mockEnabled) return;
+    if (pack?.sample) {
+      setPack(null);
+      setScreen("compose");
+      clearWorkspace();
+    }
+    setDrafts((current) => {
+      const next = current.filter((draft) => !draft.pack.sample);
+      if (next.length !== current.length) persistDrafts(next);
+      return next;
+    });
+    setHistory((current) => {
+      const next = current.filter((entry) => !entry.pack.sample);
+      if (next.length !== current.length) persistHistory(next);
+      return next;
+    });
+  }, [mockEnabled, pack?.sample]);
+
   const logHistory = useCallback((p: Pack, origin: HistoryEntry["origin"]) => {
     const entry: HistoryEntry = { id: uid(), name: p.name, pack: clonePack(p), savedAt: Date.now(), origin };
     setHistory(addHistoryEntry(entry));
@@ -173,20 +227,25 @@ export default function AiStudio() {
     const token = { cancelled: false };
     genToken.current = token;
     setBriefError(null);
+    setGenerateErrorHint(null);
     setStep(0);
     setScreen("generating");
     try {
       let result: Pack;
       if (mockEnabled) {
         result = await generateStudioPack({ brief, language, outputs, photos }, setStep, token);
+        result.sample = true;
       } else {
-        // Production path — until /ai-studio/generate is deployed this lands in
-        // the error state with an explainer instead of silently faking data.
+        const referenceUrls = photos.length ? await uploadReferencePhotos(photos) : [];
+        // Live path: persist references first so the image provider can fetch them.
         const { data } = await aiStudioApi.generate({
           brief,
           language,
           outputs: outputs as unknown as string[],
           photoNames: photos.map((photo) => photo.name).filter(Boolean),
+          referenceUrls,
+          imageQuality,
+          imageCount,
         });
         const payload = data.data as { pack?: Pack };
         if (!payload?.pack) throw new Error("No pack returned");
@@ -201,11 +260,17 @@ export default function AiStudio() {
       logHistory(result, "generation");
       toast("Content pack generated");
       if (!mockEnabled) {
-        // Best-effort server sync; local state remains the source of truth.
-        aiStudioApi.savePack(result as unknown as Record<string, unknown>).catch(() => undefined);
+        // Persist before handoff so the asset and copy have a server-side owner.
+        await aiStudioApi.savePack(result as unknown as Record<string, unknown>).catch(() => undefined);
       }
     } catch (err) {
       if (token.cancelled || (err instanceof Error && err.message === "cancelled")) return;
+      const ax = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
+      setGenerateErrorHint(
+        ax.response?.data?.error?.message ??
+          ax.response?.data?.message ??
+          (err instanceof Error ? err.message : null),
+      );
       setScreen("error");
     }
   };
@@ -217,12 +282,25 @@ export default function AiStudio() {
 
   /* ------------------------------ pack mutations ------------------------------ */
   const update = useCallback((fn: (p: Pack) => Pack) => {
-    setPack((p) => (p ? fn(p) : p));
+    setPack((p) => {
+      if (!p) return p;
+      const next = fn(p);
+      const previousMedia = (p.mediaPaths ?? []).join("|");
+      const nextMedia = (next.mediaPaths ?? []).join("|");
+      if (!mockEnabled && previousMedia !== nextMedia) {
+        void aiStudioApi.savePack(next as unknown as Record<string, unknown>).catch(() => undefined);
+      }
+      return next;
+    });
     setScreen((s) => (s === "saved" ? "review" : s));
-  }, []);
+  }, [mockEnabled]);
 
   const regenAll = () => {
     if (!pack) return;
+    if (!mockEnabled) {
+      toast("Regenerate a slide to get a new photo. Copy stays as the model wrote it.", "info");
+      return;
+    }
     setBusy(true);
     window.setTimeout(() => {
       update((p) => regenerateAll(p));
@@ -233,6 +311,10 @@ export default function AiStudio() {
 
   const refine = (instruction: string) => {
     setOverlay(null);
+    if (!mockEnabled) {
+      toast("Edit the copy on each card. Sample refine only runs when Sample data is on.", "info");
+      return;
+    }
     setBusy(true);
     window.setTimeout(() => {
       update((p) => refinePack(p, instruction));
@@ -252,6 +334,9 @@ export default function AiStudio() {
       persistDrafts(next);
       return next;
     });
+    if (!mockEnabled) {
+      void aiStudioApi.savePack(named as unknown as Record<string, unknown>).catch(() => undefined);
+    }
     toast("Draft saved");
     if (thenNew) resetStudio();
     else setScreen("saved");
@@ -283,6 +368,7 @@ export default function AiStudio() {
 
   const openHistory = (entry: HistoryEntry) => {
     const restored = { ...clonePack(entry.pack) };
+    setOverlay(null);
     setBrief(restored.brief);
     setLanguage(restored.language);
     setOutputs(restored.outputs);
@@ -304,17 +390,22 @@ export default function AiStudio() {
     setPack(null);
     setOverlay(null);
     setScreen("compose");
+    clearWorkspace();
   }
 
   const requestNew = () => {
-    if (pack && screen === "review") setOverlay("new");
+    if (pack && (screen === "review" || screen === "saved")) setOverlay("new");
     else resetStudio();
   };
 
   /* ------------------------------ hand-off ------------------------------ */
   const runHandoff = (channel: Channel, p: Pack) => {
     window.clearTimeout(handoffTimer.current);
-    setHandoff({ channel, phase: "opening", payload: buildHandoff(p, channel), openingText: OPENING_TEXT[channel](p) });
+    const handoffPayload = buildHandoff(p, channel);
+    if (channel === "whatsapp" && activeNumber?.id) {
+      handoffPayload.data.whatsappNumberId = activeNumber.id;
+    }
+    setHandoff({ channel, phase: "opening", payload: handoffPayload, openingText: OPENING_TEXT[channel](p) });
 
     // Build the real navigation payload. Instagram carries rendered PNG media;
     // Email carries the generated poster as an attachable File.
@@ -322,13 +413,23 @@ export default function AiStudio() {
     const mediaWork: Promise<Record<string, unknown>> = (async () => {
       if (channel === "instagram") {
         const slides = p.carousel ?? (p.image ? [p.image.options[p.image.selected]] : []);
-        if (slides.length === 0) return {};
-        const mediaUrls = await slidesToPngUrls(slides, `studio-${p.id}`);
+        const picked = slides.length > 1 ? slides : slides.slice(0, 1);
+        if (picked.length === 0) return {};
+        const direct = directSlideImageUrls(picked);
+        if (direct) return { mediaUrls: direct };
+        const mediaUrls = await slidesToPngUrls(picked, `studio-${p.id}`);
         return { mediaUrls };
       }
       if (channel === "email") {
         const slide = p.carousel?.[0] ?? p.image?.options[p.image.selected];
         if (!slide) return {};
+        const direct = directSlideImageUrls([slide]);
+        if (direct) {
+          const res = await fetch(direct[0]);
+          const blob = await res.blob();
+          const attachmentFile = new File([blob], `${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-poster.png`, { type: blob.type || "image/png" });
+          return { attachmentFile };
+        }
         const attachmentFile = await slideToPngFile(slide, `${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-poster.png`);
         return { attachmentFile };
       }
@@ -348,7 +449,9 @@ export default function AiStudio() {
           if (next) logHistory(next, "handoff");
           return next;
         });
-        if (!mockEnabled) aiStudioApi.logHandoff({ packId: p.id, channel, payload: buildHandoff(p, channel).data }).catch(() => undefined);
+        if (!mockEnabled) {
+          aiStudioApi.logHandoff({ packId: p.id, channel, payload: handoffPayload.data }).catch(() => undefined);
+        }
         navigate(HANDOFF_ROUTE[channel], { state: { ...baseState, ...extra } });
       })
       .catch(() => {
@@ -396,10 +499,17 @@ export default function AiStudio() {
       <main className="mx-auto w-full max-w-[1280px]" id="main">
         {screen === "compose" && (
           <>
+            <SessionShelf
+              drafts={drafts}
+              history={history}
+              onOpenDraft={openDraft}
+              onOpenHistory={openHistory}
+              onViewAll={() => setOverlay("drafts")}
+            />
             {mockEnabled && (
               <p className="mb-3 flex items-center gap-2 rounded-xl border border-[#e6defb] bg-[#f4efff] px-3 py-2 text-[12px] font-medium text-[var(--text-muted)]" role="status">
                 <Info size={14} className="flex-none text-[var(--ai-primary)]" />
-                Sample data is on — Studio uses the mock generation engine until AI services are connected. Switch it off in Settings to use the real pipeline.
+                Sample data is on — this uses sample copy and art, not the live text and image models. Turn it off in Settings for a real generation.
               </p>
             )}
             <Compose
@@ -411,6 +521,10 @@ export default function AiStudio() {
               setPhotos={setPhotos}
               outputs={outputs}
               setOutputs={setOutputs}
+              imageQuality={imageQuality}
+              setImageQuality={setImageQuality}
+              imageCount={imageCount}
+              setImageCount={setImageCount}
               error={briefError}
               setError={setBriefError}
               onGenerate={generate}
@@ -421,13 +535,23 @@ export default function AiStudio() {
           </>
         )}
         {screen === "generating" && (
-          <GenerationProgress step={step} hasVisuals={outputs.includes("ig_carousel") || outputs.includes("ig_image")} onCancel={cancelGeneration} />
+          <GenerationProgress
+            step={step}
+            hasVisuals={outputs.includes("ig_carousel") || outputs.includes("ig_image")}
+            liveImages={!mockEnabled}
+            onCancel={cancelGeneration}
+          />
         )}
         {screen === "error" && (
           <GenerationError
             onRetry={generate}
             onEdit={() => setScreen("compose")}
-            hint={mockEnabled ? undefined : "AI generation service isn't connected yet. Turn on Sample data to explore Studio with the mock engine."}
+            hint={
+              mockEnabled
+                ? undefined
+                : generateErrorHint ||
+                  "Generation failed. Your brief is still here — try again. Sample data in Settings uses the mock engine instead of the live models."
+            }
           />
         )}
         {reviewing && pack && (
@@ -449,6 +573,8 @@ export default function AiStudio() {
             onEditBrief={() => setScreen("compose")}
             onHandoff={startHandoff}
             onToast={toast}
+            useLiveImages={!mockEnabled}
+            imageQuality={imageQuality}
           />
         )}
       </main>

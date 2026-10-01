@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, CopyPlus, Download, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type { Pack, VisualSet } from "./data/types";
+import { aiStudioApi } from "../../services/api";
+import type { ArtKey, Pack, VisualSet } from "./data/types";
 import { MAX_IMAGE_OPTIONS, MAX_SLIDES, MIN_SLIDES, getSlides, newBlankSlide, regenerateSlide, setSlides, variantSlide } from "./data/mock";
 import { InstagramIcon } from "./brand";
 import { SlideArt } from "./SlideArt";
@@ -13,6 +14,8 @@ interface Props {
   setActive: (i: number) => void;
   update: (fn: (p: Pack) => Pack) => void;
   onToast: (m: string, tone?: "success" | "info" | "error") => void;
+  useLiveImages?: boolean;
+  imageQuality?: "standard" | "high" | "story";
 }
 
 
@@ -20,7 +23,7 @@ interface Props {
  * Visuals are AI-generated posters — they cannot be text-edited. Users pick,
  * regenerate, or generate variants of the exact image instead.
  */
-export function VisualGallery({ pack, set, active, setActive, update, onToast }: Props) {
+export function VisualGallery({ pack, set, active, setActive, update, onToast, useLiveImages, imageQuality = "standard" }: Props) {
   const slides = getSlides(pack, set);
   const isCarousel = set === "carousel";
   const [reorder, setReorder] = useState(false);
@@ -30,10 +33,52 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
   const target = isCarousel ? active : selectedImage;
   const optionCap = isCarousel ? MAX_SLIDES : MAX_IMAGE_OPTIONS;
 
+  const addMediaPath = (packValue: Pack, url: string, previousUrl?: string): Pack => {
+    if (!url.startsWith("/api/media/public/") && !url.includes("/api/media/public/")) return packValue;
+    const path = url.split("?")[0].split("/api/media/public/")[1];
+    if (!path) return packValue;
+    const paths = [...(packValue.mediaPaths ?? [])];
+    const previousPath = previousUrl?.split("?")[0].split("/api/media/public/")[1];
+    const index = previousPath ? paths.indexOf(previousPath) : -1;
+    if (index >= 0) paths[index] = path;
+    else if (!paths.includes(path)) paths.push(path);
+    return { ...packValue, mediaPaths: paths };
+  };
+
+  const updateGeneratedMedia = (packValue: Pack, url: string, index: number, previousUrl?: string): Pack => {
+    const next = addMediaPath(packValue, url, previousUrl);
+    const isHeader = set === "carousel" ? index === 0 : index === (next.image?.selected ?? selectedImage);
+    return isHeader && next.whatsapp
+      ? { ...next, whatsapp: { ...next.whatsapp, header: { ...next.whatsapp.header, source: url } } }
+      : next;
+  };
+
   const scroll = (dir: number) => stripRef.current?.scrollBy({ left: dir * 260, behavior: "smooth" });
 
   const add = () => {
     if (slides.length >= MAX_SLIDES) return onToast(`A carousel can have up to ${MAX_SLIDES} slides.`, "error");
+    if (useLiveImages) {
+      const source = slides[active] ?? slides[0];
+      if (!source) return;
+      const insertAt = Math.min(active + 1, slides.length);
+      const headline = source.elements.find((e) => e.role === "headline")?.text;
+      setBusy("add");
+      void fetchSlideImage(insertAt, headline)
+        .then((url) => {
+          update((p) => {
+            const current = getSlides(p, set);
+            const base = current[active] ?? current[0];
+            if (!base) return p;
+            const slide = { ...variantSlide(base, p.ctx, insertAt), image: url, art: "none" as ArtKey };
+            return setSlides(updateGeneratedMedia(p, url, insertAt), set, [...current.slice(0, insertAt), slide, ...current.slice(insertAt)]);
+          });
+          setActive(insertAt);
+          onToast("New AI slide added", "success");
+        })
+        .catch(() => onToast("Image generation failed. Try again.", "error"))
+        .finally(() => setBusy(null));
+      return;
+    }
     const slide = newBlankSlide(pack, slides.length);
     const at = Math.min(active + 1, slides.length);
     const next = [...slides.slice(0, at), slide, ...slides.slice(at)];
@@ -59,10 +104,41 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
     setActive(j);
   };
 
+  const fetchSlideImage = async (i: number, headline?: string) => {
+    const res = await aiStudioApi.regenerateVisual({
+      imagePrompt: pack.imagePrompt || pack.brief,
+      headline,
+      slideIndex: i,
+      packId: pack.id,
+      imageQuality,
+    });
+    const url = (res.data as { data?: { url?: string } })?.data?.url;
+    if (!url) throw new Error("No image URL");
+    return url;
+  };
+
   /** In-place regeneration of one slide/option. */
   const regen = (i: number) => {
     const id = slides[i].id;
+    const headline = slides[i].elements.find((e) => e.role === "headline")?.text;
     setBusy(id);
+    if (useLiveImages) {
+      void fetchSlideImage(i, headline)
+        .then((url) => {
+          update((p) => {
+            const cur = getSlides(p, set);
+            return setSlides(
+              updateGeneratedMedia(p, url, i, cur[i]?.image || undefined),
+              set,
+              cur.map((s, k) => (k === i ? { ...s, image: url, art: "none" as ArtKey } : s)),
+            );
+          });
+          onToast("New AI photo for this slide", "success");
+        })
+        .catch(() => onToast("Image generation failed. Try again.", "error"))
+        .finally(() => setBusy(null));
+      return;
+    }
     window.setTimeout(() => {
       update((p) => {
         const cur = getSlides(p, set);
@@ -75,6 +151,9 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
 
   /** Generate a fresh variant of one slide/option and insert it after it. */
   const variant = (i: number) => {
+    if (useLiveImages && slides.length >= 4) {
+      return onToast("A live pack can have up to 4 generated photos.", "error");
+    }
     if (slides.length >= optionCap) {
       return onToast(
         isCarousel ? `A carousel can have up to ${MAX_SLIDES} slides.` : `You can have up to ${MAX_IMAGE_OPTIONS} image options. Delete one first.`,
@@ -82,7 +161,24 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
       );
     }
     const id = slides[i].id;
+    const headline = slides[i].elements.find((e) => e.role === "headline")?.text;
     setBusy(id);
+    if (useLiveImages) {
+      void fetchSlideImage(i + 1, headline)
+        .then((url) => {
+          update((p) => {
+            const cur = getSlides(p, set);
+            const v = { ...variantSlide(cur[i], p.ctx, i), image: url, art: "none" as ArtKey };
+            const next = [...cur.slice(0, i + 1), v, ...cur.slice(i + 1)];
+            return setSlides(updateGeneratedMedia(p, url, i), set, next);
+          });
+          setActive(i + 1);
+          onToast("New AI variant added", "success");
+        })
+        .catch(() => onToast("Image generation failed. Try again.", "error"))
+        .finally(() => setBusy(null));
+      return;
+    }
     window.setTimeout(() => {
       update((p) => {
         const cur = getSlides(p, set);
@@ -98,6 +194,31 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
 
   const regenOptions = () => {
     setBusy("all");
+    if (useLiveImages) {
+      void (async () => {
+        try {
+          const urls: string[] = [];
+          for (let k = 0; k < slides.length; k++) {
+            const headline = slides[k].elements.find((e) => e.role === "headline")?.text;
+            urls.push(await fetchSlideImage(k, headline));
+          }
+          update((p) => {
+            const list = getSlides(p, set);
+            return setSlides(
+              urls.reduce((nextPack, url, k) => updateGeneratedMedia(nextPack, url, k, list[k]?.image || undefined), p),
+              set,
+              list.map((s, k) => ({ ...s, image: urls[k] ?? s.image, art: "none" as ArtKey })),
+            );
+          });
+          onToast("AI photos refreshed", "success");
+        } catch {
+          onToast("Image generation failed. Try again.", "error");
+        } finally {
+          setBusy(null);
+        }
+      })();
+      return;
+    }
     window.setTimeout(() => {
       update((p) => setSlides(p, set, getSlides(p, set).map((s, k) => regenerateSlide(s, p.ctx, k))));
       setBusy(null);
@@ -162,6 +283,12 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
           {slides.length} / {optionCap}
         </span>
       </div>
+      {busy === "add" && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-[var(--ai-primary-soft)] px-3 py-2 text-[12px] font-semibold text-[var(--ai-primary)]" role="status" aria-live="polite">
+          <RefreshCw size={14} className="spin flex-none" />
+          Creating a new visual for this slide…
+        </div>
+      )}
 
       {isCarousel ? (
         <div className="relative">
@@ -195,11 +322,12 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
               <button
                 type="button"
                 onClick={add}
-                aria-label="Add slide"
-                className="flex aspect-square w-[116px] flex-none flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] text-[12px] font-bold text-[var(--text-muted)] transition-colors hover:border-[var(--ai-primary)] hover:text-[var(--ai-primary)] sm:w-[124px]"
+                aria-label={busy === "add" ? "Generating new slide" : "Add slide"}
+                disabled={busy !== null}
+                className={`flex aspect-square w-[116px] flex-none flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-subtle)] text-[12px] font-bold text-[var(--text-muted)] transition-colors hover:border-[var(--ai-primary)] hover:text-[var(--ai-primary)] sm:w-[124px] ${busy === "add" ? "border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]" : ""}`}
               >
-                <Plus size={20} />
-                Add slide
+                {busy === "add" ? <RefreshCw size={20} className="spin" /> : <Plus size={20} />}
+                {busy === "add" ? "Generating…" : "Add slide"}
               </button>
             )}
           </div>
@@ -218,7 +346,13 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
                   role="radio"
                   aria-checked={on}
                   aria-label={`Option ${i + 1}${on ? " (selected)" : ""}`}
-                  onClick={() => update((p) => (p.image ? { ...p, image: { ...p.image, selected: i } } : p))}
+                  onClick={() => update((p) => {
+                    if (!p.image) return p;
+                    const next = { ...p, image: { ...p.image, selected: i } };
+                    return next.whatsapp
+                      ? { ...next, whatsapp: { ...next.whatsapp, header: { ...next.whatsapp.header, source: s.image || next.whatsapp.header.source } } }
+                      : next;
+                  })}
                   className={`relative block w-full overflow-hidden rounded-xl border-2 transition-all duration-150 ${on ? "border-[var(--ai-primary)] shadow-[0_6px_16px_rgba(109,61,242,0.25)]" : "border-transparent hover:border-[var(--ai-primary-ring)]"} ${busy === s.id || busy === "all" ? "opacity-40" : ""}`}
                 >
                   <SlideArt slide={s} label={`Option ${i + 1}`} />
@@ -243,7 +377,13 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast }:
                   </span>
                 </div>
                 {!on && (
-                  <button type="button" className="btn btn-sm btn-soft mt-1 w-full" onClick={() => update((p) => (p.image ? { ...p, image: { ...p.image, selected: i } } : p))}>
+                  <button type="button" className="btn btn-sm btn-soft mt-1 w-full" onClick={() => update((p) => {
+                    if (!p.image) return p;
+                    const next = { ...p, image: { ...p.image, selected: i } };
+                    return next.whatsapp
+                      ? { ...next, whatsapp: { ...next.whatsapp, header: { ...next.whatsapp.header, source: s.image || next.whatsapp.header.source } } }
+                      : next;
+                  })}>
                     Select image
                   </button>
                 )}

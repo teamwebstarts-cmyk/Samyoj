@@ -54,6 +54,41 @@ function throwTemplateSaveError(error: unknown): never {
   throw error;
 }
 
+async function bindStudioHandoffTemplate(
+  organizationId: string,
+  studioPackId: string | undefined,
+  templateName: string,
+  whatsappNumberId?: string,
+): Promise<void> {
+  if (!studioPackId) return;
+  const pack = await prisma.aiStudioPack.findFirst({
+    where: { organizationId, packData: { path: ['id'], equals: studioPackId } },
+    select: { id: true },
+  }).catch(() => null);
+  if (!pack) return;
+  const handoffs = await prisma.aiStudioHandoff.findMany({
+    where: { organizationId, packId: pack.id, channel: 'whatsapp' },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+  const handoff = handoffs.find((candidate) => {
+    const payload =
+      candidate.payload && typeof candidate.payload === 'object'
+        ? (candidate.payload as Record<string, unknown>)
+        : {};
+    return !whatsappNumberId || !payload.whatsappNumberId || payload.whatsappNumberId === whatsappNumberId;
+  });
+  if (!handoff) return;
+  const payload =
+    handoff.payload && typeof handoff.payload === 'object'
+      ? (handoff.payload as Record<string, unknown>)
+      : {};
+  await prisma.aiStudioHandoff.update({
+    where: { id: handoff.id },
+    data: { payload: { ...payload, name: templateName } },
+  });
+}
+
 function emitTemplateSyncTelemetry(
   organizationId: string,
   templates: Array<{ status?: string }>
@@ -365,6 +400,13 @@ router.post(
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
 
+    await bindStudioHandoffTemplate(
+      req.user!.organizationId!,
+      data.studioPackId,
+      data.name,
+      req.activeWhatsappNumberId,
+    );
+
     sendSuccess(res, result, 201);
   })
 );
@@ -395,6 +437,12 @@ router.post(
     }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
+    await bindStudioHandoffTemplate(
+      req.user!.organizationId!,
+      data.studioPackId,
+      data.name,
+      req.activeWhatsappNumberId,
+    );
 
     sendSuccess(res, result, 201);
   })
@@ -524,6 +572,12 @@ router.post(
     }
 
     await invalidateTemplateCache(req.user!.organizationId!, wabaId, data.name);
+    await bindStudioHandoffTemplate(
+      req.user!.organizationId!,
+      data.studioPackId,
+      data.name,
+      req.activeWhatsappNumberId,
+    );
 
     sendSuccess(res, result, 201);
   })
