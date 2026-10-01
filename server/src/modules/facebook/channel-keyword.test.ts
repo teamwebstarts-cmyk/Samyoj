@@ -37,6 +37,24 @@ describe('matchChannelKeyword', () => {
     ).toBeNull();
   });
 
+  it('matches a listed word or emoji', () => {
+    const rows = [
+      {
+        triggerType: 'KEYWORD',
+        config: { platform: 'IG', keyword: 'offer, 🔥', message: 'dm', publicMessage: 'on post' },
+      },
+    ];
+    expect(matchInstagramCommentReplies(rows, 'OFFER please')).toEqual({
+      privateText: 'dm',
+      publicText: 'on post',
+    });
+    expect(matchInstagramCommentReplies(rows, '🔥')).toEqual({
+      privateText: 'dm',
+      publicText: 'on post',
+    });
+    expect(matchInstagramCommentReplies(rows, 'hello').privateText).toBeNull();
+  });
+
   it('takes the oldest private text and the oldest public text', () => {
     const replies = matchInstagramCommentReplies(
       [

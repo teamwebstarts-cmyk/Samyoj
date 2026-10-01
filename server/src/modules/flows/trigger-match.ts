@@ -26,7 +26,19 @@ export function keywordMatches(content: string, config: FlowTriggerConfig): bool
     }
   }
   if (config.exactMatch) return lower.trim() === keyword;
-  return new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(content);
+  return commentStyleKeywordHit(content, keyword);
+}
+
+/** Whole words for letters/numbers. Emoji and symbols match by presence (\\b never sees them). */
+function commentStyleKeywordHit(content: string, keyword: string): boolean {
+  const foldedContent = content.replace(/\uFE0F/g, '').toLowerCase();
+  const foldedKeyword = keyword.replace(/\uFE0F/g, '').toLowerCase();
+  if (!foldedKeyword) return false;
+  if (!/[\p{L}\p{N}]/u.test(foldedKeyword)) {
+    return foldedContent.includes(foldedKeyword);
+  }
+  const escaped = escapeRegExp(foldedKeyword);
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'u').test(foldedContent);
 }
 
 function escapeRegExp(value: string): string {

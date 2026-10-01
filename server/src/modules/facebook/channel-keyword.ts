@@ -9,6 +9,14 @@ import { findParentPageChannel } from './parent-page';
 
 type Rule = { triggerType?: string; config: unknown };
 
+/** One field may list alternatives: "offer, 🔥" matches either. */
+function instagramTriggerMatches(text: string, keyword: string | undefined): boolean {
+  const raw = keyword?.trim();
+  if (!raw) return false;
+  const tokens = raw.split(',').map((part) => part.trim()).filter(Boolean);
+  return (tokens.length > 0 ? tokens : [raw]).some((token) => keywordMatches(text, { keyword: token }));
+}
+
 function replyText(config: unknown): string {
   const row = (config || {}) as { message?: string; response?: string };
   return (row.response || row.message || '').trim();
@@ -34,7 +42,7 @@ export function matchInstagramCommentReplies(
     if (row.triggerType && row.triggerType !== 'KEYWORD') continue;
     const config = (row.config || {}) as IgCommentConfig;
     if (config.platform !== 'IG') continue;
-    if (!keywordMatches(text, { keyword: config.keyword })) continue;
+    if (!instagramTriggerMatches(text, config.keyword)) continue;
     const scoped = config.igMediaId?.trim();
     if (scoped && scoped !== igMediaId) continue;
     hits.push(config);

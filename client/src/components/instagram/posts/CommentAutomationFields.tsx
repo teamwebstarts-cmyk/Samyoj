@@ -4,7 +4,7 @@ import InfoTip from '../../ui/InfoTip';
 const KEYWORD_SUGGESTIONS = ['PRICE', 'LINK', 'OFFER', 'DETAILS', 'YES'] as const;
 
 const KEYWORD_MATCH_TIP =
-  'Matches whole words only (not case-sensitive). “price” matches “What’s the price?” but not “priced”.';
+  'Not case-sensitive. “Offer” matches “OFFER please” and “offer🔥”, not “offering”. An emoji matches that emoji in the comment. Use commas for alternatives: offer, 🔥';
 
 const PRIVATE_DM_TIP =
   'Instagram allows one private reply per commenter, within 7 days of their comment. Use this for links or offers.';

@@ -8,6 +8,15 @@ describe('keywordMatches', () => {
     expect(keywordMatches('that looks pricey', { keyword: 'price' })).toBe(false);
   });
 
+  it('ignores letter case and matches emoji triggers', () => {
+    expect(keywordMatches('OFFER please', { keyword: 'Offer' })).toBe(true);
+    expect(keywordMatches('offer🔥', { keyword: 'offer' })).toBe(true);
+    expect(keywordMatches('offering', { keyword: 'offer' })).toBe(false);
+    expect(keywordMatches('this 🔥', { keyword: '🔥' })).toBe(true);
+    expect(keywordMatches('hello', { keyword: '🔥' })).toBe(false);
+    expect(keywordMatches('❤️ love', { keyword: '❤' })).toBe(true);
+  });
+
   it('supports exact and regex flags', () => {
     expect(keywordMatches('demo', { keyword: 'demo', exactMatch: true })).toBe(true);
     expect(keywordMatches('demo please', { keyword: 'demo', exactMatch: true })).toBe(false);
