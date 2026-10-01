@@ -454,6 +454,20 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
   const w = ART_WIDTH[slide.art][left ? "left" : "center"];
 
   const photo = Boolean(slide.image);
+
+  if (photo && slide.image) {
+    return (
+      <div
+        className={`slide-box ${className}`}
+        style={{ background: "#0a0c12" }}
+        role="img"
+        aria-label={label ?? "Generated visual"}
+      >
+        <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+      </div>
+    );
+  }
+
   const textStyle: CSSProperties = photo
     ? { left: "6%", right: "6%", bottom: "7%", top: "auto", alignItems: "flex-start", textAlign: "left" }
     : left
@@ -474,17 +488,8 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
         }}
       />
 
-      {/* Art / photo */}
-      {slide.image ? (
-        <>
-          <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
-          <div
-            aria-hidden
-            className="absolute inset-x-0 bottom-0 h-[55%]"
-            style={{ background: "linear-gradient(180deg, rgba(8,10,20,0) 0%, rgba(8,10,20,0.78) 100%)" }}
-          />
-        </>
-      ) : slide.art !== "none" ? (
+      {/* Art */}
+      {slide.art !== "none" ? (
         <div
           className="absolute"
           style={
@@ -505,7 +510,7 @@ export function SlideArt({ slide, className = "", label }: { slide: Slide; class
             fontFamily: `"${r.font}", ${r.font === "Playfair Display" ? "serif" : "sans-serif"}`,
             fontSize: `${r.size / 4}cqw`,
             fontWeight: r.weight,
-            color: slide.image && (e.role === "headline" || e.role === "sub") ? "#ffffff" : r.color,
+            color: r.color,
             lineHeight: e.role === "headline" ? 1.05 : 1.2,
             overflowWrap: "anywhere",
           };

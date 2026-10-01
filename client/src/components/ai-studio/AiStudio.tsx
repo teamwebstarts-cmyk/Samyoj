@@ -22,7 +22,7 @@ import { Compose } from "./Compose";
 import { GenerationError, GenerationProgress } from "./Generating";
 import { PackView } from "./PackView";
 import type { PackTab } from "./PackView";
-import { DraftDrawer, SessionShelf, ToastHost } from "./Overlays";
+import { DraftDrawer, ToastHost } from "./Overlays";
 import type { ToastItem } from "./Overlays";
 import { HandoffModal, NewPackModal, RefineModal } from "./Modals";
 import type { HandoffState } from "./Modals";
@@ -499,13 +499,6 @@ export default function AiStudio() {
       <main className="mx-auto w-full max-w-[1280px]" id="main">
         {screen === "compose" && (
           <>
-            <SessionShelf
-              drafts={drafts}
-              history={history}
-              onOpenDraft={openDraft}
-              onOpenHistory={openHistory}
-              onViewAll={() => setOverlay("drafts")}
-            />
             {mockEnabled && (
               <p className="mb-3 flex items-center gap-2 rounded-xl border border-[#e6defb] bg-[#f4efff] px-3 py-2 text-[12px] font-medium text-[var(--text-muted)]" role="status">
                 <Info size={14} className="flex-none text-[var(--ai-primary)]" />
@@ -531,6 +524,11 @@ export default function AiStudio() {
               onExample={useExample}
               hasPack={!!pack}
               onBackToPack={() => setScreen("review")}
+              drafts={drafts}
+              history={history}
+              onOpenDraft={openDraft}
+              onOpenHistory={openHistory}
+              onViewAllSessions={() => setOverlay("drafts")}
             />
           </>
         )}

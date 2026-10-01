@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
-import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, CopyPlus, Download, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CopyPlus, Download, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { aiStudioApi } from "../../services/api";
 import type { ArtKey, Pack, VisualSet } from "./data/types";
 import { MAX_IMAGE_OPTIONS, MAX_SLIDES, MIN_SLIDES, getSlides, newBlankSlide, regenerateSlide, setSlides, variantSlide } from "./data/mock";
 import { InstagramIcon } from "./brand";
 import { SlideArt } from "./SlideArt";
+import { ImageLightbox } from "./ImageLightbox";
 import { downloadSlidePoster } from "../../utils/aiStudioPoster";
 
 interface Props {
@@ -26,11 +27,10 @@ interface Props {
 export function VisualGallery({ pack, set, active, setActive, update, onToast, useLiveImages, imageQuality = "standard" }: Props) {
   const slides = getSlides(pack, set);
   const isCarousel = set === "carousel";
-  const [reorder, setReorder] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const selectedImage = pack.image?.selected ?? 0;
-  const target = isCarousel ? active : selectedImage;
   const optionCap = isCarousel ? MAX_SLIDES : MAX_IMAGE_OPTIONS;
 
   const addMediaPath = (packValue: Pack, url: string, previousUrl?: string): Pack => {
@@ -192,40 +192,6 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
     }, 650);
   };
 
-  const regenOptions = () => {
-    setBusy("all");
-    if (useLiveImages) {
-      void (async () => {
-        try {
-          const urls: string[] = [];
-          for (let k = 0; k < slides.length; k++) {
-            const headline = slides[k].elements.find((e) => e.role === "headline")?.text;
-            urls.push(await fetchSlideImage(k, headline));
-          }
-          update((p) => {
-            const list = getSlides(p, set);
-            return setSlides(
-              urls.reduce((nextPack, url, k) => updateGeneratedMedia(nextPack, url, k, list[k]?.image || undefined), p),
-              set,
-              list.map((s, k) => ({ ...s, image: urls[k] ?? s.image, art: "none" as ArtKey })),
-            );
-          });
-          onToast("AI photos refreshed", "success");
-        } catch {
-          onToast("Image generation failed. Try again.", "error");
-        } finally {
-          setBusy(null);
-        }
-      })();
-      return;
-    }
-    window.setTimeout(() => {
-      update((p) => setSlides(p, set, getSlides(p, set).map((s, k) => regenerateSlide(s, p.ctx, k))));
-      setBusy(null);
-      onToast("Image options regenerated");
-    }, 700);
-  };
-
   const download = (i: number) => {
     const s = slides[i];
     if (!s) return;
@@ -233,9 +199,23 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
       .then((ok) => onToast(ok ? "Poster downloaded (PNG · 1080 × 1080)" : "Couldn't render the poster.", ok ? "success" : "error"));
   };
 
+  const openPreview = (i: number, url?: string) => {
+    setActive(i);
+    if (url) setLightboxUrl(url);
+  };
+
   const itemActions = (i: number) => (
     <div className="mt-1 flex items-center justify-center gap-0.5">
-      {reorder ? (
+      <button type="button" className="icon-btn !h-7 !w-7" aria-label={`New variant of slide ${i + 1}`} title="New variant" disabled={busy !== null} onClick={() => variant(i)}>
+        <CopyPlus size={14} />
+      </button>
+      <button type="button" className="icon-btn !h-7 !w-7" aria-label={`Regenerate slide ${i + 1}`} title="Regenerate" disabled={busy !== null} onClick={() => regen(i)}>
+        <RefreshCw size={14} />
+      </button>
+      <button type="button" className="icon-btn !h-7 !w-7" aria-label={`Download slide ${i + 1}`} title="Download PNG" onClick={() => download(i)}>
+        <Download size={14} />
+      </button>
+      {isCarousel && (
         <>
           <button type="button" className="icon-btn !h-7 !w-7" aria-label={`Move slide ${i + 1} earlier`} disabled={i === 0} onClick={() => move(i, -1)}>
             <ChevronLeft size={15} />
@@ -243,23 +223,9 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
           <button type="button" className="icon-btn !h-7 !w-7" aria-label={`Move slide ${i + 1} later`} disabled={i === slides.length - 1} onClick={() => move(i, 1)}>
             <ChevronRight size={15} />
           </button>
-        </>
-      ) : (
-        <>
-          <button type="button" className="icon-btn !h-7 !w-7" aria-label={`New variant of slide ${i + 1}`} title="New variant" disabled={busy !== null} onClick={() => variant(i)}>
-            <CopyPlus size={14} />
+          <button type="button" className="icon-btn !h-7 !w-7 hover:!bg-[var(--danger-soft)] hover:!text-[var(--danger)]" aria-label={`Delete slide ${i + 1}`} disabled={slides.length <= MIN_SLIDES} onClick={() => remove(i)}>
+            <Trash2 size={14} />
           </button>
-          <button type="button" className="icon-btn !h-7 !w-7" aria-label={`Regenerate slide ${i + 1}`} title="Regenerate" disabled={busy !== null} onClick={() => regen(i)}>
-            <RefreshCw size={14} />
-          </button>
-          <button type="button" className="icon-btn !h-7 !w-7" aria-label={`Download slide ${i + 1}`} title="Download PNG" onClick={() => download(i)}>
-            <Download size={14} />
-          </button>
-          {isCarousel && (
-            <button type="button" className="icon-btn !h-7 !w-7 hover:!bg-[var(--danger-soft)] hover:!text-[var(--danger)]" aria-label={`Delete slide ${i + 1}`} disabled={slides.length <= MIN_SLIDES} onClick={() => remove(i)}>
-              <Trash2 size={14} />
-            </button>
-          )}
         </>
       )}
     </div>
@@ -306,7 +272,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
                       role="option"
                       aria-selected={on}
                       aria-label={`Select slide ${i + 1}`}
-                      onClick={() => setActive(i)}
+                      onClick={() => openPreview(i, s.image || undefined)}
                       className={`block w-full overflow-hidden rounded-xl border-2 transition-all duration-150 ${on ? "border-[var(--ai-primary)] shadow-[0_6px_16px_rgba(109,61,242,0.25)]" : "border-transparent hover:border-[var(--ai-primary-ring)]"} ${busy === s.id ? "opacity-40" : ""}`}
                     >
                       <SlideArt slide={s} label={`Slide ${i + 1}`} />
@@ -346,13 +312,16 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
                   role="radio"
                   aria-checked={on}
                   aria-label={`Option ${i + 1}${on ? " (selected)" : ""}`}
-                  onClick={() => update((p) => {
-                    if (!p.image) return p;
-                    const next = { ...p, image: { ...p.image, selected: i } };
-                    return next.whatsapp
-                      ? { ...next, whatsapp: { ...next.whatsapp, header: { ...next.whatsapp.header, source: s.image || next.whatsapp.header.source } } }
-                      : next;
-                  })}
+                  onClick={() => {
+                    update((p) => {
+                      if (!p.image) return p;
+                      const next = { ...p, image: { ...p.image, selected: i } };
+                      return next.whatsapp
+                        ? { ...next, whatsapp: { ...next.whatsapp, header: { ...next.whatsapp.header, source: s.image || next.whatsapp.header.source } } }
+                        : next;
+                    });
+                    if (s.image) setLightboxUrl(s.image);
+                  }}
                   className={`relative block w-full overflow-hidden rounded-xl border-2 transition-all duration-150 ${on ? "border-[var(--ai-primary)] shadow-[0_6px_16px_rgba(109,61,242,0.25)]" : "border-transparent hover:border-[var(--ai-primary-ring)]"} ${busy === s.id || busy === "all" ? "opacity-40" : ""}`}
                 >
                   <SlideArt slide={s} label={`Option ${i + 1}`} />
@@ -393,36 +362,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
-        {isCarousel ? (
-          <>
-            <button type="button" className="btn btn-sm" onClick={add} disabled={slides.length >= MAX_SLIDES}>
-              <Plus size={14} /> Add Slide
-            </button>
-            <button type="button" className={`btn btn-sm ${reorder ? "btn-soft" : ""}`} aria-pressed={reorder} onClick={() => setReorder((r) => !r)}>
-              <ArrowLeftRight size={14} /> {reorder ? "Done reordering" : "Reorder"}
-            </button>
-            <button type="button" className="btn btn-sm" onClick={() => regen(active)} disabled={busy !== null}>
-              <RefreshCw size={14} className={busy ? "spin" : ""} /> Regenerate Slide {active + 1}
-            </button>
-            <button type="button" className="btn btn-sm" onClick={() => variant(active)} disabled={busy !== null}>
-              <CopyPlus size={14} /> New Variant
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" className="btn btn-sm" onClick={regenOptions} disabled={busy !== null}>
-              <RefreshCw size={14} className={busy ? "spin" : ""} /> Regenerate Options
-            </button>
-            <button type="button" className="btn btn-sm" onClick={() => variant(selectedImage)} disabled={busy !== null}>
-              <CopyPlus size={14} /> New Variant
-            </button>
-          </>
-        )}
-        <button type="button" className="btn btn-sm btn-soft ml-auto" onClick={() => download(target)}>
-          <Download size={14} /> Download {isCarousel ? `Slide ${active + 1}` : `Option ${selectedImage + 1}`}
-        </button>
-      </div>
+      <ImageLightbox url={lightboxUrl} title="Generated visual" onClose={() => setLightboxUrl(null)} />
     </section>
   );
 }

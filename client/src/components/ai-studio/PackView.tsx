@@ -7,6 +7,7 @@ import { ChannelIcon } from "./brand";
 import { EmailCopyCard, InstagramCopyCard, WhatsAppTemplateCard } from "./ChannelCards";
 import { VisualGallery } from "./VisualGallery";
 import { SlideArt } from "./SlideArt";
+import { ImageLightbox } from "./ImageLightbox";
 
 export type PackTab = "all" | "visuals" | "instagram" | "whatsapp" | "email";
 
@@ -61,6 +62,7 @@ export function PackView(p: Props) {
   const visualCount = (pack.carousel?.length ?? 0) + (pack.image?.options.length ?? 0);
   const anyHandoff = Object.values(pack.handedOff).some(Boolean);
   const [nameDraft, setNameDraft] = useState(pack.name);
+  const [previewLightbox, setPreviewLightbox] = useState<string | null>(null);
 
   const tabs: { id: PackTab; label: string; show: boolean }[] = [
     { id: "all", label: "Overview", show: true },
@@ -230,15 +232,25 @@ export function PackView(p: Props) {
         <aside className="space-y-4 xl:sticky xl:top-[88px]" aria-label="Hand-off">
           <section className="card p-4 sm:p-5">
             {selectedPreview && (
-              <div className="mb-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)]">
-                <div className="relative aspect-square max-h-[220px]">
+              <button
+                type="button"
+                className="mb-4 block w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[#0a0c12] text-left transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ai-primary)]"
+                aria-label="Open full-size preview of selected visual"
+                onClick={() => {
+                  if (selectedPreview.image) setPreviewLightbox(selectedPreview.image);
+                }}
+              >
+                <div className="relative aspect-square w-full">
                   <SlideArt slide={selectedPreview} label="Selected visual preview" />
-                  <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">
-                    Selected visual
-                  </span>
                 </div>
-              </div>
+                {selectedPreview.image && (
+                  <p className="border-t border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1.5 text-center text-[10px] font-semibold text-[var(--text-muted)]">
+                    Tap to view full size
+                  </p>
+                )}
+              </button>
             )}
+            <ImageLightbox url={previewLightbox} title="Selected visual" onClose={() => setPreviewLightbox(null)} />
             <div className="flex items-start gap-3">
               <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--ai-primary-soft)] text-[var(--ai-primary)]">
                 <CheckCircle2 size={19} />

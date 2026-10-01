@@ -2,9 +2,12 @@ import { useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { AlertCircle, ArrowRight, Check, CheckCircle2, ChevronDown, Globe, ImagePlus, Lightbulb, Plus, Sparkles, X } from "lucide-react";
 import type { Language, OutputId, Photo, Slide } from "./data/types";
+import type { Draft } from "./data/types";
+import type { HistoryEntry } from "../../utils/aiStudioStore";
 import { EXAMPLE_IDEAS, LANGUAGES, MAX_BRIEF, MAX_PHOTOS, MAX_PHOTO_BYTES, OUTPUT_OPTIONS, uid } from "./data/mock";
 import { ChannelIcon, GmailIcon, InstagramIcon, WhatsAppIcon } from "./brand";
 import { SlideArt } from "./SlideArt";
+import { SessionShelf } from "./Overlays";
 
 /* ------------------------------ Hero ------------------------------ */
 
@@ -222,7 +225,7 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
       <span className="field-label" id="outputs-label">
         What do you want to create? <small>(select one or more)</small>
       </span>
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 thin-scroll" role="group" aria-labelledby="outputs-label">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-labelledby="outputs-label">
         {OUTPUT_OPTIONS.map((o) => {
           const on = value.includes(o.id);
           return (
@@ -232,9 +235,9 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
               role="checkbox"
               aria-checked={on}
               onClick={() => toggle(o.id)}
-              className={`relative flex min-w-[142px] flex-none items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all duration-150 ${
+              className={`relative flex min-w-0 items-center gap-1.5 rounded-xl border px-2 py-2 text-left transition-all duration-150 ${
                 on
-                  ? "border-2 border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] px-[9px] py-[7px] shadow-[0_4px_14px_rgba(109,61,242,0.14)]"
+                  ? "border-2 border-[var(--ai-primary)] bg-[var(--ai-primary-soft)] px-[7px] py-[7px] shadow-[0_4px_14px_rgba(109,61,242,0.14)]"
                   : "border-[var(--border-strong)] bg-white hover:border-[var(--ai-primary-ring)] hover:bg-[var(--surface-subtle)]"
               }`}
             >
@@ -246,10 +249,10 @@ export function OutputSelector({ value, onChange }: { value: OutputId[]; onChang
               >
                 <Check size={11} strokeWidth={3.5} />
               </span>
-              <ChannelIcon channel={o.channel} size={21} />
-              <span>
-                <span className="block whitespace-nowrap text-[11.5px] font-bold leading-tight">{o.title}</span>
-                <span className="mt-0.5 block whitespace-nowrap text-[10px] leading-snug text-[var(--text-muted)]">{o.desc}</span>
+              <ChannelIcon channel={o.channel} size={19} />
+              <span className="min-w-0">
+                <span className="block truncate text-[10.5px] font-bold leading-tight">{o.title}</span>
+                <span className="mt-0.5 block truncate text-[9px] leading-snug text-[var(--text-muted)]">{o.desc}</span>
               </span>
             </button>
           );
@@ -344,7 +347,19 @@ function Examples({ onUse }: { onUse: (id: string) => void }) {
 
 /* ------------------------------ Side help ------------------------------ */
 
-function SideHelp() {
+function SideHelp({
+  drafts,
+  history,
+  onOpenDraft,
+  onOpenHistory,
+  onViewAll,
+}: {
+  drafts: Draft[];
+  history: HistoryEntry[];
+  onOpenDraft: (draft: Draft) => void;
+  onOpenHistory: (entry: HistoryEntry) => void;
+  onViewAll: () => void;
+}) {
   const steps = [
     ["Describe your idea", "Tell us about your product, offer or content idea.", "#6d3df2", "#f1ecff"],
     ["Generate content", "We create visuals and copy tailored for each channel.", "#12a366", "#e6f7ef"],
@@ -352,7 +367,14 @@ function SideHelp() {
     ["Use in your channels", "Take it to Instagram Posts, WhatsApp Templates or Email Compose.", "#e5484d", "#fdecec"],
   ];
   return (
-    <aside className="space-y-4" aria-label="Help">
+    <aside className="space-y-4" aria-label="Help and saved sessions">
+      <SessionShelf
+        drafts={drafts}
+        history={history}
+        onOpenDraft={onOpenDraft}
+        onOpenHistory={onOpenHistory}
+        onViewAll={onViewAll}
+      />
       <section className="card p-5">
         <h3 className="text-[14px] font-extrabold">How it works</h3>
         <ol className="mt-4 space-y-4">
@@ -412,6 +434,11 @@ export interface ComposeProps {
   onExample: (id: string) => void;
   hasPack: boolean;
   onBackToPack: () => void;
+  drafts: Draft[];
+  history: HistoryEntry[];
+  onOpenDraft: (draft: Draft) => void;
+  onOpenHistory: (entry: HistoryEntry) => void;
+  onViewAllSessions: () => void;
 }
 
 export function Compose(p: ComposeProps) {
@@ -540,7 +567,13 @@ export function Compose(p: ComposeProps) {
 
         <Examples onUse={p.onExample} />
       </div>
-      <SideHelp />
+      <SideHelp
+        drafts={p.drafts}
+        history={p.history}
+        onOpenDraft={p.onOpenDraft}
+        onOpenHistory={p.onOpenHistory}
+        onViewAll={p.onViewAllSessions}
+      />
     </div>
   );
 }
