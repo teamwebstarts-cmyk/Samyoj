@@ -246,6 +246,8 @@
 /* ============ Cards & panels ============ */
 
 .ema-card {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--ema-line);
   border-radius: 16px;
   background: var(--ema-card);
@@ -934,21 +936,6 @@
   height: 100%;
   max-height: 100%;
 }
-@media (max-width: 900px) {
-  .ema-split {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(160px, 32%) minmax(0, 1fr);
-    min-height: 0;
-  }
-  .ema-split--viewport {
-    height: 100%;
-    max-height: 100%;
-    overflow: hidden;
-  }
-  .ema-split--viewport .ema-sent {
-    max-height: 100%;
-  }
-}
 
 .ema-sent {
   display: flex;
@@ -1031,6 +1018,8 @@
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -2612,5 +2601,98 @@
   }
   .ema-foot .ema-btn {
     flex: 1 1 auto;
+  }
+}
+
+/* Phone: scroll the page. Do not lock compose/templates into a short side-by-side pane. */
+@media (max-width: 900px) {
+  .ema-page,
+  .ema-shell--compose,
+  .ema-shell--templates {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ema-shell--compose,
+  .ema-shell--templates {
+    flex: 1 1 auto;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ema-split,
+  .ema-split--viewport,
+  .ema-templates,
+  .ema-templates--viewport {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    min-height: min-content;
+    overflow: visible;
+  }
+  .ema-split--viewport > .ema-card,
+  .ema-sent,
+  .ema-pane,
+  .ema-templates--viewport > .ema-editor,
+  .ema-templates--viewport > .ema-tcreate,
+  .ema-templates--viewport > .ema-tpreview,
+  .ema-templates--viewport .ema-tlibrary {
+    flex: none;
+    height: auto;
+    max-height: none;
+    min-height: min-content;
+    overflow: visible;
+  }
+  .ema-sent__list,
+  .ema-templates--viewport .ema-tlibrary .ema-tlist {
+    flex: none;
+    height: auto;
+    min-height: 0;
+    max-height: min(280px, 42vh);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .ema-pane__pad,
+  .ema-pane .ema-read,
+  .ema-templates--viewport > .ema-tcreate,
+  .ema-templates--viewport > .ema-tpreview {
+    overflow: visible;
+    max-height: none;
+  }
+  .ema-pane__pad {
+    padding: 14px 12px 16px;
+  }
+  .ema-sent__item,
+  .ema-trow,
+  .ema-picker__item {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ema-field__label,
+  .ema-picker__toolbar,
+  .ema-compose-head,
+  .ema-read__head {
+    flex-wrap: wrap;
+  }
+  .ema-from__addr,
+  .ema-from__via,
+  .ema-card__sub {
+    overflow-wrap: anywhere;
+  }
+  .ema-mail,
+  .ema-read .ema-mail {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .ema-ttabs {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .ema-tpreview {
+    grid-column: auto;
   }
 }
