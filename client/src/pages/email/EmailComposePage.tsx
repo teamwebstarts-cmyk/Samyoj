@@ -811,7 +811,7 @@ export default function EmailComposePage() {
                               <button
                                 key={c.id}
                                 type="button"
-                                className={`ema-picker__item ${picked ? 'ema-picker__item--on' : ''} ${sentBefore ? 'ema-picker__item--sent' : ''} ${!c.eligible ? 'ema-picker__item--disabled' : ''}`}
+                                className={`ema-picker__item ${picked ? 'ema-picker__item--on' : ''} ${!c.eligible ? 'ema-picker__item--disabled' : ''}`}
                                 aria-pressed={picked}
                                 aria-disabled={!c.eligible}
                                 disabled={consentContactId !== null}
@@ -825,8 +825,8 @@ export default function EmailComposePage() {
                                   <span className="block text-[11px] font-semibold text-[var(--ema-muted)]">{c.email}</span>
                                 </span>
                                 {sentBefore ? (
-                                  <span className="ema-picker__sent-pill" title="You emailed this contact before">
-                                    Sent before
+                                  <span className="ema-picker__sent-mark" title="You emailed this contact before">
+                                    Sent
                                   </span>
                                 ) : null}
                                 {picked && (
@@ -843,7 +843,7 @@ export default function EmailComposePage() {
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t border-[var(--ema-line)] px-3 py-2">
                           <p className="text-[10.5px] font-semibold text-[var(--ema-muted)]">
-                            Select multiple contacts, then Done. Highlighted rows were emailed before (see Sent on the left).
+                            Select multiple contacts, then Done. “Sent” = emailed before (see list on the left).
                           </p>
                           <button
                             type="button"

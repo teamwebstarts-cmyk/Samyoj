@@ -118,7 +118,9 @@ export default function CommentAutomationFields({
       <div className="igp-auto-fields__responses">
         <div className={`igp-auto-fields__card ${replyError ? 'igp-auto-fields__card--error' : ''}`}>
           <div className="igp-auto-fields__card-head">
-            <Send className="h-3.5 w-3.5 text-[var(--igp-green)]" aria-hidden />
+            <span className="igp-auto-fields__card-ico igp-auto-fields__card-ico--green" aria-hidden>
+              <Send className="h-3.5 w-3.5 text-[var(--igp-green)]" />
+            </span>
             <div className="igp-auto-fields__card-titles">
               <label htmlFor={publicId}>
                 <strong>Comment reply</strong>
@@ -140,7 +142,9 @@ export default function CommentAutomationFields({
 
         <div className={`igp-auto-fields__card ${replyError ? 'igp-auto-fields__card--error' : ''}`}>
           <div className="igp-auto-fields__card-head">
-            <Link2 className="h-3.5 w-3.5 text-[var(--igp-violet)]" aria-hidden />
+            <span className="igp-auto-fields__card-ico igp-auto-fields__card-ico--violet" aria-hidden>
+              <Link2 className="h-3.5 w-3.5 text-[var(--igp-violet)]" />
+            </span>
             <div className="igp-auto-fields__card-titles">
               <label htmlFor={dmId} className="igp-field__label-row igp-field__label-row--tight">
                 <strong>Private DM</strong>

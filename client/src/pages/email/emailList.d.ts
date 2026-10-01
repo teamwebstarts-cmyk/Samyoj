@@ -5,3 +5,7 @@ export function filterRecentSends<T extends { name: string; email: string; subje
 ): T[];
 
 export function priorSendsFor<T extends { email: string }>(sends: T[], email: string): T[];
+
+export function dedupeLatestSendPerEmail<T extends { email: string; createdAt: string }>(
+  sends: T[],
+): T[];

@@ -17,3 +17,23 @@ export function priorSendsFor(sends, email) {
   if (!needle) return [];
   return (sends || []).filter((send) => String(send.email || '').trim().toLowerCase() === needle);
 }
+
+/** Sidebar list: one row per recipient (latest send). */
+export function dedupeLatestSendPerEmail(sends) {
+  const byEmail = new Map();
+  for (const send of sends || []) {
+    const key = String(send.email || '').trim().toLowerCase();
+    if (!key) continue;
+    const existing = byEmail.get(key);
+    if (!existing) {
+      byEmail.set(key, send);
+      continue;
+    }
+    const nextAt = new Date(send.createdAt).getTime();
+    const prevAt = new Date(existing.createdAt).getTime();
+    if (nextAt >= prevAt) byEmail.set(key, send);
+  }
+  return [...byEmail.values()].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
