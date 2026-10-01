@@ -1,5 +1,5 @@
 -- Add AI_STUDIO_PACK to the GenerationJobKind enum
-ALTER TYPE "GenerationJobKind" ADD VALUE "AI_STUDIO_PACK";
+ALTER TYPE "GenerationJobKind" ADD VALUE 'AI_STUDIO_PACK';
 
 -- AI Studio packs: persisted generation results that the client can restore or hand off
 CREATE TABLE "ai_studio_packs" (
