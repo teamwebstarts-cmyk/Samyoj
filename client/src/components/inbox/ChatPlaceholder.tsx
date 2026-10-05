@@ -57,7 +57,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
   const metaHub =
     platform === 'instagram'
       ? (
-          <div className="hidden h-full min-h-0 w-full max-w-[22rem] shrink-0 flex-col border-l border-rose-100/80 bg-white/60 p-3 dark:border-rose-950/40 dark:bg-neutral-950/40 lg:flex lg:max-w-[min(24rem,34%)] xl:max-w-[26rem]">
+          <div className="hidden h-full min-h-0 w-full max-w-[22rem] shrink-0 flex-col border-l border-rose-100/80 bg-white/60 p-3 dark:border-rose-950/40 dark:bg-neutral-950/40 md:flex md:max-w-[min(24rem,38%)] xl:max-w-[26rem]">
             <MetaChannelSideHub
               className="h-full min-h-0 flex-1 !rounded-xl !shadow-none"
               heading="Instagram on Samyoj"
@@ -93,7 +93,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
         )
       : platform === 'facebook'
         ? (
-            <div className="hidden h-full min-h-0 w-full max-w-[22rem] shrink-0 flex-col border-l border-blue-100/80 bg-white/60 p-3 dark:border-blue-950/40 dark:bg-neutral-950/40 lg:flex lg:max-w-[min(24rem,34%)]">
+            <div className="hidden h-full min-h-0 w-full max-w-[22rem] shrink-0 flex-col border-l border-blue-100/80 bg-white/60 p-3 dark:border-blue-950/40 dark:bg-neutral-950/40 md:flex md:max-w-[min(24rem,38%)]">
               <MetaChannelSideHub
                 className="h-full min-h-0 flex-1 !rounded-xl !shadow-none"
                 heading="Facebook on Samyoj"
@@ -131,7 +131,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
 
   return (
     <div
-      className="inbox-placeholder-bg relative flex h-full min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
+      className="inbox-placeholder-bg relative flex h-full min-h-0 flex-1 flex-col overflow-hidden md:flex-row"
       role="status"
       aria-live="polite"
       aria-label="Your inbox is ready"
@@ -194,7 +194,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
               </button>
             ) : null}
             {(platform === 'instagram' || platform === 'facebook') && (
-              <div className="inbox-placeholder-card mt-4 w-full max-w-md border-t border-slate-200/80 pt-4 dark:border-slate-700 lg:hidden">
+              <div className="inbox-placeholder-card mt-4 w-full max-w-md border-t border-slate-200/80 pt-4 dark:border-slate-700 md:hidden">
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   More on Samyoj
                 </p>

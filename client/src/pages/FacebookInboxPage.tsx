@@ -146,8 +146,9 @@ export default function FacebookInboxPage() {
       .catch(() => setCannedReplies([]));
   }, []);
 
-  const openThread = useCallback(async (id: string) => {
+  const openThread = useCallback(async (id: string, preview?: FbConversation) => {
     setSelectedId(id);
+    if (preview) setSelected(preview);
     setThreadLoading(true);
     setChatSearchOpen(false);
     setChatSearch('');
@@ -183,6 +184,10 @@ export default function FacebookInboxPage() {
       });
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not open conversation');
+      if (!preview) {
+        setSelectedId(null);
+        setSelected(null);
+      }
     } finally {
       setThreadLoading(false);
     }
@@ -514,7 +519,7 @@ export default function FacebookInboxPage() {
           <div className="inbox-shell inbox-shell--messenger flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden md:rounded-2xl">
             <div
               className={`inbox-sidebar relative flex h-full min-h-0 w-full flex-col md:w-[22rem] ${
-                selected ? 'hidden md:flex' : 'flex'
+                selectedId ? 'hidden md:flex' : 'flex'
               }`}
             >
               <MetaMockNotice />
@@ -580,7 +585,7 @@ export default function FacebookInboxPage() {
                   setSelectionMode(false);
                 }}
                 onRetry={() => void loadList()}
-                onSelect={(conv) => void openThread(conv.id)}
+                onSelect={(conv) => void openThread(conv.id, conv)}
                 onContextMenu={(event, conv) => {
                   event.preventDefault();
                   setSelectionMode(true);
@@ -594,10 +599,10 @@ export default function FacebookInboxPage() {
 
             <div
               className={`inbox-chat-pane relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
-                !selected ? 'hidden md:flex' : 'flex'
+                !selectedId ? 'hidden md:flex' : 'flex'
               }`}
             >
-              {selected ? (
+              {selectedId && selected ? (
                 <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     <ChatHeader
@@ -720,9 +725,11 @@ export default function FacebookInboxPage() {
                     }
                   />
               </div>
-            ) : (
+              ) : selectedId ? (
+                <ThreadSkeleton />
+              ) : (
                 <ChatPlaceholder platform="facebook" />
-            )}
+              )}
             </div>
           </div>
         </div>
