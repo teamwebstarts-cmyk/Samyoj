@@ -92,7 +92,23 @@ export function normalizeError(err: unknown): NormalizedClientError {
 
 export function getErrorMessage(err: unknown, fallback = 'Something went wrong'): string {
   const normalized = normalizeError(err);
+  const billing = aiBillingUserMessage(normalized.code, normalized.message);
+  if (billing) return billing;
   return sanitizeUserErrorMessage(normalized.message, normalized.code) || fallback;
+}
+
+/** Clear Billing copy when the API blocked AI for credits or plan, not a provider glitch. */
+export function aiBillingUserMessage(code?: string, message?: string): string | null {
+  if (code === 'AI_CREDITS_EXHAUSTED' || /credits exhausted|minutes exhausted/i.test(message || '')) {
+    return 'AI credits are used up for this workspace. Open Billing and buy a chat top-up, then try again.';
+  }
+  if (
+    code === 'PLAN_FEATURE_AI' ||
+    /available on Growth and Pro|AI is not included on your plan/i.test(message || '')
+  ) {
+    return 'AI is not included on this plan. Upgrade to Growth or Pro in Billing, then try again.';
+  }
+  return null;
 }
 
 const CONNECT_NOT_READY =

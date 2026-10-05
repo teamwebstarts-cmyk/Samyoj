@@ -489,13 +489,23 @@ export async function patchPlatformOrgFlags(input: {
   reason: string;
   flag: string;
   enabled: boolean;
+  dailyMessageCap?: number | null;
 }) {
   if (!(KNOWN_FEATURE_FLAGS as readonly string[]).includes(input.flag)) {
     throw new AppError(400, 'Unknown feature flag');
   }
   const current = await getOrgFeatureFlags(input.organizationId);
   const before = current.find((row) => row.flag === input.flag);
-  await setFeatureFlag(input.organizationId, input.flag, input.enabled);
+  const nextMetadata =
+    input.dailyMessageCap !== undefined
+      ? {
+          ...((before?.metadata && typeof before.metadata === 'object' && !Array.isArray(before.metadata)
+            ? before.metadata
+            : {}) as Record<string, unknown>),
+          dailyMessageCap: input.dailyMessageCap,
+        }
+      : undefined;
+  await setFeatureFlag(input.organizationId, input.flag, input.enabled, nextMetadata);
   await writePlatformAudit({
     operatorId: input.operatorId,
     action: 'PLATFORM_ORG_FLAG_UPDATED',
@@ -503,8 +513,16 @@ export async function patchPlatformOrgFlags(input: {
     targetType: 'OrgFeatureFlag',
     targetId: input.flag,
     reason: input.reason,
-    beforeState: { flag: input.flag, enabled: before?.enabled ?? false },
-    afterState: { flag: input.flag, enabled: input.enabled },
+    beforeState: {
+      flag: input.flag,
+      enabled: before?.enabled ?? false,
+      dailyMessageCap: before?.dailyMessageCap ?? null,
+    },
+    afterState: {
+      flag: input.flag,
+      enabled: input.enabled,
+      dailyMessageCap: input.dailyMessageCap !== undefined ? input.dailyMessageCap : (before?.dailyMessageCap ?? null),
+    },
   });
   return getOrgFeatureFlags(input.organizationId);
 }

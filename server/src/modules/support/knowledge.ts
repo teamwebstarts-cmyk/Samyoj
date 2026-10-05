@@ -53,7 +53,7 @@ export function scoreSupportTopic(topic: SupportKnowledgeTopic, tokens: string[]
 export function selectSupportKnowledge(query: string, limit = 4): SupportKnowledgeTopic[] {
   const tokens = tokenizeSupportQuery(query);
   if (tokens.length === 0) {
-    return SUPPORT_KNOWLEDGE_TOPICS.filter((t) => t.id === 'privacy' || t.id === 'connect').slice(0, 2);
+    return SUPPORT_KNOWLEDGE_TOPICS.filter((t) => t.id === 'privacy' || t.id === 'connect-channels').slice(0, 2);
   }
   const ranked = SUPPORT_KNOWLEDGE_TOPICS.map((topic) => ({
     topic,

@@ -41,3 +41,37 @@ describe('WhatsApp studio handoff', () => {
     expect(payload.data.mediaPaths).toEqual(['org/b.png', 'org/a.png']);
   });
 });
+
+describe('Email studio handoff', () => {
+  it('uses a fetchable public media URL, not a raw storage path', () => {
+    const p = pack();
+    p.email = { subject: 'Open Sunday', body: 'Join us' };
+    p.image = {
+      selected: 0,
+      options: [
+        {
+          id: 's1',
+          bg: 'cream',
+          layout: 'center',
+          kind: 'image',
+          elements: [],
+          image: '/api/media/public/org/poster.png',
+        },
+      ],
+    };
+    const state = buildHandoffState(p, 'email');
+    expect(state.mediaUrl).toContain('/api/media/public/org/poster.png');
+    expect(state.subject).toBe('Open Sunday');
+    expect((state as { body?: string }).body).toBe('Join us');
+  });
+});
+
+describe('Instagram studio handoff', () => {
+  it('does not copy WhatsApp header into Instagram state', () => {
+    const p = pack();
+    p.instagram = { caption: 'Hello', hashtags: '#jaipur' };
+    const state = buildHandoffState(p, 'instagram');
+    expect(state).not.toHaveProperty('headerMediaUrl');
+    expect(state.caption).toContain('Hello');
+  });
+});

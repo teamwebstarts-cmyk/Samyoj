@@ -6,6 +6,7 @@ import { MAX_IMAGE_OPTIONS, MAX_SLIDES, MIN_SLIDES, getSlides, newBlankSlide, re
 import { InstagramIcon } from "./brand";
 import { SlideArt } from "./SlideArt";
 import { downloadSlidePoster } from "../../utils/aiStudioPoster";
+import { getErrorMessage } from "../../utils/errors";
 
 interface Props {
   pack: Pack;
@@ -82,7 +83,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
           setActive(insertAt);
           onToast("New AI slide added", "success");
         })
-        .catch(() => onToast("Image generation failed. Try again.", "error"))
+        .catch((err) => onToast(getErrorMessage(err, "Image generation failed. Try again."), "error"))
         .finally(() => setBusy(null));
       return;
     }
@@ -143,7 +144,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
           });
           onToast("New AI photo for this slide", "success");
         })
-        .catch(() => onToast("Image generation failed. Try again.", "error"))
+        .catch((err) => onToast(getErrorMessage(err, "Image generation failed. Try again."), "error"))
         .finally(() => setBusy(null));
       return;
     }
@@ -183,7 +184,7 @@ export function VisualGallery({ pack, set, active, setActive, update, onToast, u
           setActive(i + 1);
           onToast("New AI variant added", "success");
         })
-        .catch(() => onToast("Image generation failed. Try again.", "error"))
+        .catch((err) => onToast(getErrorMessage(err, "Image generation failed. Try again."), "error"))
         .finally(() => setBusy(null));
       return;
     }

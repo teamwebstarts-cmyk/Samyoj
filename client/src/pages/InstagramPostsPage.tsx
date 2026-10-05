@@ -11,8 +11,13 @@ import { getInstagramMockLibrary, getInstagramMockPosts, isMetaMockId, mergeById
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { resolvePublicMediaUrl } from '../utils/publicMediaUrl';
+import {
+  absolutizePostMediaBody,
+  prepareInstagramHandoffMediaUrls,
+} from '../utils/instagramPostMedia';
 import ConnectScreen from '../components/instagram/posts/ConnectScreen';
 import PostPanel from '../components/instagram/posts/PostPanel';
+import InstagramPostsHub from '../components/instagram/posts/InstagramPostsHub';
 import PostComposerTab, { type ScheduleError } from '../components/instagram/posts/PostComposerTab';
 import PostPreviewTab, { type PreviewData } from '../components/instagram/posts/PostPreviewTab';
 import PostAutomationTab from '../components/instagram/posts/PostAutomationTab';
@@ -223,12 +228,6 @@ export default function InstagramPostsPage() {
     ? library.find((row) => row.igMediaId === selected.igMediaId)
     : null;
 
-  /* Desktop: panel is always docked — when nothing is selected it shows the
-     composer. Closing on desktop therefore resets to a fresh New post. */
-  useEffect(() => {
-    if (isDesktop && selectedId === null) setSelectedId('new');
-  }, [isDesktop, selectedId]);
-
   const openNew = (type: MediaType = 'IMAGE') => {
     automationLoadSeq.current += 1;
     automationEditedRef.current = false;
@@ -256,7 +255,9 @@ export default function InstagramPostsPage() {
   const [studioHandoffName, setStudioHandoffName] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const handoffConsumedRef = useRef(false);
   useEffect(() => {
+    if (handoffConsumedRef.current) return;
     const state = (location.state || {}) as {
       studioHandoff?: boolean;
       studioName?: string;
@@ -265,16 +266,32 @@ export default function InstagramPostsPage() {
       mediaUrls?: string[];
     };
     if (!state.studioHandoff) return;
+    handoffConsumedRef.current = true;
     openNew(state.mediaType === 'CAROUSEL' ? 'CAROUSEL' : 'IMAGE');
     if (state.caption) setCaption(state.caption);
     const urls = (state.mediaUrls || []).filter((u) => typeof u === 'string' && u.length > 0);
     if (urls.length > 0) {
-      setMediaItems(urls.map((url) => ({ url, kind: 'image' as const })));
-      setImageUrl(urls[0]);
-      setMediaMeta({
-        name: `${state.studioName || 'AI Studio'} visuals`,
-        meta: `${urls.length} image${urls.length > 1 ? 's' : ''} from AI Studio`,
+      setMediaUpload({
+        fileName: state.studioName || 'AI Studio',
+        label: 'Preparing AI Studio visuals…',
+        progress: 12,
       });
+      void prepareInstagramHandoffMediaUrls(urls)
+        .then((prepared) => {
+          if (prepared.length === 0) return;
+          setMediaItems(prepared.map((url) => ({ url, kind: 'image' as const })));
+          setImageUrl(prepared[0]);
+          setMediaMeta({
+            name: `${state.studioName || 'AI Studio'} visuals`,
+            meta: `${prepared.length} image${prepared.length > 1 ? 's' : ''} from AI Studio`,
+          });
+        })
+        .catch(() => {
+          toastError('Could not prepare AI Studio images. Upload an image manually.');
+        })
+        .finally(() => {
+          setMediaUpload(null);
+        });
     }
     setStudioHandoffName(state.studioName || 'AI Studio');
     // Consume the state so refresh doesn't re-prefill.
@@ -283,11 +300,8 @@ export default function InstagramPostsPage() {
   }, []);
 
   const closePanel = () => {
-    if (isDesktop) {
-      openNew('IMAGE');
-    } else {
-      setSelectedId(null);
-    }
+    setSelectedId(null);
+    setStudioOpen(false);
   };
 
   const openExisting = (post: PostRow) => {
@@ -602,6 +616,14 @@ export default function InstagramPostsPage() {
       return;
     }
     const body = buildBody();
+    const pendingBlob =
+      body.imageUrl?.startsWith('blob:') ||
+      body.videoUrl?.startsWith('blob:') ||
+      body.mediaItems?.some((item) => item.url.startsWith('blob:'));
+    if (pendingBlob) {
+      toastError('Images are still preparing from AI Studio. Wait a moment, then try again.');
+      return;
+    }
     if (mediaType === 'IMAGE' && !body.imageUrl) {
       toastError('Add an image first.');
       return;
@@ -645,7 +667,10 @@ export default function InstagramPostsPage() {
     savingRef.current = true;
     setSaving(true);
     try {
-      const payload = { ...body, scheduledAt: mode === 'draft' ? null : scheduledAt };
+      const payload = absolutizePostMediaBody({
+        ...body,
+        scheduledAt: mode === 'draft' ? null : scheduledAt,
+      });
       const created =
         selectedId && selectedId !== 'new'
           ? (await instagramApi.posts.update(selectedId, payload)).data.data
@@ -1006,17 +1031,24 @@ export default function InstagramPostsPage() {
                 )}
               </div>
 
-              <PostPanel
-                open={isDesktop || Boolean(selectedId)}
-                onClose={closePanel}
-                title={panelTitle}
-                tab={panelTab}
-                onTabChange={setPanelTab}
-                showCreateTab={!remoteItem}
-                automationReady={Boolean(autoId || inlineAutomationReady)}
-                body={renderPanelBody()}
-                footer={renderFooter()}
-              />
+              {selectedId ? (
+                <PostPanel
+                  open
+                  onClose={closePanel}
+                  title={panelTitle}
+                  tab={panelTab}
+                  onTabChange={setPanelTab}
+                  showCreateTab={!remoteItem}
+                  automationReady={Boolean(autoId || inlineAutomationReady)}
+                  body={renderPanelBody()}
+                  footer={renderFooter()}
+                />
+              ) : isDesktop ? (
+                <InstagramPostsHub
+                  className="igp-panel !w-[clamp(320px,38%,480px)] !flex-shrink-0 !self-stretch"
+                  onNewPost={() => openNew('IMAGE')}
+                />
+              ) : null}
             </div>
           </>
         )}

@@ -110,9 +110,17 @@ const JUMP_LINKS: JumpLink[] = [
     keywords: ['campaign', 'campaigns', 'broadcast', 'send'],
   },
   {
+    id: 'help',
+    title: 'Help assistant',
+    subtitle: 'How to use WhatsApp, Messenger, Instagram, and Email',
+    href: '/help',
+    icon: LifeBuoy,
+    keywords: ['help', 'support assistant', 'help center', 'assistant'],
+  },
+  {
     id: 'tickets',
     title: 'Tickets',
-    subtitle: 'Support queue and response tracking',
+    subtitle: 'WhatsApp chats that still need a reply',
     href: '/tickets',
     icon: LifeBuoy,
     keywords: ['ticket', 'tickets', 'support'],

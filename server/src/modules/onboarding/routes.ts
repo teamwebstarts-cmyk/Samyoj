@@ -38,6 +38,23 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
 
+    const countContentDraftTemplates = async (): Promise<number> => {
+      try {
+        return await prisma.contentDraft.count({
+          where: {
+            organizationId: orgId,
+            OR: [
+              { metaTemplateName: { not: null } },
+              { metaTemplateStatus: { not: null } },
+            ],
+          },
+        });
+      } catch {
+        // ponytail: older DBs may lack content_drafts; onboarding must not 500 the shell
+        return 0;
+      }
+    };
+
     const [whatsappNumbers, contacts, teamMembers, testMessage, contentTemplates, campaignsWithTemplate] =
       await Promise.all([
         prisma.whatsappNumber.count({ where: { organizationId: orgId, isActive: true } }),
@@ -49,15 +66,7 @@ router.get(
             conversation: { organizationId: orgId },
           },
         }),
-        prisma.contentDraft.count({
-          where: {
-            organizationId: orgId,
-            OR: [
-              { metaTemplateName: { not: null } },
-              { metaTemplateStatus: { not: null } },
-            ],
-          },
-        }),
+        countContentDraftTemplates(),
         prisma.campaign.count({
           where: { organizationId: orgId, templateName: { not: '' } },
         }),

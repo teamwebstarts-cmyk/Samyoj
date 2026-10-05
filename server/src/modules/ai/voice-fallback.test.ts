@@ -43,6 +43,19 @@ describe('classifyAiBrainError', () => {
         new AppError(502, 'Model is temporarily unavailable: <html><title>503 Service Temporarily Unavailable</title>')
       )
     ).toBe('provider_overloaded');
+    expect(classifyAiBrainError(new AppError(429, 'AI chat credits exhausted. Buy a top-up pack in Billing.', 'AI_CREDITS_EXHAUSTED'))).toBe(
+      'credits_exhausted'
+    );
+    expect(classifyAiBrainError(new AppError(403, 'AI Assistant is available on Growth and Pro plans. Upgrade to unlock AI features.', 'PLAN_FEATURE_AI'))).toBe(
+      'plan_ai_locked'
+    );
+  });
+
+  it('does not tell the customer to retry when credits or the plan block AI', () => {
+    const credits = spokenAfterBrainFailure('text', 'credits_exhausted');
+    expect(credits.reply).not.toBe(CHAT_RETRY_BUSY);
+    expect(credits.skipReason).toBe('credits_exhausted');
+    expect(spokenAfterBrainFailure('text', 'plan_ai_locked').skipReason).toBe('plan_ai_locked');
   });
 });
 

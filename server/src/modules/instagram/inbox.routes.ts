@@ -489,6 +489,14 @@ router.post(
       },
       include: { user: { select: { id: true, name: true } } },
     });
+    emitToOrg(orgId, 'agent:note', {
+      noteId: note.id,
+      authorUserId: userId,
+      agentName: note.user.name,
+      preview: content.slice(0, 120),
+      href: `/instagram/inbox?thread=${conversation.id}`,
+      channel: 'instagram',
+    });
     sendSuccess(res, note);
   })
 );

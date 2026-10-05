@@ -5,7 +5,6 @@ import crypto from 'crypto';
 import prisma from '../../config/database';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { AppError, sendSuccess, asyncHandler, paramId } from '../../utils/response';
-import { recordUsage } from '../content-studio/shared/cost-guard';
 import { resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
 import { studioTemplateHeaderUrl } from '../instagram/posts.media-url';
 import { isImageQuality, type ImageQuality } from './hunyuan-image';
@@ -126,7 +125,6 @@ router.post(
       );
 
       const tokens = result.usage?.totalTokens || 2000;
-      await recordUsage(orgId, GenerationJobKind.TEXT, tokens).catch(() => undefined);
 
       if (job) {
         await prisma.generationJob.update({

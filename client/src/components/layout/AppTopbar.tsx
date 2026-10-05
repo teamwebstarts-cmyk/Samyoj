@@ -3,12 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   ChevronRight,
-  Circle,
   Headphones,
   LogOut,
   Menu,
-  Moon,
-  Power,
   Search,
   Settings2,
 } from 'lucide-react';
@@ -41,39 +38,6 @@ import SupportBoard from '../support/SupportBoard';
 
 const USER_MENU_WIDTH = 240;
 const USER_MENU_GAP = 12;
-
-const AVAILABILITY_OPTIONS = [
-  {
-    value: 'ONLINE' as const,
-    label: 'Online',
-    icon: Circle,
-    iconClass: 'text-emerald-500 fill-emerald-500',
-    activeClass:
-      'bg-white text-emerald-700 ring-1 ring-emerald-200 shadow-sm dark:bg-theme-surface dark:text-emerald-300 dark:ring-emerald-500/30',
-  },
-  {
-    value: 'AWAY' as const,
-    label: 'Away',
-    icon: Moon,
-    iconClass: 'text-amber-500',
-    activeClass:
-      'bg-white text-amber-700 ring-1 ring-amber-200 shadow-sm dark:bg-theme-surface dark:text-amber-300 dark:ring-amber-500/30',
-  },
-  {
-    value: 'OFFLINE' as const,
-    label: 'Offline',
-    icon: Power,
-    iconClass: 'text-neutral-400',
-    activeClass:
-      'bg-white text-neutral-700 ring-1 ring-neutral-200 shadow-sm dark:bg-theme-surface dark:text-theme-fg dark:ring-theme-border',
-  },
-];
-
-function availabilityDotClass(status: 'ONLINE' | 'AWAY' | 'OFFLINE') {
-  if (status === 'ONLINE') return 'bg-emerald-500';
-  if (status === 'AWAY') return 'bg-amber-400';
-  return 'bg-neutral-400';
-}
 
 interface AppTopbarProps {
   companyName?: string;
@@ -111,7 +75,7 @@ function useIsApplePlatform() {
 
 export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout }: AppTopbarProps) {
   const { pathname, search } = useLocation();
-  const { orgRole, availability, setAvailability } = useAuth();
+  const { orgRole } = useAuth();
   const { extras: topbarExtras } = useTopbarExtras();
   const { hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { facebook, instagram } = useMetaChannelStatus();
@@ -217,14 +181,8 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
     'truncate text-[15px] font-bold leading-none tracking-tight text-neutral-900 sm:text-[18px] md:text-[20px] dark:text-theme-fg';
 
   const userAvatar = (
-    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-whatsapp-500 text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-whatsapp-500 text-[12px] font-bold tracking-wide text-white sm:h-10 sm:w-10 sm:text-[13px]">
       {initials}
-      {availability ? (
-        <span
-          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-theme-surface ${availabilityDotClass(availability)}`}
-          aria-hidden
-        />
-      ) : null}
     </span>
   );
 
@@ -253,43 +211,6 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
                 </p>
               </div>
             </div>
-            {availability && (
-              <div
-                role="group"
-                aria-label="Availability"
-                className="mt-1.5 border-t border-neutral-100 pt-1.5 dark:border-theme-border"
-              >
-                <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-400 dark:text-theme-muted">
-                  Availability
-                </p>
-                <div className="flex gap-1 rounded-xl bg-neutral-100/80 p-1 dark:bg-theme-subtle">
-                  {AVAILABILITY_OPTIONS.map((option) => {
-                    const active = availability === option.value;
-                    const Icon = option.icon;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={active}
-                        onClick={() => {
-                          void setAvailability(option.value);
-                          setUserMenuOpen(false);
-                        }}
-                        className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-bold leading-none transition ${
-                          active
-                            ? option.activeClass
-                            : 'text-neutral-500 hover:bg-white/70 dark:text-neutral-400 dark:hover:bg-theme-surface/80'
-                        }`}
-                      >
-                        <Icon className={`h-3.5 w-3.5 shrink-0 ${option.iconClass}`} strokeWidth={2.25} />
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
             <div className="mt-1.5 space-y-0.5 border-t border-neutral-100 pt-1.5 dark:border-theme-border">
             <Link
               to="/settings"
@@ -450,22 +371,21 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             <NumberSwitcherMobile />
             <NumberSwitcher />
 
+            <Link
+              to="/help"
+              className="topbar-icon-btn sm:hidden"
+              aria-label="Help assistant"
+              title="Help assistant"
+            >
+              <Headphones className="h-[17px] w-[17px]" strokeWidth={2} />
+            </Link>
             <button
               type="button"
               onClick={() => setSupportOpen(true)}
               className="hidden shrink-0 whitespace-nowrap items-center gap-1.5 text-[13px] font-semibold text-neutral-600 transition hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-theme-fg"
             >
               <Headphones className="h-4 w-4 text-neutral-400" strokeWidth={2} />
-              Support
-            </button>
-            <button
-              type="button"
-              onClick={() => setSupportOpen(true)}
-              className="topbar-icon-btn sm:hidden"
-              aria-label="Support"
-              title="Support"
-            >
-              <Headphones className="h-[17px] w-[17px]" strokeWidth={2} />
+              Help
             </button>
 
             {/* Search — design pill; opens command palette */}

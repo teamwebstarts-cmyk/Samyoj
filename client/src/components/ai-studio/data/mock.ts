@@ -15,6 +15,7 @@ import type {
   SlideKind,
   VisualSet,
 } from "./types";
+import { emailPosterUrlFromPack } from "../../../utils/studioHandoffMedia";
 
 export const MAX_BRIEF = 2000;
 export const MIN_SLIDES = 2;
@@ -602,7 +603,6 @@ export function buildHandoffState(pack: Pack, channel: Channel): HandoffNavState
       studioPack: pack.id,
       studioHandoff: true,
       studioName: pack.name,
-      headerMediaUrl: pack.whatsapp?.header.source,
       mediaPaths: (pack as Pack & { mediaPaths?: string[] }).mediaPaths,
       mediaType: useCarousel ? "CAROUSEL" : "IMAGE",
       caption,
@@ -642,7 +642,7 @@ export function buildHandoffState(pack: Pack, channel: Channel): HandoffNavState
     studioName: pack.name,
     subject: pack.email!.subject,
     body: pack.email!.body,
-    mediaUrl: (pack as Pack & { mediaPaths?: string[] }).mediaPaths?.[0],
+    mediaUrl: emailPosterUrlFromPack(pack),
   };
 }
 

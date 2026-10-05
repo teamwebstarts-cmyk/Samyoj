@@ -40,6 +40,113 @@ Each connected number is its own workspace. Switch numbers from the top bar. If 
 After this org disconnects, another org may connect that Meta number and gets a new empty workspace, not this org's chats.`,
   },
   {
+    id: 'connect-channels',
+    title: 'Connect channels',
+    keywords: [
+      'connect channels',
+      'facebook page',
+      'instagram',
+      'gmail',
+      'email',
+      'channels settings',
+      'connect facebook',
+      'connect instagram',
+      'connect gmail',
+      'mailbox',
+      'page connect',
+    ],
+    content: `Connect every channel from Settings → Channels. You do not enter a Meta App ID or App Secret.
+
+WhatsApp: click Connect WhatsApp, sign in with Facebook, pick the business number.
+
+Facebook: click Connect Facebook, sign in, pick the Facebook Page. Messenger Inbox uses that Page.
+
+Instagram: connect a professional Instagram account (Business or Creator) linked to the Facebook Page. Connect Facebook Page first if you have not.
+
+Email: click Connect Gmail, sign in with Google, and allow send access. Email in Samyoj is send-only from that mailbox — it is not a Gmail inbox.
+
+Disconnect turns the channel off. Conversation and sent history stay in Samyoj. Reconnecting the same WhatsApp number on this org reopens the same WhatsApp workspace.`,
+  },
+  {
+    id: 'facebook-inbox',
+    title: 'Messenger Inbox',
+    keywords: [
+      'messenger',
+      'facebook inbox',
+      'page message',
+      'facebook chat',
+      'messenger inbox',
+      'page conversation',
+    ],
+    content: `Facebook Page messages open in Messenger Inbox (left nav → Facebook → Messenger Inbox), not in WhatsApp Inbox.
+
+Reply from that thread list. The 24-hour customer-service window still applies: type a normal reply while it is open; if it is closed, use an approved message path Meta allows for that Page.
+
+Messenger is scoped to the connected Facebook Page, not to the WhatsApp number switcher. Ads performance is a separate Facebook → Ads page.`,
+  },
+  {
+    id: 'facebook-ads',
+    title: 'Facebook Ads',
+    keywords: ['facebook ads', 'ads manager', 'ad spend', 'leads', 'cpl', 'meta ads'],
+    content: `Facebook → Ads (and the Dashboard ads snapshot) show Meta's numbers for the connected ad account: spend, leads, and CPL when Meta returns them.
+
+Those figures are Meta's, not Samyoj revenue. Meta Cloud API / ads charges stay on the Meta bill. Samyoj plan price is software only.
+
+Samyoj does not replace Ads Manager. Use View ads / Open Ads Manager when you need to change campaigns in Meta.`,
+  },
+  {
+    id: 'instagram-inbox',
+    title: 'Instagram Inbox',
+    keywords: ['instagram inbox', 'instagram dm', 'ig dm', 'direct message', 'instagram chat'],
+    content: `Instagram Direct messages open in Instagram Inbox (left nav → Instagram → Inbox), not in WhatsApp Inbox.
+
+Connect Instagram first from Settings → Channels. Replies you send here go out as the connected Instagram professional account.
+
+Comments on posts are a separate page: Instagram → Comments.`,
+  },
+  {
+    id: 'instagram-comments',
+    title: 'Instagram Comments',
+    keywords: [
+      'instagram comments',
+      'hide comment',
+      'public reply',
+      'private reply',
+      'comment keyword',
+      'comment automation',
+    ],
+    content: `Instagram → Comments lists comments on your posts. Hide sends Meta's hide flag, so the comment is hidden on Instagram itself for public viewers — it is not only a local filter in Samyoj.
+
+You can reply publicly on the comment. A private reply sends one Instagram DM for that comment (Meta allows one private reply per comment).
+
+Keyword automations can post a public reply and/or send a private DM when a comment matches a word or emoji (case-insensitive; comma-separated alternatives like offer, 🔥).`,
+  },
+  {
+    id: 'instagram-posts',
+    title: 'Instagram Posts',
+    keywords: ['instagram posts', 'schedule post', 'create post', 'instagram composer', 'caption'],
+    content: `Instagram → Posts is where you create, schedule, and manage feed posts for the connected Instagram professional account.
+
+Write the caption in Samyoj, then publish or schedule. This is not the same as WhatsApp campaigns or Email templates.`,
+  },
+  {
+    id: 'email-channel',
+    title: 'Email (Gmail)',
+    keywords: [
+      'gmail',
+      'email compose',
+      'email template',
+      'mailbox',
+      'send email',
+      'google mail',
+    ],
+    content: `Email is a send-only Gmail channel. Connect the mailbox in Settings → Channels (Connect Gmail). Compose is Email → Compose. Saved drafts live in Email → Templates.
+
+Pick a contact that already has an email saved, write the message, and send as that Gmail mailbox. Samyoj stores a sent log. It does not show a Gmail inbox, does not pull replies, and does not report opens.
+
+Google limits the mailbox (about 500 emails a day on free Gmail, about 2,000 a day on paid Workspace). If sending stops, wait up to 24 hours. Do not use Samyoj's own SMTP for customer mail — that is for password reset and invites only.`,
+  },
+  {
     id: 'inbox',
     title: 'Inbox',
     keywords: [
@@ -57,15 +164,15 @@ After this org disconnects, another org may connect that Meta number and gets a 
       'jawab',
       'reply nahi',
     ],
-    content: `Inbox is where you reply to customers on the active WhatsApp number.
+    content: `WhatsApp Inbox (left nav → WhatsApp → Inbox) is where you reply to customers on the active WhatsApp number. Facebook Page chats are Messenger Inbox. Instagram DMs are Instagram Inbox.
 
-Start a chat from Inbox → New chat. Phone is required; name, email, tags, notes, custom fields, and campaign consent are optional — the same fields as Contacts. Starting a 1:1 chat does not opt the person into campaigns unless you check Allow campaign messages.
+Start a WhatsApp chat from Inbox → New chat. Phone is required; name, email, tags, notes, custom fields, and campaign consent are optional — the same fields as Contacts. Starting a 1:1 chat does not opt the person into campaigns unless you check Allow campaign messages.
 
 You can assign an agent, add labels, and leave private internal notes. Apply or pause an AI bot on a single chat from the conversation (personal pick). That personal pick is not overwritten when someone applies a bot to all chats from AI Bots.
 
 If the 24-hour reply window is open, type a normal message. If it is closed, the composer asks you to send an approved template — tap Template, pick an approved one, fill variables, send.
 
-If you can send messages but customer replies never appear, that is an inbound connection issue (see Inbound replies) — not an Inbox UI bug. Do not share passwords, OTPs, or app secrets.`,
+If you can send WhatsApp messages but customer replies never appear, that is an inbound connection issue (see Inbound replies) — not an Inbox UI bug. Do not share passwords, OTPs, or app secrets.`,
   },
   {
     id: 'inbound',
@@ -82,11 +189,13 @@ If you can send messages but customer replies never appear, that is an inbound c
       'total received',
       'outgoing works',
     ],
-    content: `Sending from Inbox to a phone does not need a public URL. Customer replies (phone → Inbox) do: Meta must reach Samyoj over HTTPS.
+    content: `Sending a WhatsApp message from Inbox to a phone does not need a public URL. Customer WhatsApp replies (phone → Inbox) do: Meta must reach Samyoj over HTTPS.
 
 On a local or test workspace, start the app with the usual start script so the inbound tunnel is running, then send a *new* reply from the phone to the connected business number. An old thread is not a reliable test.
 
-If you can send but replies never appear, it is a connection issue — not something to fix by redesigning Inbox. Do not paste webhook URLs, App Secret, or environment values here.`,
+Facebook Messenger and Instagram DMs use Meta's Page / Instagram webhooks, not the WhatsApp number tunnel. Email does not receive replies in Samyoj.
+
+If you can send WhatsApp but replies never appear, it is a connection issue — not something to fix by redesigning Inbox. Do not paste webhook URLs, App Secret, or environment values here.`,
   },
   {
     id: 'numbers',
@@ -214,9 +323,9 @@ This Help Center is an assistant only — it answers how to use Samyoj. It does 
     id: 'settings',
     title: 'Settings',
     keywords: ['settings', 'setup', 'business hours', 'appearance', 'canned', 'hours', 'theme'],
-    content: `Settings covers Connect WhatsApp, appearance (theme, density, card spacing), canned replies, and workspace setup. There is no App ID / App Secret field for normal users.
+    content: `Settings covers Channels (WhatsApp, Facebook, Instagram, Gmail), appearance (theme, density, card spacing), canned replies, and workspace setup. There is no App ID / App Secret field for normal users.
 
-Canned replies are shortcuts you type in Inbox. Appearance changes the product chrome, not the customer's WhatsApp.`,
+Canned replies are shortcuts you type in WhatsApp Inbox. Appearance changes the product chrome, not the customer's WhatsApp, Messenger, or Instagram.`,
   },
   {
     id: 'team',

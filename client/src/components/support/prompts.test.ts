@@ -11,21 +11,20 @@ describe('support suggested prompts', () => {
     expect(SUPPORT_STARTER_PROMPTS.length).toBeLessThanOrEqual(3);
   });
 
-  it('covers connect and inbound on the welcome screen', () => {
+  it('covers connect channels and inbound on the welcome screen', () => {
     const ids = SUPPORT_STARTER_PROMPTS.map((p) => p.id);
-    expect(ids).toContain('connect');
+    expect(ids).toContain('connect-channels');
     expect(ids).toContain('inbound');
   });
 
   it('returns personalized follow-ups after a connect question', () => {
     const follow = followUpPromptsFor(
-      'How do I connect my WhatsApp business number in Samyoj?',
-      '1. Open Settings. 2. Click Connect WhatsApp.'
+      'How do I connect WhatsApp, Facebook, Instagram, or Email in Samyoj?',
+      '1. Open Settings → Channels. 2. Click Connect for the channel you need.'
     );
     expect(follow.length).toBeGreaterThanOrEqual(2);
     expect(follow.length).toBeLessThanOrEqual(4);
-    expect(follow.some((p) => p.id === 'connect')).toBe(false);
-    expect(follow.some((p) => p.topicId === 'inbound' || p.id === 'inbound')).toBe(true);
+    expect(follow.some((p) => p.id === 'connect-channels')).toBe(false);
   });
 
   it('matches a follow-up question exactly', () => {

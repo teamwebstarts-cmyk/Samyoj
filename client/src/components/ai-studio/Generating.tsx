@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, Lightbulb, RefreshCw, Pencil } from "lucide-react";
+import { Check, Lightbulb } from "lucide-react";
 import { GENERATION_STEPS } from "./data/mock";
 import { CreativeHub3d } from "./CreativeHub3d";
 
@@ -84,29 +84,6 @@ export function GenerationProgress({
       <button type="button" className="btn btn-sm mt-4" onClick={onCancel}>
         Cancel and edit brief
       </button>
-    </div>
-  );
-}
-
-export function GenerationError({ onRetry, onEdit, hint }: { onRetry: () => void; onEdit: () => void; hint?: string }) {
-  return (
-    <div className="anim-fade-up mx-auto flex max-w-[460px] flex-col items-center px-2 pt-12 text-center">
-      <span className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-[var(--danger-soft)] text-[var(--danger)]">
-        <AlertTriangle size={28} />
-      </span>
-      <h2 className="text-[22px] font-extrabold tracking-tight" role="alert">
-        We couldn't create the content pack.
-      </h2>
-      <p className="mt-2 text-[14px] text-[var(--text-muted)]">Try generating again. Your idea, photos and selections are still here.</p>
-      {hint && <p className="mt-3 rounded-xl bg-[var(--surface-subtle)] px-3 py-2 text-[12.5px] leading-snug text-[var(--text-muted)]">{hint}</p>}
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button type="button" className="btn btn-primary btn-lg" onClick={onRetry} data-autofocus>
-          <RefreshCw size={16} /> Try again
-        </button>
-        <button type="button" className="btn btn-lg" onClick={onEdit}>
-          <Pencil size={16} /> Edit brief
-        </button>
-      </div>
     </div>
   );
 }

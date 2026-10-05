@@ -4,6 +4,7 @@
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
+  height: 100%;
   flex-direction: column;
   gap: 14px;
   max-width: 1360px;
@@ -1412,6 +1413,7 @@ button.igp-stat--on:focus-visible {
 /* ============ Workspace & panel ============ */
 
 .igp-workspace {
+  position: relative;
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
@@ -1474,6 +1476,29 @@ button.igp-stat--on:focus-visible {
   border-bottom: 1px solid var(--igp-line);
   background: var(--igp-card);
   padding: 10px 12px;
+}
+
+.igp-panel__close {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--igp-line-strong);
+  border-radius: 12px;
+  background: var(--igp-card);
+  color: var(--igp-ink);
+  cursor: pointer;
+}
+.igp-panel__close:hover {
+  border-color: var(--igp-accent-line-strong);
+  background: var(--igp-accent-soft);
+  color: var(--igp-accent);
+}
+.igp-panel__close svg {
+  width: 18px;
+  height: 18px;
 }
 
 .igp-panel__tabs {
@@ -1631,16 +1656,23 @@ button.igp-stat--on:focus-visible {
   color: #93c5fd;
 }
 
-/* Compact desktop/tablet: use a full-screen sheet instead of squeezing the preview. */
+/* Compact desktop/tablet: overlay the workspace only — keep app sidebar + topbar usable. */
 @media (max-width: 1279px) {
+  .igp-workspace {
+    overflow: hidden;
+  }
   .igp-panel {
-    position: fixed;
+    position: absolute;
     inset: 0;
-    z-index: 45;
+    z-index: 25;
     width: auto;
     max-height: none;
     border: none;
-    border-radius: 0;
+    border-radius: 16px;
+    box-shadow: var(--igp-panel-shadow);
+  }
+  .igp-panel__close {
+    display: inline-flex;
   }
   .igp-panel__body {
     padding-bottom: 24px;

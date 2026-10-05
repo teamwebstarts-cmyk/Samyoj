@@ -298,6 +298,20 @@ export async function reserveCallingMinutesForCall(params: {
   });
 }
 
+/** Stop hammering the same row. Exhausted credits will not appear until a top-up. */
+export const AI_METERING_MAX_ATTEMPTS = 8;
+
+export function nextMeteringStatus(err: unknown, attempts: number): 'PENDING_RETRY' | 'FAILED' {
+  const code =
+    err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code || '') : '';
+  const message = err instanceof Error ? err.message : String(err);
+  if (code === 'AI_CREDITS_EXHAUSTED' || /credits exhausted|minutes exhausted/i.test(message)) {
+    return 'FAILED';
+  }
+  if (attempts >= AI_METERING_MAX_ATTEMPTS) return 'FAILED';
+  return 'PENDING_RETRY';
+}
+
 export function computeDeductionSplit(params: {
   includedLimit: number;
   includedUsed: number;
@@ -630,12 +644,15 @@ export async function retryPendingCallingMinuteDeductions(limit = 100): Promise<
       });
       settled += 1;
     } catch (err) {
+      const attempts = Number(metadata.billingAttempts || 0) + 1;
+      const billingStatus = nextMeteringStatus(err, attempts);
       await prisma.call.update({
         where: { id: row.id },
         data: {
           metadata: {
             ...metadata,
-            billingStatus: 'PENDING_RETRY',
+            billingStatus,
+            billingAttempts: attempts,
             billingError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
           },
         },
@@ -771,6 +788,17 @@ export async function grantTopUpInTransaction(
         addonBalance: { increment: creditsGranted },
       },
   });
+
+  if (params.sku.pool === 'chat') {
+    await tx.aiUsageLog.updateMany({
+      where: {
+        organizationId: params.organizationId,
+        meteringStatus: 'FAILED',
+        meteringError: { contains: 'exhausted', mode: 'insensitive' },
+      },
+      data: { meteringStatus: 'PENDING_RETRY', meteringAttempts: 0 },
+    });
+  }
 
   await tx.aiCreditPurchase.create({
     data: {

@@ -48,7 +48,12 @@ function isExpectedApiNoise(error: unknown): boolean {
   const url = String(error.config?.url || '');
   if (status === 404 && /\/calling\/[^/?]+\/signaling(?:\?|$)/.test(url)) return true;
   if (status === 401 && /\/auth\/(?:me|refresh|login)(?:\?|$)/.test(url)) return true;
-  if (status === 401 && /\/(?:team\/heartbeat|inbox\/unread-total|tickets)(?:\?|$)/.test(url)) return true;
+  if (
+    status === 401 &&
+    /\/(?:team\/heartbeat|inbox\/unread-total|tickets|whatsapp\/webhook-status)(?:\?|$)/.test(url)
+  ) {
+    return true;
+  }
   if (status === 429 && /\/auth\/(?:refresh|login)(?:\?|$)/.test(url)) return true;
   if (status === 402) return true;
   if (status === 429 && /too many calls|80008|rate limit/i.test(JSON.stringify(error.response?.data ?? ''))) {

@@ -325,6 +325,11 @@ export default function DashboardPage() {
             whatsappLabel={activeNumber?.phoneNumber}
             facebookLabel={facebook?.label}
             instagramLabel={instagram?.label}
+            emailLabel={
+              gmailStatus?.status === 'connected'
+                ? gmailStatus.email || GMAIL_MOCK_MAILBOX
+                : 'Not connected'
+            }
             onboarding={
               hasOnboarding && onboarding
                 ? {

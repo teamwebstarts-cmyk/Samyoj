@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
-import { messagingConsent } from '../../utils/plainLanguage';
 import {
   INDIA_COUNTRY_CODE,
   INDIA_LOCAL_PHONE_PLACEHOLDER,
@@ -20,8 +19,6 @@ import {
 } from '../../utils/phone';
 import { normalizeCustomKey } from '../../utils/customAttributes';
 import type { ContactFormValues } from './contactForm';
-import { ContactConsentInfoTip } from './ContactConsentInfoTip';
-
 interface ContactFieldsFormProps {
   form: ContactFormValues;
   onChange: (next: ContactFormValues) => void;
@@ -32,7 +29,7 @@ interface ContactFieldsFormProps {
   phoneId?: string;
   phoneDisabled?: boolean;
   availableTags?: string[];
-  /** Inbox new chat: phone + name first; optional fields behind a disclosure. */
+  /** Inbox new chat: name, phone, email, tags first; notes/extras/consent behind a disclosure. */
   layout?: 'full' | 'compact';
 }
 
@@ -266,7 +263,7 @@ export default function ContactFieldsForm({
     <AppInput
       id="contact-name"
       label={isCompact ? 'Customer name (optional)' : 'Name'}
-      placeholder="Customer name"
+      placeholder={isCompact ? 'Customer name (optional)' : 'Customer name'}
       value={form.name}
       onChange={(e) => set({ name: e.target.value })}
       autoComplete="name"
@@ -277,7 +274,7 @@ export default function ContactFieldsForm({
   const emailField = (
     <AppInput
       id="contact-email"
-      label="Email"
+      label={isCompact ? 'Email (optional)' : 'Email'}
       placeholder="customer@example.com"
       type="email"
       value={form.email}
@@ -525,31 +522,13 @@ export default function ContactFieldsForm({
     </div>
   );
 
-  const consentField = (
-    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-theme-border bg-theme-subtle/40 px-4 py-3 transition hover:bg-theme-subtle/60">
-      <input
-        type="checkbox"
-        checked={form.optedIn}
-        onChange={(e) => set({ optedIn: e.target.checked })}
-        className="mt-0.5 h-4 w-4 rounded border-theme-border text-emerald-600 focus:ring-emerald-500/30"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="text-[13px] font-semibold text-theme-fg">{messagingConsent.allowCampaignMessages}</p>
-          <ContactConsentInfoTip />
-        </div>
-        <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-theme-muted">
-          {messagingConsent.allowCampaignHint}
-        </p>
-      </div>
-    </label>
-  );
-
   if (isCompact) {
     return (
       <div className="space-y-4">
-        {phoneField}
         {nameField}
+        {phoneField}
+        {emailField}
+        {tagsSection}
 
         <button
           type="button"
@@ -557,7 +536,7 @@ export default function ContactFieldsForm({
           className="flex w-full items-center justify-between gap-2 rounded-xl border border-dashed border-theme-border/80 bg-theme-subtle/30 px-3.5 py-2.5 text-left text-[12.5px] font-semibold text-theme-secondary transition hover:bg-theme-subtle/60"
           aria-expanded={showOptional}
         >
-          <span>More options (email, tags, notes…)</span>
+          <span>More options (notes, extra details…)</span>
           <ChevronDown
             className={`h-4 w-4 shrink-0 text-theme-muted transition ${showOptional ? 'rotate-180' : ''}`}
           />
@@ -565,11 +544,8 @@ export default function ContactFieldsForm({
 
         {showOptional && (
           <div className="space-y-4 border-t border-theme-border/60 pt-4">
-            {emailField}
-            {tagsSection}
             {notesField}
             {customFieldsSection}
-            {consentField}
           </div>
         )}
       </div>
@@ -588,7 +564,6 @@ export default function ContactFieldsForm({
       {tagsSection}
       {notesField}
       {customFieldsSection}
-      {consentField}
     </div>
   );
 }

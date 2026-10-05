@@ -15,6 +15,10 @@ export function explainAiSkipReason(reason?: string | null): string {
       return 'Too many AI replies just now. Wait a few seconds.';
     case 'token_quota':
       return 'Monthly AI token limit reached for this workspace.';
+    case 'credits_exhausted':
+      return 'AI credits are used up for this workspace. Open Billing and buy a chat top-up, then try again.';
+    case 'plan_ai_locked':
+      return 'AI is not included on this plan. Upgrade to Growth or Pro in Billing, then try again.';
     case 'provider_rate_limit':
       return 'The AI provider hit a rate limit. Try again in a moment.';
     case 'provider_overloaded':
@@ -32,8 +36,14 @@ export function explainAiSkipReason(reason?: string | null): string {
   }
 }
 
-export function httpStatusToAiSkipReason(status?: number, message?: string): string | undefined {
+export function httpStatusToAiSkipReason(status?: number, message?: string, code?: string): string | undefined {
   const lower = (message || '').toLowerCase();
+  if (code === 'AI_CREDITS_EXHAUSTED' || /credits exhausted|minutes exhausted/i.test(message || '')) {
+    return 'credits_exhausted';
+  }
+  if (code === 'PLAN_FEATURE_AI' || /available on growth and pro|not included on your plan/i.test(lower)) {
+    return 'plan_ai_locked';
+  }
   if (status === 429 && /monthly|token limit/i.test(message || '')) return 'token_quota';
   if (status === 429) return 'rate_limited';
   if (status === 504 || /timed out|timeout/i.test(lower)) return 'provider_timeout';

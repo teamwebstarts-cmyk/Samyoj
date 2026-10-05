@@ -12,20 +12,47 @@ export interface SupportSuggestedPrompt {
   question: string;
 }
 
-/** Welcome screen — keep short (2-3 items); everything else surfaces after chat. */
+export const SUPPORT_CHANNEL_CHIPS: SupportSuggestedPrompt[] = [
+  {
+    id: 'chip-whatsapp',
+    topicId: 'connect',
+    label: 'WhatsApp',
+    question: 'How do I connect WhatsApp and reply from Inbox in Samyoj?',
+  },
+  {
+    id: 'chip-messenger',
+    topicId: 'facebook-inbox',
+    label: 'Messenger',
+    question: 'How do I reply to Facebook Messenger in Samyoj?',
+  },
+  {
+    id: 'chip-instagram',
+    topicId: 'instagram-inbox',
+    label: 'Instagram',
+    question: 'How do I manage Instagram DMs and comments in Samyoj?',
+  },
+  {
+    id: 'chip-email',
+    topicId: 'email-channel',
+    label: 'Email',
+    question: 'How do I send email from my connected Gmail in Samyoj?',
+  },
+];
+
+/** Welcome screen — keep short (2-3 items); channel chips sit above. */
 export const SUPPORT_STARTER_PROMPTS: SupportSuggestedPrompt[] = [
   {
-    id: 'connect',
-    topicId: 'connect',
-    label: 'How do I connect my WhatsApp business number?',
-    question: 'How do I connect my WhatsApp business number in Samyoj?',
+    id: 'connect-channels',
+    topicId: 'connect-channels',
+    label: 'How do I connect WhatsApp, Facebook, Instagram, or Email?',
+    question: 'How do I connect WhatsApp, Facebook, Instagram, or Email in Samyoj?',
   },
   {
     id: 'inbound',
     topicId: 'inbound',
     label: 'Why are customer replies not showing in Inbox?',
     question:
-      'I can send WhatsApp messages but customer replies do not appear in Inbox. What should I check?',
+      'Customer replies are not showing in Samyoj Inbox (WhatsApp, Messenger, or Instagram). What should I check?',
   },
 ];
 
@@ -74,6 +101,24 @@ export const SUPPORT_FOLLOWUP_EXTRA_PROMPTS: SupportSuggestedPrompt[] = [
     question: 'How do multiple WhatsApp numbers work in one workspace?',
   },
   {
+    id: 'messenger',
+    topicId: 'facebook-inbox',
+    label: 'Where do Facebook Page messages appear?',
+    question: 'Where do Facebook Page messages appear in Samyoj?',
+  },
+  {
+    id: 'ig-comments',
+    topicId: 'instagram-comments',
+    label: 'What does Hide do on an Instagram comment?',
+    question: 'What does Hide do on an Instagram comment in Samyoj?',
+  },
+  {
+    id: 'gmail-send',
+    topicId: 'email-channel',
+    label: 'Does Email show Gmail replies?',
+    question: 'Does Samyoj Email show Gmail replies and inbox?',
+  },
+  {
     id: 'team',
     topicId: 'team',
     label: 'How do I invite teammates to my workspace?',
@@ -88,38 +133,55 @@ export const SUPPORT_FOLLOWUP_EXTRA_PROMPTS: SupportSuggestedPrompt[] = [
 ];
 
 export const SUPPORT_ALL_PROMPTS: SupportSuggestedPrompt[] = [
+  ...SUPPORT_CHANNEL_CHIPS,
   ...SUPPORT_STARTER_PROMPTS,
   ...SUPPORT_FOLLOWUP_EXTRA_PROMPTS,
 ];
 
 const RELATED_TOPICS: Record<string, string[]> = {
-  connect: ['inbound', 'numbers', 'templates'],
+  connect: ['connect-channels', 'inbound', 'numbers'],
+  'connect-channels': ['connect', 'facebook-inbox', 'instagram-inbox', 'email-channel'],
   templates: ['inbox', 'campaigns', 'contacts'],
   'ai-bots': ['ai-bots', 'inbox', 'calls'],
-  inbox: ['inbound', 'templates', 'ai-bots', 'connect'],
+  inbox: ['inbound', 'templates', 'facebook-inbox', 'instagram-inbox'],
   inbound: ['connect', 'inbox', 'numbers'],
   campaigns: ['templates', 'contacts', 'numbers'],
   contacts: ['campaigns', 'numbers', 'team'],
   numbers: ['connect', 'inbox', 'contacts'],
   team: ['settings', 'contacts'],
-  settings: ['connect', 'team'],
+  settings: ['connect-channels', 'team'],
   calls: ['ai-bots'],
+  'facebook-inbox': ['facebook-ads', 'connect-channels', 'inbox'],
+  'facebook-ads': ['facebook-inbox'],
+  'instagram-inbox': ['instagram-comments', 'instagram-posts', 'connect-channels'],
+  'instagram-comments': ['instagram-inbox', 'instagram-posts'],
+  'instagram-posts': ['instagram-inbox', 'instagram-comments'],
+  'email-channel': ['connect-channels', 'contacts'],
 };
 
 function inferTopicIds(text: string): string[] {
   const t = text.toLowerCase();
   const ids: string[] = [];
-  if (/connect|whatsapp|facebook|oauth|link.*number|business number/i.test(t)) ids.push('connect');
-  if (/inbound|reply|replies|receive|not showing|missing|webhook|tunnel/i.test(t)) ids.push('inbound');
-  if (/template|broadcast message/i.test(t)) ids.push('templates');
-  if (/campaign|blast|bulk/i.test(t)) ids.push('campaigns');
-  if (/bot|ai|train|calling|call bot|automation/i.test(t)) ids.push('ai-bots');
-  if (/inbox|conversation|chat thread/i.test(t)) ids.push('inbox');
-  if (/contact|opt-?in|subscriber|customer list/i.test(t)) ids.push('contacts');
-  if (/team|invite|teammate|role/i.test(t)) ids.push('team');
-  if (/number|multiple|switch.*number/i.test(t)) ids.push('numbers');
-  if (/setting|billing|account|profile/i.test(t)) ids.push('settings');
-  if (/call|voice|phone call/i.test(t)) ids.push('calls');
+  if (/\bgmail\b|email compose|email template|mailbox|send email/.test(t)) ids.push('email-channel');
+  if (/instagram comment|hide comment|ig comment/.test(t)) ids.push('instagram-comments');
+  if (/instagram post|schedule post/.test(t)) ids.push('instagram-posts');
+  if (/instagram|ig dm/.test(t)) ids.push('instagram-inbox');
+  if (/facebook ads|ad spend|\bcpl\b/.test(t)) ids.push('facebook-ads');
+  if (/messenger|facebook inbox|facebook page/.test(t)) ids.push('facebook-inbox');
+  if (/connect.*channel|connect facebook|connect instagram|connect gmail/.test(t)) {
+    ids.push('connect-channels');
+  }
+  if (/connect|whatsapp|oauth|link.*number|business number/.test(t)) ids.push('connect');
+  if (/inbound|reply|replies|receive|not showing|missing|webhook|tunnel/.test(t)) ids.push('inbound');
+  if (/template|broadcast message/.test(t)) ids.push('templates');
+  if (/campaign|blast|bulk/.test(t)) ids.push('campaigns');
+  if (/bot|ai|train|calling|call bot|automation/.test(t)) ids.push('ai-bots');
+  if (/inbox|conversation|chat thread/.test(t)) ids.push('inbox');
+  if (/contact|opt-?in|subscriber|customer list/.test(t)) ids.push('contacts');
+  if (/team|invite|teammate|role/.test(t)) ids.push('team');
+  if (/number|multiple|switch.*number/.test(t)) ids.push('numbers');
+  if (/setting|billing|account|profile/.test(t)) ids.push('settings');
+  if (/call|voice|phone call/.test(t)) ids.push('calls');
   return ids;
 }
 
@@ -145,11 +207,12 @@ export function followUpPromptsFor(
   const inferred = inferTopicIds(`${lastUserText}\n${lastAssistantText}`);
   const topicIds = asked
     ? [asked.topicId, ...inferred, ...(RELATED_TOPICS[asked.topicId] || [])]
-    : [...inferred, 'connect', 'inbound', 'inbox', 'ai-bots'];
+    : [...inferred, 'connect-channels', 'inbound', 'facebook-inbox', 'email-channel'];
 
   const seen = new Set<string>(asked ? [asked.id] : []);
-  if (lastUserText.toLowerCase().includes('connect') || asked?.id === 'connect') {
+  if (lastUserText.toLowerCase().includes('connect') || asked?.id === 'connect' || asked?.id === 'connect-channels') {
     seen.add('connect');
+    seen.add('connect-channels');
   }
   for (const text of priorUserTexts) {
     const p = matchPrompt(text);
@@ -159,7 +222,7 @@ export function followUpPromptsFor(
 
   for (const topicId of topicIds) {
     for (const p of SUPPORT_ALL_PROMPTS) {
-      if (p.topicId !== topicId || seen.has(p.id)) continue;
+      if (p.topicId !== topicId || seen.has(p.id) || p.id.startsWith('chip-')) continue;
       seen.add(p.id);
       out.push(p);
       if (out.length >= limit) return out;

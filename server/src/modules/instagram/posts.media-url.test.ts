@@ -14,6 +14,7 @@ vi.mock('../media/storage-adapter', () => ({
 }));
 
 import {
+  coerceInstagramWriteMediaUrl,
   extractPublicMediaRelative,
   mediaUrlForMeta,
   publicApiOrigin,
@@ -39,6 +40,20 @@ describe('extractPublicMediaRelative', () => {
   it('reads the relative URL used by AI Studio handoffs', () => {
     expect(extractPublicMediaRelative('/api/media/public/org/file.png?exp=9&sig=aa')).toBe(
       'org/file.png',
+    );
+  });
+});
+
+describe('coerceInstagramWriteMediaUrl', () => {
+  it('prefixes AI Studio relative media paths', () => {
+    expect(coerceInstagramWriteMediaUrl('/api/media/public/org/a.png?sig=1')).toBe(
+      'https://example-8000.app.github.dev/api/media/public/org/a.png?sig=1',
+    );
+  });
+
+  it('passes through absolute URLs', () => {
+    expect(coerceInstagramWriteMediaUrl('https://cdn.example/a.jpg')).toBe(
+      'https://cdn.example/a.jpg',
     );
   });
 });

@@ -2217,6 +2217,15 @@ router.post(
       include: { user: { select: { id: true, name: true } } },
     });
 
+    emitInbox(req, 'agent:note', {
+      noteId: note.id,
+      authorUserId: note.userId,
+      agentName: note.user.name,
+      preview: content.trim().slice(0, 120),
+      href: `/inbox?conversation=${id}`,
+      channel: 'whatsapp',
+    });
+
     sendSuccess(res, note, 201);
   })
 );

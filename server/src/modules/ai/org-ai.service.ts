@@ -12,6 +12,7 @@ import {
 } from './ai-usage-actions';
 import {
   deductChatCreditsFromUsageLog,
+  nextMeteringStatus,
 } from '../billing/ai-credits/service';
 import { shouldDeductOnUsageLog } from '../billing/ai-credits/pool-map';
 
@@ -215,11 +216,12 @@ export async function recordAiUsage(data: {
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500);
+        const meteringStatus = nextMeteringStatus(err, 1);
         await prisma.aiUsageLog.update({
           where: { id: row.id },
-          data: { meteringStatus: 'PENDING_RETRY', meteringError: errorMessage },
+          data: { meteringStatus, meteringError: errorMessage },
         });
-        log.error('AI credit deduction pending retry', {
+        log.warn('AI credit deduction not settled', {
           organizationId: data.organizationId,
           usageLogId: row.id,
           action: data.action,
@@ -275,19 +277,27 @@ export async function retryPendingAiCreditDeductions(limit = 100): Promise<numbe
       });
       settled++;
     } catch (err) {
+      const fresh = await prisma.aiUsageLog.findUnique({
+        where: { id: row.id },
+        select: { meteringAttempts: true },
+      });
+      const meteringStatus = nextMeteringStatus(err, fresh?.meteringAttempts ?? 1);
       await prisma.aiUsageLog.update({
         where: { id: row.id },
         data: {
-          meteringStatus: 'PENDING_RETRY',
+          meteringStatus,
           meteringError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
         },
       });
-      log.error('AI credit retry failed', {
+      const payload = {
         organizationId: row.organizationId,
         usageLogId: row.id,
         action: row.action,
+        meteringStatus,
         error: err instanceof Error ? err.message : String(err),
-      });
+      };
+      if (meteringStatus === 'FAILED') log.warn('AI credit retry stopped', payload);
+      else log.warn('AI credit retry failed', payload);
     }
   }
   return settled;

@@ -14,6 +14,7 @@ interface SupportAssistantTabProps {
   onMessagesChange: (messages: SupportChatMessage[]) => void;
   userInitials: string;
   assistantOnline: boolean | null;
+  onAssistantReply?: () => void;
 }
 
 function newId() {
@@ -39,6 +40,7 @@ export default function SupportAssistantTab({
   onMessagesChange,
   userInitials,
   assistantOnline,
+  onAssistantReply,
 }: SupportAssistantTabProps) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -101,6 +103,7 @@ export default function SupportAssistantTab({
         return;
       }
       onMessagesChange([...history, { id: newId(), role: 'assistant', content: reply }]);
+      onAssistantReply?.();
     } catch (err) {
       setSendError(supportChatErrorMessage(err));
     } finally {
@@ -156,7 +159,7 @@ export default function SupportAssistantTab({
                   <p className="mb-1 pr-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-theme-muted">
                     You
                   </p>
-                  <div className="rounded-2xl rounded-br-md bg-whatsapp-600 px-3.5 py-2.5 text-left text-[13.5px] font-medium leading-relaxed text-white shadow-[0_1px_2px_rgba(18,140,126,0.25)]">
+                  <div className="rounded-2xl rounded-br-md bg-sky-600 px-3.5 py-2.5 text-left text-[13.5px] font-medium leading-relaxed text-white shadow-[0_1px_2px_rgba(2,132,199,0.25)]">
                     {msg.content}
                   </div>
                 </div>

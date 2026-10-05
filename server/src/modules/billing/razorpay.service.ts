@@ -75,7 +75,7 @@ export async function razorpayApi<T>(path: string, init?: RequestInit): Promise<
   if (!res.ok) {
     const err = await res.text();
     logger.error('Razorpay API error', { source: 'razorpay', path, error: err });
-    throw new AppError(502, 'Payment gateway request failed');
+    throw new AppError(502, razorpayFailureMessage(err));
   }
   return res.json() as Promise<T>;
 }
@@ -104,17 +104,36 @@ export async function createRazorpayPlan(params: {
   });
 }
 
+/**
+ * Razorpay rejects a missing total_count on accounts without perpetual billing
+ * ("total_count is required"). 100 is the provider cap on billing cycles;
+ * cancel-at-period-end still stops renewal before that ceiling.
+ */
+export const RAZORPAY_SUBSCRIPTION_CYCLE_CAP = 100;
+
+function razorpayFailureMessage(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: { description?: string } };
+    const description = parsed.error?.description?.trim();
+    if (description && description.length <= 180) return description;
+  } catch {
+    /* keep the generic message */
+  }
+  return 'Payment gateway request failed';
+}
+
 export async function createRazorpaySubscription(params: {
   planId: string;
   totalCount?: number;
   notes?: Record<string, string>;
 }): Promise<{ id: string; status: string; short_url?: string }> {
+  const totalCount = params.totalCount ?? RAZORPAY_SUBSCRIPTION_CYCLE_CAP;
   return razorpayApi<{ id: string; status: string; short_url?: string }>('/subscriptions', {
     method: 'POST',
     body: JSON.stringify({
       plan_id: params.planId,
       customer_notify: 1,
-      ...(params.totalCount ? { total_count: params.totalCount } : {}),
+      total_count: totalCount,
       notes: params.notes,
     }),
   });

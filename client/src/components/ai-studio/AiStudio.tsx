@@ -19,7 +19,7 @@ import {
   uid,
 } from "./data/mock";
 import { Compose } from "./Compose";
-import { GenerationError, GenerationProgress } from "./Generating";
+import { GenerationProgress } from "./Generating";
 import { PackView } from "./PackView";
 import type { PackTab } from "./PackView";
 import { DraftDrawer, ToastHost } from "./Overlays";
@@ -27,6 +27,7 @@ import type { ToastItem } from "./Overlays";
 import { HandoffModal, NewPackModal, RefineModal } from "./Modals";
 import type { HandoffState } from "./Modals";
 import { slideToPngFile, slidesToPngUrls, directSlideImageUrls } from "../../utils/aiStudioPoster";
+import { aiBillingUserMessage, normalizeError } from "../../utils/errors";
 import {
   addHistoryEntry,
   clearStoredHistory,
@@ -49,10 +50,10 @@ import "../../styles/ai-studio.css";
  *   overlays: drafts+history drawer, handoff (warning / opening), refine, new
  *
  * Data model: with Sample data ON the mock engine generates packs; with it OFF
- * the studio calls aiStudioApi and shows a clear error state when the service
- * isn't connected yet. Drafts + history persist in localStorage either way.
+ * the studio calls aiStudioApi. Failures stay on the brief editor with the real
+ * message. Drafts + history persist in localStorage either way.
  */
-type Screen = "compose" | "generating" | "error" | "review" | "saved";
+type Screen = "compose" | "generating" | "review" | "saved";
 type Overlay = null | "drafts" | "refine" | "new";
 
 const DEFAULT_OUTPUTS: OutputId[] = ["ig_carousel"];
@@ -110,7 +111,6 @@ export default function AiStudio() {
   const [imageQuality, setImageQuality] = useState<'standard' | 'high' | 'story'>('standard');
   const [imageCount, setImageCount] = useState<1 | 2 | 4>(1);
   const [briefError, setBriefError] = useState<string | null>(null);
-  const [generateErrorHint, setGenerateErrorHint] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [pack, setPack] = useState<Pack | null>(usableWorkspace?.pack ?? null);
   const [tab, setTab] = useState<PackTab>("all");
@@ -125,6 +125,7 @@ export default function AiStudio() {
 
   const genToken = useRef({ cancelled: false });
   const handoffTimer = useRef<number | undefined>(undefined);
+  const handoffRunningRef = useRef(false);
   const toastId = useRef(0);
   const seededRef = useRef(false);
 
@@ -228,7 +229,6 @@ export default function AiStudio() {
     const token = { cancelled: false };
     genToken.current = token;
     setBriefError(null);
-    setGenerateErrorHint(null);
     const stay = !!opts?.inPlace;
     if (stay) setBusy(true);
     else {
@@ -270,16 +270,17 @@ export default function AiStudio() {
       }
     } catch (err) {
       if (token.cancelled || (err instanceof Error && err.message === "cancelled")) return;
-      const ax = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
+      const n = normalizeError(err);
       const message =
-        ax.response?.data?.error?.message ??
-        ax.response?.data?.message ??
-        (err instanceof Error ? err.message : null);
+        aiBillingUserMessage(n.code, n.message) ||
+        n.message ||
+        "Generation failed. Try again.";
       if (stay) {
-        toast(message || "Couldn't regenerate. Your current pack is still here.", "error");
+        toast(message, "error");
       } else {
-        setGenerateErrorHint(message);
-        setScreen("error");
+        setBriefError(message);
+        setScreen("compose");
+        document.getElementById("brief")?.focus();
       }
     } finally {
       if (stay) setBusy(false);
@@ -412,6 +413,8 @@ export default function AiStudio() {
 
   /* ------------------------------ hand-off ------------------------------ */
   const runHandoff = (channel: Channel, p: Pack) => {
+    if (handoffRunningRef.current) return;
+    handoffRunningRef.current = true;
     window.clearTimeout(handoffTimer.current);
     const handoffPayload = buildHandoff(p, channel);
     if (channel === "whatsapp" && activeNumber?.id) {
@@ -437,7 +440,8 @@ export default function AiStudio() {
         if (!slide) return {};
         const direct = directSlideImageUrls([slide]);
         if (direct) {
-          const res = await fetch(direct[0]);
+          const res = await fetch(direct[0], { credentials: "include" });
+          if (!res.ok) throw new Error("Generated poster could not be loaded");
           const blob = await res.blob();
           const attachmentFile = new File([blob], `${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-poster.png`, { type: blob.type || "image/png" });
           return { attachmentFile };
@@ -469,6 +473,9 @@ export default function AiStudio() {
       .catch(() => {
         setHandoff(null);
         toast("Couldn't prepare the hand-off. Try again.", "error");
+      })
+      .finally(() => {
+        handoffRunningRef.current = false;
       });
   };
 
@@ -552,18 +559,6 @@ export default function AiStudio() {
             onCancel={cancelGeneration}
           />
         )}
-        {screen === "error" && (
-          <GenerationError
-            onRetry={generate}
-            onEdit={() => setScreen("compose")}
-            hint={
-              mockEnabled
-                ? undefined
-                : generateErrorHint ||
-                  "Generation failed. Your brief is still here — try again. Sample data in Settings uses the mock engine instead of the live models."
-            }
-          />
-        )}
         {reviewing && pack && (
           <PackView
             key={pack.id}
@@ -583,6 +578,7 @@ export default function AiStudio() {
             onEditBrief={() => setScreen("compose")}
             onBriefChange={setBrief}
             onHandoff={startHandoff}
+            handoffBusy={handoff !== null}
             onToast={toast}
             useLiveImages={!mockEnabled}
             imageQuality={imageQuality}

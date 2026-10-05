@@ -12,6 +12,8 @@ describe('Meta navigation', () => {
     expect(paths).toContain('/instagram/inbox');
     expect(paths).toContain('/instagram/comments');
     expect(paths).toContain('/instagram/posts');
+    expect(paths).toContain('/help');
+    expect(paths).toContain('/tickets');
     expect(paths).not.toContain('/analytics');
   });
 

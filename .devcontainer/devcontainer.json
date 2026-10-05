@@ -16,5 +16,5 @@
       "visibility": "private"
     }
   },
-  "postCreateCommand": "echo 'Samyoj: after start, open the forwarded HTTPS link for port 3000 (not http://localhost) for WhatsApp Connect.'"
+  "postCreateCommand": "bash -c 'if [ -n \"${CODESPACE_NAME:-}\" ]; then D=${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}; echo \"Samyoj UI (correct URL): https://${CODESPACE_NAME}-3000.${D}\"; echo \"Not https://3000-${CODESPACE_NAME}.${D} — that format 404s. Run: bash start.sh\"; else echo \"Run bash start.sh then open port 3000 from the Ports panel.\"; fi'"
 }

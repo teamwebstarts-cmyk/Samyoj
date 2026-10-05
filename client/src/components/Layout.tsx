@@ -10,6 +10,7 @@ import {
   isEmailShellRoute,
   isInboxRoute,
   isCallsShellRoute,
+  isHelpRoute,
   isListShellRoute,
   isTemplateWizardRoute,
   shouldShowMobileBottomNav,
@@ -44,6 +45,7 @@ export default function Layout() {
     isInboxRoute(pathname) ||
     isEmailShellRoute(pathname) ||
     isCallsShellRoute(pathname) ||
+    isHelpRoute(pathname) ||
     isListShellRoute(pathname, search) ||
     isTemplateWizardRoute(pathname);
 

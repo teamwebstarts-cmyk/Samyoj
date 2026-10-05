@@ -427,6 +427,7 @@ router.patch(
         reason: reasonSchema,
         flag: z.string().min(1).max(64),
         enabled: z.boolean(),
+        dailyMessageCap: z.number().int().min(1).max(100_000).nullable().optional(),
       })
       .parse(req.body);
     sendSuccess(

@@ -13,4 +13,9 @@ describe('AI usage pool mapping', () => {
     expect(shouldDeductOnUsageLog('support_help')).toBe(false);
     expect(shouldDeductOnUsageLog('call_summary')).toBe(false);
   });
+
+  it('does not meter AI Studio packs against plan chat credits', () => {
+    expect(poolForAiAction('ai_studio')).toBeNull();
+    expect(shouldDeductOnUsageLog('ai_studio')).toBe(false);
+  });
 });

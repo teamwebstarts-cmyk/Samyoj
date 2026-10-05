@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Eye, MessageSquare, Pencil } from 'lucide-react';
+import { Eye, MessageSquare, Pencil, X } from 'lucide-react';
 import { FOCUS_RING_CLASS, useFocusTrap } from '../../../hooks/inboxA11y';
 import type { PanelTab } from './types';
 
@@ -25,8 +25,8 @@ const TABS: Array<{ id: PanelTab; label: string; shortLabel: string; icon: typeo
 /**
  * Right-side composer/detail panel.
  * Wide desktop: sticky column beside the grid. Compact desktop/tablet (<1280px):
- * full-screen sheet so the preview never gets squeezed into a narrow column.
- * with Escape-to-close, body scroll lock and focus returned to the trigger.
+ * overlays the posts workspace only (sidebar and topbar stay reachable).
+ * Escape-to-close and focus returned to the trigger.
  */
 export default function PostPanel({
   open,
@@ -53,13 +53,6 @@ export default function PostPanel({
     };
     window.addEventListener('keydown', onKeyDown);
 
-    const compact = window.matchMedia('(max-width: 1279px)');
-    let restoreScroll = '';
-    if (compact.matches) {
-      restoreScroll = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-    }
-
     const raf = requestAnimationFrame(() => {
       const panel = panelRef.current;
       if (!panel) return;
@@ -72,7 +65,6 @@ export default function PostPanel({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = restoreScroll;
       previouslyFocused?.focus?.();
     };
   }, [open]);
@@ -90,6 +82,14 @@ export default function PostPanel({
       tabIndex={-1}
     >
       <header className="igp-panel__head">
+        <button
+          type="button"
+          className={`igp-panel__close ${FOCUS_RING_CLASS}`}
+          onClick={onClose}
+          aria-label="Back to posts list"
+        >
+          <X strokeWidth={2.25} aria-hidden />
+        </button>
         <div className="igp-panel__tabs" role="tablist" aria-label="Post panel sections">
           {visibleTabs.map((row) => {
             const Icon = row.icon;
@@ -123,7 +123,7 @@ export default function PostPanel({
         className={`igp-panel__done ${FOCUS_RING_CLASS}`}
         onClick={onClose}
       >
-        Done
+        Back to posts
       </button>
     </aside>
   );

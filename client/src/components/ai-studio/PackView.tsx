@@ -28,6 +28,7 @@ interface Props {
   onEditBrief: () => void;
   onBriefChange?: (brief: string) => void;
   onHandoff: (c: Channel) => void;
+  handoffBusy?: boolean;
   onToast: (m: string, tone?: "success" | "info" | "error") => void;
   useLiveImages?: boolean;
   imageQuality?: "standard" | "high" | "story";
@@ -92,7 +93,14 @@ export function PackView(p: Props) {
     (e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[n])?.focus();
   };
 
-  const cardProps = { pack, update: p.update, onHandoff: p.onHandoff, onToast: p.onToast, live: p.useLiveImages };
+  const cardProps = {
+    pack,
+    update: p.update,
+    onHandoff: p.onHandoff,
+    handoffBusy: p.handoffBusy,
+    onToast: p.onToast,
+    live: p.useLiveImages,
+  };
   const channelTab = tab === "instagram" || tab === "whatsapp" || tab === "email";
   const showVisuals = hasVisuals && (tab === "all" || tab === "visuals");
   const channelCards = [

@@ -90,7 +90,11 @@ export const PAGE_META: Record<string, PageMeta> = {
   },
   '/tickets': {
     title: 'Tickets',
-    description: 'Follow up on chats that need a reply',
+    description: 'Follow up on WhatsApp chats that need a reply',
+  },
+  '/help': {
+    title: 'Help assistant',
+    description: 'How to use WhatsApp, Messenger, Instagram, and Email in Samyoj',
   },
   '/team': {
     title: 'Team',
@@ -185,6 +189,11 @@ export function getTemplateWizardTopbarLabel(pathname: string): string {
   if (pathname === '/templates/library') return 'Library';
   if (/^\/templates\/[^/]+\/resubmit$/.test(pathname)) return 'Edit template';
   return 'Template';
+}
+
+/** Help assistant fills the viewport; the transcript scrolls inside. */
+export function isHelpRoute(pathname: string): boolean {
+  return pathname === '/help' || pathname.startsWith('/help/');
 }
 
 /** Campaigns and contacts list fill the viewport — table scrolls inside the shell card. */

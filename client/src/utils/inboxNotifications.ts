@@ -55,6 +55,12 @@ export function dismissInboxNotification(conversationId: string) {
   emit();
 }
 
+export function clearInboxNotifications() {
+  if (entries.length === 0) return;
+  entries = [];
+  emit();
+}
+
 export function useInboxMessageNotifications(): InboxMessageNotification[] {
   return useSyncExternalStore(subscribeInboxNotifications, getInboxNotifications);
 }

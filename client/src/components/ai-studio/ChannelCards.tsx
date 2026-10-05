@@ -11,6 +11,7 @@ interface Props {
   pack: Pack;
   update: (fn: (p: Pack) => Pack) => void;
   onHandoff: (c: Channel) => void;
+  handoffBusy?: boolean;
   onToast: (m: string, tone?: "success" | "info" | "error") => void;
   live?: boolean;
   alwaysEdit?: boolean;
@@ -89,7 +90,7 @@ const readBox = "whitespace-pre-wrap break-words rounded-xl border border-[var(-
 
 /* ------------------------------ Instagram ------------------------------ */
 
-export function InstagramCopyCard({ pack, update, onHandoff, onToast, live, alwaysEdit }: Props) {
+export function InstagramCopyCard({ pack, update, onHandoff, onToast, live, alwaysEdit, handoffBusy }: Props) {
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<"caption" | "hashtags">("caption");
   const ig = pack.instagram!;
@@ -116,7 +117,12 @@ export function InstagramCopyCard({ pack, update, onHandoff, onToast, live, alwa
       }}
       footer={
         <>
-          <button type="button" className="btn btn-primary flex-1" onClick={() => onHandoff("instagram")}>
+          <button
+            type="button"
+            className="btn btn-primary flex-1"
+            disabled={handoffBusy}
+            onClick={() => onHandoff("instagram")}
+          >
             <ExternalLink size={14} /> Use in Posts
           </button>
           <button
@@ -162,7 +168,7 @@ function waHeaderSlide(pack: Pack) {
   return pack.carousel?.[0] ?? pack.image?.options[pack.image.selected] ?? null;
 }
 
-export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live, alwaysEdit }: Props) {
+export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live, alwaysEdit, handoffBusy }: Props) {
   const [editing, setEditing] = useState(false);
   const t = pack.whatsapp!;
   const thumb = waHeaderSlide(pack);
@@ -192,7 +198,12 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live, a
       }}
       footer={
         <>
-          <button type="button" className="btn btn-primary flex-1" onClick={() => onHandoff("whatsapp")}>
+          <button
+            type="button"
+            className="btn btn-primary flex-1"
+            disabled={handoffBusy}
+            onClick={() => onHandoff("whatsapp")}
+          >
             <ExternalLink size={14} /> Open in Templates
           </button>
           <button type="button" className="btn flex-1" onClick={() => void copyWithToast(asText(), onToast)}>
@@ -286,7 +297,7 @@ export function WhatsAppTemplateCard({ pack, update, onHandoff, onToast, live, a
 
 /* ------------------------------ Email ------------------------------ */
 
-export function EmailCopyCard({ pack, update, onHandoff, onToast, live, alwaysEdit }: Props) {
+export function EmailCopyCard({ pack, update, onHandoff, onToast, live, alwaysEdit, handoffBusy }: Props) {
   const [editing, setEditing] = useState(false);
   const [tplSaved, setTplSaved] = useState(false);
   const e = pack.email!;
@@ -313,7 +324,12 @@ export function EmailCopyCard({ pack, update, onHandoff, onToast, live, alwaysEd
       }}
       footer={
         <>
-          <button type="button" className="btn btn-primary flex-1" onClick={() => onHandoff("email")}>
+          <button
+            type="button"
+            className="btn btn-primary flex-1"
+            disabled={handoffBusy}
+            onClick={() => onHandoff("email")}
+          >
             <ExternalLink size={14} /> Use in Email
           </button>
           <button type="button" className="btn flex-1" onClick={() => void copyWithToast(`Subject: ${e.subject}\n\n${e.body}`, onToast)}>

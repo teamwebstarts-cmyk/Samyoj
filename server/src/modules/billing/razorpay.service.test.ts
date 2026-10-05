@@ -245,6 +245,7 @@ describe('subscription provider contract', () => {
     expect(planPayload.item.amount).toBe(294882);
     expect(planPayload.item.currency).toBe('INR');
     expect(subscriptionPayload.plan_id).toBe('plan_growth_monthly');
+    expect(subscriptionPayload.total_count).toBe(100);
     expect(subscriptionPayload.notes.skuId).toBe('growth_monthly');
     fetchSpy.mockRestore();
   });

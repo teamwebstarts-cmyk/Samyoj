@@ -8,7 +8,10 @@ import type { MetricsPeriod } from '../../utils/metricsPeriod';
 import type { WorkspaceChannels } from '../../utils/workspaceChannels';
 import FacebookGlyph from './icons/FacebookGlyph';
 import InstagramGlyph from './icons/InstagramGlyph';
+import MailGlyph from './icons/MailGlyph';
 import WhatsAppGlyph from './icons/WhatsAppGlyph';
+
+const ALL_CHANNEL_SLOTS = 4;
 
 function AllChannelsIcon() {
   return (
@@ -26,7 +29,7 @@ function ChannelChip({
   label: string;
 }) {
   return (
-    <span className="inline-flex min-w-0 max-w-[11rem] items-center gap-1.5">
+    <span className="inline-flex min-w-0 max-w-[9.5rem] items-center gap-1.5">
       <span className="inline-flex shrink-0">{icon}</span>
       <span className="truncate">{label}</span>
     </span>
@@ -38,6 +41,7 @@ export default function AllChannelsConnectionHero({
   whatsappLabel,
   facebookLabel,
   instagramLabel,
+  emailLabel,
   period,
   onPeriodChange,
 }: {
@@ -45,11 +49,17 @@ export default function AllChannelsConnectionHero({
   whatsappLabel?: string;
   facebookLabel?: string;
   instagramLabel?: string;
+  emailLabel?: string;
   period: MetricsPeriod;
   onPeriodChange: (period: MetricsPeriod) => void;
 }) {
-  const connectedCount = [channels.whatsapp, channels.facebook, channels.instagram].filter(Boolean).length;
-  const allConnected = connectedCount === 3;
+  const connectedCount = [
+    channels.whatsapp,
+    channels.facebook,
+    channels.instagram,
+    channels.email,
+  ].filter(Boolean).length;
+  const allConnected = connectedCount === ALL_CHANNEL_SLOTS;
   const chips = [
     channels.whatsapp
       ? {
@@ -72,6 +82,13 @@ export default function AllChannelsConnectionHero({
           label: instagramLabel || 'Instagram',
         }
       : null,
+    channels.email
+      ? {
+          key: 'email',
+          icon: <MailGlyph className="h-3.5 w-3.5 text-[#EA4335]" />,
+          label: emailLabel || 'Email',
+        }
+      : null,
   ].filter(Boolean) as Array<{ key: string; icon: ReactNode; label: string }>;
 
   const nameLine =
@@ -85,16 +102,16 @@ export default function AllChannelsConnectionHero({
         ))}
       </span>
     ) : (
-      'WhatsApp, Facebook, and Instagram in one place'
+      'WhatsApp, Facebook, Instagram, and Email in one place'
     );
 
   let statusLine: ReactNode;
   if (allConnected) {
-    statusLine = 'Cross-channel inbox, ads snapshot, and recent activity on this dashboard.';
+    statusLine = 'Cross-channel inbox, ads snapshot, email, and recent activity on this dashboard.';
   } else if (connectedCount > 0) {
     statusLine = (
       <>
-        {connectedCount} of 3 channels connected — connect the rest in{' '}
+        {connectedCount} of {ALL_CHANNEL_SLOTS} channels connected — connect the rest in{' '}
         <Link to="/settings?tab=channels" className="font-semibold text-sky-700 hover:underline">
           Channels settings
         </Link>
@@ -104,7 +121,7 @@ export default function AllChannelsConnectionHero({
   } else {
     statusLine = (
       <>
-        Connect WhatsApp, Facebook, or Instagram in{' '}
+        Connect WhatsApp, Facebook, Instagram, or Email in{' '}
         <Link to="/settings?tab=channels" className="font-semibold text-sky-700 hover:underline">
           Channels settings
         </Link>
@@ -116,7 +133,7 @@ export default function AllChannelsConnectionHero({
   return (
     <section aria-label="All channels overview" className="relative z-10">
       <div
-        className="dashboard-card dashboard-channel-hero dashboard-channel-hero--all dashboard-channel-hero-layout relative overflow-hidden rounded-[22px] border border-sky-100/90 bg-gradient-to-r from-sky-50/55 via-white to-white px-4 py-4 sm:px-7 sm:py-5"
+        className="dashboard-card dashboard-channel-hero dashboard-channel-hero--all dashboard-channel-hero-layout dashboard-channel-hero-layout--all relative overflow-hidden rounded-[22px] border border-sky-100/90 bg-gradient-to-r from-sky-50/55 via-white to-white px-4 py-4 sm:px-7 sm:py-5"
       >
         <ChannelHeroLead
           icon={<AllChannelsIcon />}
@@ -126,19 +143,19 @@ export default function AllChannelsConnectionHero({
               <ChannelHeroConnectedBadge />
             ) : (
               <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-900">
-                {connectedCount}/3 connected
+                {connectedCount}/{ALL_CHANNEL_SLOTS} connected
               </span>
             )
           }
           nameLine={typeof nameLine === 'string' ? <span className="truncate">{nameLine}</span> : nameLine}
           description={statusLine}
         />
+        <AllChannelsHeroArt />
         <ChannelHeroActions
           manageHref="/settings?tab=channels"
           period={period}
           onPeriodChange={onPeriodChange}
         />
-        <AllChannelsHeroArt />
       </div>
     </section>
   );

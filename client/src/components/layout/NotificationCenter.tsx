@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Bell, MessageSquare, Ticket } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
 import { ticketApi } from '../../services/api';
 import { isOverdue, type TicketItem } from '../tickets/ticketUi';
 import { useSocket } from '../../hooks/useSocket';
@@ -8,28 +7,52 @@ import { useOnActiveNumberChange } from '../../hooks/useOnActiveNumberChange';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWhatsAppNumber } from '../../contexts/WhatsAppNumberContext';
 import {
+  clearInboxNotifications,
   dismissInboxNotification,
   getOpenConversationId,
   pushInboxNotification,
   useInboxMessageNotifications,
 } from '../../utils/inboxNotifications';
+import {
+  clearAgentNotifications,
+  dismissAgentNotification,
+  pushAgentNotification,
+  useAgentNotifications,
+} from '../../utils/agentNotifications';
+import {
+  clearAllDismissedNotifications,
+  isNotificationDismissed,
+} from '../../utils/notificationDismissals';
 import type { Conversation, Message } from '../../types';
+import { useMetaMock } from '../../contexts/MetaMockContext';
+import { getNotificationMockAlerts } from '../../utils/notificationMockData';
+import NotificationSidebar from './NotificationSidebar';
+import type { AppNotification, NotificationFilter } from './notificationTypes';
 
 interface NotificationCenterProps {
-  /** Unread inbox count passed from parent if available */
   unreadInbox?: number;
+}
+
+function filterDismissed(userId: string | undefined, items: AppNotification[]): AppNotification[] {
+  return items.filter((item) => !isNotificationDismissed(userId, item.id));
 }
 
 export default function NotificationCenter({ unreadInbox = 0 }: NotificationCenterProps) {
   const { user } = useAuth();
+  const { enabled: mockPreview } = useMetaMock();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<NotificationFilter>('all');
   const [tickets, setTickets] = useState<TicketItem[]>([]);
-  const ref = useRef<HTMLDivElement>(null);
+  const [workspaceAlerts, setWorkspaceAlerts] = useState<AppNotification[]>([]);
+  const [dismissTick, setDismissTick] = useState(0);
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const requestGenerationRef = useRef(0);
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
   const messageAlerts = useInboxMessageNotifications();
+  const agentAlerts = useAgentNotifications();
 
   const load = useCallback(() => {
     if (!user || !resolved || !activeNumber) return;
@@ -57,12 +80,43 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
   useOnActiveNumberChange(() => {
     requestGenerationRef.current += 1;
     setTickets([]);
+    setWorkspaceAlerts([]);
     load();
   });
 
-  // Background-message alerts: only when the tab is hidden or a different
-  // conversation is open — the open thread already surfaces new messages.
   useSocket((event, data) => {
+    if (event === 'agent:note') {
+      const payload = data as {
+        noteId?: string;
+        authorUserId?: string;
+        agentName?: string;
+        preview?: string;
+        href?: string;
+        channel?: 'whatsapp' | 'facebook' | 'instagram';
+        whatsappNumberId?: string;
+        numberId?: string;
+      };
+      if (!payload.noteId || !payload.href) return;
+      if (payload.authorUserId && payload.authorUserId === user?.id) return;
+      const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
+      if (
+        payload.channel === 'whatsapp' &&
+        eventNumberId &&
+        activeNumber &&
+        ![activeNumber.id, activeNumber.phoneNumberId].includes(eventNumberId)
+      ) {
+        return;
+      }
+      const agentName = payload.agentName?.trim() || 'Teammate';
+      pushAgentNotification({
+        id: payload.noteId,
+        agentName,
+        preview: payload.preview?.trim() || 'New internal note',
+        href: payload.href,
+      });
+      return;
+    }
+
     if (event === 'ticket:new' || event === 'ticket:updated') {
       const payload = data as { whatsappNumberId?: string; numberId?: string };
       const eventNumberId = payload.whatsappNumberId ?? payload.numberId;
@@ -75,6 +129,45 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
       load();
       return;
     }
+
+    if (event === 'conversation:ai_error') {
+      const payload = data as {
+        conversationId?: string;
+        operatorMessage?: string;
+        skipReason?: string;
+      };
+      if (!payload.conversationId) return;
+      const body =
+        payload.operatorMessage ||
+        (payload.skipReason ? `Inbox: ${payload.skipReason.replace(/_/g, ' ')}` : undefined);
+      const entry: AppNotification = {
+        id: `ai-${payload.conversationId}-${Date.now()}`,
+        category: 'updates',
+        title: 'AI could not reply in Inbox',
+        body,
+        href: `/inbox?conversation=${payload.conversationId}`,
+        at: Date.now(),
+        tone: 'warning',
+      };
+      setWorkspaceAlerts((prev) => [entry, ...prev].slice(0, 40));
+      return;
+    }
+
+    if (event === 'content:budget:warning') {
+      const payload = data as { kind?: string; projected?: number; softLimit?: number };
+      const entry: AppNotification = {
+        id: `budget-${payload.kind || 'gen'}-${Date.now()}`,
+        category: 'updates',
+        title: 'Generation budget warning',
+        body: 'You are nearing today’s content limit. Open Billing & usage for details.',
+        href: '/billing?tab=usage',
+        at: Date.now(),
+        tone: 'sky',
+      };
+      setWorkspaceAlerts((prev) => [entry, ...prev].slice(0, 40));
+      return;
+    }
+
     if (event !== 'message:new') return;
     const payload = data as {
       conversationId?: string;
@@ -96,7 +189,6 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
     const openId = getOpenConversationId();
     const differentChatOpen = openId !== null && openId !== conversationId;
     if (!document.hidden && !differentChatOpen) return;
-    // Inbound webhook emits a top-level contact; conversation summaries may not have one.
     const contact = payload.contact ?? payload.conversation?.contact;
     const content = payload.message?.content ?? '';
     pushInboxNotification({
@@ -109,29 +201,108 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
     });
   });
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-
   const breached = tickets.filter(isOverdue);
-  const count = breached.length + messageAlerts.length + (unreadInbox > 0 ? 1 : 0);
+
+  const rawNotifications = useMemo((): AppNotification[] => {
+    const items: AppNotification[] = [];
+
+    for (const alert of messageAlerts) {
+      items.push({
+        id: `msg-${alert.conversationId}`,
+        category: 'messages',
+        title: `New message from ${alert.contactName}`,
+        body: alert.preview,
+        href: `/inbox?conversation=${alert.conversationId}`,
+        at: alert.at,
+        tone: 'whatsapp',
+      });
+    }
+
+    if (unreadInbox > 0) {
+      items.push({
+        id: 'inbox-unread-summary',
+        category: 'messages',
+        title: 'Unread conversations',
+        body: 'You have chats waiting in Inbox',
+        href: '/inbox',
+        at: Date.now(),
+        tone: 'whatsapp',
+      });
+    }
+
+    for (const ticket of breached) {
+      items.push({
+        id: `ticket-${ticket.id}`,
+        category: 'tickets',
+        title: ticket.title,
+        body: 'Reply overdue',
+        href: `/tickets?ticket=${ticket.id}`,
+        at: ticket.updatedAt ? new Date(ticket.updatedAt).getTime() : Date.now(),
+        tone: 'danger',
+      });
+    }
+
+    for (const note of agentAlerts) {
+      items.push({
+        id: `agent-${note.id}`,
+        category: 'agents',
+        title: `${note.agentName} left a note`,
+        body: note.preview,
+        href: note.href,
+        at: note.at,
+        tone: 'neutral',
+      });
+    }
+
+    items.push(...workspaceAlerts);
+
+    if (mockPreview) {
+      items.push(...getNotificationMockAlerts());
+    }
+
+    items.sort((a, b) => b.at - a.at);
+    return items;
+  }, [messageAlerts, unreadInbox, breached, agentAlerts, workspaceAlerts, mockPreview]);
+
+  const notifications = useMemo(() => {
+    void dismissTick;
+    return filterDismissed(user?.id, rawNotifications);
+  }, [rawNotifications, user?.id, dismissTick]);
+
+  const count = notifications.length;
+
+  const clearAll = useCallback(() => {
+    const ids = rawNotifications.map((item) => item.id);
+    clearAllDismissedNotifications(userIdRef.current, ids);
+    clearInboxNotifications();
+    clearAgentNotifications();
+    setWorkspaceAlerts([]);
+    setDismissTick((n) => n + 1);
+  }, [rawNotifications]);
+
+  const handleItemActivate = useCallback((item: AppNotification) => {
+    clearAllDismissedNotifications(userIdRef.current, [item.id]);
+    if (item.id.startsWith('msg-')) {
+      dismissInboxNotification(item.id.slice(4));
+    }
+    if (item.id.startsWith('agent-')) {
+      dismissAgentNotification(item.id.slice(6));
+    }
+    setDismissTick((n) => n + 1);
+  }, []);
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
         type="button"
         onClick={() => {
-          setOpen((v) => !v);
-          if (!open) load();
+          setOpen(true);
+          load();
         }}
         className="topbar-icon-btn relative"
         aria-label="Notifications"
         title="Notifications"
+        aria-expanded={open}
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.9} />
         {count > 0 && (
@@ -141,73 +312,15 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-panel">
-          <div className="border-b border-theme-border px-4 py-3">
-            <p className="text-label font-extrabold text-theme-fg">Notifications</p>
-          </div>
-          <div className="max-h-80 overflow-y-auto p-2">
-            {messageAlerts.map((alert) => (
-              <Link
-                key={alert.conversationId}
-                to={`/inbox?conversation=${alert.conversationId}`}
-                onClick={() => {
-                  dismissInboxNotification(alert.conversationId);
-                  setOpen(false);
-                }}
-                className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-theme-subtle"
-              >
-                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-whatsapp-600" />
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-bold text-theme-fg">
-                    New message from {alert.contactName}
-                  </p>
-                  {alert.preview && (
-                    <p className="truncate text-caption text-theme-muted">{alert.preview}</p>
-                  )}
-                </div>
-              </Link>
-            ))}
-
-            {unreadInbox > 0 && (
-              <Link
-                to="/inbox"
-                onClick={() => setOpen(false)}
-                className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-theme-subtle"
-              >
-                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-whatsapp-600" />
-                <div>
-                  <p className="text-[13px] font-bold text-theme-fg">Unread messages</p>
-                  <p className="text-caption text-theme-muted">
-                    You have conversations waiting in Inbox
-                  </p>
-                </div>
-              </Link>
-            )}
-
-            {breached.map((ticket) => (
-              <Link
-                key={ticket.id}
-                to={`/tickets?ticket=${ticket.id}`}
-                onClick={() => setOpen(false)}
-                className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-theme-subtle"
-              >
-                <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" strokeWidth={2.1} />
-                <div>
-                  <p className="text-[13px] font-bold text-theme-fg">{ticket.title}</p>
-                  <p className="text-caption text-rose-600 dark:text-rose-400">Reply overdue</p>
-                </div>
-              </Link>
-            ))}
-
-            {count === 0 && (
-              <p className="px-3 py-6 text-center text-[13px] text-theme-muted">
-                All caught up — no alerts
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      <NotificationSidebar
+        open={open}
+        onClose={() => setOpen(false)}
+        notifications={notifications}
+        filter={filter}
+        onFilterChange={setFilter}
+        onClearAll={clearAll}
+        onItemActivate={handleItemActivate}
+      />
+    </>
   );
 }

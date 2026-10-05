@@ -8,6 +8,12 @@ export function supportChatErrorMessage(err: unknown): string {
   const n = normalizeError(err);
   if (n.status === 401) return 'Sign in again to use Support.';
   if (n.isNetworkError) return 'Could not reach Support. Check your connection, then try again.';
+  if (n.code === 'HELP_CENTER_DISABLED' || n.status === 403 && /turned off/i.test(n.message)) {
+    return 'Help assistant is turned off for this workspace.';
+  }
+  if (n.code === 'HELP_CENTER_DAILY_CAP') {
+    return 'Help assistant limit for today — try tomorrow, or ask your platform admin.';
+  }
   if (n.status === 429 && /monthly|token/i.test(n.message)) {
     return 'Monthly AI token limit reached for this workspace.';
   }

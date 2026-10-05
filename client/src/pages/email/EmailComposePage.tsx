@@ -40,6 +40,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { gmailApi, type GmailAttachment, type GmailContact, type GmailSend, type GmailTemplate } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
+import { fetchStudioMediaBlob, studioPublicUrlFromStoragePath } from '../../utils/studioHandoffMedia';
 import {
   applyMergeFields,
   buildAutoFill,
@@ -350,23 +351,24 @@ export default function EmailComposePage() {
     setComposeTab('write');
     if (state.subject) setSubject(state.subject);
     if (state.body) setMessage(state.body);
-    if (state.attachmentFile instanceof File) void addFiles([state.attachmentFile]);
-    if (!(state.attachmentFile instanceof File) && state.mediaUrl) {
-      void fetch(state.mediaUrl)
-        .then((response) => {
-          if (!response.ok) throw new Error('Generated poster could not be loaded');
-          return response.blob();
-        })
-        .then((blob) =>
-          addFiles([
-            new File(
-              [blob],
-              `${(state.studioName || 'ai-studio').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-poster.png`,
-              { type: blob.type || 'image/png' },
-            ),
-          ]),
-        )
-        .catch(() => undefined);
+    const posterName = `${(state.studioName || 'ai-studio').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-poster.png`;
+    if (state.attachmentFile instanceof File) {
+      void addFiles([state.attachmentFile]);
+    } else if (state.mediaUrl) {
+      const posterUrl = state.mediaUrl.includes('..')
+        ? ''
+        : state.mediaUrl.startsWith('http') || state.mediaUrl.startsWith('/') || state.mediaUrl.startsWith('blob:')
+          ? state.mediaUrl
+          : studioPublicUrlFromStoragePath(state.mediaUrl);
+      if (posterUrl) {
+        void fetchStudioMediaBlob(posterUrl)
+          .then((blob) =>
+            addFiles([new File([blob], posterName, { type: blob.type || 'image/png' })]),
+          )
+          .catch(() => {
+            setSendError('AI Studio poster could not be attached. Add an image manually.');
+          });
+      }
     }
     setStudioHandoffName(state.studioName || 'AI Studio');
     navigate(location.pathname, { replace: true });

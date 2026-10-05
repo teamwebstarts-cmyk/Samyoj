@@ -1,3 +1,4 @@
+// ponytail: AI Studio is intentionally off the SaaS credit ledger (product decision).
 import { createChatCompletion, type ChatMessage, type ChatCompletionResult } from '../ai/chat-completion.service';
 import { AppError } from '../../utils/response';
 import { extractJsonObject } from './studio-prompts';
@@ -19,7 +20,7 @@ export async function fetchStudioPackFromLlm(options: {
       messages,
       maxTokens: 8000,
       temperature,
-      usageAction: 'chat',
+      usageAction: 'ai_studio',
       whatsappNumberId: options.whatsappNumberId ?? undefined,
       skipCreditCheck: true,
     });

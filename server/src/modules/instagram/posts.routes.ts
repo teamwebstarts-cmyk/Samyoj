@@ -19,7 +19,7 @@ import {
   assertScheduleWindow,
 } from './posts.limits';
 import { parseMediaPayload, resolvePostMedia } from './posts.media';
-import { mediaUrlForMeta } from './posts.media-url';
+import { coerceInstagramWriteMediaUrl, mediaUrlForMeta } from './posts.media-url';
 import { publishInstagramPost } from './posts.publish';
 import { recoverStaleInstagramPosts } from './posts.recovery';
 import {
@@ -87,8 +87,22 @@ router.use(authenticate, requireOrg, loadOrgRole);
 
 const editors = requireOrgRole('OWNER', 'ADMIN', 'SUPERVISOR');
 
+const instagramMediaUrl = z
+  .string()
+  .min(1)
+  .transform((value, ctx) => {
+    try {
+      const absolute = coerceInstagramWriteMediaUrl(value);
+      new URL(absolute);
+      return absolute;
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid url' });
+      return z.NEVER;
+    }
+  });
+
 const mediaItemSchema = z.object({
-  url: z.string().url(),
+  url: instagramMediaUrl,
   kind: z.enum(['image', 'video']),
 });
 
@@ -96,8 +110,8 @@ const writeSchema = z.object({
   caption: z.string().max(CAPTION_MAX).default(''),
   mediaType: z.enum(['IMAGE', 'REELS', 'CAROUSEL']).optional(),
   feedRatio: z.enum(['1:1', '4:5', '1.91:1']).default('1:1'),
-  imageUrl: z.string().url().optional(),
-  videoUrl: z.string().url().optional(),
+  imageUrl: instagramMediaUrl.optional(),
+  videoUrl: instagramMediaUrl.optional(),
   mediaItems: z.array(mediaItemSchema).optional(),
   scheduledAt: z.string().datetime().nullable().optional(),
 });

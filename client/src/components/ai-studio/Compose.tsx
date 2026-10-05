@@ -621,9 +621,16 @@ export function Compose(p: ComposeProps) {
             </div>
           </div>
           {p.error && (
-            <p id="brief-help" className="mt-1.5 text-[12px]">
-              <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--danger)]" role="alert">
-                <AlertCircle size={13} /> {p.error}
+            <p id="brief-help" className="mt-3 flex flex-wrap items-start gap-2 rounded-xl border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2.5 text-[13px] font-semibold leading-snug text-[var(--danger)]" role="alert">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>
+                {p.error}
+                {/billing/i.test(p.error) && (
+                  <>
+                    {" "}
+                    <a href="/billing" className="underline underline-offset-2">Open Billing</a>
+                  </>
+                )}
               </span>
             </p>
           )}

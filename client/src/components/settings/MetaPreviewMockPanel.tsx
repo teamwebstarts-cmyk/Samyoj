@@ -8,7 +8,7 @@ export default function MetaPreviewMockPanel() {
   return (
     <SettingsPanel
       title="Channel preview data"
-      description="Sample rows for Messenger, Ads, Instagram, and Email (dashboard, compose, templates). Default is off. Live data still loads when a channel is really connected."
+      description="Sample rows for Messenger, Ads, Instagram, Email, and the notification bell (dashboard, compose, templates). Default is off. Live data still loads when a channel is really connected."
       icon={FlaskConical}
     >
       <div className="flex flex-wrap gap-2">
@@ -37,8 +37,8 @@ export default function MetaPreviewMockPanel() {
       </div>
       <p className="mt-3 text-[12.5px] leading-relaxed text-theme-muted">
         {enabled
-          ? 'Sample threads, metrics, and the Email mailbox are shown. Turn this off to see empty production screens.'
-          : 'Production behaviour. Email stays disconnected until Gmail is connected. Empty screens show when a mailbox has no mail yet.'}
+          ? 'Sample threads, metrics, the Email mailbox, and notification drawer alerts are shown. Turn this off to see empty production screens.'
+          : 'Production behaviour. Email stays disconnected until Gmail is connected. The bell shows only real alerts.'}
       </p>
     </SettingsPanel>
   );

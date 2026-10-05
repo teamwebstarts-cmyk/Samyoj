@@ -739,7 +739,7 @@ export default function AiBotPage() {
     } catch (err: unknown) {
       const n = normalizeError(err);
       const skipReason =
-        httpStatusToAiSkipReason(n.status, n.message) || getErrorMessage(err, 'Test failed');
+        httpStatusToAiSkipReason(n.status, n.message, n.code) || getErrorMessage(err, 'Test failed');
       setTestResult({
         reply: null,
         handoff: false,

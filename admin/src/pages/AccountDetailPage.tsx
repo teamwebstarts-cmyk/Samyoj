@@ -91,7 +91,7 @@ type Detail = {
       unitNote: string;
     };
   };
-  flagsCatalog: Array<{ flag: string; enabled: boolean }>;
+  flagsCatalog: Array<{ flag: string; enabled: boolean; dailyMessageCap?: number | null }>;
 };
 
 const TABS = ['Overview', 'Product', 'WhatsApp', 'AI', 'Billing', 'Errors', 'Outreach'] as const;
@@ -134,6 +134,7 @@ export function AccountDetailPage() {
   const [grantCallingAddon, setGrantCallingAddon] = useState('');
   const [selectedFlag, setSelectedFlag] = useState('');
   const [flagEnabled, setFlagEnabled] = useState(false);
+  const [dailyCap, setDailyCap] = useState('');
   const [templateId, setTemplateId] = useState('connect_whatsapp');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -151,8 +152,10 @@ export function AccountDetailPage() {
     setDetail(data);
     setLimit(data.ai.monthlyTokenLimit == null ? '' : String(data.ai.monthlyTokenLimit));
     if (data.flagsCatalog.length > 0) {
-      setSelectedFlag(data.flagsCatalog[0].flag);
-      setFlagEnabled(data.flagsCatalog[0].enabled);
+      const first = data.flagsCatalog[0];
+      setSelectedFlag(first.flag);
+      setFlagEnabled(first.enabled);
+      setDailyCap(first.dailyMessageCap == null ? '' : String(first.dailyMessageCap));
     }
   }
 
@@ -340,7 +343,14 @@ export function AccountDetailPage() {
                 )}
                 {detail.flagsCatalog.map((flag) => (
                   <div key={flag.flag} className="flex items-center justify-between rounded-lg border border-slate-100 p-2.5 bg-slate-50/50">
-                    <span className="font-mono font-medium text-slate-800">{flag.flag}</span>
+                    <span className="font-mono font-medium text-slate-800">
+                      {flag.flag}
+                      {flag.flag === 'help_center' && flag.dailyMessageCap != null ? (
+                        <span className="ml-2 font-sans text-[11px] font-semibold text-slate-500">
+                          cap {flag.dailyMessageCap}/day
+                        </span>
+                      ) : null}
+                    </span>
                     <StatusBadge status={flag.enabled ? 'ACTIVE' : 'DISABLED'} />
                   </div>
                 ))}
@@ -471,6 +481,39 @@ export function AccountDetailPage() {
                 <p className="mt-1 text-[11px] text-slate-500">Chat bot · Voice calling</p>
               </div>
             </div>
+
+            {(() => {
+              const helpFlag = detail.flagsCatalog.find((row) => row.flag === 'help_center');
+              const helpUsage = detail.ai.usage.surfaces.find((row) => row.action === 'support_help');
+              return (
+                <div className="mt-4 rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Help Center</p>
+                      <p className="mt-1 text-[13px] font-semibold text-slate-900">In-app support assistant</p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Default on. Not billed from customer chat or calling credits. Platform cap is optional.
+                      </p>
+                    </div>
+                    <StatusBadge status={helpFlag?.enabled !== false ? 'ACTIVE' : 'DISABLED'} />
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <p className="text-[12px] text-slate-600">
+                      Daily cap:{' '}
+                      <span className="font-mono font-semibold text-slate-900">
+                        {helpFlag?.dailyMessageCap == null ? 'Uncapped' : helpFlag.dailyMessageCap}
+                      </span>
+                    </p>
+                    <p className="text-[12px] text-slate-600">
+                      Usage (30d):{' '}
+                      <span className="font-mono font-semibold text-slate-900">
+                        {formatCount(helpUsage?.totalTokens ?? 0)} units
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {detail.ai.coverageNote && (
               <p className="mt-4 text-xs leading-relaxed text-slate-500 border-t border-slate-100 pt-3">
@@ -644,6 +687,9 @@ export function AccountDetailPage() {
                 reason,
                 flag: selectedFlag,
                 enabled: flagEnabled,
+                ...(selectedFlag === 'help_center'
+                  ? { dailyMessageCap: dailyCap.trim() === '' ? null : Number(dailyCap) }
+                  : {}),
               }),
             })
               .then(() => {
@@ -660,7 +706,10 @@ export function AccountDetailPage() {
             onChange={(e) => {
               setSelectedFlag(e.target.value);
               const found = detail.flagsCatalog.find((f) => f.flag === e.target.value);
-              if (found) setFlagEnabled(found.enabled);
+              if (found) {
+                setFlagEnabled(found.enabled);
+                setDailyCap(found.dailyMessageCap == null ? '' : String(found.dailyMessageCap));
+              }
             }}
           >
             {detail.flagsCatalog.map((f) => (
@@ -677,6 +726,18 @@ export function AccountDetailPage() {
             />
             Enable this feature flag for organization
           </label>
+
+          {selectedFlag === 'help_center' ? (
+            <Input
+              label="Daily Help Center message cap (blank = uncapped)"
+              type="number"
+              min={1}
+              max={100000}
+              value={dailyCap}
+              onChange={(e) => setDailyCap(e.target.value)}
+              placeholder="Uncapped"
+            />
+          ) : null}
 
           <Input
             label="Operator Reason (Required for audit log)"

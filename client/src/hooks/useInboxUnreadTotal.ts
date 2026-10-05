@@ -33,6 +33,10 @@ export function useInboxUnreadTotal() {
   }, [activeNumber, hasConnectedNumber, numbersLoading, resolved, user]);
 
   useEffect(() => {
+    if (!user) {
+      setTotal(0);
+      return;
+    }
     void refresh();
     const onFocus = () => {
       void refresh();
@@ -45,7 +49,7 @@ export function useInboxUnreadTotal() {
       window.removeEventListener('focus', onFocus);
       window.clearInterval(interval);
     };
-  }, [refresh]);
+  }, [refresh, user]);
 
   useOnActiveNumberChange(() => {
     void refresh();

@@ -70,7 +70,7 @@ export default function NewChatSlideOver({
       ...(tags.length ? { tags } : {}),
       ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
       ...(Object.keys(customAttributes).length ? { customAttributes } : {}),
-      optedIn: form.optedIn,
+      optedIn: true,
     };
 
     setSaving(true);
@@ -92,7 +92,7 @@ export default function NewChatSlideOver({
       open={open}
       onClose={onClose}
       title="New chat"
-      subtitle="Enter a phone number to start chatting"
+      subtitle="Name and email are optional. Phone is required to start the chat."
       icon={MessageCircle}
       accent="emerald"
       footer={

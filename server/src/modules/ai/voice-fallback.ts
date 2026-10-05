@@ -13,6 +13,8 @@ export const VOICE_KEEP_ON_LINE =
 export const OPERATOR_VISIBLE_AI_SKIPS = [
   'rate_limited',
   'token_quota',
+  'credits_exhausted',
+  'plan_ai_locked',
   'provider_rate_limit',
   'provider_overloaded',
   'provider_timeout',
@@ -32,6 +34,10 @@ export function operatorMessageForSkip(reason?: string | null): string {
       return 'AI is rate-limited in this workspace. Wait a few seconds, then try again.';
     case 'token_quota':
       return 'Monthly AI token limit reached for this workspace. Replies will resume next month or after the limit is raised.';
+    case 'credits_exhausted':
+      return 'AI credits are used up for this workspace. Open Billing and buy a chat top-up, then try again.';
+    case 'plan_ai_locked':
+      return 'AI is not included on this plan. Upgrade to Growth or Pro in Billing, then try again.';
     case 'provider_rate_limit':
       return 'The AI provider hit a rate limit. Try again in a moment.';
     case 'provider_overloaded':
@@ -53,6 +59,14 @@ export function classifyAiBrainError(err: unknown): OperatorVisibleAiSkip {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
 
+  const code =
+    err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code || '') : '';
+  if (code === 'AI_CREDITS_EXHAUSTED' || /credits exhausted|minutes exhausted/i.test(msg)) {
+    return 'credits_exhausted';
+  }
+  if (code === 'PLAN_FEATURE_AI' || /available on Growth and Pro|AI is not included on your plan/i.test(msg)) {
+    return 'plan_ai_locked';
+  }
   if (status === 429 && /monthly|token limit/i.test(msg)) return 'token_quota';
   if (status === 429 || /rate limit/i.test(msg)) return 'provider_rate_limit';
   if (status === 504 || /timed out|timeout/i.test(lower)) return 'provider_timeout';
@@ -75,6 +89,14 @@ export function spokenAfterBrainFailure(
   skipped: boolean;
   skipReason: string;
 } {
+  if (skipReason === 'credits_exhausted' || skipReason === 'plan_ai_locked') {
+    return {
+      reply: channel === 'voice' ? VOICE_KEEP_ON_LINE : 'Thanks for your message. A teammate will reply shortly.',
+      handoff: false,
+      skipped: true,
+      skipReason,
+    };
+  }
   if (channel === 'voice') {
     return { reply: VOICE_KEEP_ON_LINE, handoff: false, skipped: true, skipReason };
   }

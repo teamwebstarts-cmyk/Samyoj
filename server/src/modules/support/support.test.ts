@@ -47,8 +47,21 @@ describe('support knowledge retrieval', () => {
   });
 
   it('matches Inbox template questions to templates', () => {
-    const topics = selectSupportKnowledge('How do I send a template from Inbox?');
-    expect(topics.some((t) => t.id === 'templates')).toBe(true);
+    expect(selectSupportKnowledge('How do I send a template from Inbox?').some((t) => t.id === 'templates')).toBe(true);
+  });
+
+  it('matches Messenger questions to facebook-inbox', () => {
+    expect(selectSupportKnowledge('How do I reply to Facebook Messenger?')[0]?.id).toBe('facebook-inbox');
+  });
+
+  it('matches Instagram comment hide questions', () => {
+    expect(selectSupportKnowledge('Does hide comment hide it on Instagram?').some((t) => t.id === 'instagram-comments')).toBe(
+      true
+    );
+  });
+
+  it('matches Gmail send questions to email-channel', () => {
+    expect(selectSupportKnowledge('How do I send email from Gmail in Samyoj?')[0]?.id).toBe('email-channel');
   });
 
   it('does not dump the whole corpus on a nonsense query', () => {
@@ -71,6 +84,8 @@ describe('support system prompt', () => {
     const prompt = buildSupportSystemPrompt(knowledge);
     expect(prompt).toMatch(/Connect WhatsApp/i);
     expect(prompt).toMatch(/left-nav Tickets/i);
+    expect(prompt).toMatch(/Messenger Inbox/i);
+    expect(prompt).toMatch(/not gated by a Samyoj SaaS plan/i);
     expect(prompt).not.toMatch(/Escalate to ticket/i);
     expect(prompt).toMatch(/Do not use markdown/i);
     expect(prompt).not.toMatch(/META_APP_SECRET|SARVAM_API_KEY/);
@@ -163,8 +178,11 @@ describe('support ticket schema', () => {
 });
 
 describe('AI usage', () => {
-  it('records Help Center replies as support_help', () => {
+  it('records Help Center replies as support_help without customer credit deduct', () => {
     expect(AI_USAGE_ACTIONS).toContain('support_help');
+    const chat = readFileSync(join(__dirname, 'chat.service.ts'), 'utf8');
+    expect(chat).toContain('skipCreditCheck: true');
+    expect(chat).toContain("usageAction: 'support_help'");
   });
 });
 
@@ -177,5 +195,8 @@ describe('support routes', () => {
     expect(routes).not.toContain("'/tickets'");
     expect(routes).not.toContain("'/tickets/escalate'");
     expect(routes).toContain('authenticate, requireOrg');
+    expect(routes).not.toContain("requireFeatureOnMutation('support')");
+    expect(routes).not.toContain('requireActiveCommercialOnMutation');
+    expect(routes).toContain('assertHelpCenterChatAllowed');
   });
 });

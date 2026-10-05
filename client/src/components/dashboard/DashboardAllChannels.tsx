@@ -88,6 +88,7 @@ export default function DashboardAllChannels({
   whatsappLabel,
   facebookLabel,
   instagramLabel,
+  emailLabel,
   onboarding,
   onboardingError,
   onRetryOnboarding,
@@ -100,6 +101,7 @@ export default function DashboardAllChannels({
   whatsappLabel?: string;
   facebookLabel?: string;
   instagramLabel?: string;
+  emailLabel?: string;
   onboarding?: {
     steps: GettingStartedStep[];
     completedCount: number;
@@ -232,6 +234,7 @@ export default function DashboardAllChannels({
         whatsappLabel={whatsappLabel}
         facebookLabel={facebookLabel}
         instagramLabel={instagramLabel}
+        emailLabel={emailLabel}
       />
       <Link
         to="/facebook/ads"
@@ -263,7 +266,7 @@ export default function DashboardAllChannels({
             <h2 className="text-[14px] font-extrabold">Live overview</h2>
             <p className="text-[11px] text-neutral-400">Updated just now</p>
           </div>
-          <div className="grid flex-1 grid-cols-3 gap-1.5 sm:gap-2">
+          <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-1.5 md:gap-2">
             <Mini
               mark={<span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#25D366] text-white"><WhatsAppGlyph className="h-3.5 w-3.5" /></span>}
               value={(stats?.messagesSent ?? 0).toLocaleString()}
@@ -300,7 +303,7 @@ export default function DashboardAllChannels({
             <h2 className="text-[14px] font-extrabold">Message status</h2>
             <Link to="/reports" className="shrink-0 text-[11px] font-bold text-[#1877F2]">View details</Link>
           </div>
-          <div className="flex flex-1 items-center justify-center gap-3 sm:gap-4">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 max-sm:py-1 sm:flex-row sm:gap-4">
             <Donut delivered={deliveredPct} sent={sentPct} failed={failedPct} />
             <ul className="min-w-[7.25rem] space-y-1.5 text-[11.5px] font-semibold text-neutral-600 sm:text-[12px]">
               <li className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-emerald-500" /> Delivered <span className="ml-auto tabular-nums">{deliveredPct}%</span></li>
@@ -330,7 +333,7 @@ export default function DashboardAllChannels({
               </li>
             ))}
             {activity.length === 0 ? (
-              <li className="py-6 text-center text-[12px] text-neutral-400">Activity from WhatsApp, Facebook, and Instagram will show here.</li>
+              <li className="py-6 text-center text-[12px] text-neutral-400">Activity from WhatsApp, Facebook, Instagram, and Email will show here.</li>
             ) : null}
           </ul>
         </section>
@@ -434,25 +437,31 @@ function Mini({
 }) {
   const rounded = delta == null ? null : Math.round(delta);
   return (
-    <div className="flex h-full flex-col rounded-xl bg-[#f8fbff] px-2 py-2">
-      <div className="flex items-center justify-between gap-1">
+    <div className="flex h-full flex-row items-center gap-3 rounded-xl bg-[#f8fbff] px-2.5 py-2.5 sm:flex-col sm:items-stretch sm:gap-0 sm:px-2 sm:py-2">
+      <div className="flex shrink-0 flex-col items-center justify-center gap-0 sm:w-full sm:flex-row sm:justify-between">
         {mark}
         {rounded != null ? (
-          <p className={`text-[10px] font-bold ${rounded >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <p
+            className={`mt-1 text-[10px] font-bold sm:mt-0 ${rounded >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+          >
             {rounded >= 0 ? '↑' : '↓'} {Math.abs(rounded)}%
           </p>
         ) : null}
       </div>
-      <p className="mt-1.5 text-[18px] font-black leading-none tabular-nums">{value}</p>
-      <p className="mt-0.5 text-[10px] font-medium leading-tight text-neutral-500 sm:text-[11px]">{label}</p>
-      <div className="mt-1.5">
-        <KpiSparkline
-          color={color}
-          gradientFrom={gradientFrom}
-          gradientTo={gradientTo}
-          dataPoints={dataPoints.length ? dataPoints : [0, 0, 0, 0]}
-          className="h-7 w-full"
-        />
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2 sm:block sm:w-full">
+        <div className="min-w-0">
+          <p className="text-[18px] font-black leading-none tabular-nums sm:mt-1.5">{value}</p>
+          <p className="mt-0.5 text-[10px] font-medium leading-tight text-neutral-500 sm:text-[11px]">{label}</p>
+        </div>
+        <div className="shrink-0 sm:mt-1.5 sm:w-full">
+          <KpiSparkline
+            color={color}
+            gradientFrom={gradientFrom}
+            gradientTo={gradientTo}
+            dataPoints={dataPoints.length ? dataPoints : [0, 0, 0, 0]}
+            className="h-7 w-[5.5rem] sm:w-full"
+          />
+        </div>
       </div>
     </div>
   );

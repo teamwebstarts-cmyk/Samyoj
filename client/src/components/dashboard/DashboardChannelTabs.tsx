@@ -46,13 +46,16 @@ export default function DashboardChannelTabs({
         className="dashboard-channel-tab dashboard-channel-tab--all"
         data-channel="all"
         data-active={allActive}
+        aria-label="All Channels — WhatsApp, Facebook, Instagram, Email"
+        title="All Channels"
       >
         <span className="dashboard-channel-tab__icon bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-[0_4px_10px_rgba(56,189,248,0.32)]">
           <Layers className="h-[17px] w-[17px]" strokeWidth={2.2} />
         </span>
-        <span className="min-w-0">
+        <span className="dashboard-channel-tab__name">All</span>
+        <span className="dashboard-channel-tab__copy min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="truncate text-[12px] font-extrabold text-neutral-900 sm:text-[13px]">All Channels</span>
+            <span className="truncate text-[12px] font-extrabold text-neutral-900 lg:text-[13px]">All Channels</span>
           </span>
           <span className="dashboard-channel-tab__sub mt-0.5 block truncate text-[10.5px] font-medium text-neutral-500">
             WhatsApp, Facebook, Instagram, Email
@@ -79,6 +82,10 @@ export default function DashboardChannelTabs({
                 ? 'bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] text-white shadow-[0_4px_10px_rgba(220,39,67,0.28)]'
                 : 'bg-[#ea4335] text-white shadow-[0_4px_10px_rgba(234,67,53,0.32)]';
 
+        const subtitle =
+          channel.key === 'whatsapp' && whatsappLabel ? whatsappLabel : subtitles[channel.key];
+        const statusLabel = connected ? 'Connected' : 'Not connected';
+
         return (
           <Link
             key={channel.key}
@@ -87,13 +94,20 @@ export default function DashboardChannelTabs({
             data-channel={channel.key}
             data-active={active}
             data-connected={connected}
+            aria-label={`${channel.label} — ${statusLabel}${subtitle ? `, ${subtitle}` : ''}`}
+            title={`${channel.label} (${statusLabel})`}
           >
             <span className={`dashboard-channel-tab__icon ${iconClass}`}>
               <Icon className="h-[18px] w-[18px]" />
+              <span
+                className={`dashboard-channel-tab__status-dot ${connected ? 'dashboard-channel-tab__status-dot--on' : 'dashboard-channel-tab__status-dot--off'}`}
+                aria-hidden
+              />
             </span>
-            <span className="min-w-0">
+            <span className="dashboard-channel-tab__name">{channel.label}</span>
+            <span className="dashboard-channel-tab__copy min-w-0">
               <span className="flex items-center gap-1.5">
-                <span className="truncate text-[12px] font-extrabold text-neutral-900 sm:text-[13px]">
+                <span className="truncate text-[12px] font-extrabold text-neutral-900 lg:text-[13px]">
                   {channel.label}
                 </span>
                 <span
@@ -104,11 +118,11 @@ export default function DashboardChannelTabs({
                   }`}
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
-                  <span className="hidden sm:inline">{connected ? 'Connected' : 'Not connected'}</span>
+                  <span className="hidden lg:inline">{statusLabel}</span>
                 </span>
               </span>
               <span className="dashboard-channel-tab__sub mt-0.5 block truncate text-[10.5px] font-medium text-neutral-500">
-                {channel.key === 'whatsapp' && whatsappLabel ? whatsappLabel : subtitles[channel.key]}
+                {subtitle}
               </span>
             </span>
           </Link>

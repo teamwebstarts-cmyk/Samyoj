@@ -74,6 +74,18 @@ export function studioTemplateHeaderUrl(payload: {
 }
 
 /** Fresh signed URL for browser previews (API may return an older origin or expiry). */
+/** Accept path-only Samyoj media URLs on write APIs; Zod `.url()` needs a full origin. */
+export function coerceInstagramWriteMediaUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) throw new URIError('Invalid URL');
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('/')) {
+    const origin = publicApiOrigin().replace(/\/$/, '');
+    return `${origin}${trimmed}`;
+  }
+  throw new URIError('Invalid URL');
+}
+
 export function refreshSignedPublicMediaUrl(url: string | null | undefined): string | null {
   const trimmed = (url ?? '').trim();
   if (!trimmed) return null;

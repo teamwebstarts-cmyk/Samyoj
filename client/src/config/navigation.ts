@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
   Bot,
+  CircleHelp,
   ClipboardList,
   CreditCard,
   Facebook,
@@ -136,7 +137,10 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Support',
-    items: [{ to: '/tickets', icon: Ticket, label: 'Tickets' }],
+    items: [
+      { to: '/help', icon: CircleHelp, label: 'Help assistant' },
+      { to: '/tickets', icon: Ticket, label: 'Tickets' },
+    ],
   },
   {
     label: 'Account',
@@ -216,6 +220,7 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/automations', icon: Workflow, label: 'Automations' },
   { to: '/content-studio', icon: Sparkles, label: 'AI Studio', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },
+  { to: '/help', icon: CircleHelp, label: 'Help assistant' },
   { to: '/tickets', icon: Ticket, label: 'Tickets' },
   { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
   { to: '/team', icon: UsersRound, label: 'Team', showForRoles: SUPERVISOR_PLUS },
