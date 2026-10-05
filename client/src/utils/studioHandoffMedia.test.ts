@@ -44,7 +44,7 @@ describe('studioHandoffMedia', () => {
       },
       image: {
         selected: 0,
-        options: [{ id: '1', bg: 'cream', layout: 'center', kind: 'image', elements: [], image: '/api/media/public/org/email.png' }],
+        options: [{ id: '1', bg: 'cream', layout: 'center', kind: 'image', art: 'none', variant: 0, elements: [], image: '/api/media/public/org/email.png' }],
       },
     });
     expect(emailPosterUrlFromPack(pack)).toContain('/api/media/public/org/email.png');
