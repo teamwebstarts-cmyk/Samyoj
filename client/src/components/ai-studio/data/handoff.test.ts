@@ -54,6 +54,8 @@ describe('Email studio handoff', () => {
           bg: 'cream',
           layout: 'center',
           kind: 'image',
+          art: 'none',
+          variant: 0,
           elements: [],
           image: '/api/media/public/org/poster.png',
         },
