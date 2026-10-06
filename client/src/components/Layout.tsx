@@ -21,10 +21,14 @@ import MobileBottomNav from './layout/MobileBottomNav';
 import MobileMoreSheet from './layout/MobileMoreSheet';
 import CallNotificationProvider from './calls/CallNotificationProvider';
 import QualityRatingBanner from './billing/QualityRatingBanner';
+import SubscriptionLockModal, { SubscriptionLockBanner } from './billing/SubscriptionLockModal';
+import { useEntitlements } from '../hooks/useEntitlements';
 import { TopbarProvider } from '../contexts/TopbarContext';
 
 export default function Layout() {
   const { user, organization, logout } = useAuth();
+  const { entitlements } = useEntitlements();
+  const subscriptionLocked = Boolean(entitlements?.isLocked);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const sidebarAccent = resolveSidebarAccent(pathname, search);
@@ -143,6 +147,7 @@ export default function Layout() {
           {!hideTopbar && (
             <div className="mobile-chrome-hide">
               <QualityRatingBanner />
+              <SubscriptionLockBanner locked={subscriptionLocked} />
             </div>
           )}
 
@@ -157,6 +162,7 @@ export default function Layout() {
           >
             <Outlet />
           </main>
+          <SubscriptionLockModal locked={subscriptionLocked} />
 
           {showBottomNav && <MobileBottomNav onMoreOpen={() => setMoreOpen(true)} />}
           <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />

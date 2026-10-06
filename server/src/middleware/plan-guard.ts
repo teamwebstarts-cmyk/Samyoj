@@ -9,15 +9,11 @@ import {
   checkFeature,
 } from '../modules/billing/entitlements.service';
 import { AppError } from '../utils/response';
-import { config } from '../config';
+import { isSubscriptionEnforcementEnabled } from '../modules/billing/subscription-enforcement';
 
-/** Local test-deploy: do not block product flows on expired demo plans. */
-function bypassPlanGuardsForLocalTesting(): boolean {
-  return (
-    config.nodeEnv === 'development' &&
-    config.billing.allowTestBypass &&
-    !process.env.VITEST
-  );
+/** Admin switch off: do not block product flows. On: existing plan rules apply. */
+async function subscriptionEnforcementOff(): Promise<boolean> {
+  return !(await isSubscriptionEnforcementEnabled());
 }
 
 /**
@@ -25,7 +21,7 @@ function bypassPlanGuardsForLocalTesting(): boolean {
  */
 export function requireActiveCommercial() {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (bypassPlanGuardsForLocalTesting()) return next();
+    if (await subscriptionEnforcementOff()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       return next(new AppError(401, 'Organization required'));
@@ -61,7 +57,7 @@ export function requireActiveCommercialOnMutation() {
  */
 export function requirePlan(minTier: PlanTier) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (bypassPlanGuardsForLocalTesting()) return next();
+    if (await subscriptionEnforcementOff()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       return next(new AppError(401, 'Organization required'));
@@ -100,7 +96,7 @@ export function requirePlan(minTier: PlanTier) {
  */
 export function requireQuota(quotaType: QuotaType, requestedCount = 1) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (bypassPlanGuardsForLocalTesting()) return next();
+    if (await subscriptionEnforcementOff()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       return next(new AppError(401, 'Organization required'));
@@ -130,7 +126,7 @@ export function requireQuota(quotaType: QuotaType, requestedCount = 1) {
 /** Guard a named entitlement before a mutating route runs. */
 export function requireFeature(feature: FeatureType) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (bypassPlanGuardsForLocalTesting()) return next();
+    if (await subscriptionEnforcementOff()) return next();
     const orgId = req.user?.organizationId;
     if (!orgId) return next(new AppError(401, 'Organization required'));
 

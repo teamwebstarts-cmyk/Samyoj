@@ -59,7 +59,9 @@ function getStatusInfo(status?: string | null) {
 }
 
 export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLimit }: BillingCurrentPlanHeroProps) {
-  const status = getStatusInfo(info.subscriptionStatus);
+  const status = getStatusInfo(
+    info.entitlements?.isLocked === false ? 'active' : info.subscriptionStatus,
+  );
   const StatusIcon = status.icon;
   const planTier = info.planTier || info.plan;
   const accent = tierAccents[planTier] || tierAccents.launch;

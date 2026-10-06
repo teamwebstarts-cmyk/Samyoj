@@ -8,7 +8,6 @@ import AuthLayout from '../components/auth/AuthLayout';
 import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
-import { authApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 
@@ -23,7 +22,7 @@ function getPasswordStrength(password: string) {
   if (score <= 1) return { label: 'Weak', width: '25%', color: 'bg-red-400' };
   if (score === 2) return { label: 'Fair', width: '45%', color: 'bg-amber-400' };
   if (score === 3) return { label: 'Good', width: '70%', color: 'bg-emerald-400' };
-  return { label: 'Strong', width: '100%', color: 'bg-whatsapp-500' };
+  return { label: 'Strong', width: '100%', color: 'bg-blue-500' };
 }
 
 export default function RegisterPage() {
@@ -34,8 +33,6 @@ export default function RegisterPage() {
     companyName: '',
   });
   const [loading, setLoading] = useState(false);
-  const [pendingVerifyEmail, setPendingVerifyEmail] = useState<string | null>(null);
-  const [smtpConfigured, setSmtpConfigured] = useState(true);
   const { register } = useAuth();
   const { signInWithGoogle } = useGoogleAuth();
   const navigate = useNavigate();
@@ -49,13 +46,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await register(form);
-      if (result.emailVerificationRequired) {
-        setPendingVerifyEmail(result.email);
-        setSmtpConfigured(result.smtpConfigured);
-        toastSuccess('Account created — verify your email to sign in');
-        return;
-      }
+      await register(form);
       toastSuccess('Account created — welcome!');
       navigate('/', { replace: true });
     } catch (err: unknown) {
@@ -64,41 +55,6 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
-
-  if (pendingVerifyEmail) {
-    return (
-      <AuthLayout
-        compact
-        title="Check your email"
-        subtitle={`We sent a verification link to ${pendingVerifyEmail}. Verify before signing in.`}
-      >
-        {!smtpConfigured && (
-          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[13px] text-amber-900">
-            We&apos;re unable to send email right now. If you don&apos;t receive a verification link
-            within a few minutes, try resending below or contact support.
-          </p>
-        )}
-        <button
-          type="button"
-          className="mb-3 w-full text-[13px] font-semibold text-[#0A8954]"
-          onClick={() =>
-            void authApi
-              .resendVerification(pendingVerifyEmail)
-              .then(() => toastSuccess('Verification email resent. Check your inbox.'))
-              .catch((err) => toastError(getErrorMessage(err, 'Could not resend')))
-          }
-        >
-          Resend verification email
-        </button>
-        <Link
-          to="/login"
-          className="flex h-12 w-full items-center justify-center rounded-[14px] bg-[#0A8954] text-sm font-semibold text-white"
-        >
-          Go to sign in
-        </Link>
-      </AuthLayout>
-    );
-  }
 
   return (
     <AuthLayout
@@ -200,10 +156,7 @@ export default function RegisterPage() {
 
         <p className="pt-1 text-center text-[13px] font-medium text-slate-500">
           Already have an account?{' '}
-          <Link
-            to="/login"
-            className="font-bold text-[#0A8954] transition hover:text-[#087A4A]"
-          >
+          <Link to="/login" className="auth-link font-bold">
             Sign in
           </Link>
         </p>

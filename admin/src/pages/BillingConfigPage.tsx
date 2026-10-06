@@ -60,6 +60,8 @@ export function BillingConfigPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [enforcement, setEnforcement] = useState(false);
+  const [enforcementSaving, setEnforcementSaving] = useState(false);
 
   const [planTiers, setPlanTiers] = useState<Record<string, PlanTierDef>>({});
   const [billingSkus, setBillingSkus] = useState<BillingSkuDef[]>([]);
@@ -68,10 +70,14 @@ export function BillingConfigPage() {
   const [selectedTier, setSelectedTier] = useState<PlanTier>('growth');
 
   useEffect(() => {
-    platformRequest<any>('/settings')
-      .then((data) => {
+    Promise.all([
+      platformRequest<any>('/settings'),
+      platformRequest<{ enabled: boolean }>('/settings/subscription-enforcement'),
+    ])
+      .then(([data, enforcementState]) => {
         setPlanTiers(data.planTiers || {});
         setBillingSkus(data.billingSkus || []);
+        setEnforcement(enforcementState.enabled === true);
         setLoading(false);
       })
       .catch((err) => {
@@ -79,6 +85,23 @@ export function BillingConfigPage() {
         setLoading(false);
       });
   }, []);
+
+  const toggleEnforcement = async () => {
+    const next = !enforcement;
+    setError('');
+    setEnforcementSaving(true);
+    try {
+      const data = await platformRequest<{ enabled: boolean }>('/settings/subscription-enforcement', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: next }),
+      });
+      setEnforcement(data.enabled === true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update subscription enforcement');
+    } finally {
+      setEnforcementSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     setError('');
@@ -183,6 +206,29 @@ export function BillingConfigPage() {
           </span>
         }
       />
+
+      <SectionCard
+        title="Subscription enforcement"
+        purpose="Off: every workspace can use the full product without buying a plan, including AI credits. On: expired plans and credit limits apply, and customers must purchase."
+        padded
+        action={
+          <Button
+            type="button"
+            variant={enforcement ? 'danger' : 'secondary'}
+            loading={enforcementSaving}
+            aria-pressed={enforcement}
+            onClick={toggleEnforcement}
+          >
+            {enforcement ? 'On — purchase required' : 'Off — full access'}
+          </Button>
+        }
+      >
+        <p className="text-xs leading-relaxed text-slate-600">
+          {enforcement
+            ? 'Subscriptions are on. Expired workspaces stay read-only until they buy a plan, and AI credit limits block chat and calling.'
+            : 'Subscriptions are off. This is the testing default: plan expiry and AI credit limits do not block anyone. Turn this on before production billing.'}
+        </p>
+      </SectionCard>
 
       {error && (
         <div className="rounded-xl bg-rose-50 border border-rose-200 p-4 text-xs font-semibold text-rose-800 flex items-center gap-2.5 shadow-sm">

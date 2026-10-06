@@ -66,8 +66,12 @@ export default function BillingHero({ info }: BillingHeroProps) {
   let statusIcon = CheckCircle2;
   let title = 'Billing & Subscriptions';
   let description = 'Plan, seats & WhatsApp charges.';
+  const workspaceOpen = info.entitlements?.isLocked === false;
 
-  if (info.subscriptionStatus === 'trial') {
+  if (workspaceOpen && info.subscriptionStatus && info.subscriptionStatus !== 'trial' && info.subscriptionStatus !== 'active') {
+    statusText = 'Open';
+    description = 'This workspace is open. You can keep using every feature.';
+  } else if (info.subscriptionStatus === 'trial') {
     statusText = 'Trial';
     statusTone = 'amber';
     statusIcon = Clock;

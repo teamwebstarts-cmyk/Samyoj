@@ -37,7 +37,7 @@ export default function VerifyEmailPage() {
       <div className="text-center">
         <Link
           to="/login"
-          className="inline-flex h-12 items-center justify-center rounded-[14px] bg-[#0A8954] px-5 text-sm font-semibold text-white"
+          className="auth-btn-primary inline-flex h-12 items-center justify-center rounded-[14px] px-5 text-sm font-semibold text-white"
         >
           Go to sign in
         </Link>

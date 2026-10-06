@@ -6,6 +6,7 @@ import {
   getOrgEntitlements,
   isTierSufficient,
 } from './entitlements.service';
+import { resetSubscriptionEnforcementCache } from './subscription-enforcement';
 
 vi.mock('../../config/database', () => ({
   default: {
@@ -27,12 +28,19 @@ vi.mock('../../config/database', () => ({
     automation: {
       count: vi.fn(),
     },
+    platformSetting: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
 describe('entitlements.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSubscriptionEnforcementCache();
+    vi.mocked(prisma.platformSetting.findUnique).mockResolvedValue({
+      value: { enabled: true },
+    } as never);
   });
 
   describe('isTierSufficient', () => {
@@ -157,6 +165,18 @@ describe('entitlements.service', () => {
       const ent = await getOrgEntitlements('org-3');
       expect(ent.isLocked).toBe(true);
 
+      resetSubscriptionEnforcementCache();
+      vi.mocked(prisma.platformSetting.findUnique).mockResolvedValue(null);
+      const open = await getOrgEntitlements('org-3');
+      expect(open.isLocked).toBe(false);
+      expect(open.quotas.contacts.limit).toBe('unlimited');
+      expect(open.quotas.aiIncluded).toBe('included');
+      await expect(checkQuota('org-3', 'ai')).resolves.toMatchObject({ allowed: true });
+
+      resetSubscriptionEnforcementCache();
+      vi.mocked(prisma.platformSetting.findUnique).mockResolvedValue({
+        value: { enabled: true },
+      } as never);
       const check = await checkQuota('org-3', 'contacts', 1);
       expect(check.allowed).toBe(false);
       expect(check.code).toBe('SUBSCRIPTION_LOCKED');

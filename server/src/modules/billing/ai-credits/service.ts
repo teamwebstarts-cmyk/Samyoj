@@ -186,11 +186,17 @@ export async function getAiCreditBalances(organizationId: string): Promise<{
   };
 }
 
+async function meteringEnforced(): Promise<boolean> {
+  const { isSubscriptionEnforcementEnabled } = await import('../subscription-enforcement');
+  return isSubscriptionEnforcementEnabled();
+}
+
 export async function assertAiCreditsAvailable(
   organizationId: string,
   pool: AiCreditPool,
   amount = 1
 ): Promise<void> {
+  if (!(await meteringEnforced())) return;
   const entitlement =
     pool === 'calling'
       ? await checkQuota(organizationId, 'calling')
@@ -228,6 +234,7 @@ export async function reserveCallingMinutesForCall(params: {
   callId: string;
   minutes?: number;
 }): Promise<void> {
+  if (!(await meteringEnforced())) return;
   const amount = Math.max(1, Math.ceil(params.minutes ?? 1));
   const quota = await checkQuota(params.organizationId, 'calling');
   if (!quota.allowed) {
@@ -393,6 +400,7 @@ export async function deductChatCreditsFromUsageLog(params: {
 }): Promise<void> {
   const amount = tokensToChatCredits(params.promptTokens, params.completionTokens);
   if (amount <= 0) return;
+  if (!(await meteringEnforced())) return;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -431,6 +439,7 @@ export async function deductCallingMinutesForCall(params: {
 }): Promise<void> {
   const amount = callingSecondsToMinutes(params.durationSeconds);
   if (amount <= 0) return;
+  if (!(await meteringEnforced())) return;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -460,11 +469,37 @@ export async function deductCallingMinutesForCall(params: {
   }
 }
 
+async function releaseCallingReservation(organizationId: string, callId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.aiCreditReservation.findUnique({ where: { callId } });
+    if (!current || current.status !== 'RESERVED') return;
+    const balance = await tx.orgAiCreditBalance.findUnique({
+      where: {
+        organizationId_pool: { organizationId, pool: 'calling' },
+      },
+    });
+    if (balance) {
+      await tx.orgAiCreditBalance.update({
+        where: { id: balance.id },
+        data: { reserved: Math.max(0, balance.reserved - current.amount) },
+      });
+    }
+    await tx.aiCreditReservation.update({
+      where: { id: current.id },
+      data: { status: 'EXPIRED', settledAt: new Date() },
+    });
+  });
+}
+
 export async function settleCallingMinutesForCall(params: {
   organizationId: string;
   callId: string;
   durationSeconds: number;
 }): Promise<void> {
+  if (!(await meteringEnforced())) {
+    await releaseCallingReservation(params.organizationId, params.callId);
+    return;
+  }
   const actualAmount = callingSecondsToMinutes(params.durationSeconds);
   const current = await prisma.aiCreditReservation.findUnique({
     where: { callId: params.callId },

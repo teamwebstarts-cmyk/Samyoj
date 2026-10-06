@@ -37,7 +37,12 @@ import {
   rotatePlatformCsrf,
 } from './session';
 import { getPlatformOrg, getPlatformOverview, listPlatformOrgs, patchPlatformOrgAi, patchPlatformOrgBilling, patchPlatformOrgFlags } from './orgs';
-import { getPlatformSettings, patchPlatformSettings } from './settings';
+import {
+  getPlatformSettings,
+  getSubscriptionEnforcement,
+  patchPlatformSettings,
+  putSubscriptionEnforcement,
+} from './settings';
 import {
   createAdminLibraryTemplate,
   deleteAdminLibraryTemplate,
@@ -664,6 +669,8 @@ router.get(
 
 router.get('/settings', getPlatformSettings);
 router.put('/settings', patchPlatformSettings);
+router.get('/settings/subscription-enforcement', getSubscriptionEnforcement);
+router.put('/settings/subscription-enforcement', putSubscriptionEnforcement);
 
 const catalogButtonSchema = z.object({
   type: z.enum(['URL', 'PHONE_NUMBER', 'COPY_CODE', 'QUICK_REPLY']),

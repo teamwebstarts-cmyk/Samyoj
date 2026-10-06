@@ -10,14 +10,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { authApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
-import { toastError, toastSuccess } from '../utils/toast';
+import { toastError } from '../utils/toast';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [requires2FA, setRequires2FA] = useState(false);
-  const [needsVerify, setNeedsVerify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const { login, refreshSession } = useAuth();
@@ -72,17 +71,11 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setNeedsVerify(false);
     try {
       const result = await login(email, password, requires2FA ? totpCode : undefined);
       if (result.requires2FA) {
         setRequires2FA(true);
         toastError('Enter your authenticator code to continue');
-        return;
-      }
-      if (result.requiresEmailVerification) {
-        setNeedsVerify(true);
-        toastError('Verify your email before signing in');
         return;
       }
       if (result.mustResetPassword) {
@@ -95,15 +88,6 @@ export default function LoginPage() {
       toastError(getErrorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const resendVerification = async () => {
-    try {
-      await authApi.resendVerification(email);
-      toastSuccess('If verification is needed, a new email was sent. Check your inbox.');
-    } catch (err: unknown) {
-      toastError(getErrorMessage(err, 'Could not resend verification'));
     }
   };
 
@@ -155,7 +139,7 @@ export default function LoginPage() {
               <div className="pt-0.5">
                 <Link
                   to="/forgot-password"
-                  className="text-[13px] font-semibold text-[#0A8954] transition hover:text-[#087A4A]"
+                  className="auth-link text-[13px] font-semibold"
                 >
                   Forgot password?
                 </Link>
@@ -186,22 +170,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {needsVerify && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[13px] text-amber-900">
-            <p className="font-semibold">Email not verified</p>
-            <p className="mt-1 text-amber-800/90">
-              Check your inbox for the verification link, or resend it.
-            </p>
-            <button
-              type="button"
-              onClick={() => void resendVerification()}
-              className="mt-2 font-semibold text-[#0A8954] underline-offset-2 hover:underline"
-            >
-              Resend verification email
-            </button>
-          </div>
-        )}
-
         <div className="pt-1">
           <AuthButton loading={loading} loadingText="Signing in...">
             <span className="flex items-center gap-2">
@@ -216,7 +184,7 @@ export default function LoginPage() {
             Don&apos;t have an account?{' '}
             <Link
               to="/register"
-              className="font-bold text-[#0A8954] transition hover:text-[#087A4A]"
+              className="auth-link font-bold"
             >
               Sign up
             </Link>

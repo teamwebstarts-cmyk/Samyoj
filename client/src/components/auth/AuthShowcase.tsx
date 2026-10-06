@@ -1,32 +1,41 @@
 import type { ComponentType } from 'react';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, Settings2 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import AuthBrand from './AuthBrand';
-import { IconBolt, IconCampaignChart, IconSparkle, IconTeam } from './AuthIcons';
+import { IconBarChart, IconBolt } from './AuthIcons';
 
-export const AUTH_LOGIN_HERO_SRC = '/brand/loiginn.png';
+export const AUTH_LOGIN_HERO_SRC = '/brand/auth-workspace-illustration.png';
 
 type AuthIcon = ComponentType<{ className?: string }>;
 
-const FEATURES: { icon: AuthIcon; title: string; description: string }[] = [
+const FEATURES: {
+  icon: AuthIcon;
+  title: string;
+  description: string;
+  iconVariant: 'channels' | 'automate' | 'grow';
+}[] = [
   {
     icon: IconBolt,
-    title: 'Automate Smartly',
-    description: 'Save time with intelligent automation.',
+    iconVariant: 'channels',
+    title: 'All Your Channels, One Place',
+    description: 'WhatsApp, Facebook, Instagram, Email and more.',
   },
   {
-    icon: IconCampaignChart,
-    title: 'Manage in One Place',
-    description: 'All your conversations, contacts and campaigns in one dashboard.',
+    icon: Settings2,
+    iconVariant: 'automate',
+    title: 'Automate & Save Time',
+    description: 'Smart automations, AI-powered responses and workflows.',
   },
   {
-    icon: IconTeam,
-    title: 'Work Better Together',
-    description: 'Collaborate with your team seamlessly.',
+    icon: IconBarChart,
+    iconVariant: 'grow',
+    title: 'Engage & Grow',
+    description: 'Turn conversations into customers and build lasting relationships.',
   },
 ];
 
-const ICON_WELL = 'flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E8F5EE] text-[#0A8954]';
+const ICON_WELL =
+  'flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F3EEFF] text-[#732BFD]';
 
 export function AuthCtaCard() {
   const { pathname } = useLocation();
@@ -45,7 +54,7 @@ export function AuthCtaCard() {
           </p>
           <Link
             to="/login"
-            className="mt-1 inline-flex text-[13.5px] font-semibold text-[#0A8954] transition hover:text-[#087A4A]"
+            className="auth-link mt-1 inline-flex text-[13.5px] font-semibold"
           >
             Sign in →
           </Link>
@@ -66,7 +75,7 @@ export function AuthCtaCard() {
         </p>
         <Link
           to="/register"
-          className="mt-1 inline-flex text-[13.5px] font-semibold text-[#0A8954] transition hover:text-[#087A4A]"
+          className="auth-link mt-1 inline-flex text-[13.5px] font-semibold"
         >
           Create one free →
         </Link>
@@ -98,24 +107,30 @@ export default function AuthShowcase() {
           <h2 className="font-extrabold tracking-[-0.045em] text-[#12182A]">
             Simplify Conversations.
             <br />
-            <span className="whitespace-nowrap text-[#0A8954]">
-              Strengthen Relationships.
-              <IconSparkle className="mb-[0.14em] ml-2 inline-block h-[0.36em] w-[0.36em] align-baseline text-[#0A8954]" />
-            </span>
+            <span className="auth-showcase-headline-gradient">Grow Your Business.</span>
           </h2>
-          <p className="font-medium tracking-[-0.012em] text-slate-500">
-            A simple platform to automate WhatsApp, manage chats and grow your business.
+          <p className="auth-showcase-sub font-medium tracking-[-0.018em] text-slate-500">
+            <span className="auth-showcase-sub__line">
+              Manage WhatsApp, Instagram, Facebook, Email and more from a single .
+            </span>
+            <span className="auth-showcase-sub__line">
+            platform Automate, engage and grow your business with Samyoj.
+            </span>
           </p>
         </div>
 
         <ul className="auth-showcase-features">
-          {FEATURES.map(({ icon: Icon, title, description }) => (
+          {FEATURES.map(({ icon: Icon, title, description, iconVariant }) => (
             <li key={title} className="flex min-h-0 items-start gap-3">
-              <span className="auth-feature-icon mt-0.5">
-                <Icon />
+              <span className={`auth-feature-icon auth-feature-icon--${iconVariant} mt-0.5`}>
+                {iconVariant === 'automate' ? (
+                  <Settings2 className="h-[50%] w-[50%]" strokeWidth={1.75} />
+                ) : (
+                  <Icon />
+                )}
               </span>
               <div className="min-w-0 pt-0.5">
-                <p className="auth-feature-title font-black tracking-[-0.024em] text-[#0B1220]">
+                <p className="auth-feature-title font-bold tracking-[-0.024em] text-[#0B1220]">
                   {title}
                 </p>
                 <p className="auth-feature-desc font-semibold tracking-[-0.01em] text-slate-600">

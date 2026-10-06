@@ -26,7 +26,6 @@ interface AuthContextType {
     totpCode?: string
   ) => Promise<{
     requires2FA?: boolean;
-    requiresEmailVerification?: boolean;
     mustResetPassword?: boolean;
   }>;
   register: (data: {
@@ -34,10 +33,7 @@ interface AuthContextType {
     email: string;
     password: string;
     companyName: string;
-  }) => Promise<
-    | { emailVerificationRequired: true; email: string; smtpConfigured: boolean; message?: string }
-    | { emailVerificationRequired: false }
-  >;
+  }) => Promise<void>;
   logout: () => void;
   setAvailability: (status: AgentAvailability) => Promise<void>;
   refreshSession: () => Promise<boolean>;
@@ -196,9 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.data.requires2FA) {
       return { requires2FA: true };
     }
-    if (data.data.requiresEmailVerification) {
-      return { requiresEmailVerification: true };
-    }
     clearAuthBackup();
     applySession(
       setUser,
@@ -232,14 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     companyName: string;
   }) => {
     const { data } = await authApi.register(formData);
-    if (data.data.emailVerificationRequired) {
-      return {
-        emailVerificationRequired: true as const,
-        email: data.data.user?.email as string,
-        smtpConfigured: Boolean(data.data.smtpConfigured),
-        message: data.data.message as string | undefined,
-      };
-    }
     clearAuthBackup();
     applySession(
       setUser,
@@ -251,7 +236,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'ONLINE',
       false
     );
-    return { emailVerificationRequired: false as const };
   };
 
   const logout = () => {

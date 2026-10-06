@@ -16,6 +16,7 @@ import MetaCostExplainerCard from '../components/billing/MetaCostExplainerCard';
 import BillingSkeleton from '../components/billing/BillingSkeleton';
 import BillingUsageStatsTab from '../components/billing/BillingUsageStatsTab';
 import AiAddonGrid from '../components/billing/AiAddonGrid';
+import RazorpayTestInstruments from '../components/billing/RazorpayTestInstruments';
 import EmptyState from '../components/ui/EmptyState';
 import PageShell from '../components/ui/PageShell';
 import SectionCard from '../components/ui/SectionCard';
@@ -31,7 +32,11 @@ import type {
   BillingUsage,
   ReportsOverviewFullData,
 } from '../types';
-import { openRazorpayCheckout, openRazorpaySubscriptionCheckout } from '../utils/razorpay';
+import {
+  isRazorpayTestKey,
+  openRazorpayCheckout,
+  openRazorpaySubscriptionCheckout,
+} from '../utils/razorpay';
 import { toastError, toastSuccess } from '../utils/toast';
 
 type BillingTab = 'usage' | 'plans' | 'history';
@@ -220,9 +225,11 @@ export default function BillingPage() {
   const displayedPlanId = info?.planTier || info?.plan;
   const displayedPlanExpiry =
     info?.entitlements?.planExpiresAt || info?.planExpiresAt || info?.currentPeriodEnd;
-  const billingStatusLocked = ['trial_expired', 'locked', 'expired', 'cancelled', 'paused'].includes(
-    info?.subscriptionStatus || '',
-  );
+  const billingStatusLocked = info?.entitlements
+    ? Boolean(info.entitlements.isLocked)
+    : ['trial_expired', 'locked', 'expired', 'cancelled', 'paused'].includes(
+        info?.subscriptionStatus || '',
+      );
   const currentPlanIsActive = Boolean(
     displayedPlanId &&
       !info?.entitlements?.isLocked &&
@@ -312,6 +319,7 @@ export default function BillingPage() {
         subscriptionId,
         name: 'Samyoj Platform',
         description: `${plan.name} ${cadence} subscription — GST-inclusive recurring billing`,
+        prefillName: user?.name,
         prefillEmail: user?.email,
         onSuccess: async (response) => {
           try {
@@ -452,6 +460,7 @@ export default function BillingPage() {
         orderId: payload.orderId,
         name: 'Samyoj AI Add-on',
         description: `${payload.label} — ${payload.units?.toLocaleString('en-IN') ?? ''} ${unitWord}`,
+        prefillName: user?.name,
         prefillEmail: user?.email,
         onSuccess: async (response) => {
           try {
@@ -603,6 +612,10 @@ export default function BillingPage() {
               <AppAlert variant="info">
                 Paid checkout is unavailable — Razorpay is not configured on the server.
               </AppAlert>
+            )}
+
+            {activeTab === 'plans' && isRazorpayTestKey(info.razorpayKeyId) && (
+              <RazorpayTestInstruments />
             )}
 
             {info.pendingPayment && paymentStatusLabel(info.pendingPayment) === 'Pending' && (

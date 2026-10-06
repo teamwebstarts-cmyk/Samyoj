@@ -80,8 +80,8 @@ router.post(
             email,
             passwordHash,
             role: 'ADMIN',
-            // Honest: not verified until /verify-email (or Google OAuth). Login still allowed.
-            emailVerifiedAt: null,
+            // Signup grants access immediately. Email-link verification is not shown.
+            emailVerifiedAt: new Date(),
           },
         });
 
@@ -113,30 +113,19 @@ router.post(
       throw err;
     }
 
-    // Sign in when verification gate allows it (dev default on; production requires verify).
-    let sessionIssued = false;
-    if (config.auth.allowUnverifiedLogin) {
-      await issueTenantSession(
-        res,
-        {
-          userId: result.user.id,
-          email: result.user.email,
-          organizationId: result.org.id,
-        },
-        req
-      );
-      sessionIssued = true;
-    }
+    await issueTenantSession(
+      res,
+      {
+        userId: result.user.id,
+        email: result.user.email,
+        organizationId: result.org.id,
+      },
+      req
+    );
     emitProductEvent({
       organizationId: result.org.id,
       name: 'REGISTER',
     });
-
-    try {
-      await issueEmailVerification(result.user.id, result.user.email);
-    } catch {
-      /* SMTP may be unset in local/dev — account still usable when gate allows */
-    }
 
     sendSuccess(
       res,
@@ -146,18 +135,16 @@ router.post(
           name: result.user.name,
           email: result.user.email,
           role: result.user.role,
-          emailVerified: false,
+          emailVerified: true,
         },
         organization: {
           id: result.org.id,
           companyName: result.org.companyName,
           role: 'OWNER',
         },
-        emailVerificationRequired: !sessionIssued,
+        emailVerificationRequired: false,
         smtpConfigured: isSmtpConfigured(),
-        message: sessionIssued
-          ? 'Account created. You are now signed in.'
-          : 'Account created. Verify your email before signing in.',
+        message: 'Account created. You are now signed in.',
       },
       201
     );
@@ -196,11 +183,6 @@ router.post(
         });
       }
       throw new AppError(401, 'Invalid email or password');
-    }
-
-    // Email verification gate (production default: block until verified).
-    if (!user.emailVerifiedAt && !config.auth.allowUnverifiedLogin) {
-      throw new AppError(403, 'Verify your email before signing in', 'EMAIL_NOT_VERIFIED');
     }
 
     const orgMembership = user.organizations[0];

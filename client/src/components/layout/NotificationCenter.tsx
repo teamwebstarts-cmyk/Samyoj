@@ -24,6 +24,7 @@ import {
   isNotificationDismissed,
 } from '../../utils/notificationDismissals';
 import type { Conversation, Message } from '../../types';
+import { useEntitlements } from '../../hooks/useEntitlements';
 import { useMetaMock } from '../../contexts/MetaMockContext';
 import { getNotificationMockAlerts } from '../../utils/notificationMockData';
 import NotificationSidebar from './NotificationSidebar';
@@ -39,6 +40,7 @@ function filterDismissed(userId: string | undefined, items: AppNotification[]): 
 
 export default function NotificationCenter({ unreadInbox = 0 }: NotificationCenterProps) {
   const { user } = useAuth();
+  const { entitlements } = useEntitlements();
   const { enabled: mockPreview } = useMetaMock();
   const { activeNumber, resolved } = useWhatsAppNumber();
   const [open, setOpen] = useState(false);
@@ -256,13 +258,26 @@ export default function NotificationCenter({ unreadInbox = 0 }: NotificationCent
 
     items.push(...workspaceAlerts);
 
+    if (entitlements?.isLocked) {
+      const expiredAt = entitlements.periodEnd ? new Date(entitlements.periodEnd).getTime() : Date.now();
+      items.push({
+        id: 'plan-expired',
+        category: 'updates',
+        title: 'Your plan period has ended',
+        body: 'Purchase a plan to restore sending, campaigns, and AI.',
+        href: '/billing',
+        at: Number.isFinite(expiredAt) ? expiredAt : Date.now(),
+        tone: 'warning',
+      });
+    }
+
     if (mockPreview) {
       items.push(...getNotificationMockAlerts());
     }
 
     items.sort((a, b) => b.at - a.at);
     return items;
-  }, [messageAlerts, unreadInbox, breached, agentAlerts, workspaceAlerts, mockPreview]);
+  }, [messageAlerts, unreadInbox, breached, agentAlerts, workspaceAlerts, mockPreview, entitlements]);
 
   const notifications = useMemo(() => {
     void dismissTick;

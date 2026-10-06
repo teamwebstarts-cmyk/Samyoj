@@ -2875,8 +2875,8 @@
   }
 
   .auth-btn-primary {
-    background: #0a8954;
-    box-shadow: 0 1px 2px rgba(10, 137, 84, 0.12);
+    background: #732bfd;
+    box-shadow: 0 1px 2px rgb(115 43 253 / 0.22);
     transition:
       transform 0.15s ease,
       background-color 0.15s ease,
@@ -2884,8 +2884,8 @@
   }
 
   .auth-btn-primary:hover:not(:disabled) {
-    background: #087a4a;
-    box-shadow: 0 1px 2px rgba(10, 137, 84, 0.16);
+    background: #5f22d4;
+    box-shadow: 0 1px 2px rgb(95 34 212 / 0.26);
   }
 
   .auth-btn-primary:active:not(:disabled) {
@@ -2895,8 +2895,8 @@
   .auth-btn-primary:focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 4px rgba(37, 211, 102, 0.22),
-      0 4px 16px rgba(37, 211, 102, 0.28);
+      0 0 0 4px rgb(115 43 253 / 0.28),
+      0 4px 16px rgb(115 43 253 / 0.32);
   }
 
   .btn-primary {

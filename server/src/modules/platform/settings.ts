@@ -4,6 +4,10 @@ import prisma from '../../config/database';
 import { asyncHandler, sendSuccess, AppError } from '../../utils/response';
 import { PLAN_TIERS, BILLING_SKUS } from '../billing/plans';
 import { billingConfigSchema, parseBillingConfig, refreshBillingConfig } from '../billing/config';
+import {
+  isSubscriptionEnforcementEnabled,
+  setSubscriptionEnforcementEnabled,
+} from '../billing/subscription-enforcement';
 
 function assertSuperAdmin(req: Request) {
   if (req.platformOperator?.role !== 'SUPER_ADMIN') {
@@ -49,3 +53,18 @@ export const patchPlatformSettings = asyncHandler(
     sendSuccess(res, setting.value);
   }
 );
+
+export const getSubscriptionEnforcement = asyncHandler(async (req: Request, res: Response) => {
+  assertSuperAdmin(req);
+  sendSuccess(res, { enabled: await isSubscriptionEnforcementEnabled() });
+});
+
+export const putSubscriptionEnforcement = asyncHandler(async (req: Request, res: Response) => {
+  assertSuperAdmin(req);
+  const enabled = (req.body as { enabled?: unknown })?.enabled;
+  if (typeof enabled !== 'boolean') {
+    throw new AppError(400, 'enabled must be true or false');
+  }
+  await setSubscriptionEnforcementEnabled(enabled);
+  sendSuccess(res, { enabled });
+});

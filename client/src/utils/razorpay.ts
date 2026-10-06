@@ -29,6 +29,43 @@ export function loadRazorpayScript(): Promise<void> {
   return scriptPromise;
 }
 
+/** Ask Checkout for every INR instrument. Subscriptions still only show mandate methods Razorpay allows. */
+export function razorpayCheckoutConfig(kind: 'order' | 'subscription' = 'order') {
+  const blocks = {
+    upi: { name: 'UPI', instruments: [{ method: 'upi' }] },
+    card: { name: 'Cards', instruments: [{ method: 'card' }] },
+    netbanking: { name: 'Netbanking', instruments: [{ method: 'netbanking' }] },
+    ...(kind === 'order'
+      ? { wallet: { name: 'Wallets', instruments: [{ method: 'wallet' }] } }
+      : {}),
+  };
+  return {
+    display: {
+      blocks,
+      sequence: [
+        'block.upi',
+        'block.card',
+        'block.netbanking',
+        ...(kind === 'order' ? ['block.wallet'] : []),
+      ],
+      preferences: { show_default_blocks: true },
+    },
+  };
+}
+
+export function razorpayMethodFlags(kind: 'order' | 'subscription' = 'order') {
+  return {
+    upi: true,
+    card: true,
+    netbanking: true,
+    wallet: kind === 'order',
+  };
+}
+
+export function isRazorpayTestKey(keyId: string | null | undefined): boolean {
+  return Boolean(keyId && keyId.startsWith('rzp_test_'));
+}
+
 export interface RazorpayCheckoutOptions {
   keyId: string;
   orderId: string;
@@ -36,6 +73,7 @@ export interface RazorpayCheckoutOptions {
   currency: string;
   name: string;
   description: string;
+  prefillName?: string;
   prefillEmail?: string;
   onSuccess: (response: {
     razorpay_order_id: string;
@@ -57,7 +95,12 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
     name: options.name,
     description: options.description,
     order_id: options.orderId,
-    prefill: options.prefillEmail ? { email: options.prefillEmail } : undefined,
+    prefill: {
+      ...(options.prefillName ? { name: options.prefillName } : {}),
+      ...(options.prefillEmail ? { email: options.prefillEmail } : {}),
+    },
+    method: razorpayMethodFlags('order'),
+    config: razorpayCheckoutConfig('order'),
     theme: { color: '#25D366' },
     handler: options.onSuccess,
     modal: {
@@ -77,6 +120,7 @@ export interface RazorpaySubscriptionCheckoutOptions {
   subscriptionId: string;
   name: string;
   description: string;
+  prefillName?: string;
   prefillEmail?: string;
   onSuccess: (response: {
     razorpay_subscription_id: string;
@@ -98,7 +142,12 @@ export async function openRazorpaySubscriptionCheckout(
     subscription_id: options.subscriptionId,
     name: options.name,
     description: options.description,
-    prefill: options.prefillEmail ? { email: options.prefillEmail } : undefined,
+    prefill: {
+      ...(options.prefillName ? { name: options.prefillName } : {}),
+      ...(options.prefillEmail ? { email: options.prefillEmail } : {}),
+    },
+    method: razorpayMethodFlags('subscription'),
+    config: razorpayCheckoutConfig('subscription'),
     theme: { color: '#25D366' },
     handler: options.onSuccess,
     modal: {

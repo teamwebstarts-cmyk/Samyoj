@@ -18,7 +18,7 @@ export default function AuthTabs() {
             to={to}
             className={`-mb-px border-b-2 pb-3 text-sm font-medium transition-colors ${
               active
-                ? 'border-whatsapp-600 text-theme-fg dark:border-whatsapp-400'
+                ? 'border-[#732BFD] text-theme-fg dark:border-[#A78BFA]'
                 : 'border-transparent text-theme-muted hover:text-theme-fg'
             }`}
           >

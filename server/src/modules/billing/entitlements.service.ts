@@ -1,14 +1,15 @@
 import prisma from '../../config/database';
-import { config } from '../../config';
 import {
   PlanTier,
   PLAN_TIERS,
   legacyPlanToTier,
 } from './plans';
 import { AppError } from '../../utils/response';
+import { isSubscriptionEnforcementEnabled } from './subscription-enforcement';
 
-function unlockLocalTesting(): boolean {
-  return config.nodeEnv === 'development' && config.billing.allowTestBypass && !process.env.VITEST;
+/** Platform admin owns this. Off (the default) means full product access. */
+async function commercialOpen(): Promise<boolean> {
+  return !(await isSubscriptionEnforcementEnabled());
 }
 
 export type QuotaType =
@@ -176,7 +177,7 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
   const tierDef = PLAN_TIERS[planTier] || PLAN_TIERS.launch;
   const isLedgerBacked = Boolean(latestPeriod);
   const now = new Date();
-  const softLocked =
+  const rawSoftLocked =
     org.subscriptionStatus === 'grace' || currentSubscription?.status === 'GRACE';
   const statusLocked =
     ['trial_expired', 'locked', 'expired', 'cancelled'].includes(org.subscriptionStatus) ||
@@ -185,7 +186,7 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
   const computedLocked = isLedgerBacked
     ? !currentPeriod || statusLocked
     : statusLocked || Boolean(org.planExpiresAt && org.planExpiresAt <= now);
-  const testing = unlockLocalTesting();
+  const testing = await commercialOpen();
   const isLocked = testing ? false : computedLocked;
   const planExpiresAt = ledgerPeriod?.endsAt ?? org.planExpiresAt;
 
@@ -195,7 +196,7 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
     planName: tierDef.name,
     subscriptionStatus: org.subscriptionStatus,
     isLocked,
-    softLocked,
+    softLocked: testing ? false : rawSoftLocked,
     planExpiresAt,
     planPeriodId: currentPeriod?.id ?? latestPeriod?.id ?? null,
     periodStartsAt: ledgerPeriod?.startsAt ?? null,
@@ -203,22 +204,22 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
     quotas: {
       waNumbers: {
         used: waCount,
-        limit: tierDef.waNumbers,
+        limit: testing ? 'unlimited' : tierDef.waNumbers,
       },
       seats: {
         used: seatCount + inviteCount,
-        limit: tierDef.seats,
+        limit: testing ? 'unlimited' : tierDef.seats,
       },
       contacts: {
         used: contactCount,
-        limit: tierDef.contacts,
+        limit: testing ? 'unlimited' : tierDef.contacts,
       },
       publishedWorkflows: {
         used: automationCount + flowCount,
-        limit: tierDef.publishedWorkflows,
+        limit: testing ? 'unlimited' : tierDef.publishedWorkflows,
       },
-      // Local testing already unlocks mutations via checkFeature. Mirror that in
-      // the snapshot so the UI does not grey-out Send while the API would allow it.
+      // Enforcement off must match the API: the screen should not keep Kickstart caps
+      // or grey-out AI while mutations are already allowed.
       aiIncluded: testing && tierDef.aiIncluded === 'off' ? 'included' : tierDef.aiIncluded,
       callingIncluded: testing ? true : tierDef.callingIncluded,
       analyticsAdvanced: testing ? true : tierDef.analyticsAdvanced,
@@ -237,7 +238,7 @@ export async function checkFeature(
   organizationId: string,
   feature: FeatureType
 ): Promise<{ allowed: boolean; requiredPlan: PlanTier; reason?: string; code?: string }> {
-  if (unlockLocalTesting()) {
+  if (await commercialOpen()) {
     return { allowed: true, requiredPlan: 'growth' };
   }
   const entitlements = await getOrgEntitlements(organizationId);
@@ -301,7 +302,7 @@ export async function checkQuota(
 ): Promise<QuotaCheckResult> {
   const entitlements = await getOrgEntitlements(organizationId);
 
-  if (unlockLocalTesting()) {
+  if (await commercialOpen()) {
     return {
       allowed: true,
       used: 0,
