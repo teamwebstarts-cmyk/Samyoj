@@ -208,7 +208,8 @@ export async function getOrgEntitlements(organizationId: string): Promise<OrgEnt
       },
       seats: {
         used: seatCount + inviteCount,
-        limit: testing ? 'unlimited' : tierDef.seats,
+        // seats quota is number | 'custom'; 'custom' is already treated as unbounded
+        limit: testing ? 'custom' : tierDef.seats,
       },
       contacts: {
         used: contactCount,
