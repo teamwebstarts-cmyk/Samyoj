@@ -56,6 +56,13 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     retryHelps: false,
     action: 'meta_account',
   },
+  133010: {
+    title: 'This WhatsApp number is not registered',
+    body: 'Meta rejected the send because this business number is not registered for Cloud API. In WhatsApp Manager, open the number and choose Register, then enter the 6-digit PIN. Retry will not send until the number shows Registered.',
+    notice: 'Register this WhatsApp number in WhatsApp Manager before sending.',
+    retryHelps: false,
+    action: 'meta_account',
+  },
   190: {
     title: 'WhatsApp login expired',
     body: 'Reconnect WhatsApp in Settings. The access token is no longer valid, so messages cannot send.',

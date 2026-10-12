@@ -16,6 +16,15 @@ describe('explainWhatsAppSendFailure', () => {
     expect(explained.notice.toLowerCase()).toMatch(/template is fine/);
   });
 
+  it('explains 133010 as the business number not registered on Cloud API', () => {
+    const explained = explainWhatsAppSendFailure({
+      code: 133010,
+      rawMessage: '(#133010) Account not registered',
+    });
+    expect(explained.retryHelps).toBe(false);
+    expect(explained.action).toBe('meta_account');
+  });
+
   it('parses META_131031 from API error codes', () => {
     expect(parseWhatsAppMetaCode('META_131031')).toBe(131031);
     expect(

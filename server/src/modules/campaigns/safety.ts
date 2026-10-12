@@ -296,7 +296,7 @@ export function classifyProviderError(error: unknown): {
   const permanent =
     typeof candidate?.metaCode === 'number' &&
     [100, 368, 131008, 131021, 131026, 131031, 131037, 131047, 131049, 131050, 131051,
-      132000, 132001, 132012, 132015, 132016, 141006, 141010, 141014].includes(candidate.metaCode);
+      132000, 132001, 132012, 132015, 132016, 133010, 141006, 141010, 141014].includes(candidate.metaCode);
   // Error text is not authoritative: Meta commonly echoes token/auth words in
   // throttling and upstream failures. Only explicit Meta auth code/status
   // semantics are safe to classify as a durable configuration failure.

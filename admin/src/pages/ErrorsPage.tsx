@@ -33,7 +33,7 @@ const ERROR_DESCRIPTIONS: Record<number, { category: string; description: string
   131051: { category: 'Unsupported Format', description: 'Media file type or payload unsupported.', advice: 'Verify MIME type and file size limits.' },
   132000: { category: 'Template Structure', description: 'Template parameters count mismatch.', advice: 'Ensure all body variables (e.g. {{1}}, {{2}}) have matching values.' },
   132001: { category: 'Template Missing', description: 'Template does not exist in this language/locale.', advice: 'Check Meta Template sync status in Settings.' },
-  133010: { category: 'Phone Not Registered', description: 'Destination number is not registered on WhatsApp.', advice: 'Validate phone number format with country code.' },
+  133010: { category: 'Phone Not Registered', description: 'The business number is not registered for Cloud API.', advice: 'Register the number in WhatsApp Manager with the 6-digit PIN.' },
   130429: { category: 'Cloud API Rate Limit', description: 'Cloud API calls exceeded per-second cap.', advice: 'Exponential backoff will retry automatically.' },
 };
 

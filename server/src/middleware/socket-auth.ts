@@ -20,7 +20,7 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
       ? handshakeToken.trim()
       : cookieToken;
   if (!token) {
-    logError(new Error('Authentication required'), { source: 'socket', path: '/connect' });
+    logger.warn('Socket auth: no access token', { source: 'socket', path: '/connect' });
     return next(new Error('Authentication required'));
   }
 

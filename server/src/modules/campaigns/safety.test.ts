@@ -208,6 +208,10 @@ describe('campaign safety boundaries', () => {
     expect(classifyProviderError(Object.assign(new Error('Business Account locked'), {
       metaCode: 131031,
     })).classification).toBe('PERMANENT_REJECTION');
+    expect(classifyProviderError(Object.assign(new Error('(#133010) Account not registered'), {
+      metaCode: 133010,
+      statusCode: 400,
+    })).classification).toBe('PERMANENT_REJECTION');
   });
 
   it('separates durable setup failures from retryable provider outages', () => {
