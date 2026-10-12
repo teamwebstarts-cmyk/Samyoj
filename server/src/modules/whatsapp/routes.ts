@@ -995,7 +995,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       });
       const channel = webhookObject === 'page' ? 'page' : 'instagram';
       trackWebhookReceived(channel);
-      trackWebhookQueued(channel);
+      if (accepted.queue === 'queued') trackWebhookQueued(channel);
       log.info('Page/Instagram webhook persisted and queued', {
         requestId,
         eventKey: accepted.eventKey,
@@ -1021,7 +1021,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
   try {
     const accepted = await persistAndEnqueueInboundWebhook({ payload, requestId });
     trackWebhookReceived();
-    trackWebhookQueued();
+    if (accepted.queue === 'queued') trackWebhookQueued();
     log.info('Webhook persisted and queued', {
       requestId,
       eventKey: accepted.eventKey,

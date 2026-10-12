@@ -54,7 +54,9 @@ describe('WhatsApp route hardening', () => {
     expect(postBlock.slice(pageHandlerIdx)).toContain("webhookObject === 'page'");
     expect(postBlock.slice(pageHandlerIdx)).toContain("webhookObject === 'instagram'");
     expect(postBlock.slice(pageHandlerIdx)).toContain('trackWebhookReceived(channel)');
-    expect(postBlock.slice(pageHandlerIdx)).toContain('trackWebhookQueued(channel)');
+    expect(postBlock.slice(pageHandlerIdx)).toContain(
+      "if (accepted.queue === 'queued') trackWebhookQueued(channel)"
+    );
     expect(postBlock).not.toContain('Webhook ignored — not a WhatsApp business account payload');
   });
 
