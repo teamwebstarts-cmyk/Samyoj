@@ -3,6 +3,7 @@ import {
   explainWhatsAppSendFailure,
   explainWhatsAppSendFailureFromMessage,
   parseWhatsAppMetaCode,
+  showsKnownProviderFailure,
 } from './whatsappSendFailure';
 
 describe('explainWhatsAppSendFailure', () => {
@@ -30,6 +31,13 @@ describe('explainWhatsAppSendFailure', () => {
     expect(
       explainWhatsAppSendFailure({ code: 'META_190' }).action
     ).toBe('connect');
+  });
+
+  it('shows a known Meta code on AMBIGUOUS rows and hides a blank ambiguous send', () => {
+    expect(showsKnownProviderFailure('AMBIGUOUS', { metaCode: 133010 })).toBe(true);
+    expect(showsKnownProviderFailure('FAILED', null)).toBe(true);
+    expect(showsKnownProviderFailure('AMBIGUOUS', {})).toBe(false);
+    expect(showsKnownProviderFailure('SENT', { metaCode: 133010 })).toBe(false);
   });
 
   it('reads stored message metadata including Graph errors[]', () => {

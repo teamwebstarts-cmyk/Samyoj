@@ -190,6 +190,18 @@ export function explainWhatsAppSendFailure(input: {
   };
 }
 
+/** FAILED always. AMBIGUOUS only when Meta already named a code we can explain. */
+export function showsKnownProviderFailure(
+  status: string,
+  metadata?: { metaCode?: number; metaErrorCode?: number } | null
+): boolean {
+  const normalized = (status || '').toUpperCase();
+  if (normalized === 'FAILED') return true;
+  if (normalized !== 'AMBIGUOUS') return false;
+  const code = metadata?.metaErrorCode ?? metadata?.metaCode;
+  return typeof code === 'number' && Object.prototype.hasOwnProperty.call(BY_CODE, code);
+}
+
 export function explainWhatsAppSendFailureFromMessage(message: {
   type?: string;
   metadata?: {

@@ -13,8 +13,6 @@ export interface CallingSettings {
   afterHoursMessage: string;
   missedCallAutoMessage: boolean;
   missedCallMessage: string;
-  recordingConsentEnabled: boolean;
-  recordingConsentMessage: string;
   ttsVoice: string | null;
   ttsLanguage: string | null;
   deepgramLanguage: string | null;
@@ -47,9 +45,6 @@ export const DEFAULT_CALLING_SETTINGS: CallingSettings = {
   missedCallAutoMessage: true,
   missedCallMessage:
     'Sorry we missed your call! Reply here on WhatsApp and our team will help you shortly.',
-  recordingConsentEnabled: false,
-  recordingConsentMessage:
-    'This call may be recorded.',
   ttsVoice: null,
   ttsLanguage: null,
   deepgramLanguage: null,

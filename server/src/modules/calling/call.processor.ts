@@ -213,8 +213,6 @@ async function startAiSession(params: {
   direction: string;
   botId: string | null;
   sdpOffer: string;
-  consentMessage?: string;
-  recordingEnabled?: boolean;
   greeting?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
@@ -237,8 +235,6 @@ async function startAiSession(params: {
     direction: params.direction as 'USER_INITIATED' | 'BUSINESS_INITIATED',
     aiBotId: params.botId || undefined,
     greeting: params.greeting,
-    consentMessage: params.consentMessage,
-    recordingEnabled: params.recordingEnabled === true,
     ttsVoice: params.ttsVoice,
     ttsLanguage: params.ttsLanguage,
     sttPrompt: params.sttPrompt,
@@ -414,10 +410,6 @@ async function ringAgentsForCall(params: {
           direction: params.direction,
           botId: params.botId,
           sdpOffer: params.sdpOffer,
-          consentMessage: params.settings.recordingConsentEnabled
-            ? params.settings.recordingConsentMessage
-            : undefined,
-          recordingEnabled: params.settings.recordingConsentEnabled === true,
           greeting: timeoutVoice.aiGreeting,
           ttsVoice: timeoutVoice.ttsVoice,
           ttsLanguage: timeoutVoice.ttsLanguage,
@@ -731,10 +723,6 @@ async function handleCallConnect(
     direction,
     botId: bot.id,
     sdpOffer,
-    consentMessage: settings.recordingConsentEnabled
-      ? settings.recordingConsentMessage
-      : undefined,
-    recordingEnabled: settings.recordingConsentEnabled === true,
     greeting: voice.aiGreeting,
     ttsVoice: voice.ttsVoice,
     ttsLanguage: voice.ttsLanguage,

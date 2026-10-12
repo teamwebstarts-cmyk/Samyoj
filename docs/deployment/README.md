@@ -4,6 +4,7 @@
 
 | File | Kya hai |
 |------|---------|
+| **[AWS_MIGRATION_GUIDE.md](./AWS_MIGRATION_GUIDE.md)** | 🚀 **GCP → AWS** — data kya aayega / nahi, security, GitHub deploy (no source on server), cost (verified), checklists, AWS MCP. **Migration se pehle yahi.** |
 | **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** | ✅ **Main guide** — step-by-step redeploy instructions, cheatsheet, troubleshooting. **Yahi pehle padho.** |
 | **[SERVER_INVENTORY.md](./SERVER_INVENTORY.md)** | 📋 Detailed VM inventory — sab kuch jo live server pe mila (services, ports, .env keys, nginx, git state). Deep-dive reference. |
 

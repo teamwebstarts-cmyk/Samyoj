@@ -150,10 +150,6 @@ const COMPARISON_CATEGORIES: MatrixCategory[] = [
         tooltip: 'Interactive real-time voice agent powered by fast Indian STT & TTS',
         values: { launch: false, starter: false, growth: false, pro: true, enterprise: true },
       },
-      {
-        name: 'Call Recording & Transcription',
-        values: { launch: false, starter: false, growth: false, pro: true, enterprise: true },
-      },
     ],
   },
   {

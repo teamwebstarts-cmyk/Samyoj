@@ -15,7 +15,9 @@ export function mergeCallingSettings(
     aiGreeting: config.calling.aiGreeting,
   };
 
-  if (!stored) {
+  const storedWithoutRecording = stripRecordingSettings(stored);
+
+  if (!storedWithoutRecording) {
     return {
       ...base,
       // Cold live transfer media is not production-ready — always message-only.
@@ -26,12 +28,10 @@ export function mergeCallingSettings(
 
   return {
     ...base,
-    ...stored,
-    aiGreeting: stored.aiGreeting?.trim() || base.aiGreeting,
-    afterHoursMessage: stored.afterHoursMessage?.trim() || base.afterHoursMessage,
-    missedCallMessage: stored.missedCallMessage?.trim() || base.missedCallMessage,
-    recordingConsentMessage:
-      stored.recordingConsentMessage?.trim() || base.recordingConsentMessage,
+    ...storedWithoutRecording,
+    aiGreeting: storedWithoutRecording.aiGreeting?.trim() || base.aiGreeting,
+    afterHoursMessage: storedWithoutRecording.afterHoursMessage?.trim() || base.afterHoursMessage,
+    missedCallMessage: storedWithoutRecording.missedCallMessage?.trim() || base.missedCallMessage,
     // Cold live transfer media is not production-ready — always message-only.
     liveTransferEnabled: false,
     transferMode: 'message_only',
@@ -42,6 +42,20 @@ export function mergeCallingSettings(
     deepgramLanguage: normalizeVoiceLang(stored.deepgramLanguage),
     sarvamSttLanguage: normalizeVoiceLang(stored.sarvamSttLanguage),
   };
+}
+
+/** Drop leftover consent fields so an old settings blob cannot announce a recording. */
+function stripRecordingSettings(
+  stored: Partial<CallingSettings> | null | undefined
+): Partial<CallingSettings> | null | undefined {
+  if (!stored) return stored;
+  const next = { ...stored } as Partial<CallingSettings> & {
+    recordingConsentEnabled?: unknown;
+    recordingConsentMessage?: unknown;
+  };
+  delete next.recordingConsentEnabled;
+  delete next.recordingConsentMessage;
+  return next;
 }
 
 function normalizeVoiceLang(value: string | null | undefined): string | null {

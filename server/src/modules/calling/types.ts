@@ -42,9 +42,6 @@ export interface ActiveCallContext {
   direction: 'USER_INITIATED' | 'BUSINESS_INITIATED';
   aiBotId?: string | null;
   greeting?: string;
-  consentMessage?: string;
-  /** When true, buffer and persist inbound PCM. Default false (consent-gated). */
-  recordingEnabled?: boolean;
   ttsVoice?: string;
   ttsLanguage?: string;
   /** Sarvam STT terminology hint (not the bot brain prompt). */

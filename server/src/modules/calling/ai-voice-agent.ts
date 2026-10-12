@@ -39,7 +39,6 @@ import { isVoiceBackchannel, wantsCallbackOnCall, wantsEndCall, wantsHumanOnCall
 import { config } from '../../config';
 import {
   isLikelyTtsEcho,
-  joinSpokenTurns,
   prepareSpokenText,
   shouldAllowBargeInDuringTts,
   shouldMuteCallStt,
@@ -315,10 +314,7 @@ export class AiVoiceCallSession {
       return;
     }
 
-    const opening = joinSpokenTurns(
-      this.ctx.consentMessage,
-      this.ctx.greeting || 'Hi, thanks for calling. How can I help?'
-    );
+    const opening = (this.ctx.greeting || 'Hi, thanks for calling. How can I help?').trim();
     if (opening) {
       if (await this.abortIfRemoteHangup('before_greeting')) return;
       try {

@@ -1,4 +1,4 @@
-import { Clock3, MessageSquare, Moon, PhoneMissed, Settings2, type LucideIcon } from 'lucide-react';
+import { Clock3, Moon, PhoneMissed, Settings2, type LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppInput from '../ui/AppInput';
 import AppSelect from '../ui/AppSelect';
@@ -18,8 +18,6 @@ export interface CallingSettings {
   afterHoursMessage: string;
   missedCallAutoMessage: boolean;
   missedCallMessage: string;
-  recordingConsentEnabled: boolean;
-  recordingConsentMessage: string;
   sarvamSttLanguage?: string | null;
   sarvamTtsSpeaker?: string | null;
   sarvamMode?: 'codemix' | 'transcribe';
@@ -42,8 +40,6 @@ const defaultSettings: CallingSettings = {
   afterHoursMessage: 'Thanks for calling. We are currently closed.',
   missedCallAutoMessage: true,
   missedCallMessage: 'Sorry we missed your call! Reply here and we will help you shortly.',
-  recordingConsentEnabled: false,
-  recordingConsentMessage: 'This call may be recorded.',
   liveTransferEnabled: false,
   transferMode: 'message_only',
   sarvamTtsSpeaker: 'shubh',
@@ -84,7 +80,7 @@ export const SARVAM_LANGUAGES = [
 
 const RING_PRESETS = [20, 30, 45, 60];
 
-type SectionId = 'behavior' | 'recording' | 'after-hours' | 'missed' | 'advanced';
+type SectionId = 'behavior' | 'after-hours' | 'missed' | 'advanced';
 
 const SECTIONS: Array<{
   id: SectionId;
@@ -92,7 +88,6 @@ const SECTIONS: Array<{
   icon: LucideIcon;
 }> = [
   { id: 'behavior', label: 'Call behavior', icon: Settings2 },
-  { id: 'recording', label: 'Recording', icon: MessageSquare },
   { id: 'after-hours', label: 'After hours', icon: Moon },
   { id: 'missed', label: 'Missed call reply', icon: PhoneMissed },
   { id: 'advanced', label: 'Advanced', icon: Clock3 },
@@ -134,8 +129,6 @@ export default function CallingSettingsForm({ initialSection = 'behavior' }: Cal
       afterHoursMessage: settings.afterHoursMessage,
       missedCallAutoMessage: settings.missedCallAutoMessage,
       missedCallMessage: settings.missedCallMessage,
-      recordingConsentEnabled: settings.recordingConsentEnabled,
-      recordingConsentMessage: settings.recordingConsentMessage,
       liveTransferEnabled: false,
       transferMode: 'message_only' as const,
     }),
@@ -150,8 +143,6 @@ export default function CallingSettingsForm({ initialSection = 'behavior' }: Cal
       afterHoursMessage: baseline.afterHoursMessage,
       missedCallAutoMessage: baseline.missedCallAutoMessage,
       missedCallMessage: baseline.missedCallMessage,
-      recordingConsentEnabled: baseline.recordingConsentEnabled,
-      recordingConsentMessage: baseline.recordingConsentMessage,
       liveTransferEnabled: false,
       transferMode: 'message_only' as const,
     };
@@ -227,7 +218,7 @@ export default function CallingSettingsForm({ initialSection = 'behavior' }: Cal
             <p className="text-[12px] font-medium text-theme-muted">
               Greeting, speaker, and which bot answers the phone live on{' '}
               <span className="font-semibold text-theme-fg">AI Bots → Calling</span>. This screen is
-              for ring, recording, and missed-call follow-up.
+              for ring and missed-call follow-up.
             </p>
             {section === 'behavior' && (
               <SectionFrame
@@ -279,38 +270,8 @@ export default function CallingSettingsForm({ initialSection = 'behavior' }: Cal
                   }
                 />
                 <p className="rounded-xl border border-neutral-200 bg-neutral-50/80 px-3 py-2.5 text-[12px] font-medium text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-400">
-                  Max calls at once is under Advanced. Recording consent is under Recording.
+                  Max calls at once is under Advanced.
                 </p>
-              </SectionFrame>
-            )}
-
-            {section === 'recording' && (
-              <SectionFrame
-                title="Recording"
-                subtitle="Ask for consent before the call is recorded."
-              >
-                <label className="flex items-center gap-2 text-[13px] font-semibold text-neutral-800 dark:text-neutral-200">
-                  <input
-                    type="checkbox"
-                    checked={settings.recordingConsentEnabled}
-                    onChange={(e) =>
-                      setSettings((s) => ({ ...s, recordingConsentEnabled: e.target.checked }))
-                    }
-                    className="rounded border-neutral-300"
-                  />
-                  Play recording consent at call start
-                </label>
-                {settings.recordingConsentEnabled && (
-                  <AppTextarea
-                    className="mt-2"
-                    label="Consent message"
-                    value={settings.recordingConsentMessage}
-                    onChange={(e) =>
-                      setSettings((s) => ({ ...s, recordingConsentMessage: e.target.value }))
-                    }
-                    rows={2}
-                  />
-                )}
               </SectionFrame>
             )}
 

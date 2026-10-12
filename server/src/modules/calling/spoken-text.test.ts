@@ -77,12 +77,10 @@ describe('joinSpokenTurns', () => {
   it('speaks consent and greeting as one thought', () => {
     expect(
       joinSpokenTurns(
-        'Just so you know, this call may be recorded',
-        'Hi, thanks for calling. How can I help?'
+        'Hi, thanks for calling',
+        'How can I help?'
       )
-    ).toBe(
-      'Just so you know, this call may be recorded. Hi, thanks for calling. How can I help?'
-    );
+    ).toBe('Hi, thanks for calling. How can I help?');
   });
 });
 

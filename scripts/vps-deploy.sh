@@ -14,6 +14,9 @@ git checkout "$BRANCH"
 git merge --ff-only "origin/${BRANCH}"
 echo "HEAD=$(git rev-parse --short HEAD) BRANCH=$(git branch --show-current) MSG=$(git log -1 --format=%s)"
 
+echo "===== 1b. Trim old host logs ====="
+APP_DIR="$APP" bash "$APP/scripts/vps-trim-logs.sh"
+
 echo "===== 2. Server deps + prisma generate ====="
 cd "$APP/server"
 grep -q '^NODE_ENV=production$' .env || { echo "NODE_ENV=production is required"; exit 1; }

@@ -44,7 +44,10 @@ import {
 } from './unsupportedMessage';
 import type { Message } from '../../types';
 import CallSummaryNote from '../calls/CallSummaryNote';
-import { explainWhatsAppSendFailureFromMessage } from '../../utils/whatsappSendFailure';
+import {
+  explainWhatsAppSendFailureFromMessage,
+  showsKnownProviderFailure,
+} from '../../utils/whatsappSendFailure';
 
 const ACTION_MENU_WIDTH = 160;
 const REACT_MENU_WIDTH = 232;
@@ -425,10 +428,12 @@ export default function MessageBubble({
     type === 'TEMPLATE' && message.metadata?.templateName
       ? formatTemplateLabel(message.metadata.templateName)
       : null;
-  const tickStatus = mapStatus(message.status);
-  const isFailed = isOutbound && tickStatus === 'failed';
-  const isAmbiguous = isOutbound && tickStatus === 'ambiguous';
-  const sendFailure = isFailed ? explainWhatsAppSendFailureFromMessage(message) : null;
+  const rawTick = mapStatus(message.status);
+  const isFailed = isOutbound && rawTick === 'failed';
+  const isAmbiguous = isOutbound && rawTick === 'ambiguous';
+  const knownFailure = isOutbound && showsKnownProviderFailure(message.status, message.metadata);
+  const tickStatus = knownFailure && isAmbiguous ? 'failed' : rawTick;
+  const sendFailure = knownFailure ? explainWhatsAppSendFailureFromMessage(message) : null;
   const canRetryFailed = Boolean(isFailed && onRetry && sendFailure?.retryHelps !== false);
   const time = grouping.last ? formatBubbleClockTime(message.createdAt) : undefined;
   const replyPreview = message.metadata?.replyPreview;
@@ -1016,12 +1021,12 @@ export default function MessageBubble({
             </div>
               {reactionChips}
             <FailedRetryRow
-              show={isFailed}
+              show={knownFailure}
               retrying={retrying}
               explanation={sendFailure}
               onRetry={canRetryFailed ? () => onRetry?.(message) : undefined}
             />
-            <AmbiguousStatusRow show={isAmbiguous} />
+            <AmbiguousStatusRow show={isAmbiguous && !knownFailure} />
             </div>
           </div>
         </div>
@@ -1063,12 +1068,12 @@ export default function MessageBubble({
           </div>
           {reactionChips}
           <FailedRetryRow
-            show={isFailed}
+            show={knownFailure}
             retrying={retrying}
             explanation={sendFailure}
             onRetry={canRetryFailed ? () => onRetry?.(message) : undefined}
           />
-          <AmbiguousStatusRow show={isAmbiguous} />
+          <AmbiguousStatusRow show={isAmbiguous && !knownFailure} />
         </div>
       </div>
     </div>

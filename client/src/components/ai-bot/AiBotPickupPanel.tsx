@@ -13,8 +13,6 @@ type PickupSettings = {
   afterHoursMessage: string;
   missedCallAutoMessage: boolean;
   missedCallMessage: string;
-  recordingConsentEnabled: boolean;
-  recordingConsentMessage: string;
 };
 
 const RING_PRESETS = [20, 30, 45, 60];
@@ -32,8 +30,6 @@ const defaults: PickupSettings = {
   afterHoursMessage: 'Thanks for calling. We are currently closed.',
   missedCallAutoMessage: true,
   missedCallMessage: 'Sorry we missed your call! Reply here and we will help you shortly.',
-  recordingConsentEnabled: false,
-  recordingConsentMessage: 'This call may be recorded.',
 };
 
 function telephonyPayload(settings: PickupSettings) {
@@ -44,8 +40,6 @@ function telephonyPayload(settings: PickupSettings) {
     afterHoursMessage: settings.afterHoursMessage,
     missedCallAutoMessage: settings.missedCallAutoMessage,
     missedCallMessage: settings.missedCallMessage,
-    recordingConsentEnabled: settings.recordingConsentEnabled,
-    recordingConsentMessage: settings.recordingConsentMessage,
     liveTransferEnabled: false,
     transferMode: 'message_only' as const,
   };
@@ -223,19 +217,6 @@ const AiBotPickupPanel = forwardRef<AiBotPickupPanelHandle, AiBotPickupPanelProp
           />
         )}
 
-        <ToggleRow
-          label="Recording notice"
-          checked={settings.recordingConsentEnabled}
-          onChange={(checked) => setSettings((s) => ({ ...s, recordingConsentEnabled: checked }))}
-        />
-        {settings.recordingConsentEnabled && (
-          <AppTextarea
-            rows={2}
-            placeholder="Consent line"
-            value={settings.recordingConsentMessage}
-            onChange={(e) => setSettings((s) => ({ ...s, recordingConsentMessage: e.target.value }))}
-          />
-        )}
       </div>
     );
   }

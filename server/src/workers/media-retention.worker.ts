@@ -1,5 +1,3 @@
-import fs from 'fs/promises';
-import path from 'path';
 import prisma from '../config/database';
 import { createModuleLogger } from '../utils/logger';
 import { deleteMediaObject } from '../modules/media/storage-adapter';
@@ -10,85 +8,9 @@ import {
 
 const log = createModuleLogger('media-retention');
 
-const CALLS_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'calls');
-
-export function getCallRecordingTtlDays(): number {
-  const raw = parseInt(process.env.CALL_RECORDING_TTL_DAYS || '7', 10);
-  if (!Number.isFinite(raw) || raw < 1) return 7;
-  return raw;
-}
-
-/**
- * Delete local AI call recordings (`uploads/calls/*.pcm`) older than TTL.
- * Safe no-op when the directory is missing.
- */
-export async function purgeExpiredCallRecordings(options?: {
-  uploadsDir?: string;
-  ttlDays?: number;
-  now?: Date;
-}): Promise<{ scanned: number; deleted: number }> {
-  const uploadsDir = options?.uploadsDir ?? CALLS_UPLOAD_DIR;
-  const ttlDays = options?.ttlDays ?? getCallRecordingTtlDays();
-  const now = options?.now ?? new Date();
-  const cutoffMs = now.getTime() - ttlDays * 24 * 60 * 60 * 1000;
-
-  let scanned = 0;
-  let deleted = 0;
-
-  let entries: string[];
-  try {
-    entries = await fs.readdir(uploadsDir);
-  } catch (err) {
-    const code = err && typeof err === 'object' && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
-    if (code === 'ENOENT') {
-      return { scanned: 0, deleted: 0 };
-    }
-    throw err;
-  }
-
-  for (const name of entries) {
-    if (!name.endsWith('.pcm')) continue;
-    const filePath = path.join(uploadsDir, name);
-    scanned += 1;
-
-    let mtimeMs: number;
-    try {
-      const stat = await fs.stat(filePath);
-      mtimeMs = stat.mtimeMs;
-    } catch {
-      continue;
-    }
-
-    if (mtimeMs >= cutoffMs) continue;
-
-    try {
-      await fs.unlink(filePath);
-      deleted += 1;
-      log.info('Deleted expired call recording', {
-        file: name,
-        ttlDays,
-        ageDays: Math.round((now.getTime() - mtimeMs) / (24 * 60 * 60 * 1000)),
-      });
-    } catch (err) {
-      log.warn('Failed to delete call recording', {
-        file: name,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  if (deleted > 0) {
-    log.info('Call recording TTL cleanup finished', { scanned, deleted, ttlDays });
-  }
-
-  return { scanned, deleted };
-}
-
 export async function runMediaRetentionPass(): Promise<{
   scanned: number;
   purged: number;
-  recordingsScanned: number;
-  recordingsDeleted: number;
   instagramCommentsDeleted: number;
   gmailAttachmentsDeleted: number;
 }> {
@@ -135,7 +57,6 @@ export async function runMediaRetentionPass(): Promise<{
     }
   }
 
-  const recordings = await purgeExpiredCallRecordings();
   const igComments = await purgeExpiredInstagramComments();
   // This is a system-wide storage cleanup, so it intentionally scans
   // disconnected workspaces too. User-facing attachment reads require an
@@ -171,8 +92,6 @@ export async function runMediaRetentionPass(): Promise<{
   return {
     scanned,
     purged,
-    recordingsScanned: recordings.scanned,
-    recordingsDeleted: recordings.deleted,
     instagramCommentsDeleted: igComments.deleted,
     gmailAttachmentsDeleted: expiredGmailAttachments.length,
   };
@@ -191,7 +110,6 @@ export function startMediaRetentionWorker(): void {
   setInterval(run, intervalMs);
   log.info('Media retention worker started', {
     intervalMs,
-    callRecordingTtlDays: getCallRecordingTtlDays(),
     instagramCommentRetentionDays: getInstagramCommentRetentionDays(),
   });
 }
