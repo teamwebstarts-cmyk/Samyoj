@@ -36,11 +36,11 @@ export function mergeCallingSettings(
     liveTransferEnabled: false,
     transferMode: 'message_only',
     maxCallDurationSec: clampCallDurationSec(
-      stored.maxCallDurationSec ?? base.maxCallDurationSec
+      storedWithoutRecording.maxCallDurationSec ?? base.maxCallDurationSec
     ),
-    ttsLanguage: normalizeVoiceLang(stored.ttsLanguage),
-    deepgramLanguage: normalizeVoiceLang(stored.deepgramLanguage),
-    sarvamSttLanguage: normalizeVoiceLang(stored.sarvamSttLanguage),
+    ttsLanguage: normalizeVoiceLang(storedWithoutRecording.ttsLanguage),
+    deepgramLanguage: normalizeVoiceLang(storedWithoutRecording.deepgramLanguage),
+    sarvamSttLanguage: normalizeVoiceLang(storedWithoutRecording.sarvamSttLanguage),
   };
 }
 
