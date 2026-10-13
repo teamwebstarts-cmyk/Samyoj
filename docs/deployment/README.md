@@ -4,7 +4,9 @@
 
 | File | Kya hai |
 |------|---------|
-| **[AWS_MIGRATION_GUIDE.md](./AWS_MIGRATION_GUIDE.md)** | 🚀 **GCP → AWS** — data kya aayega / nahi, security, GitHub deploy (no source on server), cost (verified), checklists, AWS MCP. **Migration se pehle yahi.** |
+| **[AWS_POC_STEPS.md](./AWS_POC_STEPS.md)** | ✅ **Ab ye follow karo** — minimal POC: kaun sa step tum, kaun sa agent. DNS last. |
+| **[AWS_MIGRATION_GUIDE.md](./AWS_MIGRATION_GUIDE.md)** | 🚀 Full reference — data matrix, security, cost, GitHub deploy model. |
+| **[AWS_MCP_CURSOR_SETUP.md](./AWS_MCP_CURSOR_SETUP.md)** | 🤖 **Official AWS MCP Server + Cursor** — OAuth setup, tumhe kya details chahiye, safe IAM, verify steps. |
 | **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** | ✅ **Main guide** — step-by-step redeploy instructions, cheatsheet, troubleshooting. **Yahi pehle padho.** |
 | **[SERVER_INVENTORY.md](./SERVER_INVENTORY.md)** | 📋 Detailed VM inventory — sab kuch jo live server pe mila (services, ports, .env keys, nginx, git state). Deep-dive reference. |
 
