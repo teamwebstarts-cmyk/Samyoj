@@ -82,8 +82,11 @@ export default function DashboardChannelTabs({
                 ? 'bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] text-white shadow-[0_4px_10px_rgba(220,39,67,0.28)]'
                 : 'bg-[#ea4335] text-white shadow-[0_4px_10px_rgba(234,67,53,0.32)]';
 
-        const subtitle =
-          channel.key === 'whatsapp' && whatsappLabel ? whatsappLabel : subtitles[channel.key];
+        const subtitle = connected
+          ? channel.key === 'whatsapp' && whatsappLabel
+            ? whatsappLabel
+            : subtitles[channel.key]
+          : `Connect ${channel.label}`;
         const statusLabel = connected ? 'Connected' : 'Not connected';
 
         return (
@@ -106,18 +109,18 @@ export default function DashboardChannelTabs({
             </span>
             <span className="dashboard-channel-tab__name">{channel.label}</span>
             <span className="dashboard-channel-tab__copy min-w-0">
-              <span className="flex items-center gap-1.5">
-                <span className="truncate text-[12px] font-extrabold text-neutral-900 lg:text-[13px]">
+              <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                <span className="min-w-0 flex-1 truncate text-[12px] font-extrabold text-neutral-900 lg:text-[13px]">
                   {channel.label}
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                  className={`dashboard-channel-tab__status-badge inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none ${
                     connected
                       ? 'bg-emerald-50 text-emerald-700'
                       : 'bg-neutral-100 text-neutral-500'
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
                   <span className="hidden lg:inline">{statusLabel}</span>
                 </span>
               </span>

@@ -177,8 +177,10 @@ About **$35 / month (~₹3,000)** if `t3.medium` + 30 GB stays running. Stop or 
 | Mumbai EC2 | **`samyoj-poc`** `i-085ca1949bb94e621` · `t3.medium` · Debian 12 · key `samyoj-poc-bootstrap` |
 | Elastic IP | **`3.108.25.94`** |
 | Security group | `sg-053a33215e0d0477a` — **80, 443** public; **22 only** from the Codespace IP (temporary) |
-| App on AWS | **Running.** Health ok. DB restored: 11 orgs, 17 messages, 1 WhatsApp number. No `.git`, no `server/src`. |
-| POC URL | `http://3.108.25.94/` (HTTP only — DNS not moved) |
-| GCP `app.samyoj.com` | **Still live** |
+| App on AWS | **Running.** Health ok. Fresh dump 13 Oct 2026 09:09 UTC: 11 orgs, 17 messages, 1 WhatsApp number. No `.git`, no `server/src`. |
+| Boot | `pm2-samyoj.service` enabled. `certbot` installed. Certificate waits for DNS. |
+| DNS | **Done.** `app.samyoj.com` and `admin.samyoj.com` → `3.108.25.94` |
+| HTTPS | Certificate until **11 Jan 2027**. HTTP redirects to HTTPS. Webhook challenge returns `ping`. |
+| GCP VM | Still running. Stop it after a real login and one new WhatsApp reply. |
 
-**Your next (Step 4 preview):** when agent says ready, open `http://3.108.25.94/` and try login.
+**Your next:** change the two A records, then say `DNS go`. Learning: [AWS_LEARNING.md](./AWS_LEARNING.md). Operate the box: [AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md).

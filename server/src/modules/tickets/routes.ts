@@ -188,20 +188,29 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const orgId = req.user!.organizationId!;
     const conversationId = req.params.conversationId as string;
-    const { title, priority, category, description } = z
+    const { title, priority, category, description, assignedAgentId } = z
       .object({
         title: z.string().optional(),
         priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
         category: z.string().optional(),
         description: z.string().max(2000).optional(),
+        assignedAgentId: z.string().uuid().nullable().optional(),
       })
       .parse(req.body);
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+      where: { id: conversationId, organizationId: orgId },
       include: { contact: true },
     });
     if (!conversation) throw new AppError(404, 'Conversation not found');
+    if (
+      conversation.whatsappNumberId &&
+      req.activeWhatsappNumberId &&
+      conversation.whatsappNumberId !== req.activeWhatsappNumberId
+    ) {
+      throw new AppError(404, 'Conversation not found');
+    }
+    if (assignedAgentId) await assertAgentInOrg(orgId, assignedAgentId);
 
     const ticket = await prisma.ticket.create({
       data: {
@@ -212,6 +221,7 @@ router.post(
         title: title || `Ticket: ${conversation.contact.name || conversation.contact.phone}`,
         priority: priority || 'MEDIUM',
         category,
+        assignedAgentId: assignedAgentId || undefined,
         slaDueAt: computeSlaDueAt(),
       },
       include: ticketInclude,

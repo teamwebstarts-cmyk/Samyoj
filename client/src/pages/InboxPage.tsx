@@ -1080,6 +1080,8 @@ export default function InboxPage() {
         open={ticketModalOpen}
         defaultTitle={selected ? `Support: ${selected.contact.name || selected.contact.phone}` : ''}
         submitting={ticketSubmitting}
+        agents={agents}
+        defaultAssigneeId={selected?.assignedAgent?.id}
         onClose={() => setTicketModalOpen(false)}
         onSubmit={(values) => void handleSubmitTicket(values)}
       />

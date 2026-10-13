@@ -1714,8 +1714,14 @@
       padding: 0.45rem 0.65rem;
     }
 
+    .dashboard-channel-tab__status-badge {
+      max-height: 1.125rem;
+    }
+
     .dashboard-channel-tab__copy {
       display: block;
+      min-width: 0;
+      flex: 1;
     }
 
     .dashboard-channel-tab__name {
@@ -2553,48 +2559,15 @@
     gap: 0.625rem;
   }
 
-  @media (min-width: 900px) {
-    .dashboard-channel-hero-layout--all {
-      grid-template-columns: minmax(0, 1fr) minmax(9.5rem, 17.5rem) auto;
-      column-gap: 0.375rem;
-    }
-
-    .dashboard-channel-hero-layout--all .channel-hero-lead {
-      grid-column: 1;
-      grid-row: 1;
-      min-width: 0;
-      padding-right: 0.25rem;
-    }
-
-    .dashboard-channel-hero-layout--all .channel-hero-actions {
-      grid-column: 3;
-      grid-row: 1;
-    }
-  }
-
   .dashboard-channel-hero-decor--all {
     left: auto;
-    right: auto;
-    top: auto;
-    position: relative;
-    display: flex;
-    width: min(100%, 17.5rem);
-    max-width: 17.5rem;
-    height: 5.75rem;
-    transform: none;
-    justify-self: center;
-  }
-
-  @media (min-width: 900px) {
-    .dashboard-channel-hero-decor--all {
-      position: relative;
-      grid-column: 2;
-      grid-row: 1;
-      justify-self: end;
-      align-self: center;
-      display: flex !important;
-      margin: 0;
-    }
+    right: 13.5rem;
+    top: 50%;
+    z-index: 0;
+    display: none;
+    height: 104px;
+    width: min(220px, 30%);
+    transform: translateY(-50%);
   }
 
   .all-channels-hero__frame {
@@ -2669,44 +2642,13 @@
 
   }
 
-  @media (max-width: 899px) {
-    .dashboard-channel-hero-layout--all {
-      grid-template-columns: minmax(0, 1fr);
-      justify-items: stretch;
-    }
-
+  @media (min-width: 1024px) {
     .dashboard-channel-hero-layout--all .channel-hero-lead {
-      grid-column: 1;
-      grid-row: 1;
+      padding-right: 15.5rem;
     }
 
     .dashboard-channel-hero-decor--all {
-      grid-column: 1;
-      grid-row: 2;
-      display: flex;
-      height: 5.5rem;
-      margin-top: 0.15rem;
-    }
-
-    .dashboard-channel-hero-layout--all .channel-hero-actions {
-      grid-column: 1;
-      grid-row: 3;
-      width: 100%;
-    }
-
-    .all-channels-hero__frame {
-      justify-content: center;
-    }
-  }
-
-  @media (min-width: 1280px) {
-    .dashboard-channel-hero-layout--all {
-      grid-template-columns: minmax(0, 1fr) minmax(11rem, 20rem) auto;
-    }
-
-    .dashboard-channel-hero-decor--all {
-      max-width: 20rem;
-      height: 7.75rem;
+      display: flex !important;
     }
   }
 

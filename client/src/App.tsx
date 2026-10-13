@@ -47,7 +47,7 @@ import BillingPage from './pages/BillingPage';
 import ContentStudioPage from './pages/ContentStudioPage';
 import CommercePage from './pages/CommercePage';
 import TicketsPage from './pages/TicketsPage';
-import HelpPage from './pages/HelpPage';
+import HelpDrawerRedirect from './pages/HelpDrawerRedirect';
 import OnboardingGate from './components/OnboardingGate';
 import { AppToaster } from './utils/toast';
 
@@ -119,7 +119,7 @@ export default function App() {
                       <Route path="/content-studio" element={<ContentStudioPage />} />
                       <Route path="/commerce" element={<CommercePage />} />
                       <Route path="/tickets" element={<TicketsPage />} />
-                      <Route path="/help" element={<HelpPage />} />
+                      <Route path="/help" element={<HelpDrawerRedirect />} />
                       <Route path="/contacts" element={<ContactsPage />} />
                       <Route path="/team" element={<TeamPage />} />
                       <Route path="/reports" element={<Navigate to="/billing?tab=usage" replace />} />

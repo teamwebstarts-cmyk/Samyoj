@@ -16,6 +16,8 @@ export interface WhatsAppSendFailureExplanation {
   title: string;
   body: string;
   notice: string;
+  steps?: string[];
+  footnote?: string;
   retryHelps: boolean;
   action: WhatsAppSendFailureAction;
 }
@@ -57,9 +59,15 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     action: 'meta_account',
   },
   133010: {
-    title: 'This WhatsApp number is not registered',
-    body: 'Meta rejected the send because this business number is not registered for Cloud API. In WhatsApp Manager, open the number and choose Register, then enter the 6-digit PIN. Retry will not send until the number shows Registered.',
-    notice: 'Register this WhatsApp number in WhatsApp Manager before sending.',
+    title: 'Register this number in WhatsApp Manager',
+    body: 'Your business line is not registered for Cloud API yet, so Meta blocked this message.',
+    notice: 'Register this number in WhatsApp Manager before sending.',
+    steps: [
+      'Open WhatsApp Manager and select this phone number.',
+      'Tap Register and enter the 6-digit PIN Meta sends you.',
+      'When the number shows Registered, send again from Samyoj.',
+    ],
+    footnote: 'Retrying in Samyoj will not work until Meta shows Registered.',
     retryHelps: false,
     action: 'meta_account',
   },

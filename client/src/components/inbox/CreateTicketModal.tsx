@@ -5,17 +5,21 @@ import AppButton from '../ui/AppButton';
 import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import { FOCUS_RING_CLASS, useAutoFocus } from '../../hooks/inboxA11y';
+import type { TeamAgent } from '../../types';
 
 export interface TicketFormValues {
   title: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   description?: string;
+  assignedAgentId?: string | null;
 }
 
 interface CreateTicketModalProps {
   open: boolean;
   defaultTitle: string;
   submitting: boolean;
+  agents?: TeamAgent[];
+  defaultAssigneeId?: string | null;
   onClose: () => void;
   onSubmit: (values: TicketFormValues) => void;
 }
@@ -35,12 +39,15 @@ export default function CreateTicketModal({
   open,
   defaultTitle,
   submitting,
+  agents = [],
+  defaultAssigneeId,
   onClose,
   onSubmit,
 }: CreateTicketModalProps) {
   const [title, setTitle] = useState(defaultTitle);
   const [priority, setPriority] = useState<TicketFormValues['priority']>('MEDIUM');
   const [description, setDescription] = useState('');
+  const [assignedAgentId, setAssignedAgentId] = useState<string>('');
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useAutoFocus(titleInputRef, open);
@@ -50,8 +57,9 @@ export default function CreateTicketModal({
       setTitle(defaultTitle);
       setPriority('MEDIUM');
       setDescription('');
+      setAssignedAgentId(defaultAssigneeId || '');
     }
-  }, [open, defaultTitle]);
+  }, [open, defaultTitle, defaultAssigneeId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +68,7 @@ export default function CreateTicketModal({
       title: title.trim(),
       priority,
       description: description.trim() || undefined,
+      assignedAgentId: assignedAgentId || null,
     });
   };
 
@@ -68,7 +77,7 @@ export default function CreateTicketModal({
       open={open}
       onClose={onClose}
       title="Create ticket"
-      subtitle="Add this chat to the Tickets page so the team can follow up and hit the reply deadline."
+      subtitle="Create a follow-up and hand it to an agent. Works from WhatsApp, Messenger, and Instagram chats."
       icon={Ticket}
       // Match the inbox Create-ticket rail button: emerald token + Lucide Ticket icon.
       iconClassName="bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-500/25"
@@ -109,6 +118,26 @@ export default function CreateTicketModal({
               );
             })}
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className="text-label text-theme-secondary">Assign to</span>
+          <select
+            value={assignedAgentId}
+            onChange={(e) => setAssignedAgentId(e.target.value)}
+            className={`w-full rounded-xl border border-theme-border bg-theme-surface px-3 py-2 text-[13px] font-semibold text-theme-fg ${FOCUS_RING_CLASS}`}
+            aria-label="Assign ticket to"
+          >
+            <option value="">Unassigned</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] font-medium text-theme-muted">
+            The agent sees this on Tickets. Leave unassigned if you will pick someone later.
+          </p>
         </div>
 
         <AppTextarea

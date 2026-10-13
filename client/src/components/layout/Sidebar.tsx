@@ -3,8 +3,9 @@ import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { resolveSidebarAccent, type SidebarChannelAccent } from '../../utils/sidebarChannelAccent';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronsLeft, ChevronDown, X } from 'lucide-react';
-import { getVisibleNavSections, type NavSection } from '../../config/navigation';
+import { getVisibleNavSections, type NavItemAction, type NavSection } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSupportDrawer } from '../../contexts/SupportDrawerContext';
 import { PlatformBrand } from './PlatformBrand';
 import WhatsAppGlyph from '../dashboard/icons/WhatsAppGlyph';
 import { SidebarFlyoutTip, tipProps, useSidebarFlyoutTip } from './SidebarFlyoutTip';
@@ -37,6 +38,81 @@ function formatBadge(count: number): string {
   return count > 99 ? '99+' : String(count);
 }
 
+function navItemClass(isActive: boolean, accent: SidebarChannelAccent) {
+  return [
+    'sidebar-nav-item group relative box-border flex h-[var(--density-nav-item-h)] w-full items-center rounded-xl border pl-2.5 pr-2.5 text-left text-[13.5px] font-medium',
+    'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
+    isActive ? `sidebar-nav-item--active sidebar-nav-item--accent-${accent}` : 'sidebar-nav-item--idle',
+  ].join(' ');
+}
+
+function NavItemBody({
+  isActive,
+  collapsed,
+  glyph,
+  Icon,
+  label,
+  badgeLabel,
+}: {
+  isActive: boolean;
+  collapsed?: boolean;
+  glyph?: 'whatsapp';
+  Icon: LucideIcon;
+  label: string;
+  badgeLabel: string;
+}) {
+  return (
+    <>
+      <span
+        className={[
+          'sidebar-nav-icon relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+          !isActive ? 'group-hover:scale-[1.04]' : '',
+        ].join(' ')}
+        style={{ transition: 'transform 200ms ease, background-color 200ms ease' }}
+      >
+        {glyph === 'whatsapp' ? (
+          <WhatsAppGlyph className={isActive ? 'h-4 w-4 text-white' : 'h-4 w-4'} />
+        ) : (
+          <Icon
+            className={isActive ? 'h-[16px] w-[16px] text-white' : 'h-[17px] w-[17px]'}
+            strokeWidth={isActive ? 2 : 1.75}
+          />
+        )}
+        {badgeLabel ? (
+          <span
+            className={[
+              'sidebar-nav-badge absolute -right-0.5 -top-0.5 z-[2] inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold tabular-nums',
+              'transition-opacity duration-200 ease-out',
+              collapsed ? 'opacity-100' : 'pointer-events-none opacity-0',
+            ].join(' ')}
+            aria-hidden={!collapsed}
+          >
+            {badgeLabel}
+          </span>
+        ) : null}
+      </span>
+
+      <span
+        className={[
+          'sidebar-label ml-2.5 flex min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap',
+          'transition-[opacity,margin] duration-200 ease-out',
+          collapsed ? 'pointer-events-none ml-0 w-0 opacity-0' : 'opacity-100',
+        ].join(' ')}
+        aria-hidden={collapsed}
+      >
+        <span className="min-w-0 flex-1 truncate transition-[font-weight] duration-200 group-hover:font-semibold">
+          {label}
+        </span>
+        {badgeLabel ? (
+          <span className="sidebar-nav-badge inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums">
+            {badgeLabel}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+}
+
 function NavItem({
   to,
   icon: Icon,
@@ -49,6 +125,7 @@ function NavItem({
   onShowTip,
   onHideTip,
   accent = 'neutral',
+  action,
 }: {
   to: string;
   icon: LucideIcon;
@@ -61,10 +138,40 @@ function NavItem({
   onShowTip: (text: string, el: HTMLElement) => void;
   onHideTip: () => void;
   accent?: SidebarChannelAccent;
+  action?: NavItemAction;
 }) {
+  const { openSupport, open: helpDrawerOpen } = useSupportDrawer();
   const badgeLabel = formatBadge(badge ?? 0);
   const tipText = badgeLabel ? `${label} · ${badgeLabel}` : label;
   const flyout = tipProps(!!collapsed, tipText, onShowTip, onHideTip);
+  const aria = badgeLabel ? `${label}, ${badgeLabel} unread` : label;
+
+  if (action === 'open-help') {
+    const isActive = helpDrawerOpen;
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          onHideTip();
+          onNavigate?.();
+          openSupport();
+        }}
+        aria-label={aria}
+        aria-pressed={isActive}
+        {...flyout}
+        className={navItemClass(isActive, accent)}
+      >
+        <NavItemBody
+          isActive={isActive}
+          collapsed={collapsed}
+          glyph={glyph}
+          Icon={Icon}
+          label={label}
+          badgeLabel={badgeLabel}
+        />
+      </button>
+    );
+  }
 
   return (
     <NavLink
@@ -74,67 +181,19 @@ function NavItem({
         onHideTip();
         onNavigate?.();
       }}
-      aria-label={badgeLabel ? `${label}, ${badgeLabel} unread` : label}
+      aria-label={aria}
       {...flyout}
-      className={({ isActive }) =>
-        [
-          'sidebar-nav-item group relative box-border flex h-[var(--density-nav-item-h)] w-full items-center rounded-xl border pl-2.5 pr-2.5 text-[13.5px] font-medium',
-          'transition-[background-color,color,box-shadow,border-color] duration-200 ease-out',
-          isActive
-            ? `sidebar-nav-item--active sidebar-nav-item--accent-${accent}`
-            : 'sidebar-nav-item--idle',
-        ].join(' ')
-      }
+      className={({ isActive }) => navItemClass(isActive, accent)}
     >
       {({ isActive }) => (
-        <>
-          <span
-            className={[
-              'sidebar-nav-icon relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-              !isActive ? 'group-hover:scale-[1.04]' : '',
-            ].join(' ')}
-            style={{ transition: 'transform 200ms ease, background-color 200ms ease' }}
-          >
-            {glyph === 'whatsapp' ? (
-              <WhatsAppGlyph className={isActive ? 'h-4 w-4 text-white' : 'h-4 w-4'} />
-            ) : (
-              <Icon
-                className={isActive ? 'h-[16px] w-[16px] text-white' : 'h-[17px] w-[17px]'}
-                strokeWidth={isActive ? 2 : 1.75}
-              />
-            )}
-            {badgeLabel ? (
-              <span
-                className={[
-                  'sidebar-nav-badge absolute -right-0.5 -top-0.5 z-[2] inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold tabular-nums',
-                  'transition-opacity duration-200 ease-out',
-                  collapsed ? 'opacity-100' : 'pointer-events-none opacity-0',
-                ].join(' ')}
-                aria-hidden={!collapsed}
-              >
-                {badgeLabel}
-              </span>
-            ) : null}
-          </span>
-
-          <span
-            className={[
-              'sidebar-label ml-2.5 flex min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap',
-              'transition-[opacity,margin] duration-200 ease-out',
-              collapsed ? 'pointer-events-none ml-0 w-0 opacity-0' : 'opacity-100',
-            ].join(' ')}
-            aria-hidden={collapsed}
-          >
-            <span className="min-w-0 flex-1 truncate transition-[font-weight] duration-200 group-hover:font-semibold">
-              {label}
-            </span>
-            {badgeLabel ? (
-              <span className="sidebar-nav-badge inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums">
-                {badgeLabel}
-              </span>
-            ) : null}
-          </span>
-        </>
+        <NavItemBody
+          isActive={isActive}
+          collapsed={collapsed}
+          glyph={glyph}
+          Icon={Icon}
+          label={label}
+          badgeLabel={badgeLabel}
+        />
       )}
     </NavLink>
   );
@@ -512,7 +571,7 @@ export default function Sidebar({
                 <div className="flex flex-col gap-1">
                   {section.items.map((item) => (
                     <NavItem
-                      key={item.to}
+                      key={item.action ?? item.to}
                       {...item}
                       collapsed={collapsed}
                       onNavigate={onNavigate}

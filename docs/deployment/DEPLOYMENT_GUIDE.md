@@ -1,8 +1,10 @@
 # Samyoj — Production Deployment Guide (GCE VM)
 
-> **Purpose:** Complete, developer-friendly guide for deploying/redeploying Samyoj to the Google Compute Engine VM.
-> **Last verified:** 2026-08-06 (live VM inspection)
-> **App is currently LIVE at:** `https://app.samyoj.com` ✅
+> **AWS is the next host.** Until DNS moves, this file is only the Google Cloud VM. New deploys: [AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md). Concepts: [AWS_LEARNING.md](./AWS_LEARNING.md).
+>
+> **Purpose:** Redeploy steps for the Google Compute Engine VM `samyoj-server`.
+> **Last verified:** 2026-08-06 (live VM inspection). DNS on 2026-10-13 still points here.
+> **App name still opens this VM:** `https://app.samyoj.com` until the A record changes to `3.108.25.94`.
 
 ---
 

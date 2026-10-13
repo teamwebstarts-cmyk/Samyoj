@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   Check,
@@ -46,6 +47,7 @@ import type { Message } from '../../types';
 import CallSummaryNote from '../calls/CallSummaryNote';
 import {
   explainWhatsAppSendFailureFromMessage,
+  sendFailureActionLink,
   showsKnownProviderFailure,
 } from '../../utils/whatsappSendFailure';
 
@@ -1102,28 +1104,89 @@ function FailedRetryRow({
   onRetry?: () => void;
   explanation: ReturnType<typeof explainWhatsAppSendFailureFromMessage> | null;
 }) {
-  if (!show) return null;
+  if (!show || !explanation) return null;
+
+  const actionLink = sendFailureActionLink(explanation.action);
+  const footnote =
+    explanation.footnote ||
+    (!explanation.retryHelps ? 'Retrying here will not fix this until the steps below are done.' : null);
+
   return (
-    <div className="mt-1 flex max-w-[min(100%,280px)] flex-col items-end gap-1">
-      <p className="text-right text-[11px] font-semibold text-red-600 dark:text-red-400">
-        {explanation?.title || 'Failed'}
-      </p>
-      {explanation?.body ? (
-        <p className="text-right text-[11px] leading-snug text-red-700/90 dark:text-red-300/90">
-          {explanation.body}
-        </p>
-      ) : null}
-      {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={retrying}
-          className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700 ring-1 ring-red-200/70 transition hover:bg-red-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 focus-visible:ring-offset-1 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-500/30"
-        >
-          <RotateCcw className={`h-3 w-3 ${retrying ? 'animate-spin' : ''}`} strokeWidth={2.5} />
-          Retry
-        </button>
-      ) : null}
+    <div className="mt-2 flex w-full justify-end" role="alert">
+      <div
+        className="w-full max-w-[min(100%,320px)] rounded-xl border border-rose-200/90 bg-gradient-to-b from-rose-50 to-white px-3 py-2.5 text-left shadow-[0_2px_8px_rgba(190,18,60,0.08)] dark:border-rose-500/30 dark:from-rose-950/50 dark:to-rose-950/20"
+      >
+        <div className="flex gap-2.5">
+          <span
+            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+            aria-hidden
+          >
+            <AlertCircle className="h-4 w-4" strokeWidth={2.25} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-extrabold leading-snug text-rose-950 dark:text-rose-100">
+              {explanation.title}
+            </p>
+            {explanation.body ? (
+              <p className="mt-1 text-[11px] font-medium leading-snug text-rose-900/85 dark:text-rose-200/90">
+                {explanation.body}
+              </p>
+            ) : null}
+            {explanation.steps?.length ? (
+              <ol className="mt-2 space-y-1.5 pl-0.5 text-[11px] leading-snug text-rose-900/90 dark:text-rose-100/90">
+                {explanation.steps.map((step, index) => (
+                  <li key={index} className="flex gap-2">
+                    <span
+                      className="flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full bg-rose-200/80 text-[10px] font-extrabold text-rose-900 dark:bg-rose-500/25 dark:text-rose-100"
+                      aria-hidden
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 pt-px">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+            {footnote ? (
+              <p className="mt-2 text-[10.5px] font-semibold leading-snug text-rose-800/75 dark:text-rose-300/80">
+                {footnote}
+              </p>
+            ) : null}
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {actionLink ? (
+                actionLink.external ? (
+                  <a
+                    href={actionLink.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-rose-800 ring-1 ring-rose-200/90 transition hover:bg-rose-50 dark:bg-rose-950/40 dark:text-rose-100 dark:ring-rose-500/35"
+                  >
+                    {actionLink.label}
+                  </a>
+                ) : (
+                  <Link
+                    to={actionLink.href}
+                    className="inline-flex items-center rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-rose-800 ring-1 ring-rose-200/90 transition hover:bg-rose-50 dark:bg-rose-950/40 dark:text-rose-100 dark:ring-rose-500/35"
+                  >
+                    {actionLink.label}
+                  </Link>
+                )
+              ) : null}
+              {onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  disabled={retrying}
+                  className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-rose-700 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 focus-visible:ring-offset-1 dark:bg-rose-500 dark:hover:bg-rose-400"
+                >
+                  <RotateCcw className={`h-3 w-3 ${retrying ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

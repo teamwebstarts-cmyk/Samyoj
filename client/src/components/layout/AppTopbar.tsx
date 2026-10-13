@@ -31,10 +31,10 @@ import {
 import { useMetaChannelStatus } from './MetaChannelChips';
 import { useGmailChannelAvailable } from '../email/emailData';
 import type { OrgRole } from '../../types';
+import { useSupportDrawer } from '../../contexts/SupportDrawerContext';
 import GlobalSearch, { useGlobalSearchShortcut } from './GlobalSearch';
 import NotificationCenter from './NotificationCenter';
 import NumberSwitcher, { NumberSwitcherMobile } from './NumberSwitcher';
-import SupportBoard from '../support/SupportBoard';
 
 const USER_MENU_WIDTH = 240;
 const USER_MENU_GAP = 12;
@@ -92,7 +92,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
   const initials = nameInitials(userName);
   const roleText = roleLabel(orgRole);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [supportOpen, setSupportOpen] = useState(false);
+  const { openSupport } = useSupportDrawer();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [userMenuPos, setUserMenuPos] = useState<{ top: number; right: number } | null>(null);
   const userTriggerRef = useRef<HTMLButtonElement>(null);
@@ -371,17 +371,18 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
             <NumberSwitcherMobile />
             <NumberSwitcher />
 
-            <Link
-              to="/help"
+            <button
+              type="button"
+              onClick={() => openSupport()}
               className="topbar-icon-btn sm:hidden"
               aria-label="Help assistant"
               title="Help assistant"
             >
               <Headphones className="h-[17px] w-[17px]" strokeWidth={2} />
-            </Link>
+            </button>
             <button
               type="button"
-              onClick={() => setSupportOpen(true)}
+              onClick={() => openSupport()}
               className="hidden shrink-0 whitespace-nowrap items-center gap-1.5 text-[13px] font-semibold text-neutral-600 transition hover:text-neutral-900 sm:inline-flex dark:text-neutral-300 dark:hover:text-theme-fg"
             >
               <Headphones className="h-4 w-4 text-neutral-400" strokeWidth={2} />
@@ -454,7 +455,6 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
       </header>
       {userMenu}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <SupportBoard open={supportOpen} onClose={() => setSupportOpen(false)} />
     </>
   );
 }

@@ -4,15 +4,19 @@
 
 | File | Kya hai |
 |------|---------|
-| **[AWS_POC_STEPS.md](./AWS_POC_STEPS.md)** | ✅ **Ab ye follow karo** — minimal POC: kaun sa step tum, kaun sa agent. DNS last. |
-| **[AWS_MIGRATION_GUIDE.md](./AWS_MIGRATION_GUIDE.md)** | 🚀 Full reference — data matrix, security, cost, GitHub deploy model. |
-| **[AWS_MCP_CURSOR_SETUP.md](./AWS_MCP_CURSOR_SETUP.md)** | 🤖 **Official AWS MCP Server + Cursor** — OAuth setup, tumhe kya details chahiye, safe IAM, verify steps. |
-| **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** | ✅ **Main guide** — step-by-step redeploy instructions, cheatsheet, troubleshooting. **Yahi pehle padho.** |
-| **[SERVER_INVENTORY.md](./SERVER_INVENTORY.md)** | 📋 Detailed VM inventory — sab kuch jo live server pe mila (services, ports, .env keys, nginx, git state). Deep-dive reference. |
+| **[AWS_LEARNING.md](./AWS_LEARNING.md)** | Padho pehle. Is move ke words aur decisions, Hinglish. |
+| **[AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md)** | **Aage ka deploy doc.** AWS box, SSH, redeploy, certificate after DNS. |
+| **[AWS_POC_STEPS.md](./AWS_POC_STEPS.md)** | POC checklist jo follow hua. DNS abhi last step hai. |
+| **[AWS_MIGRATION_GUIDE.md](./AWS_MIGRATION_GUIDE.md)** | Data matrix, security, cost, GitHub model. |
+| **[AWS_MCP_CURSOR_SETUP.md](./AWS_MCP_CURSOR_SETUP.md)** | Official AWS MCP + Cursor. |
+| **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** | Purana GCP VM. Sirf jab tak domain us IP par hai. |
+| **[SERVER_INVENTORY.md](./SERVER_INVENTORY.md)** | GCP inventory, August 2026 audit. |
 
 ---
 
-## Quick Start (Redeploy in 5 lines)
+## Quick Start — Google Cloud only (until DNS moves)
+
+AWS redeploy is in [AWS_DEPLOYMENT.md](./AWS_DEPLOYMENT.md). The lines below still hit `samyoj-server`.
 
 ```bash
 gcloud compute ssh samyoj-server --zone=asia-south1-c
