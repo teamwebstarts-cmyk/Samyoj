@@ -125,6 +125,7 @@ export default function TeamPage() {
 
         <SegmentedControl
           embedded
+          scroll
           value={activeTab}
           onChange={setActiveTab}
           options={tabOptions}

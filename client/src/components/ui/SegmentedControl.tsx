@@ -23,10 +23,10 @@ export default function SegmentedControl<T extends string>({
   fit = false,
   scroll = false,
 }: SegmentedControlProps<T>) {
-  const slots = (
+  const tablist = (
     <div
       className={`flex rounded-xl border border-theme-border bg-theme-subtle p-1 ${
-        scroll ? 'w-max min-w-full flex-nowrap overflow-x-auto' : fit ? 'w-full md:w-auto' : 'w-full'
+        scroll ? 'w-max min-w-full flex-nowrap sm:w-full sm:min-w-0' : fit ? 'w-full md:w-auto' : 'w-full'
       }`}
       role="tablist"
       aria-label={ariaLabel}
@@ -43,18 +43,32 @@ export default function SegmentedControl<T extends string>({
             aria-selected={isActive}
             onClick={() => onChange(option.value)}
             className={`flex items-center justify-center gap-1.5 rounded-lg font-semibold transition sm:gap-2 ${
-              scroll ? 'shrink-0' : 'flex-1'
+              scroll ? 'min-w-max flex-1 whitespace-nowrap sm:min-w-0 sm:whitespace-normal' : 'flex-1'
             } ${isActive
               ? 'bg-theme-surface text-theme-fg ring-1 ring-theme-border'
               : 'text-theme-muted hover:text-theme-secondary'} ${compact ? 'min-h-[34px] px-3 py-1.5 text-[12px] sm:min-h-[36px] sm:px-4 sm:py-2' : 'min-h-[42px] px-2 py-2 text-[13px] sm:px-3'}`}
           >
             {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />}
-            <span className="hidden sm:inline">{option.label}</span>
-            <span className="sm:hidden">{option.shortLabel ?? option.label}</span>
+            {scroll ? (
+              <span>{option.label}</span>
+            ) : (
+              <>
+                <span className="hidden sm:inline">{option.label}</span>
+                <span className="sm:hidden">{option.shortLabel ?? option.label}</span>
+              </>
+            )}
           </button>
         );
       })}
     </div>
+  );
+
+  const slots = scroll ? (
+    <div className="min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:contents">
+      {tablist}
+    </div>
+  ) : (
+    tablist
   );
 
   if (bare) {
@@ -63,7 +77,7 @@ export default function SegmentedControl<T extends string>({
 
   if (embedded) {
     return (
-      <div className="rounded-2xl border border-theme-border bg-theme-surface p-1.5">
+      <div className="min-w-0 rounded-2xl border border-theme-border bg-theme-surface p-1.5">
         {slots}
       </div>
     );
