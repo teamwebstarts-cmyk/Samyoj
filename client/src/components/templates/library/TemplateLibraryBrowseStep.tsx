@@ -1,29 +1,16 @@
-import type { LucideIcon } from 'lucide-react';
-import {
-  Calendar,
-  CheckCircle2,
-  CreditCard,
-  FileText,
-  Gift,
-  KeyRound,
-  MapPin,
-  MessageSquare,
-  Package,
-  ShieldCheck,
-  ShoppingCart,
-  Sparkles,
-  Store,
-  Truck,
-  UserRound,
-} from 'lucide-react';
 import AppAlert from '../../ui/AppAlert';
 import AppButton from '../../ui/AppButton';
 import AppSelect from '../../ui/AppSelect';
 import SearchInput from '../../ui/SearchInput';
-import StatusBadge from '../../ui/StatusBadge';
 import Skeleton from '../../ui/Skeleton';
 import InfoTip from '../../ui/InfoTip';
 import type { CatalogListItem } from '../../../utils/templateLibrary';
+import CatalogLibraryCard from './CatalogLibraryCard';
+import {
+  LIBRARY_CARD_CELL_CLASS,
+  LIBRARY_CARDS_GRID_CLASS,
+  LIBRARY_CARDS_GRID_PAD_CLASS,
+} from './templateLibraryGrid';
 
 export type CatalogFilterChip = { id: string; label: string };
 
@@ -44,49 +31,26 @@ interface TemplateLibraryBrowseStepProps {
   onRetry?: () => void;
 }
 
-const ICON_MAP: Record<string, LucideIcon> = {
-  package: Package,
-  truck: Truck,
-  pin: MapPin,
-  calendar: Calendar,
-  card: CreditCard,
-  user: UserRound,
-  shield: ShieldCheck,
-  key: KeyRound,
-  store: Store,
-  sparkles: Sparkles,
-  cart: ShoppingCart,
-  gift: Gift,
-  check: CheckCircle2,
-  message: MessageSquare,
-};
-
-const ICON_TONES = [
-  'bg-gradient-to-br from-cyan-500 to-blue-600',
-  'bg-gradient-to-br from-fuchsia-500 to-purple-600',
-  'bg-gradient-to-br from-amber-400 to-orange-600',
-  'bg-gradient-to-br from-emerald-400 to-teal-600',
-  'bg-gradient-to-br from-rose-500 to-pink-600',
-  'bg-gradient-to-br from-indigo-500 to-violet-700',
-  'bg-gradient-to-br from-lime-500 to-green-600',
-] as const;
-
-function iconFor(item: CatalogListItem): LucideIcon {
-  if (item.icon && ICON_MAP[item.icon]) return ICON_MAP[item.icon];
-  if (item.category === 'AUTHENTICATION') return KeyRound;
-  if (item.category === 'MARKETING') return Sparkles;
-  return FileText;
-}
-
-function iconToneFor(item: CatalogListItem): string {
-  let hash = 0;
-  for (const character of item.id) hash = (hash * 31 + character.charCodeAt(0)) | 0;
-  return ICON_TONES[Math.abs(hash) % ICON_TONES.length];
-}
-
 function previewBody(item: CatalogListItem, language: string): string {
   const hindi = language === 'hi_IN' || language === 'hi';
   return hindi ? item.bodyHi : item.body;
+}
+
+function LibraryCardSkeleton({ index }: { index: number }) {
+  const delay = index * 50;
+  return (
+    <div
+      className="flex min-h-[16rem] flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white dark:border-neutral-800 dark:bg-neutral-950 sm:min-h-[16.5rem]"
+    >
+      <Skeleton className="mx-auto mt-12 h-12 w-12 rounded-2xl" delayMs={delay} />
+      <div className="mt-4 flex flex-1 flex-col items-center gap-2 px-4 pb-3">
+        <Skeleton className="h-4 w-3/4 max-w-[12rem] rounded-md" delayMs={delay + 40} />
+        <Skeleton className="h-3 w-1/2 max-w-[8rem] rounded-md" delayMs={delay + 70} />
+        <Skeleton className="mt-2 h-16 w-full rounded-md" delayMs={delay + 100} />
+      </div>
+      <Skeleton className="h-10 w-full rounded-none" delayMs={delay + 130} />
+    </div>
+  );
 }
 
 export default function TemplateLibraryBrowseStep({
@@ -183,9 +147,11 @@ export default function TemplateLibraryBrowseStep({
         ) : null}
 
         {loading && items.length === 0 && !loadError ? (
-          <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-3.5">
+          <div
+            className={`max-h-[min(62vh,640px)] overflow-y-auto p-3 sm:p-3.5 ${LIBRARY_CARDS_GRID_PAD_CLASS} ${LIBRARY_CARDS_GRID_CLASS}`}
+          >
             {Array.from({ length: 6 }).map((_, index) => (
-              <Skeleton key={index} className="h-28 rounded-xl" delayMs={index * 40} />
+              <LibraryCardSkeleton key={index} index={index} />
             ))}
           </div>
         ) : loadError && items.length === 0 ? (
@@ -206,64 +172,20 @@ export default function TemplateLibraryBrowseStep({
           </p>
         ) : (
           <div
-            className="grid max-h-[min(62vh,640px)] gap-2 overflow-y-auto p-3 sm:grid-cols-2 sm:p-3.5"
+            className={`max-h-[min(62vh,640px)] overflow-y-auto p-3 sm:p-3.5 ${LIBRARY_CARDS_GRID_PAD_CLASS} ${LIBRARY_CARDS_GRID_CLASS}`}
             role="list"
             aria-label="Meta template library"
           >
-            {items.map((entry) => {
-              const key = entry.id;
-              const selected = selectedKey === key;
-              const Icon = iconFor(entry);
-              const iconTone = iconToneFor(entry);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  role="listitem"
-                  onClick={() => onSelect(key)}
-                  aria-pressed={selected}
-                  className={`flex w-full flex-col rounded-xl border p-3 text-left transition ${
-                    selected
-                      ? 'border-violet-300 bg-violet-50/80 dark:border-violet-800 dark:bg-violet-950/30'
-                      : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950'
-                  }`}
-                >
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${iconTone}`}>
-                        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
-                          {entry.title}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] font-medium text-slate-400">{entry.copy}</span>
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 flex-col items-end gap-1">
-                      {entry.ready ? (
-                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          Ready now
-                        </span>
-                      ) : entry.source === 'meta' ? (
-                        <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                          Meta library
-                        </span>
-                      ) : null}
-                      <StatusBadge status={entry.category} />
-                      {entry.mediaFormat ? (
-                        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                          {entry.mediaFormat} header
-                        </span>
-                      ) : null}
-                    </span>
-                  </span>
-                  <span className="mt-2 line-clamp-2 text-[11px] leading-snug text-slate-500">
-                    {previewBody(entry, language)}
-                  </span>
-                </button>
-              );
-            })}
+            {items.map((entry) => (
+              <div key={entry.id} role="listitem" className={LIBRARY_CARD_CELL_CLASS}>
+                <CatalogLibraryCard
+                  entry={entry}
+                  selected={selectedKey === entry.id}
+                  previewText={previewBody(entry, language)}
+                  onSelect={() => onSelect(entry.id)}
+                />
+              </div>
+            ))}
           </div>
         )}
       </div>

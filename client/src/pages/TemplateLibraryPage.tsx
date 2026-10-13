@@ -557,10 +557,10 @@ export default function TemplateLibraryPage() {
             )}
           </span>
           <div>
-            <h1 className="text-[20px] font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-[22px]">
+            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[22px]">
               {stepTitle}
             </h1>
-            <p className="mt-0.5 text-[12px] font-medium text-slate-500">{stepSubtitle}</p>
+            <p className="mt-0 text-[12px] font-medium leading-snug text-slate-500">{stepSubtitle}</p>
             {activeStep === 2 && (
               <Link
                 to="/templates"
