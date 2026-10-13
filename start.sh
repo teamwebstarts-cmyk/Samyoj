@@ -76,6 +76,20 @@ restart_api() {
   start_process api "$api_cmd"
 }
 
+restart_client() {
+  if [[ -f "$RUN_DIR/client.pid" ]]; then
+    local pid
+    pid="$(cat "$RUN_DIR/client.pid")"
+    if kill -0 "$pid" 2>/dev/null; then
+      info "Restarting client so Vite loads the HTTPS dev origin..."
+      stop_tree "$pid"
+      sleep 1
+    fi
+    rm -f "$RUN_DIR/client.pid"
+  fi
+  start_process client "npm --prefix client run dev"
+}
+
 [[ -f server/.env ]] || fail "server/.env is missing. Run bash setup.sh first."
 [[ -d server/node_modules && -d client/node_modules && -d admin/node_modules ]] ||
   fail "Dependencies are missing. Run bash setup.sh first."
@@ -220,8 +234,19 @@ if [[ "$PUBLIC_MODE" == "ngrok" ]]; then
   done
   [[ -s "$RUN_DIR/tunnel-url" ]] || fail "Tunnel URL was not created. See .run/logs/tunnel.log"
   CONNECT_HTTPS_ORIGIN="$(cat "$RUN_DIR/tunnel-url")"
-  WEBHOOK_URL="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2-)"
+  WEBHOOK_URL="$(bash "$ROOT_DIR/scripts/read-env-key.sh" server/.env META_WEBHOOK_URL || true)"
   ok "ngrok ready: $CONNECT_HTTPS_ORIGIN"
+  if [[ -f "$RUN_DIR/tunnel-port" ]] && [[ "$(cat "$RUN_DIR/tunnel-port")" == "3000" ]]; then
+    restart_client
+    for attempt in {1..30}; do
+      curl -fsS http://localhost:3000 >/dev/null 2>&1 && break
+      is_running client || fail "Client failed after tunnel setup. See .run/logs/client.log"
+      sleep 1
+    done
+    curl -fsS http://localhost:3000 >/dev/null 2>&1 ||
+      fail "Client did not become reachable after tunnel setup. See .run/logs/client.log"
+    ok "Client restarted for HTTPS Connect"
+  fi
 fi
 
 info "Restarting API so it loads the current META_WEBHOOK_URL..."
@@ -268,11 +293,16 @@ if [[ "$CHALLENGE_OK" == true ]]; then
 else
   ok "All services started (public webhook not verified yet — see warnings above)."
 fi
-echo "  Connect + test UI (HTTPS): $CONNECT_HTTPS_ORIGIN"
+if [[ -f "$RUN_DIR/tunnel-port" ]] && [[ "$(cat "$RUN_DIR/tunnel-port")" == "3000" ]] && [[ -n "$CONNECT_HTTPS_ORIGIN" ]]; then
+  echo "  WhatsApp Connect (use this): $CONNECT_HTTPS_ORIGIN"
+  echo "  Local UI (no Connect):       http://localhost:3000"
+else
+  echo "  Connect + test UI (HTTPS): $CONNECT_HTTPS_ORIGIN"
+  echo "  Local UI (no Connect):     http://localhost:3000"
+fi
 if [[ -f "$RUN_DIR/codespace-client-url" ]]; then
   echo "  Codespace UI (HTTPS):      $(cat "$RUN_DIR/codespace-client-url")"
 fi
-echo "  Local UI (no Connect):     http://localhost:3000"
 echo "  Admin:                     http://localhost:3001"
 echo "  API (local):               http://localhost:8000"
 echo "  Webhook (Meta):            $WEBHOOK_URL"

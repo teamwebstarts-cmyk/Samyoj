@@ -7,19 +7,34 @@ set -euo pipefail
 # ALWAYS uses ngrok. No Cloudflare / cloudflared fallback.
 # Fails clearly if ngrok CLI or NGROK_AUTHTOKEN is missing.
 #
-# Default TUNNEL_PORT=8000 (API webhook). Override TUNNEL_PORT=3000 only if
-# you explicitly want one ngrok URL for UI+API proxy.
+# Default: port 3000 (Vite UI + /api proxy + webhook) for local dev so Meta Connect
+# works over HTTPS. Codespaces default 8000 (UI has its own HTTPS preview).
+# Override: TUNNEL_PORT=8000 bash start.sh
 #
 # Usage:  bash scripts/dev-tunnel.sh
 # =============================================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/server/.env"
-PORT="${TUNNEL_PORT:-8000}"
-TARGET="http://127.0.0.1:${PORT}"
+CLIENT_ENV_FILE="$ROOT_DIR/client/.env"
 RUN_DIR="$ROOT_DIR/.run"
 LOG_DIR="$RUN_DIR/logs"
 READ_ENV="$ROOT_DIR/scripts/read-env-key.sh"
+
+resolve_tunnel_port() {
+  if [[ -n "${TUNNEL_PORT:-}" ]]; then
+    echo "$TUNNEL_PORT"
+    return
+  fi
+  if [[ -n "${CODESPACE_NAME:-}" ]]; then
+    echo 8000
+    return
+  fi
+  echo 3000
+}
+
+PORT="$(resolve_tunnel_port)"
+TARGET="http://127.0.0.1:${PORT}"
 
 source "$ROOT_DIR/scripts/local-wsl-shims.sh"
 local_wsl_shims "$ROOT_DIR"
@@ -59,21 +74,26 @@ normalize_ngrok_host() {
   echo "$raw"
 }
 
-write_env_key() {
-  local key="$1"
-  local value="$2"
+write_env_file_key() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
   # Args, not env: WSL does not forward env vars to Windows node.exe.
-  node - "$ENV_FILE" "$key" "$value" <<'NODE'
+  node - "$file" "$key" "$value" <<'NODE'
 const fs = require('node:fs');
 const file = process.argv[2];
 const key = process.argv[3];
 const value = process.argv[4];
-const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split(/\r?\n/) : [];
 const index = lines.findIndex((line) => line.startsWith(`${key}=`));
 if (index >= 0) lines[index] = `${key}=${value}`;
 else lines.push(`${key}=${value}`);
 fs.writeFileSync(file, lines.join('\n'));
 NODE
+}
+
+write_env_key() {
+  write_env_file_key "$ENV_FILE" "$1" "$2"
 }
 
 write_env_webhook() {
@@ -143,6 +163,14 @@ publish_tunnel() {
   [[ -f "$ENV_FILE" ]] || fail "server/.env not found — cannot update META_WEBHOOK_URL"
   write_env_webhook "$webhook_url"
   ok "Updated server/.env: META_WEBHOOK_URL=${webhook_url}"
+  if [[ "$PORT" == "3000" ]]; then
+    write_env_key CLIENT_URL "$tunnel_url"
+    write_env_key META_REDIRECT_URI "${tunnel_url}/settings/whatsapp/callback/popup"
+    write_env_file_key "$CLIENT_ENV_FILE" VITE_DEV_HTTPS_ORIGIN "$tunnel_url"
+    ok "Updated CLIENT_URL + META_REDIRECT_URI for WhatsApp Connect (HTTPS)"
+    ok "Updated client/.env: VITE_DEV_HTTPS_ORIGIN (open this URL in the browser)"
+  fi
+  echo "$PORT" > "$RUN_DIR/tunnel-port"
   if [[ -z "$(read_env NGROK_STATIC_DOMAIN)" ]]; then
     local host
     host="$(normalize_ngrok_host "$tunnel_url")"

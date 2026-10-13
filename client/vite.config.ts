@@ -6,7 +6,7 @@ const codespaceForwardingDomain =
   process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || 'app.github.dev';
 const codespaceHttpsOrigin = codespaceName
   ? `https://${codespaceName}-3000.${codespaceForwardingDomain}`
-  : '';
+  : (process.env.VITE_DEV_HTTPS_ORIGIN ?? '').replace(/\/$/, '');
 
 /** Vite still injects /@vite/client when hmr is false; that client throws in Codespaces. */
 function stripViteClientInCodespaces(): Plugin {
@@ -35,7 +35,7 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     // Allow the GitHub Codespaces forwarded host (Vite blocks non-localhost hosts by default)
-    allowedHosts: codespaceName ? true : undefined,
+    allowedHosts: codespaceName ? true : ['.ngrok-free.dev', '.ngrok-free.app'],
     // Codespaces HTTPS preview often drops Vite's HMR websocket
     // (`wss://…-3000.app.github.dev` → "WebSocket closed without opened").
     // That uncaught error can block the page. Disable live-reload here;
