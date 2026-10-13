@@ -165,7 +165,7 @@ export default function BillingHero({ info }: BillingHeroProps) {
           </p>
         </div>
 
-        <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3 xl:w-auto xl:min-w-0 xl:shrink-0">
+        <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 xl:w-auto xl:min-w-0 xl:shrink-0">
           {stats.map((stat) => {
             const config = toneStyles[stat.tone] || toneStyles.emerald;
             const Icon = stat.icon || config.icon;
