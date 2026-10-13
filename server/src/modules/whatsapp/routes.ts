@@ -184,36 +184,33 @@ async function saveWhatsappConnection(
 
   let notice = 'WhatsApp connected.';
   if (opts?.connectMode === 'coexistence' || isOnBizApp) {
-    if (!isOnBizApp) {
+    try {
+      const sync = await MetaWhatsAppService.startCoexistenceSync(
+        connection.phoneNumberId,
+        connection.accessToken
+      );
+      await prisma.whatsappNumber.update({
+        where: { id: whatsappNumber.id },
+        data: {
+          contactsSyncRequestId: sync.contactsRequestId,
+          historySyncRequestId: sync.historyRequestId,
+          coexistenceStatus: isOnBizApp ? 'active' : coexistenceStatus || 'pending',
+        },
+      });
+      notice = isOnBizApp
+        ? 'WhatsApp connected. Keep the Business app open for a few minutes so older chats can sync.'
+        : 'WhatsApp connected. Keep the Business app open. If the phone did not show linked, scan the QR and connect once more.';
+    } catch (err) {
+      log.warn('Coexistence sync did not start', {
+        organizationId: orgId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await prisma.whatsappNumber.update({
+        where: { id: whatsappNumber.id },
+        data: { coexistenceStatus: 'sync_needed' },
+      });
       notice =
-        'The phone app did not finish linking. Scan the QR in the WhatsApp Business app, then click Connect again.';
-    } else {
-      try {
-        const sync = await MetaWhatsAppService.startCoexistenceSync(
-          connection.phoneNumberId,
-          connection.accessToken
-        );
-        await prisma.whatsappNumber.update({
-          where: { id: whatsappNumber.id },
-          data: {
-            contactsSyncRequestId: sync.contactsRequestId,
-            historySyncRequestId: sync.historyRequestId,
-            coexistenceStatus: 'active',
-          },
-        });
-        notice = 'WhatsApp connected. Keep the Business app open for a few minutes so older chats can sync.';
-      } catch (err) {
-        log.warn('Coexistence sync did not start', {
-          organizationId: orgId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        await prisma.whatsappNumber.update({
-          where: { id: whatsappNumber.id },
-          data: { coexistenceStatus: 'sync_needed' },
-        });
-        notice =
-          'WhatsApp connected, but older chats did not start syncing. In the WhatsApp Business app, disconnect Business platform, wait 15 minutes, then connect again.';
-      }
+        'WhatsApp connected, but older chats did not start syncing. In the WhatsApp Business app, disconnect Business platform, wait 15 minutes, then connect again.';
     }
   } else {
     const payment = await MetaWhatsAppService.fetchWabaPaymentHint(

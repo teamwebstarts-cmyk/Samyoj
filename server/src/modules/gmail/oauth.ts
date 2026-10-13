@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../../config';
+import { isAllowedOAuthRedirectUri } from '../whatsapp/connect-oauth-state';
 import getRedis from '../../config/redis';
 import { GMAIL_SCOPES } from './constants';
 
@@ -33,8 +34,29 @@ export function googleCredentials(): { clientId: string; clientSecret: string } 
   return { clientId, clientSecret };
 }
 
+export function defaultGmailReturnUri(): string {
+  return `${config.clientUrl.replace(/\/$/, '')}/settings?tab=channels&gmail=1`;
+}
+
+/** Same frontend origins as WhatsApp OAuth. Path stays on Settings. */
+export function resolveGmailReturnUri(requested?: string | null): string {
+  const fallback = defaultGmailReturnUri();
+  if (!requested?.trim()) return fallback;
+  let url: URL;
+  try {
+    url = new URL(requested.trim());
+  } catch {
+    return fallback;
+  }
+  if (url.pathname !== '/settings') return fallback;
+  if (!isAllowedOAuthRedirectUri(`${url.origin}/settings/whatsapp/callback`)) return fallback;
+  if (!url.searchParams.has('gmail')) url.searchParams.set('gmail', '1');
+  return `${url.origin}${url.pathname}?${url.searchParams.toString()}`;
+}
+
 export function signGmailOAuthState(
-  payload: Omit<GmailOAuthState, 'type' | 'redirectUri' | 'returnUri' | 'nonce'>
+  payload: Omit<GmailOAuthState, 'type' | 'redirectUri' | 'returnUri' | 'nonce'>,
+  returnUri?: string
 ): string {
   return jwt.sign(
     {
@@ -42,7 +64,7 @@ export function signGmailOAuthState(
       nonce: crypto.randomBytes(24).toString('hex'),
       type: 'gmail_connect',
       redirectUri: gmailRedirectUri(),
-      returnUri: `${config.clientUrl.replace(/\/$/, '')}/settings?tab=channels&gmail=1`,
+      returnUri: returnUri || defaultGmailReturnUri(),
     },
     config.jwt.oauthStateSecret,
     { algorithm: 'HS256', expiresIn: '10m', audience: 'samyoj-gmail-oauth' }
@@ -60,7 +82,7 @@ export function verifyGmailOAuthState(token: string): GmailOAuthState {
     !state.userId ||
     !state.nonce ||
     state.redirectUri !== gmailRedirectUri() ||
-    !state.returnUri.startsWith(`${config.clientUrl.replace(/\/$/, '')}/`)
+    (state.returnUri !== defaultGmailReturnUri() && resolveGmailReturnUri(state.returnUri) !== state.returnUri)
   ) {
     throw new Error('Invalid Gmail OAuth state');
   }

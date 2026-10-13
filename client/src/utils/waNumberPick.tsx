@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Smartphone } from 'lucide-react';
 import AppButton from '../components/ui/AppButton';
+import { getErrorMessage } from './errors';
 import type { WhatsappPhoneOption } from '../services/api';
 
 type PendingPick = {
@@ -115,7 +116,7 @@ export function WhatsAppNumberPickHost() {
               .confirm(selected)
               .catch((err: unknown) => {
                 setSaving(false);
-                setError(err instanceof Error ? err.message : 'That number could not connect. Try again.');
+                setError(getErrorMessage(err, 'That number could not connect. Try again.'));
               });
           }}
         >

@@ -120,22 +120,18 @@ export default function WhatsAppChannelsPanel({
                   <p className="settings-channel-footnote inline-flex items-center gap-1">
                     {coexLabel}
                     {keepAlive && !offboarded ? (
-                      <Info
-                        className="h-3.5 w-3.5 text-neutral-400"
-                        aria-hidden
-                        title="Open the WhatsApp Business app about every 13 days so this link stays active."
-                      />
+                      <span title="Open the WhatsApp Business app about every 13 days so this link stays active.">
+                        <Info className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
+                      </span>
                     ) : null}
                     {number.coexistenceStatus === 'sync_needed' ||
                     (number.isOnBizApp &&
                       number.historySyncProgress == null &&
                       number.createdAt &&
                       Date.now() - new Date(number.createdAt).getTime() > 24 * 60 * 60 * 1000) ? (
-                      <Info
-                        className="h-3.5 w-3.5 text-amber-500"
-                        aria-hidden
-                        title="Older chats did not finish syncing. In the WhatsApp Business app, disconnect Business platform, wait 15 minutes, then connect again."
-                      />
+                      <span title="Older chats did not finish syncing. In the WhatsApp Business app, disconnect Business platform, wait 15 minutes, then connect again.">
+                        <Info className="h-3.5 w-3.5 text-amber-500" aria-hidden />
+                      </span>
                     ) : null}
                   </p>
                 ) : null}

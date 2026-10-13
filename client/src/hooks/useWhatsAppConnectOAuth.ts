@@ -14,7 +14,7 @@ import {
   type EmbeddedSignupMode,
 } from '../utils/embeddedSignup';
 import { getErrorMessage, sanitizeUserErrorMessage } from '../utils/errors';
-import { toastError, toastSuccess } from '../utils/toast';
+import { toastError } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
 import { closeWaNumberPick, openWaNumberPick, stashConnectNotice } from '../utils/waNumberPick';
@@ -226,7 +226,7 @@ export function useWhatsAppConnectOAuth(options?: {
           return;
         }
         if (payload.requiresSelection) {
-          toastSuccess('Select your WhatsApp number to finish connecting.');
+          toastError('WhatsApp did not return a number. Close the window and click Connect again.');
           connectingRef.current = false;
           setConnecting(false);
           return;
@@ -237,7 +237,7 @@ export function useWhatsAppConnectOAuth(options?: {
           phoneNumber: payload.phoneNumber,
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'WhatsApp connection failed';
+        const message = getErrorMessage(err, 'WhatsApp connection failed');
         if (/cancel/i.test(message)) {
           handleOAuthResult({ status: 'cancel', message });
         } else {

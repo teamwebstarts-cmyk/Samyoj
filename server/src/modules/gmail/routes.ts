@@ -24,6 +24,7 @@ import {
   fetchGoogleIdentity,
   consumeGmailOAuthState,
   signGmailOAuthState,
+  resolveGmailReturnUri,
   storeGmailOAuthState,
   verifyGmailOAuthState,
   gmailOAuthFailureRedirect,
@@ -202,10 +203,14 @@ router.get(
   requireOrgRole(OrgRole.OWNER, OrgRole.ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const state = signGmailOAuthState({
-        organizationId: req.user!.organizationId!,
-        userId: req.user!.userId,
-      });
+      const requestedReturn = typeof req.query.returnTo === 'string' ? req.query.returnTo : null;
+      const state = signGmailOAuthState(
+        {
+          organizationId: req.user!.organizationId!,
+          userId: req.user!.userId,
+        },
+        resolveGmailReturnUri(requestedReturn)
+      );
       await storeGmailOAuthState(verifyGmailOAuthState(state));
       sendSuccess(res, { url: buildGmailOAuthUrl(state), scopes: [...GMAIL_SCOPES] });
     } catch (error) {

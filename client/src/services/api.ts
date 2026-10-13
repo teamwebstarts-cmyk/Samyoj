@@ -327,7 +327,14 @@ export interface GmailSendPayload {
 export const gmailApi = {
   status: () => api.get<{ success: true; data: GmailStatus }>('/gmail/status'),
   connect: () =>
-    api.get<{ success: true; data: { url: string; scopes: string[] } }>('/gmail/connect'),
+    api.get<{ success: true; data: { url: string; scopes: string[] } }>('/gmail/connect', {
+      params: {
+        returnTo:
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/settings?tab=channels&gmail=1`
+            : undefined,
+      },
+    }),
   disconnect: () =>
     api.post<{ success: true; data: { status: 'disconnected' } }>('/gmail/disconnect', {}),
   contacts: () => api.get<{ success: true; data: GmailContact[] }>('/gmail/contacts'),

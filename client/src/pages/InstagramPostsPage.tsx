@@ -856,6 +856,14 @@ export default function InstagramPostsPage() {
               <Send className="h-4 w-4" />
             )}
             Publish now
+            <span
+              className="ml-1 inline-flex text-[12px] opacity-80"
+              title="Posting needs Meta to approve Instagram publishing. Inbox and comments still connect."
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.preventDefault()}
+            >
+              ⓘ
+            </span>
           </button>
         )}
       </>

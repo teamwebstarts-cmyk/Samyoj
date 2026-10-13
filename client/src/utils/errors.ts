@@ -126,6 +126,9 @@ export function sanitizeUserErrorMessage(message: string, code?: string): string
   if (/live production webhook|ngrok\/localhost tunnel/i.test(message)) {
     return 'WhatsApp connected. Inbound stays on the live server — for local testing use a dedicated test number.';
   }
+  if (/request failed with status code|status code \d{3}/i.test(message)) {
+    return 'That did not finish. Close the window and try Connect again.';
+  }
   if (/too many calls|#?80008|\brate limit\b/i.test(message)) {
     return 'WhatsApp is busy right now. Wait a minute, then try again.';
   }

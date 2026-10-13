@@ -1,6 +1,8 @@
 # Connect onboarding review — 13 Oct 2026
 
-No code changes in this pass. This is the fix brief.
+**Landed 14 Oct 2026 in code.** Finish uses the popup’s phone id and reloads the same page. Coexistence calls both `smb_app_data` syncs even if the biz-app flag check fails. Facebook, Instagram, and Gmail open in a window. `instagram_content_publish` stays out of Page connect until Meta approves it. Friendly errors replace raw Graph and HTTP status text.
+
+Still outside this repo: Meta App Review for Page, Instagram, and Ads is pending, so a new customer cannot connect those yet. Inbound webhooks still follow the dev tunnel until a customer host is proven. Instagram post publish stays off until that permission is approved.
 
 Live app in use: **Samyoj** `1766674304665017`, Live, Business Verification passed. Server flow is `es_v4`. `META_ES_CONFIG_ID` is set. `META_ES_COEX_CONFIG_ID` is not set, so coexistence reuses the standard config id and adds `featureType`.
 

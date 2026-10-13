@@ -423,7 +423,7 @@ export class MetaWhatsAppService {
       return data.request_id || null;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (/already|can only be requested once|2593109/i.test(message)) return null;
+      if (/can only be requested once|2593109|sync request already/i.test(message)) return null;
       throw err;
     }
   }
