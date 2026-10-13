@@ -947,7 +947,7 @@ export default function InstagramPostsPage() {
 
   return (
     <PageShell list>
-      <div className="igc-page igp-page">
+      <div className="igc-page igp-page pb-8 max-sm:pb-24">
         <MetaMockNotice />
 
         {studioHandoffName && (

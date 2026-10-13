@@ -1,10 +1,18 @@
 /* Instagram Posts — Samyoj design language (reference: insta ui images) */
 
+/* Let the app main scroll this page (all breakpoints), not a trapped list shell. */
+.page-shell-list:has(> .igp-page) {
+  height: auto;
+  min-height: 100%;
+  flex: 1 1 auto;
+  overflow: visible;
+}
+
 .igp-page {
   display: flex;
   min-height: 0;
-  flex: 1 1 auto;
-  height: 100%;
+  flex: none;
+  height: auto;
   flex-direction: column;
   gap: 14px;
   max-width: 1360px;
@@ -1169,10 +1177,11 @@ button.igp-stat--on:focus-visible {
   gap: 10px;
   width: 100%;
   margin-top: 14px;
+  align-items: start;
 }
 .igp-explore__card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   border: 1px solid var(--igp-line);
   border-radius: 14px;
@@ -1183,10 +1192,15 @@ button.igp-stat--on:focus-visible {
 .igp-explore__icon {
   display: grid;
   flex-shrink: 0;
+  align-self: flex-start;
   place-items: center;
   width: 34px;
   height: 34px;
   border-radius: 10px;
+}
+.igp-explore__card > span:not(.igp-explore__icon) {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .igp-explore__icon--pink {
   background: #fce7f3;
@@ -1210,7 +1224,7 @@ button.igp-stat--on:focus-visible {
   font-weight: 800;
   color: var(--igp-ink);
 }
-.igp-explore__card span {
+.igp-explore__card > span:not(.igp-explore__icon) > span {
   display: block;
   margin-top: 2px;
   font-size: 11px;
@@ -1351,10 +1365,15 @@ button.igp-stat--on:focus-visible {
 .igp-benefit__icon {
   display: grid;
   flex-shrink: 0;
+  align-self: flex-start;
   place-items: center;
   width: 38px;
   height: 38px;
   border-radius: 12px;
+}
+.igp-benefit > span:not(.igp-benefit__icon) {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .igp-benefit strong {
   display: block;
@@ -1362,7 +1381,7 @@ button.igp-stat--on:focus-visible {
   font-weight: 800;
   color: var(--igp-ink);
 }
-.igp-benefit span {
+.igp-benefit > span:not(.igp-benefit__icon) > span {
   display: block;
   margin-top: 2px;
   font-size: 12px;
@@ -1408,6 +1427,7 @@ button.igp-stat--on:focus-visible {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-top: 12px;
+  align-items: start;
 }
 
 /* ============ Workspace & panel ============ */
@@ -1416,9 +1436,10 @@ button.igp-stat--on:focus-visible {
   position: relative;
   display: flex;
   min-height: 0;
-  flex: 1 1 auto;
-  align-items: stretch;
+  flex: 0 0 auto;
+  align-items: flex-start;
   gap: 14px;
+  overflow: visible;
 }
 .igp-feed {
   container-type: inline-size;
@@ -1442,30 +1463,18 @@ button.igp-stat--on:focus-visible {
   box-shadow: var(--igp-panel-shadow);
 }
 
-/* Wide desktop: dock the panel only when the feed and preview both have room. */
+/* Wide desktop: dock the panel beside the feed; page scroll stays on app main. */
 @media (min-width: 1280px) {
-  .igp-page {
-    overflow: hidden;
-  }
   .igp-feed {
-    overflow-y: auto;
-    min-height: 0;
     padding-right: 2px;
   }
   .igp-panel {
     width: clamp(460px, 46%, 640px);
-    height: auto;
-    align-self: stretch;
-    min-height: 0;
+    align-self: flex-start;
   }
   .igp-panel__head,
   .igp-panel__foot {
     flex-shrink: 0;
-  }
-  .igp-panel__body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
   }
 }
 
@@ -1656,19 +1665,16 @@ button.igp-stat--on:focus-visible {
   color: #93c5fd;
 }
 
-/* Compact desktop/tablet: overlay the workspace only — keep app sidebar + topbar usable. */
+/* Below wide desktop: composer overlays the viewport (page still scrolls when closed). */
 @media (max-width: 1279px) {
-  .igp-workspace {
-    overflow: hidden;
-  }
   .igp-panel {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    z-index: 25;
+    z-index: 50;
     width: auto;
     max-height: none;
     border: none;
-    border-radius: 16px;
+    border-radius: 0;
     box-shadow: var(--igp-panel-shadow);
   }
   .igp-panel__close {
@@ -3891,6 +3897,28 @@ button.igp-stat--on:focus-visible {
   .igp-feed {
     width: 100%;
   }
+  .igp-banner__copy {
+    max-width: none;
+  }
+  .igp-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px 18px;
+  }
+  .igp-banner__titlerow {
+    align-items: flex-start;
+  }
+  .igp-banner__actions {
+    width: 100%;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+  .igp-banner__actions .igp-btn {
+    width: 100%;
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 980px) {
@@ -3928,13 +3956,6 @@ button.igp-stat--on:focus-visible {
     width: 38px;
     height: 38px;
   }
-  .igp-banner__copy {
-    max-width: none;
-  }
-  .igp-banner {
-    align-items: flex-start;
-    padding: 16px;
-  }
   .igp-banner__mark {
     width: 46px;
     height: 46px;
@@ -3942,13 +3963,7 @@ button.igp-stat--on:focus-visible {
   }
   .igp-banner__title {
     font-size: 16px;
-  }
-  .igp-banner__actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .igp-banner__actions .igp-btn {
-    flex: 1 1 auto;
+    line-height: 1.25;
   }
   .igp-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
