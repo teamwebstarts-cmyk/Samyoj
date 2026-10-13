@@ -9,15 +9,13 @@ import {
 } from 'lucide-react';
 import AppAlert from '../components/ui/AppAlert';
 import AppButton from '../components/ui/AppButton';
+import TemplateTable, { type TemplateTableRow } from '../components/templates/TemplateTable';
 import TemplateCard from '../components/templates/TemplateCard';
-import {
-  TEMPLATE_CARD_CELL_CLASS,
-  TEMPLATE_CARDS_GRID_CLASS,
-} from '../components/templates/templateCardLayout';
 import EmptyState from '../components/ui/EmptyState';
 import TemplateHero from '../components/templates/TemplateHero';
 import TemplatesListSkeleton from '../components/templates/TemplatesListSkeleton';
 import PageShell from '../components/ui/PageShell';
+import ResponsiveDataView from '../components/ui/ResponsiveDataView';
 import Pagination from '../components/ui/Pagination';
 import SlideOver from '../components/ui/SlideOver';
 import TemplateDetailPanel from '../components/templates/TemplateDetailPanel';
@@ -48,6 +46,8 @@ import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 const PENDING_POLL_MS = 30_000;
+const EMPTY_GROUP_SET = new Set<string>();
+
 interface TemplateRejectionAlert {
   templateName?: string;
   status?: string;
@@ -312,6 +312,16 @@ export default function TemplatesPage() {
     });
   }, [templates, debouncedSearch, categoryFilter]);
 
+  const tableRows = useMemo(
+    (): TemplateTableRow[] => filteredTemplates.map((t) => ({ type: 'single', template: t })),
+    [filteredTemplates],
+  );
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return tableRows.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [tableRows, page]);
+
   const paginatedTemplates = useMemo(() => {
     const start = (page - 1) * DEFAULT_PAGE_SIZE;
     return filteredTemplates.slice(start, start + DEFAULT_PAGE_SIZE);
@@ -481,19 +491,36 @@ export default function TemplatesPage() {
             </div>
           ) : (
             <>
-              <div className={TEMPLATE_CARDS_GRID_CLASS}>
-                {paginatedTemplates.map((template) => (
-                  <div key={template.id} className={TEMPLATE_CARD_CELL_CLASS}>
-                    <TemplateCard
-                      template={template}
-                      onView={() => openView(template)}
-                      onDuplicate={() => openDuplicate(template)}
-                      canManage={canManageTemplates}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-theme-border">
+              <ResponsiveDataView
+                items={paginatedTemplates}
+                tableFrom="2xl"
+                cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 2xl:hidden"
+                tableClassName=""
+                renderCard={(template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={template}
+                    onView={() => openView(template)}
+                    onDuplicate={() => openDuplicate(template)}
+                    canManage={canManageTemplates}
+                  />
+                )}
+                renderTable={() => (
+                  <TemplateTable
+                    rows={paginatedRows}
+                    page={page}
+                    pageSize={DEFAULT_PAGE_SIZE}
+                    total={tableRows.length}
+                    expandedGroups={EMPTY_GROUP_SET}
+                    onToggleGroup={() => {}}
+                    onPageChange={setPage}
+                    onView={openView}
+                    onDuplicate={openDuplicate}
+                    canManage={canManageTemplates}
+                  />
+                )}
+              />
+              <div className="border-t border-theme-border 2xl:hidden">
                 <Pagination
                   page={page}
                   pageSize={DEFAULT_PAGE_SIZE}
