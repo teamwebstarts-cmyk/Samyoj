@@ -2,6 +2,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { useSearchParams } from 'react-router-dom';
 import PageShell from '../components/ui/PageShell';
 import { cannedRepliesApi, inboxApi, instagramApi, teamApi } from '../services/api';
+import CreateTicketModal from '../components/inbox/CreateTicketModal';
+import { useInboxModals } from '../components/inbox/useInboxModals';
 import { toastError, toastSuccess } from '../utils/toast';
 import { getErrorMessage } from '../utils/errors';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
@@ -50,8 +52,6 @@ import {
 } from '../utils/metaMockData';
 
 type FbConversation = Conversation & { serviceWindow?: ServiceWindowInfo };
-
-const TICKET_IDS = new Set<string>();
 
 export default function InstagramInboxPage() {
   const { user } = useAuth();
@@ -489,12 +489,19 @@ export default function InstagramInboxPage() {
     };
   }, [selectedId]);
 
+  const {
+    ticketModalOpen,
+    setTicketModalOpen,
+    ticketSubmitting,
+    ticketConversationIds,
+    handleSubmitTicket,
+  } = useInboxModals({ selected });
+
   const channelDetailsFlags = useMemo(
     () => ({
       contactTags: false,
       savedAnswers: false,
       flows: false,
-      ticket: false,
     }),
     []
   );
@@ -549,7 +556,7 @@ export default function InstagramInboxPage() {
                 loading={loading}
                 error={listError}
                 filtered={Boolean(search || agentFilter || chip !== 'all')}
-                ticketConversationIds={TICKET_IDS}
+                ticketConversationIds={ticketConversationIds}
                 selectionMode={selectionMode}
                 selectedIds={selectedIds}
                 agents={agents}
@@ -700,7 +707,8 @@ export default function InstagramInboxPage() {
                     onContactChange={(contact) =>
                       setSelected((prev) => (prev ? { ...prev, contact } : prev))
                     }
-                    onConvertToTicket={() => undefined}
+                    onConvertToTicket={() => setTicketModalOpen(true)}
+                    hasTicket={ticketConversationIds.has(selected.id)}
                     onExport={() => void downloadChat()}
                     panelOpen={detailsToggle.panelOpen}
                     onPanelOpenChange={detailsToggle.setPanelOpen}
@@ -734,6 +742,15 @@ export default function InstagramInboxPage() {
           </div>
         </div>
       </PageShell>
+      <CreateTicketModal
+        open={ticketModalOpen}
+        defaultTitle={selected ? `Support: ${selected.contact.name || selected.contact.phone}` : ''}
+        submitting={ticketSubmitting}
+        agents={agents}
+        defaultAssigneeId={selected?.assignedAgent?.id}
+        onClose={() => setTicketModalOpen(false)}
+        onSubmit={(values) => void handleSubmitTicket(values)}
+      />
     </InboxGlassTipProvider>
   );
 }

@@ -16,6 +16,10 @@ export interface WhatsAppSendFailureExplanation {
   title: string;
   body: string;
   notice: string;
+  /** Short numbered fixes shown in Inbox (optional). */
+  steps?: string[];
+  /** One line under steps when retry is pointless (optional). */
+  footnote?: string;
   retryHelps: boolean;
   action: WhatsAppSendFailureAction;
 }
@@ -57,9 +61,15 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     action: 'meta_account',
   },
   133010: {
-    title: 'This WhatsApp number is not registered',
-    body: 'Meta rejected the send because this business number is not registered for Cloud API. In WhatsApp Manager, open the number and choose Register, then enter the 6-digit PIN. Retry will not send until the number shows Registered.',
-    notice: 'Register this WhatsApp number in WhatsApp Manager before sending.',
+    title: 'Register this number in WhatsApp Manager',
+    body: 'Your business line is not registered for Cloud API yet, so Meta blocked this message.',
+    notice: 'Register this number in WhatsApp Manager before sending.',
+    steps: [
+      'Open WhatsApp Manager and select this phone number.',
+      'Tap Register and enter the 6-digit PIN Meta sends you.',
+      'When the number shows Registered, send again from Samyoj.',
+    ],
+    footnote: 'Retrying in Samyoj will not work until Meta shows Registered.',
     retryHelps: false,
     action: 'meta_account',
   },
@@ -224,4 +234,31 @@ export function explainWhatsAppSendFailureFromMessage(message: {
     return { ...explained, retryHelps: meta.retryHelps };
   }
   return explained;
+}
+
+export function sendFailureActionLink(
+  action: WhatsAppSendFailureAction
+): { href: string; label: string; external?: boolean } | null {
+  switch (action) {
+    case 'connect':
+      return { href: '/settings?tab=whatsapp', label: 'WhatsApp settings' };
+    case 'meta_account':
+      return {
+        href: 'https://business.facebook.com/latest/whatsapp_manager/phone_numbers',
+        label: 'Open WhatsApp Manager',
+        external: true,
+      };
+    case 'template':
+      return { href: '/templates', label: 'View templates' };
+    case 'window':
+      return { href: '/templates', label: 'Send a template' };
+    case 'payment':
+      return {
+        href: 'https://business.facebook.com/billing_hub',
+        label: 'Meta billing',
+        external: true,
+      };
+    default:
+      return null;
+  }
 }

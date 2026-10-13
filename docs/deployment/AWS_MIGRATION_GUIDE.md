@@ -442,7 +442,9 @@ If AWS fails within rollback window:
 
 ## 15. AWS MCP & Cursor — can the AI help on AWS?
 
-**In this Cursor workspace today:** there is **no AWS MCP** pre-installed (unlike Render/Vercel plugins you may have). You can add one.
+**Samyoj repo:** official AWS MCP is configured in **`.cursor/mcp.json`** (`aws-mcp`). Full office steps: **[AWS_MCP_CURSOR_SETUP.md](./AWS_MCP_CURSOR_SETUP.md)**.
+
+**In Cursor:** enable the server under Settings → MCP, then complete AWS Sign-in OAuth in the browser on first tool use.
 
 ### Options (2026)
 

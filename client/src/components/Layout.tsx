@@ -10,13 +10,14 @@ import {
   isEmailShellRoute,
   isInboxRoute,
   isCallsShellRoute,
-  isHelpRoute,
   isListShellRoute,
   isTemplateWizardRoute,
   shouldShowMobileBottomNav,
 } from '../config/pageMeta';
+import { SupportDrawerProvider, useSupportDrawer } from '../contexts/SupportDrawerContext';
 import AppTopbar from './layout/AppTopbar';
 import Sidebar from './layout/Sidebar';
+import SupportBoard from './support/SupportBoard';
 import MobileBottomNav from './layout/MobileBottomNav';
 import MobileMoreSheet from './layout/MobileMoreSheet';
 import CallNotificationProvider from './calls/CallNotificationProvider';
@@ -25,7 +26,12 @@ import SubscriptionLockModal, { SubscriptionLockBanner } from './billing/Subscri
 import { useEntitlements } from '../hooks/useEntitlements';
 import { TopbarProvider } from '../contexts/TopbarContext';
 
-export default function Layout() {
+function SupportDrawerHost() {
+  const { open, closeSupport } = useSupportDrawer();
+  return <SupportBoard open={open} onClose={closeSupport} />;
+}
+
+function LayoutShell() {
   const { user, organization, logout } = useAuth();
   const { entitlements } = useEntitlements();
   const subscriptionLocked = Boolean(entitlements?.isLocked);
@@ -49,7 +55,6 @@ export default function Layout() {
     isInboxRoute(pathname) ||
     isEmailShellRoute(pathname) ||
     isCallsShellRoute(pathname) ||
-    isHelpRoute(pathname) ||
     isListShellRoute(pathname, search) ||
     isTemplateWizardRoute(pathname);
 
@@ -166,10 +171,19 @@ export default function Layout() {
 
           {showBottomNav && <MobileBottomNav onMoreOpen={() => setMoreOpen(true)} />}
           <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
+          <SupportDrawerHost />
         </div>
       </div>
 
       </TopbarProvider>
     </CallNotificationProvider>
+  );
+}
+
+export default function Layout() {
+  return (
+    <SupportDrawerProvider>
+      <LayoutShell />
+    </SupportDrawerProvider>
   );
 }

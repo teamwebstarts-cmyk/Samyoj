@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { contactApi, commerceApi, leadApi, ticketApi } from '../../services/api';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useSupportDrawer } from '../../contexts/SupportDrawerContext';
 
 type ResultType = 'contact' | 'ticket' | 'lead' | 'order' | 'page' | 'action';
 
@@ -192,6 +193,7 @@ interface GlobalSearchProps {
 
 export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
   const navigate = useNavigate();
+  const { openSupport } = useSupportDrawer();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -360,6 +362,11 @@ export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
 
   const handleSelect = (result: SearchResult) => {
     saveRecent(result);
+    if (result.id === 'help') {
+      openSupport();
+      onClose();
+      return;
+    }
     navigate(result.href);
     onClose();
   };

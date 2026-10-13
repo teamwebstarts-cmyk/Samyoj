@@ -28,6 +28,8 @@ import {
 import type { OrgRole } from '../types';
 import type { WorkspaceChannels } from '../utils/workspaceChannels';
 
+export type NavItemAction = 'open-help';
+
 export interface NavItem {
   to: string;
   icon: LucideIcon;
@@ -36,6 +38,8 @@ export interface NavItem {
   hideForRoles?: OrgRole[];
   showForRoles?: OrgRole[];
   hidden?: boolean;
+  /** Opens UI chrome instead of routing (e.g. help drawer). */
+  action?: NavItemAction;
 }
 
 /** Platform row with chevron (WhatsApp / Facebook / Instagram / Email). */
@@ -137,10 +141,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Support',
-    items: [
-      { to: '/help', icon: CircleHelp, label: 'Help assistant' },
-      { to: '/tickets', icon: Ticket, label: 'Tickets' },
-    ],
+    items: [{ to: '/tickets', icon: Ticket, label: 'Tickets' }],
   },
   {
     label: 'Account',
@@ -158,6 +159,7 @@ export const NAV_SECTIONS: NavSection[] = [
         showForRoles: ADMIN_ROLES,
       },
       { to: '/settings', icon: Settings2, label: 'Settings' },
+      { to: '/help', icon: CircleHelp, label: 'Help assistant', action: 'open-help' },
     ],
   },
 ];
@@ -220,12 +222,12 @@ export const MOBILE_MORE_ITEMS: NavItem[] = [
   { to: '/automations', icon: Workflow, label: 'Automations' },
   { to: '/content-studio', icon: Sparkles, label: 'AI Studio', hideForRoles: ['AGENT'] },
   { to: '/templates', icon: ClipboardList, label: 'Templates' },
-  { to: '/help', icon: CircleHelp, label: 'Help assistant' },
   { to: '/tickets', icon: Ticket, label: 'Tickets' },
   { to: '/commerce', icon: Package, label: 'Orders', hidden: true },
   { to: '/team', icon: UsersRound, label: 'Team', showForRoles: SUPERVISOR_PLUS },
   { to: '/billing', icon: CreditCard, label: 'Billing & Usage', showForRoles: ADMIN_ROLES },
   { to: '/settings', icon: Settings2, label: 'Settings' },
+  { to: '/help', icon: CircleHelp, label: 'Help assistant', action: 'open-help' },
 ];
 
 export function isNavItemVisible(

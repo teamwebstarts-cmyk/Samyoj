@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { getVisibleMobileMoreItems } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSupportDrawer } from '../../contexts/SupportDrawerContext';
 
 interface MobileMoreSheetProps {
   open: boolean;
@@ -12,6 +13,7 @@ interface MobileMoreSheetProps {
 
 export default function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
   const { orgRole } = useAuth();
+  const { openSupport } = useSupportDrawer();
   const moreItems = getVisibleMobileMoreItems(orgRole);
 
   useEffect(() => {
@@ -58,24 +60,46 @@ export default function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps)
           </button>
         </div>
         <nav className="grid grid-cols-3 gap-2 overflow-y-auto p-4" aria-label="Secondary navigation">
-          {moreItems.map(({ to, icon: Icon, label, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-center transition active:scale-[0.98] ${
-                  isActive
-                    ? 'border-whatsapp-500/40 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-300'
-                    : 'border-theme-border bg-theme-subtle/30 text-theme-secondary hover:bg-theme-subtle'
-                }`
-              }
-            >
-              <Icon className="h-5 w-5" strokeWidth={2} />
-              <span className="text-caption font-semibold text-theme-secondary">{label}</span>
-            </NavLink>
-          ))}
+          {moreItems.map(({ to, icon: Icon, label, end, action }) => {
+            const tileClass =
+              'flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border border-theme-border bg-theme-subtle/30 px-2 py-3 text-center text-theme-secondary transition hover:bg-theme-subtle active:scale-[0.98]';
+
+            if (action === 'open-help') {
+              return (
+                <button
+                  key={to}
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openSupport();
+                  }}
+                  className={tileClass}
+                >
+                  <Icon className="h-5 w-5" strokeWidth={2} />
+                  <span className="text-caption font-semibold text-theme-secondary">{label}</span>
+                </button>
+              );
+            }
+
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-center transition active:scale-[0.98] ${
+                    isActive
+                      ? 'border-whatsapp-500/40 bg-whatsapp-500/10 text-whatsapp-700 dark:text-whatsapp-300'
+                      : 'border-theme-border bg-theme-subtle/30 text-theme-secondary hover:bg-theme-subtle'
+                  }`
+                }
+              >
+                <Icon className="h-5 w-5" strokeWidth={2} />
+                <span className="text-caption font-semibold text-theme-secondary">{label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
       </div>
     </div>,
