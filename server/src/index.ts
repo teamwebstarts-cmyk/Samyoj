@@ -56,7 +56,6 @@ import ticketRoutes from './modules/tickets/routes';
 import supportRoutes from './modules/support/routes';
 import gmailRoutes from './modules/gmail/routes';
 import platformRoutes from './modules/platform/routes';
-import dictationRoutes from './modules/dictation/routes';
 import { setRealtimeIO } from './realtime';
 import { registerPresenceHandlers, startPresenceSweeper } from './modules/inbox/presence';
 import { registerCallingPreviewHandlers } from './modules/ai-bot/calling-preview.socket';
@@ -301,7 +300,6 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/gmail', gmailRoutes);
-app.use('/api/dictation', dictationRoutes);
 app.use('/api/platform', platformRoutes);
 
 const { clientDist, clientPublic } = getClientPaths();
