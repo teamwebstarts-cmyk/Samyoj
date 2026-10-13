@@ -16,10 +16,13 @@ export function facebookOAuthDeniedMessage(params: {
   }
 
   if (/invalid scopes/i.test(text) || /invalid scopes/i.test(code)) {
-    return 'Facebook has not granted Page, Instagram, or Ads read on this app yet. WhatsApp still works. Add those use cases on the Meta app, then connect again.';
+    return 'Facebook is not ready to connect Pages yet. WhatsApp still works.';
   }
   if (code === 'access_denied') {
     return 'Facebook connect was cancelled. Start again when you are ready.';
+  }
+  if (/fbtrace|OAuthException|\(#\d+\)|developers\.facebook|Graph API/i.test(text)) {
+    return 'Facebook did not finish connecting. Close the window and try again.';
   }
   return text || 'Facebook did not finish the connection. Start again from Settings.';
 }

@@ -25,6 +25,14 @@ import QualityRatingBanner from './billing/QualityRatingBanner';
 import SubscriptionLockModal, { SubscriptionLockBanner } from './billing/SubscriptionLockModal';
 import { useEntitlements } from '../hooks/useEntitlements';
 import { TopbarProvider } from '../contexts/TopbarContext';
+import { consumeConnectNotice, WhatsAppNumberPickHost } from '../utils/waNumberPick';
+import {
+  GMAIL_OAUTH_POPUP,
+  subscribeChannelOAuthResult,
+} from '../utils/channelOAuthPopup';
+import { instagramApi } from '../services/api';
+import { toastError, toastSuccess } from '../utils/toast';
+import { getErrorMessage } from '../utils/errors';
 
 function SupportDrawerHost() {
   const { open, closeSupport } = useSupportDrawer();
@@ -69,6 +77,43 @@ function LayoutShell() {
       document.body.style.overflow = '';
     };
   }, [mobileOpen]);
+
+  useEffect(() => {
+    const notice = consumeConnectNotice();
+    if (notice) toastSuccess(notice);
+  }, []);
+
+  useEffect(() => {
+    let lastKey = '';
+    return subscribeChannelOAuthResult((message) => {
+      if (
+        window.name === 'samyoj_facebook_oauth' ||
+        window.name === GMAIL_OAUTH_POPUP ||
+        sessionStorage.getItem('samyoj_facebook_popup') === '1' ||
+        sessionStorage.getItem('samyoj_gmail_popup') === '1'
+      ) {
+        return;
+      }
+      const key = `${message.channel}|${message.status}|${message.message || ''}`;
+      if (key === lastKey) return;
+      lastKey = key;
+      if (message.status !== 'success') {
+        toastError(message.message || 'Connection was not finished.');
+        return;
+      }
+      void (async () => {
+        if (sessionStorage.getItem('ig_after_facebook') === '1') {
+          sessionStorage.removeItem('ig_after_facebook');
+          try {
+            await instagramApi.connect();
+          } catch (err) {
+            toastError(getErrorMessage(err, 'Instagram did not link. Connect the Page, then try Instagram again.'));
+          }
+        }
+        window.location.reload();
+      })();
+    });
+  }, []);
 
   useEffect(() => {
     setMoreOpen(false);
@@ -168,6 +213,7 @@ function LayoutShell() {
             <Outlet />
           </main>
           <SubscriptionLockModal locked={subscriptionLocked} />
+          <WhatsAppNumberPickHost />
 
           {showBottomNav && <MobileBottomNav onMoreOpen={() => setMoreOpen(true)} />}
           <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />

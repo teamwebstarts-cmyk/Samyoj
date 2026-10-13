@@ -42,7 +42,7 @@ const SDK_OFFICIAL = 'https://connect.facebook.net/en_US/sdk.js';
 /** Same-origin Vite proxy — Brave/ad-block often block connect.facebook.net. */
 const SDK_PROXIED = '/__fb-sdk/en_US/sdk.js';
 const SDK_LOAD_MS = 8_000;
-const POSTMESSAGE_AFTER_CODE_MS = 3_000;
+const POSTMESSAGE_AFTER_CODE_MS = 8_000;
 
 export const FACEBOOK_SDK_BLOCKED_MESSAGE =
   'Facebook was blocked in this browser (often Brave Shields). Allow Facebook on this site or use Chrome, then click Connect WhatsApp again.';

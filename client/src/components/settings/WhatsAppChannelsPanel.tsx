@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Cloud, Copy, Smartphone, LogOut, Plus, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Cloud, Copy, Smartphone, LogOut, Plus, CheckCircle2, AlertTriangle, RefreshCw, Info } from 'lucide-react';
 import AppButton from '../ui/AppButton';
 import { SettingsTabSkeleton } from './SettingsSkeleton';
 import WhatsAppGlyph from '../dashboard/icons/WhatsAppGlyph';
@@ -116,8 +116,29 @@ export default function WhatsAppChannelsPanel({
                   <span><b>{offboarded ? 'Connection needs attention' : 'Connection healthy'}</b><small>{offboarded ? 'Reconnect to restore phone + API sync.' : 'Last checked just now'}</small></span>
                   <button type="button" onClick={onConnect} disabled={connecting || !canEdit}><RefreshCw /> Reconnect</button>
                 </div>
-                {keepAlive && !offboarded ? <p className="settings-channel-footnote">ⓘ Open WhatsApp Business app at least every ~13 days to keep coexistence active.</p> : null}
-                {coexLabel ? <p className="settings-channel-footnote">{coexLabel}</p> : null}
+                {coexLabel ? (
+                  <p className="settings-channel-footnote inline-flex items-center gap-1">
+                    {coexLabel}
+                    {keepAlive && !offboarded ? (
+                      <Info
+                        className="h-3.5 w-3.5 text-neutral-400"
+                        aria-hidden
+                        title="Open the WhatsApp Business app about every 13 days so this link stays active."
+                      />
+                    ) : null}
+                    {number.coexistenceStatus === 'sync_needed' ||
+                    (number.isOnBizApp &&
+                      number.historySyncProgress == null &&
+                      number.createdAt &&
+                      Date.now() - new Date(number.createdAt).getTime() > 24 * 60 * 60 * 1000) ? (
+                      <Info
+                        className="h-3.5 w-3.5 text-amber-500"
+                        aria-hidden
+                        title="Older chats did not finish syncing. In the WhatsApp Business app, disconnect Business platform, wait 15 minutes, then connect again."
+                      />
+                    ) : null}
+                  </p>
+                ) : null}
                 {isPrimary && numbers.length > 1 ? <p className="settings-channel-footnote">ⓘ Active number · {quotaLine}</p> : null}
               </div>
             );

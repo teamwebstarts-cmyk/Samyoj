@@ -5,9 +5,10 @@ import GmailGlyph from './GmailGlyph';
 import { gmailApi, type GmailStatus } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import { gmailCallbackErrorFromSearch } from './emailData';
+import { GMAIL_OAUTH_POPUP, openChannelOAuthPopup } from '../../utils/channelOAuthPopup';
 
 const HAPPENS = [
-  { icon: Send, tone: 'green', text: 'You will be redirected to Google to allow access.' },
+  { icon: Send, tone: 'green', text: 'Google opens in a window. This page stays here.' },
   { icon: Lock, tone: 'blue', text: 'Samyoj will only be able to send emails from your mailbox.' },
   { icon: Mail, tone: 'red', text: 'We do not read, store or access your inbox emails.' },
   { icon: ShieldCheck, tone: 'violet', text: 'Only owners or admins can connect Gmail.' },
@@ -40,9 +41,13 @@ export default function EmailConnectScreen({ connectionStatus = 'disconnected' }
     setError('');
     try {
       const response = await gmailApi.connect();
-      window.location.assign(response.data.data.url);
+      const opened = openChannelOAuthPopup(response.data.data.url, GMAIL_OAUTH_POPUP, 'samyoj_gmail_popup');
+      if (!opened) {
+        setError('Your browser blocked the window. Allow popups for this site, then click Connect again.');
+      }
     } catch (cause) {
       setError(getErrorMessage(cause, 'Gmail could not start connecting.'));
+    } finally {
       setConnecting(false);
     }
   };

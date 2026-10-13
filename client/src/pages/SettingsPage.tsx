@@ -27,6 +27,12 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { formatPhoneDisplay } from '../utils/phone';
 import { whatsappDisconnectDialogCopy } from '../utils/whatsappDisconnectCopy';
 import { facebookLoginHttpsBlockedReason } from '../utils/facebookLoginHttps';
+import {
+  FACEBOOK_OAUTH_POPUP,
+  finishChannelPopup,
+  GMAIL_OAUTH_POPUP,
+  openChannelOAuthPopup,
+} from '../utils/channelOAuthPopup';
 import { useWhatsAppConnectPicker } from '../hooks/useWhatsAppConnectPicker';
 
 // Subcomponents
@@ -212,6 +218,20 @@ export default function SettingsPage() {
     setSearchParams({ tab }, { replace: true });
   };
 
+  useEffect(() => {
+    if (searchParams.get('gmail') !== '1') return;
+    const status = searchParams.get('status');
+    if (status !== 'connected' && status !== 'failed') return;
+    finishChannelPopup(GMAIL_OAUTH_POPUP, 'samyoj_gmail_popup', {
+      channel: 'gmail',
+      status: status === 'connected' ? 'success' : 'error',
+      message:
+        status === 'connected'
+          ? 'Gmail connected.'
+          : searchParams.get('reason') || 'Gmail did not connect. Click Connect again.',
+    });
+  }, [searchParams]);
+
   // WhatsApp State
   const [disconnectTarget, setDisconnectTarget] = useState<{
     id: string;
@@ -271,9 +291,13 @@ export default function SettingsPage() {
       const { data } = await facebookApi.connectUrl(redirectUri);
       const launch = data.data as { url?: string };
       if (!launch?.url) throw new Error('Connect URL missing');
-      window.location.assign(launch.url);
+      const opened = openChannelOAuthPopup(launch.url, FACEBOOK_OAUTH_POPUP, 'samyoj_facebook_popup');
+      if (!opened) {
+        toastError('Your browser blocked the window. Allow popups for this site, then click Connect again.');
+      }
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not start Facebook Page connect');
+    } finally {
       setFacebookConnecting(false);
     }
   };
@@ -322,12 +346,20 @@ export default function SettingsPage() {
         username: saved.username,
       });
       if (saved.subscribed === false) {
-        toastError('Instagram connected, but Meta webhook subscription failed. Reconnect after checking App Review permissions.');
+        toastError('Instagram is connected. New messages may take a minute. If they do not arrive, click Connect again.');
       } else {
         toastSuccess('Instagram connected');
       }
+      window.location.reload();
     } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not connect Instagram');
+      const message = getErrorMessage(err) || 'Could not connect Instagram';
+      if (/facebook page first/i.test(message)) {
+        sessionStorage.setItem('ig_after_facebook', '1');
+        toastError('Connect the Facebook Page in the window. Instagram links right after.');
+        await connectFacebookPage();
+        return;
+      }
+      toastError(message);
     } finally {
       setInstagramConnecting(false);
     }

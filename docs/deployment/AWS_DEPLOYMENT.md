@@ -4,7 +4,7 @@
 > **Learning note:** [AWS_LEARNING.md](./AWS_LEARNING.md)  
 > **Last updated:** 2026-10-13
 
-DNS cutover is **done** (13 Oct 2026). `app.samyoj.com` and `admin.samyoj.com` resolve to `3.108.25.94`. HTTPS certificate is valid until **11 Jan 2027**. GCP VM is still running until you confirm login and one WhatsApp reply.
+DNS cutover is **done** (13 Oct 2026). `app.samyoj.com` and `admin.samyoj.com` resolve to `3.108.25.94`. HTTPS certificate is valid until **11 Jan 2027**. GCP VM `samyoj-server` is **stopped** (`TERMINATED`, not deleted). Its public IP `34.47.220.76` was released. The 10 GB disk remains, so a small disk charge continues until that disk is deleted.
 
 ---
 

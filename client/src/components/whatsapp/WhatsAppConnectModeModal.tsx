@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Cloud, Link2, Smartphone, X } from 'lucide-react';
+import { Cloud, Info, Link2, Smartphone, X } from 'lucide-react';
 import WhatsAppConnectModeCompare, {
   type ConnectModePreview,
 } from './WhatsAppConnectModeCompare';
@@ -75,9 +75,17 @@ export default function WhatsAppConnectModeModal({
               <Cloud className="h-5 w-5" strokeWidth={2} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block whitespace-nowrap text-[13px] font-bold text-neutral-900 sm:text-[14px]">
-                WhatsApp Cloud API{' '}
+              <span className="flex items-center gap-1.5 text-[13px] font-bold text-neutral-900 sm:text-[14px]">
+                WhatsApp Cloud API
                 <span className="font-semibold text-neutral-500">(standard)</span>
+                <span
+                  className="inline-flex"
+                  title="Use this when the number is already on Cloud API and not on the WhatsApp Business phone app."
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Info className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
+                </span>
               </span>
               <span className="mt-0.5 block text-[12px] text-neutral-500">
                 Number not on the Business mobile app
@@ -111,9 +119,17 @@ export default function WhatsAppConnectModeModal({
               </span>
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block whitespace-nowrap text-[13px] font-bold text-neutral-900 sm:text-[14px]">
-                Use my phone number{' '}
+              <span className="flex items-center gap-1.5 text-[13px] font-bold text-neutral-900 sm:text-[14px]">
+                Use my phone number
                 <span className="font-semibold text-neutral-500">(coexistence)</span>
+                <span
+                  className="inline-flex"
+                  title="The number must already be on the WhatsApp Business app, with about 7 days of real chats. A Cloud API-only number cannot use this."
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Info className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
+                </span>
               </span>
               <span className="mt-0.5 block text-[12px] text-neutral-500">
                 Keep WhatsApp Business on this device

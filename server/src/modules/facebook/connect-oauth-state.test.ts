@@ -81,5 +81,6 @@ describe('Facebook Page OAuth state', () => {
     expect(launch.url).toContain('pages_messaging');
     expect(launch.url).toContain('auth_type=rerequest');
     expect(launch.url).not.toContain('ads_management');
+    expect(launch.url).not.toContain('instagram_content_publish');
   });
 });

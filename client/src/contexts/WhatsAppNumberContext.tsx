@@ -32,6 +32,7 @@ export interface WhatsappNumberOption {
   coexistenceStatus?: string | null;
   historySyncProgress?: number | null;
   coexistenceOffboardedAt?: string | null;
+  createdAt?: string;
   qualityRating?: string | null;
   officialBusinessAccount?: boolean | null;
   messagingLimitTier?: string | null;

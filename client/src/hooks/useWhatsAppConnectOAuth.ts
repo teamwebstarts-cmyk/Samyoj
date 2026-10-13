@@ -17,6 +17,7 @@ import { getErrorMessage, sanitizeUserErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import { useWaOAuthPopupListener } from './useWaOAuthPopupListener';
+import { closeWaNumberPick, openWaNumberPick, stashConnectNotice } from '../utils/waNumberPick';
 
 const COEXISTENCE_FINISH_EVENT = 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
 
@@ -95,11 +96,9 @@ export function useWhatsAppConnectOAuth(options?: {
       connectingRef.current = false;
       setConnecting(false);
       if (data.status === 'success') {
-        toastSuccess(
-          data.message ||
-            'WhatsApp connected. Add a payment method in Meta Business Suite so templates can send.'
-        );
-        void refreshNumbers({ silent: true }).then(() => onConnectedRef.current?.());
+        closeWaNumberPick();
+        stashConnectNotice(data.message || 'WhatsApp connected.');
+        window.location.reload();
         return;
       }
       if (data.status === 'cancel') {
@@ -108,7 +107,7 @@ export function useWhatsAppConnectOAuth(options?: {
       }
       toastError(sanitizeUserErrorMessage(data.message || 'WhatsApp connection failed'));
     },
-    [clearPopupPoll, refreshNumbers]
+    [clearPopupPoll]
   );
 
   useEffect(() => {
@@ -183,15 +182,18 @@ export function useWhatsAppConnectOAuth(options?: {
             console.warn('[wa-connect] Unexpected coexistence ES event:', result.event);
           }
         }
-        const { data } = await whatsappApi.completeConnect(result.code, cfg.state, result.wabaId);
+        const { data } = await whatsappApi.completeConnect(
+          result.code,
+          cfg.state,
+          result.wabaId,
+          result.phoneNumberId
+        );
         const payload = data.data;
         if (payload.requiresSelection && payload.phones?.length && payload.pendingToken) {
+          const hinted = payload.phones.find((phone) => phone.phoneNumberId === result.phoneNumberId);
           const digits = new Set(payload.phones.map((phone) => phone.phoneNumber.replace(/\D/g, '')));
-          if (payload.phones.length === 1 || digits.size === 1) {
-            const chosen =
-              payload.phones.find((phone) => phone.phoneNumberId === result.phoneNumberId) ||
-              payload.phones.find((phone) => phone.wabaId === result.wabaId) ||
-              payload.phones[0];
+          if (hinted || payload.phones.length === 1 || digits.size === 1) {
+            const chosen = hinted || payload.phones[0];
             const selected = await whatsappApi.selectConnect(
               payload.pendingToken,
               chosen.phoneNumberId,
@@ -199,15 +201,28 @@ export function useWhatsAppConnectOAuth(options?: {
             );
             handleOAuthResult({
               status: 'success',
+              message: selected.data.data.notice,
               phoneNumber: selected.data.data.phoneNumber || chosen.phoneNumber,
             });
             return;
           }
-          sessionStorage.setItem('wa_oauth_code', result.code);
-          sessionStorage.setItem('wa_oauth_state', cfg.state);
-          sessionStorage.setItem('wa_oauth_phones', JSON.stringify(payload.phones));
-          sessionStorage.setItem('wa_oauth_pending', payload.pendingToken);
-          window.location.assign('/settings/whatsapp/callback');
+          openWaNumberPick({
+            phones: payload.phones,
+            confirm: async (phone) => {
+              const selected = await whatsappApi.selectConnect(
+                payload.pendingToken!,
+                phone.phoneNumberId,
+                phone.wabaId
+              );
+              handleOAuthResult({
+                status: 'success',
+                message: selected.data.data.notice,
+                phoneNumber: selected.data.data.phoneNumber || phone.phoneNumber,
+              });
+            },
+          });
+          connectingRef.current = false;
+          setConnecting(false);
           return;
         }
         if (payload.requiresSelection) {
@@ -216,7 +231,11 @@ export function useWhatsAppConnectOAuth(options?: {
           setConnecting(false);
           return;
         }
-        handleOAuthResult({ status: 'success', phoneNumber: payload.phoneNumber });
+        handleOAuthResult({
+          status: 'success',
+          message: payload.notice,
+          phoneNumber: payload.phoneNumber,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'WhatsApp connection failed';
         if (/cancel/i.test(message)) {

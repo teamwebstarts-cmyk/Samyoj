@@ -6,6 +6,7 @@ import GmailGlyph from '../email/GmailGlyph';
 import { gmailApi, type GmailStatus } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import { gmailCallbackErrorFromSearch } from '../email/emailData';
+import { GMAIL_OAUTH_POPUP, openChannelOAuthPopup } from '../../utils/channelOAuthPopup';
 
 export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
   const [searchParams] = useSearchParams();
@@ -36,9 +37,13 @@ export default function GmailPagePanel({ canEdit }: { canEdit: boolean }) {
     setError('');
     try {
       const response = await gmailApi.connect();
-      window.location.assign(response.data.data.url);
+      const opened = openChannelOAuthPopup(response.data.data.url, GMAIL_OAUTH_POPUP, 'samyoj_gmail_popup');
+      if (!opened) {
+        setError('Your browser blocked the window. Allow popups for this site, then click Connect again.');
+      }
     } catch (cause) {
       setError(getErrorMessage(cause, 'Gmail could not start connecting.'));
+    } finally {
       setWorking(false);
     }
   };

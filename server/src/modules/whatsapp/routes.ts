@@ -31,6 +31,7 @@ import {
   resolveActiveWhatsappNumberId,
 } from './active-number';
 import { saveWhatsappNumberWorkspace } from './save-connection';
+import { chooseConnectPhone } from './connect-phone';
 import {
   hydrateWebhookHealth,
   toPublicWebhookHealth,
@@ -55,16 +56,6 @@ function safeTokenEquals(a: string, b: string): boolean {
   return timingSafeEqual(digA, digB);
 }
 
-/** Prefer phones from the WABA the ES postMessage hinted (coexistence onboarding). */
-function narrowPhonesForWabaHint<T extends { wabaId: string }>(
-  phones: T[],
-  wabaIdHint?: string
-): T[] {
-  if (!wabaIdHint) return phones;
-  const matched = phones.filter((p) => p.wabaId === wabaIdHint);
-  return matched.length > 0 ? matched : phones;
-}
-
 const log = createModuleLogger('whatsapp');
 
 const router = Router();
@@ -78,13 +69,24 @@ async function saveWhatsappConnection(
   connection: Awaited<ReturnType<typeof MetaWhatsAppService.buildConnectionDetails>>,
   opts?: {
     connectMode?: 'standard' | 'coexistence';
-    skipRegister?: boolean;
     metaCredentials?: Awaited<ReturnType<typeof resolveMetaCredentials>>;
   }
 ) {
   const encryptedToken = MetaWhatsAppService.encryptToken(connection.accessToken);
   if (!normalizePhoneIdentity(connection.phoneNumber)) {
     throw new AppError(400, 'Connected WhatsApp number has no usable phone identity');
+  }
+  if (opts?.connectMode !== 'coexistence') {
+    const unverified = await MetaWhatsAppService.phoneNeedsVerification(
+      connection.phoneNumberId,
+      connection.accessToken
+    );
+    if (unverified) {
+      throw new AppError(
+        400,
+        'This number still needs the code from the Facebook window. Enter that code, then click Connect again.'
+      );
+    }
   }
   const metaCredentials = opts?.metaCredentials ?? (await resolveMetaCredentials(orgId));
 
@@ -180,7 +182,50 @@ async function saveWhatsappConnection(
     name: 'WHATSAPP_CONNECTED',
   });
 
-  return { whatsappNumber, webhookConfigured };
+  let notice = 'WhatsApp connected.';
+  if (opts?.connectMode === 'coexistence' || isOnBizApp) {
+    if (!isOnBizApp) {
+      notice =
+        'The phone app did not finish linking. Scan the QR in the WhatsApp Business app, then click Connect again.';
+    } else {
+      try {
+        const sync = await MetaWhatsAppService.startCoexistenceSync(
+          connection.phoneNumberId,
+          connection.accessToken
+        );
+        await prisma.whatsappNumber.update({
+          where: { id: whatsappNumber.id },
+          data: {
+            contactsSyncRequestId: sync.contactsRequestId,
+            historySyncRequestId: sync.historyRequestId,
+            coexistenceStatus: 'active',
+          },
+        });
+        notice = 'WhatsApp connected. Keep the Business app open for a few minutes so older chats can sync.';
+      } catch (err) {
+        log.warn('Coexistence sync did not start', {
+          organizationId: orgId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await prisma.whatsappNumber.update({
+          where: { id: whatsappNumber.id },
+          data: { coexistenceStatus: 'sync_needed' },
+        });
+        notice =
+          'WhatsApp connected, but older chats did not start syncing. In the WhatsApp Business app, disconnect Business platform, wait 15 minutes, then connect again.';
+      }
+    }
+  } else {
+    const payment = await MetaWhatsAppService.fetchWabaPaymentHint(
+      connection.wabaId,
+      connection.accessToken
+    );
+    if (payment.hasPaymentMethod === false) {
+      notice = 'WhatsApp connected. Add a card in WhatsApp Manager before template messages can send.';
+    }
+  }
+
+  return { whatsappNumber, webhookConfigured, notice };
 }
 
 const metaAdminGuard = [
@@ -299,10 +344,11 @@ router.post(
   '/connect/callback',
   ...metaAdminGuard,
   asyncHandler(async (req: Request, res: Response) => {
-    const { code, state, wabaIdHint } = req.body as {
+    const { code, state, wabaIdHint, phoneNumberIdHint } = req.body as {
       code?: string;
       state?: string;
       wabaIdHint?: string;
+      phoneNumberIdHint?: string;
     };
     if (!code) throw new AppError(400, 'Authorization code required');
     if (!state) throw new AppError(400, 'OAuth state is required');
@@ -385,17 +431,19 @@ router.post(
       throw new AppError(400, 'No phone numbers found on your WhatsApp Business Account.');
     }
 
-    const selectablePhones = narrowPhonesForWabaHint(phones, oauthState.wabaIdHint);
+    const choice = chooseConnectPhone(phones, {
+      wabaId: oauthState.wabaIdHint,
+      phoneNumberId: typeof phoneNumberIdHint === 'string' ? phoneNumberIdHint : undefined,
+    });
 
-    if (selectablePhones.length === 1) {
+    if (choice.chosen) {
       const connection = await MetaWhatsAppService.buildConnectionDetails(
         accessToken,
-        selectablePhones[0].phoneNumberId,
-        selectablePhones[0].wabaId
+        choice.chosen.phoneNumberId,
+        choice.chosen.wabaId
       );
-      const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection, {
+      const { whatsappNumber, webhookConfigured, notice } = await saveWhatsappConnection(orgId, connection, {
         connectMode,
-        skipRegister: connectMode === 'coexistence',
         metaCredentials,
       });
 
@@ -415,6 +463,7 @@ router.post(
         wabaId: whatsappNumber.wabaId,
         isActive: whatsappNumber.isActive,
         webhookConfigured,
+        notice,
       });
     }
 
@@ -428,14 +477,14 @@ router.post(
     log.info('WhatsApp OAuth requires phone selection', {
       organizationId: orgId,
       userId,
-      phoneCount: selectablePhones.length,
+      phoneCount: choice.options.length,
       wabaIdHint: oauthState.wabaIdHint,
     });
 
     sendSuccess(res, {
       requiresSelection: true,
       pendingToken,
-      phones: selectablePhones.map((p) => ({
+      phones: choice.options.map((p) => ({
         wabaId: p.wabaId,
         phoneNumberId: p.phoneNumberId,
         phoneNumber: p.phoneNumber,
@@ -483,9 +532,8 @@ router.post(
       selected.phoneNumberId,
       selected.wabaId
     );
-    const { whatsappNumber, webhookConfigured } = await saveWhatsappConnection(orgId, connection, {
+    const { whatsappNumber, webhookConfigured, notice } = await saveWhatsappConnection(orgId, connection, {
       connectMode: pending.connectMode || 'standard',
-      skipRegister: pending.connectMode === 'coexistence',
       metaCredentials,
     });
 
@@ -497,6 +545,7 @@ router.post(
       wabaId: whatsappNumber.wabaId,
       isActive: whatsappNumber.isActive,
       webhookConfigured,
+      notice,
     });
   })
 );

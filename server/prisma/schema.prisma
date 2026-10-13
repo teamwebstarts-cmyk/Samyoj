@@ -1071,6 +1071,8 @@ model WhatsappNumber {
    * History sync progress 0–100 from history webhook chunks.
    */
   historySyncProgress     Int?      @map("history_sync_progress")
+  contactsSyncRequestId   String?   @map("contacts_sync_request_id")
+  historySyncRequestId    String?   @map("history_sync_request_id")
   coexistenceOffboardedAt DateTime? @map("coexistence_offboarded_at")
   isActive                Boolean   @default(true) @map("is_active")
   createdAt               DateTime  @default(now()) @map("created_at")

@@ -7,6 +7,7 @@ import { facebookApi } from '../services/api';
 import { getErrorMessage } from '../utils/errors';
 import { safeFbConnectReturn } from '../components/layout/MetaChannelChips';
 import { facebookOAuthDeniedMessage } from '../utils/facebookOAuthDenied';
+import { FACEBOOK_OAUTH_POPUP, finishChannelPopup } from '../utils/channelOAuthPopup';
 
 type PageStatus = 'loading' | 'select' | 'success' | 'error';
 
@@ -24,13 +25,8 @@ function facebookConnectNotice(result: {
   const connectedName =
     typeof result.pageName === 'string' ? `Connected ${result.pageName}` : 'Facebook Page connected';
   const parts = [connectedName];
-  if (result.subscribed === false && typeof result.subscribeError === 'string') {
-    parts.push('Page message subscribe failed — reconnect or check App Review.');
-  }
-  if (result.igSubscribed === false) {
-    parts.push(
-      'Instagram DMs are not subscribed. Comments can still sync; Meta must allow Instagram messaging on the app.',
-    );
+  if (result.subscribed === false) {
+    parts.push('New messages may take a minute. If they do not arrive, click Connect again.');
   }
   return parts.join(' ');
 }
@@ -108,11 +104,20 @@ export default function FacebookCallbackPage() {
         sessionStorage.removeItem(STATE_KEY);
         setStatus('success');
         setMessage(facebookConnectNotice(result));
+        if (
+          finishChannelPopup(FACEBOOK_OAUTH_POPUP, 'samyoj_facebook_popup', {
+            channel: 'facebook',
+            status: 'success',
+            message: facebookConnectNotice(result),
+          })
+        ) {
+          return;
+        }
         window.setTimeout(() => {
           const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
           sessionStorage.removeItem('fb_connect_return');
           navigate(back, { replace: true });
-        }, 1200);
+        }, 600);
       })
       .catch((err) => {
         setStatus('error');
@@ -131,11 +136,20 @@ export default function FacebookCallbackPage() {
       sessionStorage.removeItem(STATE_KEY);
       setStatus('success');
       setMessage(facebookConnectNotice(data.data));
-        window.setTimeout(() => {
-          const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
-          sessionStorage.removeItem('fb_connect_return');
-          navigate(back, { replace: true });
-        }, 1200);
+      if (
+        finishChannelPopup(FACEBOOK_OAUTH_POPUP, 'samyoj_facebook_popup', {
+          channel: 'facebook',
+          status: 'success',
+          message: facebookConnectNotice(data.data),
+        })
+      ) {
+        return;
+      }
+      window.setTimeout(() => {
+        const back = safeFbConnectReturn(sessionStorage.getItem('fb_connect_return'));
+        sessionStorage.removeItem('fb_connect_return');
+        navigate(back, { replace: true });
+      }, 600);
     } catch (err) {
       setStatus('error');
       setMessage(

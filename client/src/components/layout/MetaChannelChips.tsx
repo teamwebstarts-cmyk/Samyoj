@@ -7,6 +7,7 @@ import { facebookApi, instagramApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { getErrorMessage } from '../../utils/errors';
 import { facebookLoginHttpsBlockedReason } from '../../utils/facebookLoginHttps';
+import { FACEBOOK_OAUTH_POPUP, openChannelOAuthPopup } from '../../utils/channelOAuthPopup';
 import { formatPhoneDisplay } from '../../utils/formatPhone';
 import { whatsappNotConnectedCopy } from '../../utils/whatsappConnectionCopy';
 import WhatsAppGlyph from '../dashboard/icons/WhatsAppGlyph';
@@ -48,9 +49,13 @@ export function useMetaChannelConnect() {
       const { data } = await facebookApi.connectUrl(redirectUri);
       const launch = data.data as { url?: string };
       if (!launch?.url) throw new Error('Connect URL missing');
-      window.location.assign(launch.url);
+      const opened = openChannelOAuthPopup(launch.url, FACEBOOK_OAUTH_POPUP, 'samyoj_facebook_popup');
+      if (!opened) {
+        toastError('Your browser blocked the window. Allow popups for this site, then click Connect again.');
+      }
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not start Facebook Page connect');
+    } finally {
       setBusy(null);
     }
   };
@@ -62,13 +67,14 @@ export function useMetaChannelConnect() {
       const { data } = await instagramApi.connect();
       const saved = data.data;
       toastSuccess('Instagram connected');
-      setBusy(null);
+      window.location.reload();
       return saved;
     } catch (err) {
       const message = getErrorMessage(err) || 'Could not connect Instagram';
       setBusy(null);
       if (/facebook page first/i.test(message)) {
-        toastError('Connect a Facebook Page first');
+        sessionStorage.setItem('ig_after_facebook', '1');
+        toastError('Connect the Facebook Page in the window. Instagram links right after.');
         await startFacebookConnect();
         return null;
       }

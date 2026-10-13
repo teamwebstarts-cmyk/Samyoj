@@ -42,5 +42,62 @@ export function mapWhatsAppOAuthError(err: unknown): AppError {
     );
   }
 
-  return new AppError(502, raw || 'WhatsApp connection failed. Please try Connect WhatsApp again.');
+  if (lower.includes('2655122') || lower.includes("don't have any existing")) {
+    return new AppError(
+      400,
+      'This number is already registered on the app itself, so it cannot be chosen here. Connect a number from your own Meta Business account.'
+    );
+  }
+
+  if (lower.includes('3441045') || lower.includes('not eligible') || lower.includes('further activity')) {
+    return new AppError(
+      400,
+      'This number needs more real chats in the WhatsApp Business app, about 7 days, before it can connect.'
+    );
+  }
+
+  if (lower.includes('3441030')) {
+    return new AppError(
+      400,
+      'This number is already on Cloud API. Choose Cloud API, not the phone-app option.'
+    );
+  }
+
+  if (lower.includes('3441049') || lower.includes('2655094') || lower.includes('already connected')) {
+    return new AppError(
+      400,
+      'This number is already linked to a business platform. In the WhatsApp Business app, open Settings, Account, Business platform, disconnect, wait 15 minutes, then connect again.'
+    );
+  }
+
+  if (lower.includes('4563015') || lower.includes('out of date')) {
+    return new AppError(400, 'Update the WhatsApp Business app on the phone, then connect again.');
+  }
+
+  if (lower.includes('2655095') || lower.includes('2655048')) {
+    return new AppError(
+      400,
+      'This number is not on the WhatsApp Business app. Use Cloud API, or register it in the app first.'
+    );
+  }
+
+  if (lower.includes('not_verified') || lower.includes('verification code')) {
+    return new AppError(
+      400,
+      'This number still needs the code from the Facebook window. Enter that code, then click Connect again.'
+    );
+  }
+
+  if (lower.includes('payment') || lower.includes('funding')) {
+    return new AppError(
+      400,
+      'Add a payment card in WhatsApp Manager before template messages can send.'
+    );
+  }
+
+  if (/developers\.facebook\.com|fbtrace|oauthexception|\(#\d{3,}\)|graph api/i.test(raw)) {
+    return new AppError(502, 'WhatsApp did not finish connecting. Close the window and click Connect again.');
+  }
+
+  return new AppError(502, 'WhatsApp did not finish connecting. Close the window and click Connect again.');
 }

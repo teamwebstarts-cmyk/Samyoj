@@ -485,6 +485,7 @@ export interface WhatsappConnectResult {
   wabaId?: string;
   isActive?: boolean;
   webhookConfigured?: boolean;
+  notice?: string;
 }
 
 export const whatsappApi = {
@@ -496,11 +497,12 @@ export const whatsappApi = {
         ...(mode === 'coexistence' ? { mode: 'coexistence' } : {}),
       },
     }),
-  completeConnect: (code: string, state: string, wabaIdHint?: string) =>
+  completeConnect: (code: string, state: string, wabaIdHint?: string, phoneNumberIdHint?: string) =>
     api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/callback', {
       code,
       state,
       ...(wabaIdHint ? { wabaIdHint } : {}),
+      ...(phoneNumberIdHint ? { phoneNumberIdHint } : {}),
     }),
   selectConnect: (pendingToken: string, phoneNumberId: string, wabaId: string) =>
     api.post<{ data: WhatsappConnectResult }>('/whatsapp/connect/select', {

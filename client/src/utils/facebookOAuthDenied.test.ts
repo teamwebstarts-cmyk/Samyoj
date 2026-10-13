@@ -7,7 +7,7 @@ describe('facebookOAuthDeniedMessage', () => {
       error: 'invalid_scope',
       error_description: 'Invalid Scopes: pages_show_list, ads_read',
     });
-    expect(message).toMatch(/has not granted Page, Instagram, or Ads read/);
+    expect(message).toMatch(/not ready to connect Pages/);
     expect(message).toMatch(/WhatsApp still works/);
   });
 

@@ -383,6 +383,51 @@ export class MetaWhatsAppService {
     };
   }
 
+  /** Cloud API numbers Embedded Signup left unverified cannot send. Coexistence must not be registered. */
+  static async phoneNeedsVerification(phoneNumberId: string, accessToken: string): Promise<boolean> {
+    try {
+      const data = await this.graphGet<{ code_verification_status?: string }>(
+        `/${phoneNumberId}?fields=code_verification_status`,
+        accessToken
+      );
+      return data.code_verification_status === 'NOT_VERIFIED';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Coexistence: Meta only syncs contacts and history after these two calls, once, within 24 hours.
+   * Does not call /register — a Business-app number is already registered.
+   */
+  static async startCoexistenceSync(
+    phoneNumberId: string,
+    accessToken: string
+  ): Promise<{ contactsRequestId: string | null; historyRequestId: string | null }> {
+    const contactsRequestId = await this.postSmbAppData(phoneNumberId, accessToken, 'smb_app_state_sync');
+    const historyRequestId = await this.postSmbAppData(phoneNumberId, accessToken, 'history');
+    return { contactsRequestId, historyRequestId };
+  }
+
+  private static async postSmbAppData(
+    phoneNumberId: string,
+    accessToken: string,
+    syncType: 'smb_app_state_sync' | 'history'
+  ): Promise<string | null> {
+    try {
+      const data = await this.graphPost<{ request_id?: string }>(
+        `/${phoneNumberId}/smb_app_data`,
+        accessToken,
+        { messaging_product: 'whatsapp', sync_type: syncType }
+      );
+      return data.request_id || null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/already|can only be requested once|2593109/i.test(message)) return null;
+      throw err;
+    }
+  }
+
   /** debug_token expires_at for token health monitoring. */
   static async inspectAccessTokenExpiry(
     accessToken: string,
@@ -602,6 +647,29 @@ export class MetaWhatsAppService {
 
   static async graphGetPublic<T>(path: string, accessToken: string): Promise<T> {
     return this.graphGet<T>(path, accessToken);
+  }
+
+  private static async graphPost<T>(
+    path: string,
+    accessToken: string,
+    body: Record<string, unknown>
+  ): Promise<T> {
+    const url = `${META_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json()) as T & GraphError;
+    if (!res.ok) {
+      const code = (data as GraphError).error?.code;
+      const message = (data as GraphError).error?.message || `Graph API request failed: ${path}`;
+      throw new Error(code ? `${code} ${message}` : message);
+    }
+    return data;
   }
 
   private static async graphGet<T>(path: string, accessToken: string): Promise<T> {
