@@ -5,6 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 # ponytail: verify_webhook_challenge lives in scripts/public-dev-url.sh
 source "$ROOT_DIR/scripts/public-dev-url.sh"
+# ponytail: WSL + Windows Node/ngrok/curl shims for local dev (not Codespaces-only).
+source "$ROOT_DIR/scripts/local-wsl-shims.sh"
+local_wsl_shims "$ROOT_DIR"
 RUN_DIR="$ROOT_DIR/.run"
 LOG_DIR="$RUN_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -31,7 +34,7 @@ start_process() {
     ok "$name is already running (PID $(cat "$RUN_DIR/$name.pid"))"
     return
   fi
-  nohup setsid bash -c "cd \"$ROOT_DIR\" && exec $command" >"$LOG_DIR/$name.log" 2>&1 &
+  nohup setsid bash -c "cd \"$ROOT_DIR\" && source scripts/local-wsl-shims.sh && local_wsl_shims \"$ROOT_DIR\" && exec $command" >"$LOG_DIR/$name.log" 2>&1 </dev/null &
   local pid=$!
   echo "$pid" > "$RUN_DIR/$name.pid"
   disown "$pid" 2>/dev/null || true
@@ -108,7 +111,11 @@ harden_local_permissions() {
   local env_mode
   env_mode="$(stat -c '%a' server/.env 2>/dev/null || true)"
   if [[ -n "$env_mode" && "$env_mode" != "600" ]]; then
-    warn "server/.env permissions are ${env_mode}; expected 600"
+    if [[ -r /proc/version ]] && grep -qi microsoft /proc/version; then
+      warn "server/.env stays mode ${env_mode} on the Windows drive. That is expected; continuing."
+    else
+      warn "server/.env permissions are ${env_mode}; expected 600"
+    fi
   fi
 }
 
@@ -148,7 +155,7 @@ curl -fsS http://localhost:8000/health >/dev/null 2>&1 ||
 ok "API is healthy"
 
 info "Starting Client..."
-start_process client "npm --prefix client run dev -- --host 0.0.0.0"
+start_process client "npm --prefix client run dev"
 for attempt in {1..30}; do
   curl -fsS http://localhost:3000 >/dev/null 2>&1 && break
   is_running client || fail "Client failed. See .run/logs/client.log"
@@ -186,16 +193,30 @@ if [[ "$PUBLIC_MODE" == "ngrok" ]]; then
     stop_tree "$(cat "$RUN_DIR/tunnel.pid")"
     rm -f "$RUN_DIR/tunnel.pid" "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
   fi
+  if command -v taskkill.exe >/dev/null 2>&1; then
+    taskkill.exe /IM ngrok.exe /F >/dev/null 2>&1 || true
+    sleep 1
+  fi
   rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
-  info "Starting ngrok tunnel (random URL; no stable-domain or fallback mode)..."
+  if bash "$ROOT_DIR/scripts/read-env-key.sh" server/.env NGROK_STATIC_DOMAIN | grep -q .; then
+    info "Starting ngrok tunnel (stable domain from NGROK_STATIC_DOMAIN)..."
+  else
+    info "Starting ngrok tunnel (set NGROK_STATIC_DOMAIN in server/.env for a permanent URL)..."
+  fi
   start_process tunnel "bash scripts/dev-tunnel.sh"
-  for attempt in {1..60}; do
+  for attempt in {1..90}; do
     if [[ -s "$RUN_DIR/tunnel-url" ]]; then
-      WEBHOOK_ENV="$(grep -m1 '^META_WEBHOOK_URL=' server/.env | cut -d= -f2- || true)"
+      WEBHOOK_ENV="$(bash "$ROOT_DIR/scripts/read-env-key.sh" server/.env META_WEBHOOK_URL || true)"
       [[ -n "$WEBHOOK_ENV" ]] && break
     fi
-    is_running tunnel || fail "Tunnel failed. See .run/logs/tunnel.log"
-    sleep 1
+    if is_running tunnel; then
+      sleep 1
+      continue
+    fi
+    if curl -fsS http://127.0.0.1:4040/api/tunnels >/dev/null 2>&1 && [[ -s "$RUN_DIR/tunnel-url" ]]; then
+      break
+    fi
+    fail "Tunnel failed. See .run/logs/tunnel.log"
   done
   [[ -s "$RUN_DIR/tunnel-url" ]] || fail "Tunnel URL was not created. See .run/logs/tunnel.log"
   CONNECT_HTTPS_ORIGIN="$(cat "$RUN_DIR/tunnel-url")"
@@ -229,7 +250,7 @@ else
 fi
 
 info "Starting Admin..."
-start_process admin "npm --prefix admin run dev -- --host 0.0.0.0"
+start_process admin "npm --prefix admin run dev"
 for attempt in {1..30}; do
   curl -fsS http://localhost:3001 >/dev/null 2>&1 && break
   is_running admin || fail "Admin failed. See .run/logs/admin.log"
@@ -256,8 +277,11 @@ echo "  Admin:                     http://localhost:3001"
 echo "  API (local):               http://localhost:8000"
 echo "  Webhook (Meta):            $WEBHOOK_URL"
 if [[ -n "$CONNECT_HTTPS_ORIGIN" ]]; then
-  echo "  Meta OAuth (ngrok — update when URL changes):"
+  echo "  Meta OAuth (HTTPS via ngrok):"
   echo "    ${CONNECT_HTTPS_ORIGIN}/settings/whatsapp/callback/popup"
+  if ! bash "$ROOT_DIR/scripts/read-env-key.sh" server/.env NGROK_STATIC_DOMAIN | grep -q .; then
+    echo "  Tip: set NGROK_STATIC_DOMAIN in server/.env to keep this URL across restarts."
+  fi
 fi
 echo "  Webhook registration: $(cat "$RUN_DIR/webhook-status" 2>/dev/null || echo pending)"
 echo "  Logs: .run/logs/"

@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/local-wsl-shims.sh"
+local_wsl_shims "$ROOT_DIR"
 RUN_DIR="$ROOT_DIR/.run"
 
 GREEN='\033[0;32m'
@@ -46,6 +48,9 @@ stop_service tunnel
 # Safety net for orphaned tunnel agents
 pkill -f 'cloudflared tunnel --url' 2>/dev/null || true
 pkill -f 'ngrok http' 2>/dev/null || true
+if command -v taskkill.exe >/dev/null 2>&1; then
+  taskkill.exe /IM ngrok.exe /F >/dev/null 2>&1 || true
+fi
 rm -f "$RUN_DIR/tunnel-url" "$RUN_DIR/webhook-status"
 
 if [[ "${1:-}" == "--all" ]]; then

@@ -9,6 +9,17 @@ import {
 const destructivePattern = /\b(DELETE\s+FROM|TRUNCATE\b|DROP\s+TABLE)\b/i;
 const pendingMigrationsMarker = /Following migrations? have not yet been applied/;
 
+/** Windows Node cannot spawn `npx`/`npm` (they are .cmd shims) without a shell. */
+function run(command: string, args: string[], options: { input?: string; stdio?: 'inherit'; encoding?: 'utf8' } = {}) {
+  if (process.platform === 'win32') {
+    return spawnSync('cmd.exe', ['/d', '/s', '/c', [command, ...args].join(' ')], {
+      ...options,
+      windowsHide: true,
+    });
+  }
+  return spawnSync(command, args, options);
+}
+
 function pendingMigrationNames(output: string): string[] {
   const names: string[] = [];
   for (const line of output.split('\n')) {
@@ -24,7 +35,7 @@ function migrationSql(name: string): string {
 }
 
 function verifyFreshDatabaseIsEmpty(): boolean {
-  const check = spawnSync('npx', ['prisma', 'db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'], {
+  const check = run('npx', ['prisma', 'db', 'execute', '--stdin', '--schema', 'prisma/schema.prisma'], {
     input: `
       DO $$
       DECLARE public_table_count integer;
@@ -42,7 +53,7 @@ function verifyFreshDatabaseIsEmpty(): boolean {
   return check.status === 0;
 }
 
-const status = spawnSync('npx', ['prisma', 'migrate', 'status'], { encoding: 'utf8' });
+const status = run('npx', ['prisma', 'migrate', 'status'], { encoding: 'utf8' });
 const output = `${status.stdout || ''}\n${status.stderr || ''}`;
 
 if (status.status !== 0 && !pendingMigrationsMarker.test(output)) {
@@ -62,7 +73,7 @@ if (pending.includes(historicalDestructiveMigration)) {
       'Fresh empty database verified; applying the full migration chain because the historical ' +
         'deduplication migration has no rows to delete.'
     );
-    const deploy = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
+    const deploy = run('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
     if (deploy.status !== 0) {
       throw new Error(`Fresh-database migration deploy failed with exit code ${deploy.status ?? 1}`);
     }
@@ -82,7 +93,7 @@ if (pending.includes(instagramPostsDropMigration)) {
       'Fresh empty database verified; applying the Instagram post migration chain because the ' +
         'historical drop cannot delete existing rows.'
     );
-    const deploy = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
+    const deploy = run('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
     if (deploy.status !== 0) {
       throw new Error(`Fresh-database migration deploy failed with exit code ${deploy.status ?? 1}`);
     }
@@ -99,7 +110,7 @@ if (
   approvedReconciliationMigrations.some((migration) => pending.includes(migration)) &&
   process.env.MIGRATION_BACKUP_FILE
 ) {
-  const migration = spawnSync('npm', ['run', 'db:migrate-reconciliation-safe'], {
+  const migration = run('npm', ['run', 'db:migrate-reconciliation-safe'], {
     stdio: 'inherit',
   });
   process.exitCode = migration.status ?? 1;
@@ -122,7 +133,7 @@ if (pending.length === 0) {
   );
 }
 
-const deploy = spawnSync('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
+const deploy = run('npx', ['prisma', 'migrate', 'deploy'], { stdio: 'inherit' });
 if (deploy.status !== 0) {
   throw new Error(`Additive migration deploy failed with exit code ${deploy.status ?? 1}`);
 }

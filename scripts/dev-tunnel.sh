@@ -16,9 +16,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/server/.env"
 PORT="${TUNNEL_PORT:-8000}"
-TARGET="http://localhost:${PORT}"
+TARGET="http://127.0.0.1:${PORT}"
 RUN_DIR="$ROOT_DIR/.run"
 LOG_DIR="$RUN_DIR/logs"
+READ_ENV="$ROOT_DIR/scripts/read-env-key.sh"
+
+source "$ROOT_DIR/scripts/local-wsl-shims.sh"
+local_wsl_shims "$ROOT_DIR"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; NC='\033[0m'
@@ -29,14 +33,41 @@ fail()  { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 
 mkdir -p "$LOG_DIR"
 
+read_env() {
+  bash "$READ_ENV" "$ENV_FILE" "$1"
+}
+
+ngrok_https_public_url() {
+  curl -fsS http://127.0.0.1:4040/api/tunnels 2>/dev/null |
+    node -e '
+      let input = "";
+      process.stdin.on("data", (chunk) => (input += chunk));
+      process.stdin.on("end", () => {
+        try {
+          const tunnel = JSON.parse(input).tunnels.find((item) => item.proto === "https");
+          if (tunnel) process.stdout.write(tunnel.public_url);
+        } catch {}
+      });
+    ' 2>/dev/null || true
+}
+
+normalize_ngrok_host() {
+  local raw="$1"
+  raw="${raw#https://}"
+  raw="${raw#http://}"
+  raw="${raw%%/*}"
+  echo "$raw"
+}
+
 write_env_key() {
   local key="$1"
   local value="$2"
-  ENV_FILE="$ENV_FILE" ENV_KEY="$key" ENV_VALUE="$value" node <<'NODE'
+  # Args, not env: WSL does not forward env vars to Windows node.exe.
+  node - "$ENV_FILE" "$key" "$value" <<'NODE'
 const fs = require('node:fs');
-const file = process.env.ENV_FILE;
-const key = process.env.ENV_KEY;
-const value = process.env.ENV_VALUE;
+const file = process.argv[2];
+const key = process.argv[3];
+const value = process.argv[4];
 const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
 const index = lines.findIndex((line) => line.startsWith(`${key}=`));
 if (index >= 0) lines[index] = `${key}=${value}`;
@@ -60,8 +91,8 @@ wait_for_tunnel() {
   while [[ "$attempt" -le "$max_attempts" ]]; do
     local body
     body="$(
-      VERIFY_URL="$verify_url" node <<'NODE' 2>/dev/null || true
-const url = process.env.VERIFY_URL;
+      node - "$verify_url" <<'NODE' 2>/dev/null || true
+const url = process.argv[2];
 const ctrl = new AbortController();
 const timer = setTimeout(() => ctrl.abort(), 8000);
 fetch(url, { signal: ctrl.signal })
@@ -112,11 +143,19 @@ publish_tunnel() {
   [[ -f "$ENV_FILE" ]] || fail "server/.env not found — cannot update META_WEBHOOK_URL"
   write_env_webhook "$webhook_url"
   ok "Updated server/.env: META_WEBHOOK_URL=${webhook_url}"
+  if [[ -z "$(read_env NGROK_STATIC_DOMAIN)" ]]; then
+    local host
+    host="$(normalize_ngrok_host "$tunnel_url")"
+    if [[ "$host" =~ \.ngrok-free\.(dev|app)$ ]]; then
+      write_env_key NGROK_STATIC_DOMAIN "$host"
+      ok "Pinned NGROK_STATIC_DOMAIN=${host} in server/.env (same URL on every start)"
+    fi
+  fi
   echo "pending" > "$RUN_DIR/webhook-status"
   echo "$tunnel_url" > "$RUN_DIR/tunnel-url"
 
   local verify_token
-  verify_token=$(grep '^META_VERIFY_TOKEN=' "$ENV_FILE" | cut -d= -f2-)
+  verify_token="$(read_env META_VERIFY_TOKEN)"
   if wait_for_tunnel "$webhook_url" "$verify_token"; then
     register_webhook || true
   else
@@ -128,24 +167,40 @@ ensure_ngrok_auth() {
   [[ -f "$ENV_FILE" ]] || fail "server/.env not found. Add NGROK_AUTHTOKEN and retry."
 
   local token
-  token="$(grep -m1 '^NGROK_AUTHTOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
-  # Also accept NGROK_AUTH_TOKEN alias if present
+  token="$(read_env NGROK_AUTHTOKEN)"
   if [[ -z "$token" ]]; then
-    token="$(grep -m1 '^NGROK_AUTH_TOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    token="$(read_env NGROK_AUTH_TOKEN)"
   fi
 
   if [[ -n "$token" ]]; then
-    if ! ngrok config add-authtoken "$token" >/dev/null 2>&1; then
-      fail "ngrok rejected NGROK_AUTHTOKEN from server/.env. Check the token and retry."
+    local auth_out="$LOG_DIR/ngrok-auth.out"
+    local auth_err="$LOG_DIR/ngrok-auth.err"
+    if ngrok config add-authtoken "$token" >"$auth_out" 2>"$auth_err"; then
+      return 0
     fi
-    return 0
+    if grep -qiE 'saved|updated|already|unchanged' "$auth_err" 2>/dev/null; then
+      return 0
+    fi
+    if ngrok version >/dev/null 2>&1; then
+      warn "ngrok config add-authtoken reported an error; continuing if ngrok.yml already has your token."
+      tail -n 2 "$auth_err" 2>/dev/null || true
+      return 0
+    fi
+    tail -n 5 "$auth_err" 2>/dev/null || true
+    fail "ngrok rejected NGROK_AUTHTOKEN from server/.env. Check the token and retry."
   fi
 
   if grep -q 'authtoken:' "$HOME/.config/ngrok/ngrok.yml" 2>/dev/null; then
     return 0
   fi
+  fail "NGROK_AUTHTOKEN missing. Add it to server/.env (from https://dashboard.ngrok.com/get-started/your-authtoken)."
+}
 
-  fail "NGROK_AUTHTOKEN missing. Add it to server/.env (from https://dashboard.ngrok.com/get-started/your-authtoken). Cloudflare fallback is disabled."
+watch_ngrok_agent() {
+  while curl -fsS http://127.0.0.1:4040/api/tunnels >/dev/null 2>&1; do
+    sleep 20
+  done
+  fail "ngrok agent stopped. Run bash start.sh again."
 }
 
 start_ngrok() {
@@ -153,32 +208,45 @@ start_ngrok() {
 
   ensure_ngrok_auth
 
-  # Random ngrok URL only — do NOT use reserved free domain samyoj-dev.ngrok-free.app (ERR_NGROK_313)
+  local static_host=""
+  static_host="$(normalize_ngrok_host "$(read_env NGROK_STATIC_DOMAIN)")"
+  if [[ "$static_host" == "samyoj-dev.ngrok-free.app" ]]; then
+    fail "Do not use team domain samyoj-dev.ngrok-free.app (ERR_NGROK_313). Set NGROK_STATIC_DOMAIN to your own ngrok static domain."
+  fi
+
+  local existing_url
+  existing_url="$(ngrok_https_public_url)"
+  if [[ "$existing_url" == https://* ]]; then
+    if [[ -z "$static_host" ]] || [[ "$existing_url" == *"$static_host"* ]]; then
+      ok "Reusing running ngrok: $existing_url"
+      publish_tunnel "$existing_url"
+      watch_ngrok_agent
+    fi
+    warn "ngrok is already running at $existing_url (wanted ${static_host:-a new URL}). Run bash stop.sh, then bash start.sh."
+    fail "Another ngrok tunnel is already active."
+  fi
+
   info "Starting ngrok tunnel → ${TARGET}"
   local ngrok_log="$LOG_DIR/ngrok-agent.log"
-  ngrok http "$PORT" --log=stdout >"$ngrok_log" 2>&1 &
+  local -a ngrok_cmd=(http "$PORT" --log=stdout)
+  if [[ -n "$static_host" ]]; then
+    ngrok_cmd+=(--url "https://${static_host}")
+    info "Stable public URL: https://${static_host}"
+  else
+    warn "No NGROK_STATIC_DOMAIN — URL will change each session. Add your free static domain in server/.env."
+  fi
+
+  ngrok "${ngrok_cmd[@]}" >"$ngrok_log" 2>&1 &
   local ngrok_pid=$!
 
   local tunnel_url=""
-  for attempt in {1..40}; do
+  for attempt in {1..45}; do
     if ! kill -0 "$ngrok_pid" 2>/dev/null; then
       warn "ngrok exited before opening a tunnel:"
       tail -n 30 "$ngrok_log" 2>/dev/null || true
       fail "ngrok failed to start. See .run/logs/ngrok-agent.log"
     fi
-    tunnel_url="$(
-      curl -fsS http://127.0.0.1:4040/api/tunnels 2>/dev/null |
-        node -e '
-          let input = "";
-          process.stdin.on("data", chunk => input += chunk);
-          process.stdin.on("end", () => {
-            try {
-              const tunnel = JSON.parse(input).tunnels.find(item => item.proto === "https");
-              if (tunnel) process.stdout.write(tunnel.public_url);
-            } catch {}
-          });
-        ' || true
-    )"
+    tunnel_url="$(ngrok_https_public_url)"
     [[ "$tunnel_url" == https://* ]] && break
     sleep 1
   done
@@ -187,11 +255,6 @@ start_ngrok() {
     kill "$ngrok_pid" 2>/dev/null || true
     wait "$ngrok_pid" 2>/dev/null || true
     fail "ngrok did not provide a public HTTPS URL. See .run/logs/ngrok-agent.log"
-  fi
-
-  if [[ "$tunnel_url" == *"samyoj-dev.ngrok-free.app"* ]]; then
-    kill "$ngrok_pid" 2>/dev/null || true
-    fail "Refusing reserved free domain samyoj-dev.ngrok-free.app (ERR_NGROK_313). Use a random ngrok URL."
   fi
 
   trap 'kill '"$ngrok_pid"' 2>/dev/null || true' EXIT INT TERM

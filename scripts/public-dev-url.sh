@@ -30,11 +30,12 @@ codespace_api_origin() {
 write_env_key() {
   local key="$1"
   local value="$2"
-  ENV_FILE="$ENV_FILE" ENV_KEY="$key" ENV_VALUE="$value" node <<'NODE'
+  # Args, not env: WSL does not forward env vars to Windows node.exe.
+  node - "$ENV_FILE" "$key" "$value" <<'NODE'
 const fs = require('node:fs');
-const file = process.env.ENV_FILE;
-const key = process.env.ENV_KEY;
-const value = process.env.ENV_VALUE;
+const file = process.argv[2];
+const key = process.argv[3];
+const value = process.argv[4];
 const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
 const index = lines.findIndex((line) => line.startsWith(`${key}=`));
 if (index >= 0) lines[index] = `${key}=${value}`;
@@ -70,8 +71,8 @@ probe_https_status() {
   local url="$1"
   local code
   code="$(
-    URL="$url" node <<'NODE' 2>/dev/null || echo "000"
-const url = process.env.URL;
+    node - "$url" <<'NODE' 2>/dev/null || echo "000"
+const url = process.argv[2];
 const ctrl = new AbortController();
 const t = setTimeout(() => ctrl.abort(), 12000);
 fetch(url, { signal: ctrl.signal, redirect: 'follow' })
@@ -89,8 +90,8 @@ verify_webhook_challenge() {
   local verify_url="${webhook_url}?hub.mode=subscribe&hub.verify_token=${verify_token}&hub.challenge=ping"
   local body
   body="$(
-    VERIFY_URL="$verify_url" node <<'NODE' 2>/dev/null || true
-const url = process.env.VERIFY_URL;
+    node - "$verify_url" <<'NODE' 2>/dev/null || true
+const url = process.argv[2];
 const ctrl = new AbortController();
 const t = setTimeout(() => ctrl.abort(), 12000);
 fetch(url, { signal: ctrl.signal })
