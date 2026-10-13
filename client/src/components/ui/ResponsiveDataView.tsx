@@ -6,6 +6,8 @@ interface ResponsiveDataViewProps<T> {
   renderTable: () => ReactNode;
   emptyState?: ReactNode;
   cardClassName?: string;
+  /** Classes on each card wrapper (e.g. aspect-square sizing in a flex/grid parent). */
+  cardItemClassName?: string;
   /** Extra classes on the table wrapper (padding, etc.). Visibility uses `tableFrom`. */
   tableClassName?: string;
   /** Show table from this breakpoint; cards hide at the same point. Default lg. */
@@ -28,6 +30,7 @@ export default function ResponsiveDataView<T>({
   renderTable,
   emptyState,
   cardClassName,
+  cardItemClassName = 'h-full min-w-0',
   tableClassName = '',
   tableFrom = 'lg',
 }: ResponsiveDataViewProps<T>) {
@@ -47,7 +50,11 @@ export default function ResponsiveDataView<T>({
             typeof item === 'object' && item !== null && 'id' in item
               ? String((item as { id: string }).id)
               : index;
-          return <div key={key}>{renderCard(item)}</div>;
+          return (
+            <div key={key} className={cardItemClassName}>
+              {renderCard(item)}
+            </div>
+          );
         })}
       </div>
       <div className={`${tableVisible} ${tableClassName}`.trim()}>{renderTable()}</div>
