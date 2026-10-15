@@ -172,7 +172,7 @@ describe('Phase 5 Ads insights parse', () => {
     expect(fetchAdAccountInsights).toHaveBeenCalledWith('act_team', 'page-token');
   });
 
-  it('routes are read-only and OAuth asks ads_read, not ads_management', () => {
+  it('routes are read-only and customer OAuth does not ask for rejected ads scopes', () => {
     const routes = readFileSync(join(__dirname, 'routes.ts'), 'utf8');
     const oauth = readFileSync(join(__dirname, 'connect-oauth-state.ts'), 'utf8');
     const insights = readFileSync(join(__dirname, 'ads-insights.ts'), 'utf8');
@@ -182,6 +182,7 @@ describe('Phase 5 Ads insights parse', () => {
     expect(routes).not.toMatch(/\/ads-(?:create|pause|resume|delete)/);
     expect(oauth).toContain('ads_read');
     const scopes = oauth.slice(oauth.indexOf('FACEBOOK_PAGE_LEADGEN_SCOPES'), oauth.indexOf('.join'));
+    expect(scopes).not.toContain('ads_read');
     expect(scopes).not.toContain('ads_management');
     expect(insights).not.toContain('activatePlan');
     expect(insights).not.toContain('ads_management');

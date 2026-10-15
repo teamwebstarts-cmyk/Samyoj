@@ -53,6 +53,19 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     retryHelps: false,
     action: 'payment',
   },
+  131042: {
+    title: 'Add a card in WhatsApp Manager',
+    body: 'Meta blocked this message because this business number has no payment method. This is Meta’s charge for WhatsApp, not the Samyoj plan.',
+    notice: 'Add a card in WhatsApp Manager for this number. Meta blocked the send until billing is set.',
+    steps: [
+      'Open WhatsApp Manager and select the number shown in the top bar.',
+      'Add a payment method under that WhatsApp account’s billing.',
+      'Send the template again from that same number.',
+    ],
+    footnote: 'Retry stays blocked until Meta accepts the card.',
+    retryHelps: false,
+    action: 'payment',
+  },
   141010: {
     title: 'Business verification needed',
     body: 'Meta is blocking sends until business verification is complete in Meta Business Suite.',
@@ -66,7 +79,7 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     notice: 'Register this number in WhatsApp Manager before sending.',
     steps: [
       'Open WhatsApp Manager and select this phone number.',
-      'Tap Register and enter the 6-digit PIN Meta sends you.',
+      'Tap Register, then choose a new 6-digit PIN yourself. Meta does not send it.',
       'When the number shows Registered, send again from Samyoj.',
     ],
     footnote: 'Retrying in Samyoj will not work until Meta shows Registered.',
@@ -178,6 +191,9 @@ export function explainWhatsAppSendFailure(input: {
   }
   if (/business account locked|account locked/i.test(raw)) {
     return { code: code ?? 131031, ...BY_CODE[131031] };
+  }
+  if (/business eligibility payment issue/i.test(raw)) {
+    return { code: code ?? 131042, ...BY_CODE[131042] };
   }
   const cleaned = raw.replace(/^\(#\d+\)\s*/, '').trim();
   if (cleaned) {

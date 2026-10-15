@@ -98,7 +98,7 @@ export default function ChatNoticeStack({ notices, onDismiss }: ChatNoticeStackP
           } ${notice.leaving ? 'inbox-modal-exit' : 'inbox-modal-enter'}`}
         >
           <NoticeIcon icon={notice.icon} tone={notice.tone} />
-          <div className="min-w-0 flex-1 line-clamp-2">{notice.message}</div>
+          <div className="min-w-0 flex-1">{notice.message}</div>
           {notice.action && (
             <button
               type="button"

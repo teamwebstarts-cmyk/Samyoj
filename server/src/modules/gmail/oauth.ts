@@ -21,6 +21,31 @@ export function gmailRedirectUri(): string {
   return process.env.GMAIL_REDIRECT_URI?.trim() || `${config.baseUrl.replace(/\/$/, '')}/api/gmail/oauth/callback`;
 }
 
+export const GMAIL_REFRESH_TOKEN_MISSING =
+  'Google did not allow Samyoj to keep sending. Click Connect Gmail again and accept send access.';
+
+/** Google's OAuth `error` query param, mapped to one plain sentence. Never echoes the raw description. */
+export function gmailOAuthErrorMessage(error: string, description = ''): string {
+  const code = error.trim().toLowerCase();
+  const detail = description.trim().toLowerCase();
+  if (code === 'admin_policy_enforced' || detail.includes('admin_policy_enforced')) {
+    return 'Your Google Workspace admin has blocked Samyoj. Ask them to allow this app, then connect again.';
+  }
+  if (code === 'org_internal') {
+    return 'This Google app is limited to one company. Use an allowed Google account, or ask the admin.';
+  }
+  if (code === 'invalid_scope' || detail.includes('invalid_scope')) {
+    return 'Google has not approved send access for this app yet. Connect again after approval.';
+  }
+  if (code === 'access_denied') {
+    return 'Google connect was cancelled. Click Connect Gmail again and allow send access.';
+  }
+  if (code === 'invalid_grant') {
+    return 'Google did not accept this login. Click Connect Gmail again.';
+  }
+  return 'Google did not finish connecting Gmail. Click Connect Gmail again.';
+}
+
 export function gmailOAuthFailureRedirect(reason: string, returnUri?: string): string {
   const base = (returnUri?.trim() || `${config.clientUrl.replace(/\/$/, '')}/settings?tab=channels&gmail=1`).split('#')[0];
   const joiner = base.includes('?') ? '&' : '?';

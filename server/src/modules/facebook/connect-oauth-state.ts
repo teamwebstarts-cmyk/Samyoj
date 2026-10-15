@@ -72,7 +72,11 @@ export function verifyFacebookPageOAuthState(token: string): FacebookPageConnect
   return decoded;
 }
 
-/** Page + IG + read-only Ads Insights. Cannot create or pause ads. */
+/**
+ * Live customer connect. Only permissions Meta has approved.
+ * A rejected permission in this list makes Facebook return Invalid Scopes
+ * and the whole Page dialog fails.
+ */
 export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'pages_show_list',
   'pages_manage_metadata',
@@ -81,9 +85,16 @@ export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'leads_retrieval',
   'instagram_basic',
   'instagram_manage_messages',
+].join(',');
+
+/**
+ * Meta rejected these for a screencast mismatch. Put one back into
+ * FACEBOOK_PAGE_LEADGEN_SCOPES only after that use case is approved.
+ */
+export const FACEBOOK_SCOPES_WAITING_ON_REVIEW = [
   'instagram_manage_comments',
   'ads_read',
-].join(',');
+] as const;
 
 export function buildFacebookPageOAuthUrl(opts: {
   appId: string;

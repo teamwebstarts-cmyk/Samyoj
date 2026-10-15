@@ -49,10 +49,10 @@ export function mapWhatsAppOAuthError(err: unknown): AppError {
     );
   }
 
-  if (lower.includes('3441045') || lower.includes('not eligible') || lower.includes('further activity')) {
+  if (lower.includes('3441045') || lower.includes('further activity')) {
     return new AppError(
       400,
-      'This number needs more real chats in the WhatsApp Business app, about 7 days, before it can connect.'
+      'This number is not eligible for the phone-app connection yet. Keep using it in the WhatsApp Business app, then try again.'
     );
   }
 

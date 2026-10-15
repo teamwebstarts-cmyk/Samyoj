@@ -181,10 +181,12 @@ export function buildMimeMessage(input: {
       ].join('\r\n')
     : textPart(textBody, 'text/plain');
 
+  const unsubscribe = textBody.match(/https?:\/\/[^\s<>"]+\/api\/gmail\/unsubscribe\?token=[A-Za-z0-9._~%-]+/);
   const raw = [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${subject}`,
+    ...(unsubscribe ? [`List-Unsubscribe: <${unsubscribe[0]}>`] : []),
     'MIME-Version: 1.0',
     `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     '',

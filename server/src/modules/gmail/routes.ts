@@ -1,4 +1,4 @@
-import express, { Request, Response, Router } from 'express';
+import express, { NextFunction, Request, Response, Router } from 'express';
 import crypto from 'crypto';
 import { GmailMailboxStatus, OrgRole, Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -27,14 +27,41 @@ import {
   resolveGmailReturnUri,
   storeGmailOAuthState,
   verifyGmailOAuthState,
+  gmailOAuthErrorMessage,
   gmailOAuthFailureRedirect,
+  GMAIL_REFRESH_TOKEN_MISSING,
 } from './oauth';
+import {
+  appendGmailUnsubscribe,
+  gmailUnsubscribeConfirmPage,
+  gmailUnsubscribeInvalidPage,
+  gmailUnsubscribedPage,
+  gmailUnsubscribeUrl,
+  verifyGmailUnsubscribeToken,
+} from './unsubscribe';
 import { encrypt } from '../../utils/crypto';
 import { sanitizeEmailHtml } from './mime';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
 import { applyGmailMerge, unresolvedAfterGmailMerge } from './merge-fields';
 
 const router = Router();
+
+const GMAIL_WHATSAPP_REQUIRED =
+  'Connect a WhatsApp number before sending email. Contacts and sent mail stay on that number.';
+
+function gmailNumberScope(req: Request, res: Response, next: NextFunction): void {
+  void resolveActiveWhatsappNumber(req, res, (err?: unknown) => {
+    if (
+      err instanceof AppError &&
+      err.statusCode === 400 &&
+      err.message.startsWith('Connect a WhatsApp number')
+    ) {
+      next(new AppError(400, GMAIL_WHATSAPP_REQUIRED, 'GMAIL_WHATSAPP_REQUIRED'));
+      return;
+    }
+    next(err);
+  });
+}
 
 const activeMailboxWhere = (organizationId: string) => ({
   organizationId,
@@ -116,7 +143,10 @@ router.get(
       );
     }
     if (error) {
-      return res.redirect(`${state.returnUri}&status=failed&reason=${encodeURIComponent('Google cancelled Gmail connection')}`);
+      const description = typeof req.query.error_description === 'string' ? req.query.error_description : '';
+      return res.redirect(
+        gmailOAuthFailureRedirect(gmailOAuthErrorMessage(error, description), state.returnUri),
+      );
     }
     const code = typeof req.query.code === 'string' ? req.query.code : '';
     if (!code) {
@@ -147,12 +177,19 @@ router.get(
       token = await exchangeGmailCode(code);
       identity = await fetchGoogleIdentity(token.access_token);
     } catch (cause) {
+      const raw = cause instanceof Error ? cause.message : '';
+      const googleCode = raw.match(/failed: ([a-z0-9_]+)/i)?.[1] || '';
       return res.redirect(
         gmailOAuthFailureRedirect(
-          cause instanceof Error ? cause.message : 'Google did not finish Gmail connection. Click Connect Gmail again.',
+          googleCode
+            ? gmailOAuthErrorMessage(googleCode)
+            : raw || 'Google did not finish Gmail connection. Click Connect Gmail again.',
           state.returnUri,
         ),
       );
+    }
+    if (!token.refresh_token) {
+      return res.redirect(gmailOAuthFailureRedirect(GMAIL_REFRESH_TOKEN_MISSING, state.returnUri));
     }
     const existing = await prisma.gmailMailbox.findFirst({
       where: activeMailboxWhere(state.organizationId),
@@ -170,7 +207,7 @@ router.get(
         email: identity.email,
         providerAccountId: identity.id,
         accessTokenEncrypted: encrypt(token.access_token),
-        refreshTokenEncrypted: token.refresh_token ? encrypt(token.refresh_token) : undefined,
+        refreshTokenEncrypted: encrypt(token.refresh_token),
         tokenExpiresAt: new Date(Date.now() + (token.expires_in ?? 3600) * 1000),
         scopes: [...GMAIL_SCOPES],
         status: 'CONNECTED',
@@ -179,6 +216,34 @@ router.get(
     });
     return res.redirect(`${state.returnUri}&status=connected`);
   })
+);
+
+router.get('/unsubscribe', (req: Request, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  if (!verifyGmailUnsubscribeToken(token)) {
+    res.status(400).type('html').send(gmailUnsubscribeInvalidPage());
+    return;
+  }
+  res.type('html').send(gmailUnsubscribeConfirmPage(token));
+});
+
+router.post(
+  '/unsubscribe',
+  express.urlencoded({ extended: false, limit: '4kb' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body as { token?: unknown };
+    const token = typeof body.token === 'string' ? body.token : '';
+    const payload = verifyGmailUnsubscribeToken(token);
+    if (!payload) {
+      res.status(400).type('html').send(gmailUnsubscribeInvalidPage());
+      return;
+    }
+    await prisma.contact.updateMany({
+      where: { id: payload.contactId, organizationId: payload.organizationId },
+      data: { emailOptedIn: false, emailOptOutAt: new Date() },
+    });
+    res.type('html').send(gmailUnsubscribedPage());
+  }),
 );
 
 router.use(authenticate, requireOrg);
@@ -243,7 +308,7 @@ router.post(
 router.post(
   '/attachments',
   express.raw({ type: '*/*', limit: `${MAX_ATTACHMENT_BYTES}b` }),
-  resolveActiveWhatsappNumber,
+  gmailNumberScope,
   asyncHandler(async (req: Request, res: Response) => {
     requirePersistedUser(req);
     if (!Buffer.isBuffer(req.body)) throw new AppError(400, 'Attachment bytes are required');
@@ -260,7 +325,7 @@ router.post(
     }
     const id = crypto.randomUUID();
     const whatsappNumberId = req.activeWhatsappNumberId;
-    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before uploading attachments');
+    if (!whatsappNumberId) throw new AppError(400, GMAIL_WHATSAPP_REQUIRED, 'GMAIL_WHATSAPP_REQUIRED');
     const stored = await persistMediaBuffer({
       organizationId: req.user!.organizationId!,
       messageId: `gmail/${id}`,
@@ -289,7 +354,7 @@ router.post(
 
 router.get(
   '/contacts',
-  resolveActiveWhatsappNumber,
+  gmailNumberScope,
   asyncHandler(async (req: Request, res: Response) => {
     const contacts = await prisma.contact.findMany({
       where: {
@@ -329,7 +394,7 @@ router.get(
 
 router.put(
   '/contacts/:id/email-consent',
-  resolveActiveWhatsappNumber,
+  gmailNumberScope,
   asyncHandler(async (req: Request, res: Response) => {
     const body = z.object({
       optedIn: z.boolean(),
@@ -474,7 +539,7 @@ export const gmailSendSchema = z.object({
 
 router.post(
   '/send',
-  resolveActiveWhatsappNumber,
+  gmailNumberScope,
   asyncHandler(async (req: Request, res: Response) => {
     requirePersistedUser(req);
     const data = gmailSendSchema.parse(req.body);
@@ -492,7 +557,7 @@ router.post(
     const htmlBody = data.htmlBody !== undefined ? data.htmlBody : template?.htmlBody;
     if (!subject || !textBody) throw new AppError(400, 'Subject and plain text body are required');
     const whatsappNumberId = req.activeWhatsappNumberId;
-    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before sending');
+    if (!whatsappNumberId) throw new AppError(400, GMAIL_WHATSAPP_REQUIRED, 'GMAIL_WHATSAPP_REQUIRED');
 
     const contacts = await prisma.contact.findMany({
       where: {
@@ -572,6 +637,11 @@ router.post(
             continue;
           }
         }
+        const withUnsubscribe = appendGmailUnsubscribe(
+          applyGmailMerge(textBody, contact, mergeOptions),
+          htmlBody ? applyGmailMerge(htmlBody, contact, mergeOptions) : null,
+          gmailUnsubscribeUrl(organizationId, contact.id),
+        );
         const send = await tx.emailSend.create({
           data: {
             organizationId,
@@ -583,8 +653,8 @@ router.post(
             recipientEmail: contact.email!,
             recipientName: contact.name,
             subject: applyGmailMerge(subject, contact, mergeOptions),
-            textBody: applyGmailMerge(textBody, contact, mergeOptions),
-            htmlBody: htmlBody ? applyGmailMerge(htmlBody, contact, mergeOptions) : null,
+            textBody: withUnsubscribe.textBody,
+            htmlBody: withUnsubscribe.htmlBody,
             idempotencyKey,
           },
         });
@@ -638,10 +708,10 @@ router.post(
 
 router.get(
   '/sends',
-  resolveActiveWhatsappNumber,
+  gmailNumberScope,
   asyncHandler(async (req: Request, res: Response) => {
     const whatsappNumberId = req.activeWhatsappNumberId;
-    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before viewing sends');
+    if (!whatsappNumberId) throw new AppError(400, GMAIL_WHATSAPP_REQUIRED, 'GMAIL_WHATSAPP_REQUIRED');
     const sends = await prisma.emailSend.findMany({
       where: activeGmailSendWhere(req.user!.organizationId!, whatsappNumberId),
       orderBy: { createdAt: 'desc' },

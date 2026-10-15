@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { config } from '../../config';
 import {
   FACEBOOK_PAGE_LEADGEN_SCOPES,
+  FACEBOOK_SCOPES_WAITING_ON_REVIEW,
   buildFacebookPageOAuthUrl,
   resolveFacebookOAuthRedirectUri,
   signFacebookPageOAuthState,
@@ -82,5 +83,12 @@ describe('Facebook Page OAuth state', () => {
     expect(launch.url).toContain('auth_type=rerequest');
     expect(launch.url).not.toContain('ads_management');
     expect(launch.url).not.toContain('instagram_content_publish');
+    expect(launch.url).not.toContain('ads_read');
+    expect(launch.url).not.toContain('instagram_manage_comments');
+    expect(launch.url).toContain('instagram_manage_messages');
+    expect(FACEBOOK_SCOPES_WAITING_ON_REVIEW).toEqual([
+      'instagram_manage_comments',
+      'ads_read',
+    ]);
   });
 });

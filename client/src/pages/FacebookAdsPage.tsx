@@ -425,9 +425,9 @@ export default function FacebookAdsPage() {
             title="Ads read is not granted yet"
             body="Meta has not given this app permission to read Ads Manager. WhatsApp keeps working. This page does not invent ₹0 spend."
             steps={[
-              'On the Meta app, add the Ads read use case and grant it.',
-              'Reconnect the Page after that grant.',
-              'This screen still cannot create or pause an ad.',
+              'Meta has not approved Ads read for Samyoj yet, so Page connect does not ask for it.',
+              'WhatsApp, the Page, and Instagram messages still connect.',
+              'After Meta approves Ads read, reconnect the Page. This screen still cannot create or pause an ad.',
             ]}
             action={
               <button
@@ -465,7 +465,7 @@ export default function FacebookAdsPage() {
             body="Ads are listed from the Facebook user who connected the Page, not from a Page-to-ad-account link in Business Settings."
             steps={[
               'Reconnect the Page with the same login that opens Ads Manager.',
-              'On Facebook’s permission screen, allow Ads read.',
+              'If Meta has not approved Ads read yet, this page stays empty on purpose.',
               'If more than one account appears, pick the one you want. Zeros are a real read when no ads ran.',
             ]}
             action={

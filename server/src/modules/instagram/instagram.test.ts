@@ -451,10 +451,12 @@ describe('Phase 4 Instagram', () => {
     expect(privateReplyOpen(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000), now)).toBe(false);
   });
 
-  it('OAuth asks IG comment/message scopes; Page dispatcher still ignores IG object', async () => {
+  it('OAuth asks IG message scope and holds comments until Meta approves them', async () => {
     const oauth = readFileSync(join(__dirname, '../facebook/connect-oauth-state.ts'), 'utf8');
+    const scopes = oauth.slice(oauth.indexOf('FACEBOOK_PAGE_LEADGEN_SCOPES'), oauth.indexOf('.join'));
+    expect(scopes).toContain('instagram_manage_messages');
+    expect(scopes).not.toContain('instagram_manage_comments');
     expect(oauth).toContain('instagram_manage_comments');
-    expect(oauth).toContain('instagram_manage_messages');
     const pageClient = readFileSync(join(__dirname, '../facebook/page-client.ts'), 'utf8');
     expect(pageClient).toContain('live_comments');
     const inbox = readFileSync(join(__dirname, 'inbox.routes.ts'), 'utf8');

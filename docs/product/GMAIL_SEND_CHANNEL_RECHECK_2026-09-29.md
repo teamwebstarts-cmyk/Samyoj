@@ -10,6 +10,8 @@ This recheck is the companion to:
 - `docs/product/GMAIL_EMAIL_UI_BRIEF_2026-09-29.md` — UI-only screen brief
 
 > Implementation update (2026-09-30): the follow-on Gmail attachments and template-library slice is now implemented in code. See `docs/product/GMAIL_ATTACHMENTS_LIBRARY_IMPLEMENTATION_2026-09-29.md`. The phase guidance below remains the original pre-build safety baseline; customer rollout is still blocked on Google verification and real-mail release gates.
+>
+> **15 Oct 2026:** the action list for platform access is `docs/product/GMAIL_PLATFORM_ACCESS_2026-10-15.md`. Use that for the exact Google Cloud steps. The Help Center FAQ now lists sensitive-scope verification as about **10 business days**, not the older 3–5 day line in section 2.3.
 
 The official Google pages below were read on 2026-09-29. This document records what is safe to build, what must not be requested, and which earlier assumptions were corrected.
 

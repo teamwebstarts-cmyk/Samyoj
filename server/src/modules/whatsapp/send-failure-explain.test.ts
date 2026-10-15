@@ -26,6 +26,17 @@ describe('explainWhatsAppSendFailure', () => {
     expect(explained.retryHelps).toBe(false);
   });
 
+  it('explains a business eligibility payment issue as Meta billing, not a Samyoj plan charge', () => {
+    const explained = explainWhatsAppSendFailure({
+      rawMessage: 'Business eligibility payment issue',
+    });
+    expect(explained.code).toBe(131042);
+    expect(explained.action).toBe('payment');
+    expect(explained.retryHelps).toBe(false);
+    expect(explained.notice.toLowerCase()).toMatch(/whatsapp manager/);
+    expect(explained.body.toLowerCase()).toMatch(/payment method/);
+  });
+
   it('explains 133010 as the business number not registered on Cloud API', () => {
     const explained = explainWhatsAppSendFailure({
       code: 133010,

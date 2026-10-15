@@ -124,7 +124,7 @@ export default function WhatsAppConnectModeModal({
                 <span className="font-semibold text-neutral-500">(coexistence)</span>
                 <span
                   className="inline-flex"
-                  title="The number must already be on the WhatsApp Business app, with about 7 days of real chats. A Cloud API-only number cannot use this."
+                  title="Use this only when the number is already on the WhatsApp Business phone app, version 2.24.17 or newer. Connecting unlinks WhatsApp Web and desktop companions. A Cloud API-only number cannot use this."
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
                 >
@@ -132,7 +132,7 @@ export default function WhatsAppConnectModeModal({
                 </span>
               </span>
               <span className="mt-0.5 block text-[12px] text-neutral-500">
-                Keep WhatsApp Business on this device
+                Business app 2.24.17 or newer. Web and desktop apps unlink.
               </span>
             </span>
             <span

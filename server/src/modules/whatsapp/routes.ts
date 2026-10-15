@@ -198,8 +198,8 @@ async function saveWhatsappConnection(
         },
       });
       notice = isOnBizApp
-        ? 'WhatsApp connected. Keep the Business app open for a few minutes so older chats can sync.'
-        : 'WhatsApp connected. Keep the Business app open. If the phone did not show linked, scan the QR and connect once more.';
+        ? 'WhatsApp connected. Keep the WhatsApp Business app open for the next 24 hours so older chats can sync.'
+        : 'WhatsApp connected. On the phone, open the Facebook message, tap Connect to the Business Platform, and enter the code or scan the QR from the Facebook window. Keep the Business app open for 24 hours.';
     } catch (err) {
       log.warn('Coexistence sync did not start', {
         organizationId: orgId,

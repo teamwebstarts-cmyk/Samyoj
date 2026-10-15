@@ -837,6 +837,7 @@ export default function EmailComposePage() {
                         <span>Each person gets their own email. This preview is only for {previewContact?.name}.</span>
                       )}
                       <span>Opens, replies, and delivery are not shown. A successful send is Accepted by Gmail.</span>
+                      <span>Each email includes a link the recipient can open to stop further email.</span>
                     </div>
                   </div>
                 ) : (

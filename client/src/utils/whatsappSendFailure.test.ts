@@ -17,6 +17,16 @@ describe('explainWhatsAppSendFailure', () => {
     expect(explained.notice.toLowerCase()).toMatch(/template is fine/);
   });
 
+  it('explains a business eligibility payment issue without offering a useless retry', () => {
+    const explained = explainWhatsAppSendFailure({
+      rawMessage: 'Business eligibility payment issue',
+    });
+    expect(explained.code).toBe(131042);
+    expect(explained.action).toBe('payment');
+    expect(explained.retryHelps).toBe(false);
+    expect(explained.steps?.length).toBeGreaterThan(0);
+  });
+
   it('explains 133010 as the business number not registered on Cloud API', () => {
     const explained = explainWhatsAppSendFailure({
       code: 133010,

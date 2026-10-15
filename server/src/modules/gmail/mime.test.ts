@@ -31,6 +31,17 @@ describe('Gmail MIME builder', () => {
     expect(result.raw).toContain('text/html');
   });
 
+  it('adds a List-Unsubscribe header when the body has a confirm link', () => {
+    const url = 'https://api.example.com/api/gmail/unsubscribe?token=abc.def';
+    const result = buildMimeMessage({
+      from: 'sender@example.com',
+      to: 'recipient@example.com',
+      subject: 'Hello',
+      textBody: `Hello\n\nTo stop these emails, open this link and confirm: ${url}`,
+    });
+    expect(result.raw).toContain(`List-Unsubscribe: <${url}>`);
+  });
+
   it('rejects encoded and whitespace-obfuscated javascript URLs and strips attributes', () => {
     const html = sanitizeEmailHtml(
       '<a class="x" onclick="alert(1)" href="java&#x09;script%3Aalert(1)">bad</a>' +
