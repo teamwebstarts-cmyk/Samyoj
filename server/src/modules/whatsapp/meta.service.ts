@@ -881,7 +881,12 @@ export class MetaWhatsAppService {
       `/${wabaId}/message_templates?${params.toString()}`,
       accessToken
     );
-    const template = data.data?.[0];
+    // Meta's `name` filter prefix-matches (name=hello_account returned
+    // hello_account_3). Callers rely on the exact approved template, so
+    // filter client-side and fail closed when Meta did not return the name.
+    const template = data.data?.find(
+      (item) => item.name?.toLowerCase() === templateName.toLowerCase()
+    );
     return template ? normalizeMessageTemplate(template) : null;
   }
 
