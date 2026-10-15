@@ -181,12 +181,7 @@ export function useConversationActions({
           const message =
             perm.callingBlock?.message ||
             'Meta has not turned on WhatsApp calls for this number. Calls need a daily messaging limit of at least 2,000.';
-          emitChatNotice(selected.id, {
-            kind: 'calling',
-            tone: 'amber',
-            icon: 'phone',
-            message,
-          });
+          // Global Meta block — one readable toast only, no in-chat notice (would double up).
           toastMetaBlock(message);
           return;
         }
