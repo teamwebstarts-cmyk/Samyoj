@@ -23,7 +23,6 @@ import { useMetaChannelStatus } from '../components/layout/MetaChannelChips';
 import { analyticsApi, campaignApi, inboxApi, onboardingApi, templateApi } from '../services/api';
 import { toastError } from '../utils/toast';
 import { useGmailChannelAvailable, useGmailWorkspace } from '../components/email/emailData';
-import { GMAIL_MOCK_MAILBOX } from '../utils/gmailMockData';
 import EmailDashboardView from './email/EmailDashboardPage';
 import type { AnalyticsOverview, Campaign, Conversation, MessageTemplate } from '../types';
 
@@ -106,7 +105,7 @@ export default function DashboardPage() {
   const metaReady = facebook !== null && instagram !== null;
   const waConnected = waStatus.statusReady ? waStatus.connected : hasConnectedNumber;
   const emailChannel = useGmailChannelAvailable();
-  const { status: gmailStatus } = useGmailWorkspace();
+  const { status: gmailStatus, mockPreview: gmailMock } = useGmailWorkspace();
   const channels = {
     whatsapp: waConnected,
     facebook: facebook?.connected === true,
@@ -309,9 +308,11 @@ export default function DashboardPage() {
           facebookLabel={facebook?.label}
           instagramLabel={instagram?.label}
           emailLabel={
-            gmailStatus?.status === 'connected'
-              ? gmailStatus.email || GMAIL_MOCK_MAILBOX
-              : 'Not connected'
+            gmailMock
+              ? 'Sample data'
+              : gmailStatus?.status === 'connected'
+                ? gmailStatus.email || 'Connected'
+                : 'Not connected'
           }
         />
         {showEmail ? <EmailDashboardView /> : null}
@@ -326,9 +327,11 @@ export default function DashboardPage() {
             facebookLabel={facebook?.label}
             instagramLabel={instagram?.label}
             emailLabel={
-              gmailStatus?.status === 'connected'
-                ? gmailStatus.email || GMAIL_MOCK_MAILBOX
-                : 'Not connected'
+              gmailMock
+                ? 'Sample data'
+                : gmailStatus?.status === 'connected'
+                  ? gmailStatus.email || 'Connected'
+                  : 'Not connected'
             }
             onboarding={
               hasOnboarding && onboarding

@@ -315,7 +315,16 @@
         <li><strong>Contact Lists & Consent:</strong> Customer phone numbers (in international E.164 format), opt-in consent status records, and tags managed within the customer's workspace.</li>
       </ul>
 
-      <h3>D. Technical & Log Data</h3>
+      <h3>D. Gmail send access</h3>
+      <ul>
+        <li><strong>Send only:</strong> When a business user connects Gmail or Google Workspace, Samyoj requests <code>gmail.send</code>. We do not read, list, or change mailbox contents.</li>
+        <li><strong>What we store:</strong> The mailbox address, encrypted access and refresh tokens, and for each send the subject, body, recipient, Gmail message id, and status, so the user can see the sent list.</li>
+        <li><strong>Attachments:</strong> Files attached to a send stay private to that organization, are limited to allowed types, and expire after 24 hours.</li>
+        <li><strong>Not for ads:</strong> We do not use this mailbox data for advertising, and we do not sell it.</li>
+        <li><strong>Disconnect:</strong> Disconnecting the mailbox deletes the stored tokens.</li>
+      </ul>
+
+      <h3>E. Technical & Log Data</h3>
       <ul>
         <li>Internet Protocol (IP) addresses, browser type, device information, operating system, and system activity logs necessary to diagnose platform uptime and prevent fraudulent abuse.</li>
       </ul>
@@ -328,6 +337,7 @@
         <li>To provide real-time notification updates to agents via secure WebSockets.</li>
         <li>To deliver message delivery analytics, template status tracking, and quality rating insights.</li>
         <li>To manage subscription billing, account security, two-factor authentication, and customer support.</li>
+        <li>To send email the business user wrote, from the Gmail or Google Workspace mailbox they connected, to contacts who already have email permission.</li>
         <li>To comply with Meta Platform Policies, WhatsApp Business Policies, and legal compliance obligations.</li>
       </ul>
 
@@ -351,6 +361,11 @@
             <td><strong>Razorpay Software Pvt. Ltd.</strong></td>
             <td>Subscription billing and GST invoice processing</td>
             <td>Organization name, billing email, billing address, plan SKU</td>
+          </tr>
+          <tr>
+            <td><strong>Google</strong></td>
+            <td>Send email from the mailbox a business user connected</td>
+            <td>Mailbox address, OAuth tokens, and the message the user chose to send</td>
           </tr>
           <tr>
             <td><strong>Cloud Hosting & Database</strong></td>

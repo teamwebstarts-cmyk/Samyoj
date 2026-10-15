@@ -55,7 +55,9 @@ export function gmailOAuthFailureRedirect(reason: string, returnUri?: string): s
 export function googleCredentials(): { clientId: string; clientSecret: string } {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || '';
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || '';
-  if (!clientId || !clientSecret) throw new Error('Google Gmail OAuth is not configured');
+  if (!clientId || !clientSecret) {
+    throw new Error('Connect Gmail is not set up on this server yet. Add the Google client, then try again.');
+  }
   return { clientId, clientSecret };
 }
 

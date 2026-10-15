@@ -265,7 +265,7 @@ export default function ChatThread({
         setEphemeral((prev) => prev.filter((n) => n.id !== id));
         ephemeralTimers.current.delete(id);
       }, NOTICE_EXIT_MS);
-    }, payload.kind === 'send-error' ? SEND_ERROR_NOTICE_MS : EPHEMERAL_MS);
+    }, payload.kind === 'send-error' || payload.kind === 'calling' ? SEND_ERROR_NOTICE_MS : EPHEMERAL_MS);
     ephemeralTimers.current.set(id, leaveTimer);
   }, []);
 

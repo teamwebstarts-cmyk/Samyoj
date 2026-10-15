@@ -63,7 +63,7 @@ Checked 15 Oct 2026. These keys are empty:
 - `GOOGLE_CLIENT_SECRET`
 - `GMAIL_REDIRECT_URI`
 
-Without them, Connect Gmail returns “Gmail OAuth is not configured”. `server/.env.example` does not list these keys, so a new setup can miss them.
+Without them, Connect Gmail says the Google client still has to be added. `server/.env.example` lists the three keys with empty values.
 
 The same `GOOGLE_CLIENT_ID` is also used for **Continue with Google**. Keep login’s scope list as it is. Do not add `gmail.send` to the login request. The Cloud consent screen still has to **declare** `gmail.send`, because the Gmail connect request uses it.
 
@@ -101,8 +101,8 @@ Fixed in code on 15 Oct 2026:
 
 Still open:
 
-5. **Mock preview can look connected.** If the Meta mock switch is on and Gmail is disconnected, the Email screens show fake contacts and fake sends. Send is blocked, but the screen is not the live mailbox.
-6. **No recorded proof send.** Nothing in this environment has returned a Gmail message id.
+5. **Mock preview is labeled Sample.** If the Meta mock switch is on and Gmail is disconnected, Email shows sample rows and a Sample badge. Send stays blocked. The channel tab says Sample data.
+6. **No recorded proof send.** Nothing in this environment has returned a Gmail message id. That step is still yours.
 
 ### 3.5 A different mail system — do not mix it in
 
@@ -260,11 +260,11 @@ Samyoj does not do these for them:
 
 When work starts, this is the code and content list. Platform steps 1–8 stay outside the repo.
 
-1. Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GMAIL_REDIRECT_URI` to `server/.env.example` with comments. No real values.
-2. Add the Gmail disclosure to the public privacy policy on the owned domain.
+1. Done 15 Oct 2026: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GMAIL_REDIRECT_URI` are in `server/.env.example`. No real values.
+2. Done 15 Oct 2026: `client/public/privacy.html` has the Gmail send section. The live page at `https://samyoj.com/legal/privacy-policy.html` still has to be updated to match before Google verification.
 3. Done 15 Oct 2026: no `refresh_token` means the connect is refused and the previous mailbox stays.
 4. Done 15 Oct 2026: the WhatsApp gate stays, and the Email error says contacts and sent mail stay on that number.
 5. Done 15 Oct 2026: Google refusal codes map to one sentence each.
 6. Done 15 Oct 2026: each email includes a confirm-to-unsubscribe link. The 50-recipient cap stays, and every recipient still needs email permission.
-7. Keep mock preview visibly fake, and keep Send blocked while it is on.
+7. Done 15 Oct 2026: mock preview shows Sample, and Send stays blocked while it is on.
 8. Run step 10 and keep the Gmail message id in the sent row as the proof.

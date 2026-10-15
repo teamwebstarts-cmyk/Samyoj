@@ -111,9 +111,21 @@ export default function EmailDashboardView() {
             </span>
           }
           title="Email"
-          badge={<ChannelHeroConnectedBadge />}
+          badge={
+            mockPreview ? (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                Sample
+              </span>
+            ) : (
+              <ChannelHeroConnectedBadge />
+            )
+          }
           nameLine={mailboxEmail}
-          description="Send from your connected Gmail or Google Workspace mailbox."
+          description={
+            mockPreview
+              ? 'Sample mailbox only. Connect Gmail before a real send.'
+              : 'Send from your connected Gmail or Google Workspace mailbox.'
+          }
         />
         <ChannelHeroActions
           manageHref="/settings?tab=channels"

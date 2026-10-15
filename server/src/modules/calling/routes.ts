@@ -10,8 +10,8 @@ import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import {
   isCallingConfigured,
   MetaCallingService,
-  CALLING_ENABLE_HINTS,
 } from './meta-calling.service';
+import { callingBlockNotice } from './calling-block';
 import { endCallSession, getActiveSessionCount } from './call-session.manager';
 import { isSarvamSttConfigured } from './sarvam.stt';
 import { isSarvamTtsConfigured, previewSpeechSarvam } from './sarvam.tts';
@@ -153,6 +153,8 @@ router.get(
 
     const localActive = getActiveSessionCount();
     const activeCalls = Math.max(redisActive, localActive);
+    const callingEnabled = MetaCallingService.isCallingEnabled(callingSettingsMeta);
+    const callingBlock = callingEnabled ? null : callingBlockNotice(number?.messagingLimitTier);
 
     sendSuccess(res, {
       configured: isCallingConfigured() && Boolean(config.sarvam.apiKey),
@@ -164,13 +166,14 @@ router.get(
       whatsappConnected: Boolean(number),
       phoneNumber: number?.phoneNumber ?? null,
       callingSettings: callingSettingsMeta,
-      callingEnabled: MetaCallingService.isCallingEnabled(callingSettingsMeta),
-      enableHints: MetaCallingService.isCallingEnabled(callingSettingsMeta) ? [] : CALLING_ENABLE_HINTS,
+      callingEnabled,
+      callingBlock,
+      enableHints: callingBlock ? [callingBlock.message] : [],
       voiceReady:
         Boolean(number) &&
         isCallingConfigured() &&
         Boolean(config.sarvam.apiKey) &&
-        MetaCallingService.isCallingEnabled(callingSettingsMeta),
+        callingEnabled,
       brainProvider: config.ai.brainProvider,
       orgCallingSettings: callingSettings,
     });
@@ -228,6 +231,7 @@ router.get(
       granted,
       canRequest,
       callingEnabled,
+      callingBlock: callingEnabled ? null : callingBlockNotice(number?.messagingLimitTier),
       status,
       expirationTime,
       contactId,
@@ -262,7 +266,8 @@ router.post(
 
     const settings = await MetaCallingService.getCallingSettings(number.phoneNumberId, accessToken);
     if (!MetaCallingService.isCallingEnabled(settings)) {
-      throw new AppError(400, 'Enable WhatsApp calling on your number before requesting call permission.');
+      const block = callingBlockNotice(number.messagingLimitTier);
+      throw new AppError(422, block.message, block.code);
     }
 
     // Rate / eligibility check from Meta when available
@@ -428,12 +433,13 @@ router.post(
       await MetaCallingService.enableCalling(number.phoneNumberId, accessToken);
     } catch (err) {
       if (err instanceof AppError && err.code === 'CALLING_PREREQUISITES') {
-        return res.status(err.statusCode).json({
+        const block = callingBlockNotice(number.messagingLimitTier);
+        return res.status(422).json({
           success: false,
           error: {
-            message: err.message,
-            code: err.code,
-            hints: CALLING_ENABLE_HINTS,
+            message: block.message,
+            code: block.code,
+            title: block.title,
           },
         });
       }
@@ -631,7 +637,8 @@ router.post(
     try {
       const settings = await MetaCallingService.getCallingSettings(number.phoneNumberId, accessToken);
       if (!MetaCallingService.isCallingEnabled(settings)) {
-        throw new AppError(400, 'Enable WhatsApp calling on your number before placing outbound calls.');
+        const block = callingBlockNotice(number.messagingLimitTier);
+        throw new AppError(422, block.message, block.code);
       }
       const perm = await MetaCallingService.getUserCallPermissions(
         number.phoneNumberId,

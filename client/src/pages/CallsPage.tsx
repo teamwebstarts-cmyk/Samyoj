@@ -24,7 +24,7 @@ import {
   transcriptPreview,
 } from '../components/calls/callUtils';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import { toastError, toastSuccess } from '../utils/toast';
+import { toastError, toastMetaBlock, toastSuccess } from '../utils/toast';
 import { explainAiSkipReason } from '../utils/aiSkipReasons';
 import {
   createAgentOffer,
@@ -75,6 +75,20 @@ type CallsNumberCache = {
 };
 
 /** Map UI chip → API list params. */
+function toastCallStartError(err: unknown) {
+  const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
+    ?.response?.data?.error;
+  if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {
+    toastSuccess(body?.message || 'Call permission requested — try again after they approve.');
+    return;
+  }
+  if (body?.code === 'META_CALLING_LIMIT' || body?.code === 'META_CALLING_OFF') {
+    toastMetaBlock(body.message || 'Meta has not turned on WhatsApp calls for this number.');
+    return;
+  }
+  toastError(body?.message || 'Could not start the call.');
+}
+
 function chipToParams(chip: string): { status?: string; handler?: string; direction?: string } {
   switch (chip) {
     case 'live':
@@ -152,6 +166,7 @@ export default function CallsPage() {
     !entitlementsLoading && entitlements && !entitlements.canUseFeature('calling')
       ? 'Calling is not included on your current plan.'
       : null;
+  const [callingBlock, setCallingBlock] = useState<{ title: string; message: string } | null>(null);
   const [detailsFocusSection, setDetailsFocusSection] = useState<CallDetailsSection | undefined>();
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const callsSnapshotRef = useRef<CallsNumberCache>({
@@ -216,7 +231,7 @@ export default function CallsPage() {
   const load = useCallback(async () => {
     if (!resolved || !activeNumber) return;
     try {
-      await Promise.all([
+      const [statusResult] = await Promise.all([
         callingApi.status(),
         loadCalls(),
         aiBotApi
@@ -227,6 +242,18 @@ export default function CallsPage() {
           })
           .catch(() => setOrgCallingAiEnabled(null)),
       ]);
+      const payload = statusResult.data?.data as {
+        callingEnabled?: boolean;
+        callingBlock?: { title?: string; message?: string } | null;
+      };
+      if (payload?.callingEnabled || !payload?.callingBlock?.message) {
+        setCallingBlock(null);
+      } else {
+        setCallingBlock({
+          title: payload.callingBlock.title || 'WhatsApp calls are off on this number',
+          message: payload.callingBlock.message,
+        });
+      }
     } catch {
       toastError('Could not load calls. Please refresh the page.');
     } finally {
@@ -649,13 +676,7 @@ export default function CallsPage() {
     } catch (err: unknown) {
       clearOutboundLiveCall();
       cleanupAgentCall();
-      const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
-        ?.response?.data?.error;
-      if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {
-        toastSuccess(body?.message || 'Call permission requested — try again after they approve.');
-      } else {
-        toastError(body?.message || 'Could not start the call.');
-      }
+      toastCallStartError(err);
     } finally {
       callingBackRef.current = false;
       setCallingBack(false);
@@ -701,13 +722,7 @@ export default function CallsPage() {
     } catch (err: unknown) {
       clearOutboundLiveCall();
       cleanupAgentCall();
-      const body = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })
-        ?.response?.data?.error;
-      if (body?.code === 'CALL_PERMISSION_REQUIRED' || body?.code === 'CALL_PERMISSION_REQUESTED') {
-        toastSuccess(body?.message || 'Call permission requested — try again after they approve.');
-      } else {
-        toastError(body?.message || 'Could not start the call.');
-      }
+      toastCallStartError(err);
     } finally {
       callingBackRef.current = false;
       setCallingBackId(null);
@@ -809,6 +824,14 @@ export default function CallsPage() {
             <EntitlementNotice message={callingGateMessage} upgradePlan="pro" />
           </div>
         )}
+        {callingBlock && !callingGateMessage ? (
+          <div className="shrink-0 max-md:px-3 max-md:pt-3" role="status">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[13px] font-bold text-amber-950">{callingBlock.title}</p>
+              <p className="mt-1 text-[12.5px] font-medium leading-relaxed text-amber-950/90">{callingBlock.message}</p>
+            </div>
+          </div>
+        ) : null}
         {orgCallingAiEnabled !== null ? (
           <div className="shrink-0 max-md:px-3 max-md:pt-3">
             <CallingAiToggleBanner

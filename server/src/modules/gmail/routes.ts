@@ -279,7 +279,10 @@ router.get(
       await storeGmailOAuthState(verifyGmailOAuthState(state));
       sendSuccess(res, { url: buildGmailOAuthUrl(state), scopes: [...GMAIL_SCOPES] });
     } catch (error) {
-      throw new AppError(503, error instanceof Error ? error.message : 'Gmail OAuth is not configured');
+      throw new AppError(
+        503,
+        error instanceof Error ? error.message : 'Connect Gmail is not set up on this server yet. Add the Google client, then try again.'
+      );
     }
   })
 );

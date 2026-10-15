@@ -56,6 +56,17 @@ export function toastSuccess(message: string, options?: Partial<ToastOptions>) {
   });
 }
 
+/** Meta refused a feature. Wraps so the reason is readable, unlike the one-line error toast. */
+export function toastMetaBlock(message: string) {
+  return toastError(message, {
+    duration: 9000,
+    style: {
+      whiteSpace: 'normal',
+      maxWidth: 'min(440px, calc(100vw - 32px))',
+    },
+  });
+}
+
 export function toastError(message: string, options?: Partial<ToastOptions>) {
   const dark = isDark();
   return toast.error(sanitizeUserErrorMessage(message), {

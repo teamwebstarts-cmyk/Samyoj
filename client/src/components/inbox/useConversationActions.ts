@@ -1,7 +1,7 @@
 import { useState, useRef, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callingApi, inboxApi } from '../../services/api';
-import { toastError, toastInbox, toastSuccess } from '../../utils/toast';
+import { toastError, toastInbox, toastMetaBlock, toastSuccess } from '../../utils/toast';
 import { emitChatNotice } from './chatNoticeBus';
 import { createAgentOffer, pollSdpAnswer, setActiveCallId, cleanupAgentCall } from '../../utils/agentCallRTC';
 import { beginOutboundDialing, beginOutboundLiveCall, clearOutboundLiveCall } from '../../utils/outboundLiveCallStore';
@@ -174,10 +174,20 @@ export function useConversationActions({
           granted?: boolean;
           canRequest?: boolean;
           callingEnabled?: boolean;
+          callingBlock?: { message?: string } | null;
         };
         if (perm.callingEnabled === false) {
           clearOutboundLiveCall();
-          toastError('Enable WhatsApp calling in Calls setup before placing outbound calls.');
+          const message =
+            perm.callingBlock?.message ||
+            'Meta has not turned on WhatsApp calls for this number. Calls need a daily messaging limit of at least 2,000.';
+          emitChatNotice(selected.id, {
+            kind: 'calling',
+            tone: 'amber',
+            icon: 'phone',
+            message,
+          });
+          toastMetaBlock(message);
           return;
         }
         if (!perm.granted) {
