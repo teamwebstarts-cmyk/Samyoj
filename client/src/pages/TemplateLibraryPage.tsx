@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, LayoutGrid, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep from '../components/templates/library/TemplateLibraryBrowseStep';
 import TemplateLibraryReviewStep from '../components/templates/library/TemplateLibraryReviewStep';
@@ -7,7 +7,6 @@ import TemplateWizardPreviewPanel, {
   TemplateWizardPolicyFooter,
 } from '../components/templates/wizard/TemplateWizardPreviewPanel';
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
-import TemplateWizardStepper from '../components/templates/wizard/TemplateWizardStepper';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
 import {
   buildSubmissionId,
@@ -31,7 +30,6 @@ import {
   isSampleLibraryButtonUrl,
   libraryButtonUrlError,
   libraryNeedsButtonInputs,
-  libraryWizardStages,
   statusFromTemplateCreate,
   uniqueLibraryTemplateName,
   usableLibraryButtonUrl,
@@ -490,18 +488,6 @@ export default function TemplateLibraryPage() {
 
   const { setExtras, clearExtras } = useTopbarExtras();
 
-  const stepTitle = useMemo(
-    () =>
-      activeStep === 0
-        ? 'Browse template library'
-        : activeStep === 1
-          ? 'Review library template'
-          : submittedStatus === 'APPROVED'
-            ? 'Template ready to use'
-            : 'Template submitted',
-    [activeStep, submittedStatus],
-  );
-
   const stepSubtitle = useMemo(
     () =>
       activeStep === 0
@@ -551,52 +537,6 @@ export default function TemplateLibraryPage() {
 
   return (
     <div className="template-wizard-page">
-      <div className="template-wizard-header mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-start gap-3">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              activeStep === 2
-                ? submittedStatus === 'APPROVED'
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                  : 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
-                : 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
-            }`}
-          >
-            {activeStep === 2 ? (
-              submittedStatus === 'APPROVED' ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : (
-                <Sparkles className="h-5 w-5" />
-              )
-            ) : (
-              <BookOpen className="h-5 w-5" />
-            )}
-          </span>
-          <div>
-            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[22px]">
-              {stepTitle}
-            </h1>
-            <p className="mt-0 text-[12px] font-medium leading-snug text-slate-500">{stepSubtitle}</p>
-            {activeStep === 2 && (
-              <Link
-                to="/templates"
-                className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Back to template list
-              </Link>
-            )}
-          </div>
-        </div>
-        <TemplateWizardStepper
-          activeStep={activeStep}
-          maxReachableStep={maxReachableStep}
-          onStepChange={goToStep}
-          stages={libraryWizardStages}
-          ariaLabel="Template library steps"
-        />
-      </div>
-
       <div className="template-wizard-scroll min-h-0 flex-1">
         {templateGateMessage && (
           <EntitlementNotice className="mb-4" message={templateGateMessage} upgradePlan="starter" />
