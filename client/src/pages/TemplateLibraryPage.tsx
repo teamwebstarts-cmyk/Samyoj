@@ -666,9 +666,9 @@ export default function TemplateLibraryPage() {
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
 
         <div
-          className={selected || activeStep !== 0 ? 'template-wizard-split template-wizard-split--library' : ''}
+          className={`min-h-full ${selected || activeStep !== 0 ? 'template-wizard-split template-wizard-split--library' : ''}`}
         >
-          <div className="min-w-0">
+          <div className="flex min-w-0 flex-col">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
                 search={search}
