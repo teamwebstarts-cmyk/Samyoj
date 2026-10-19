@@ -49,6 +49,8 @@ interface TemplateLibraryBrowseStepProps {
   filterId: string;
   onFilterChange: (id: string) => void;
   filters: CatalogFilterChip[];
+  /** Counts per filter id, computed from the search-scoped list before category filtering. */
+  chipCounts: Record<string, number>;
   language: string;
   onLanguageChange: (language: string) => void;
   loading: boolean;
@@ -63,11 +65,6 @@ interface TemplateLibraryBrowseStepProps {
 function previewBody(item: CatalogListItem, language: string): string {
   const hindi = language === 'hi_IN' || language === 'hi';
   return hindi ? item.bodyHi : item.body;
-}
-
-function countFor(items: CatalogListItem[], filter: CatalogFilterChip): number {
-  if (filter.id === 'all') return items.length;
-  return items.filter((item) => item.category === filter.id || (item.tags || []).includes(filter.id)).length;
 }
 
 function LibraryCardSkeleton({ index }: { index: number }) {
@@ -102,14 +99,15 @@ export default function TemplateLibraryBrowseStep({
   onSelect,
   honesty,
   loadError,
+  chipCounts,
   onRetry,
 }: TemplateLibraryBrowseStepProps) {
   const [previewItem, setPreviewItem] = useState<CatalogListItem | null>(null);
 
   const chips = useMemo(() => {
     const list = filters.length ? filters : [{ id: 'all', label: 'All' }];
-    return list.map((filter) => ({ ...filter, count: countFor(items, filter) }));
-  }, [filters, items]);
+    return list.map((filter) => ({ ...filter, count: Math.max(0, chipCounts[filter.id] || 0) }));
+  }, [filters, chipCounts]);
 
   const previewBodyText = previewItem ? previewBody(previewItem, language) : '';
 

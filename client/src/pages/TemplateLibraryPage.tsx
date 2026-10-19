@@ -200,19 +200,39 @@ export default function TemplateLibraryPage() {
 
   const existingNames = useMemo(() => new Set(accountNames), [accountNames]);
 
-  const listItems = useMemo(() => {
+  const searchScopedItems = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return catalog;
     return catalog.filter((item) => {
-      if (filterId && filterId !== 'all') {
-        const matchesCategory = item.category === filterId;
-        const matchesTag = (item.tags || []).includes(filterId);
-        if (!matchesCategory && !matchesTag) return false;
-      }
-      if (!q) return true;
       const haystack = `${item.title} ${item.id} ${item.body} ${item.bodyHi} ${item.copy || ''}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [catalog, filterId, debouncedSearch]);
+  }, [catalog, debouncedSearch]);
+
+  // Chip counts come from the search-scoped list BEFORE category filtering,
+  // so switching chips never re-counts the other chips. Boolean per-filter
+  // matching (same predicate as the filter itself) avoids double-counting
+  // items whose tags repeat their category.
+  const chipCounts = useMemo(() => {
+    const ids = new Set<string>(['all', ...filters.map((filter) => filter.id)]);
+    const counts: Record<string, number> = {};
+    for (const id of ids) {
+      counts[id] =
+        id === 'all'
+          ? searchScopedItems.length
+          : searchScopedItems.filter(
+              (item) => item.category === id || (item.tags || []).includes(id),
+            ).length;
+    }
+    return counts;
+  }, [searchScopedItems, filters]);
+
+  const listItems = useMemo(() => {
+    if (!filterId || filterId === 'all') return searchScopedItems;
+    return searchScopedItems.filter(
+      (item) => item.category === filterId || (item.tags || []).includes(filterId),
+    );
+  }, [searchScopedItems, filterId]);
 
   const selectedKey = selectedItem?.id || null;
   const selected = selectedItem;
@@ -596,6 +616,7 @@ export default function TemplateLibraryPage() {
                 filterId={filterId}
                 onFilterChange={setFilterId}
                 filters={filters.length ? filters : [{ id: 'all', label: 'All' }]}
+                chipCounts={chipCounts}
                 language={language}
                 onLanguageChange={setLanguage}
                 loading={loadingCatalog}
