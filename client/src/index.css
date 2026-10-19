@@ -3757,16 +3757,17 @@
     }
     to {
       opacity: 0;
-      transform: translateX(32px) scale(0.985);
+      transform: translateX(28px) scale(0.985);
     }
   }
 
+  /* Close mirrors the open slide, just with an easing tuned for exits. */
   .template-wizard-preview-enter {
     animation: tw-preview-slide-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .template-wizard-preview-exit {
-    animation: tw-preview-slide-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+    animation: tw-preview-slide-out 0.3s cubic-bezier(0.4, 0, 0.68, 0.86) both;
   }
 
   @media (prefers-reduced-motion: reduce) {

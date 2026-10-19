@@ -1,8 +1,6 @@
-import { BadgeCheck } from 'lucide-react';
-import AppAlert from '../../ui/AppAlert';
 import { WhatsAppChatSurface, WhatsAppTemplateCard } from '../../inbox/WhatsAppPreview';
 import { useWhatsAppPreviewIdentity } from '../../../hooks/useWhatsAppPreviewIdentity';
-import { CATEGORY_OPTIONS, LANGUAGE_OPTIONS } from '../../../utils/templateUtils';
+import TemplateDetailsCard, { languageLabel } from './TemplateDetailsCard';
 import type { TemplateFormState } from '../../../utils/templateForm';
 import type { TemplateButton } from '../../../types';
 import type { CatalogListItem } from '../../../utils/templateLibrary';
@@ -17,37 +15,22 @@ interface LibraryTemplatePreviewPanelProps {
     headerMediaUrl?: string;
   };
   previewButtons: TemplateButton[];
-}
-
-function categoryLabel(value: string) {
-  return CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value;
-}
-
-function languageLabel(value: string) {
-  return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label || value;
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-800">
-      <span className="shrink-0 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">{label}</span>
-      <span className="min-w-0 text-right text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">{children}</span>
-    </div>
-  );
+  /** Uploaded/generated header for the edit flow; overrides the filled preview media. */
+  headerPreviewUrl?: string | null;
 }
 
 /**
- * Library-specific preview panel: WhatsApp phone surface + "Template details"
- * table, per the Template Preview mock. Shown only after a card is picked.
+ * Library-specific preview panel: WhatsApp phone surface + collapsible
+ * "Template details" table. Shown only after a card is picked.
  */
 export default function LibraryTemplatePreviewPanel({
   entry,
   form,
   filledPreview,
   previewButtons,
+  headerPreviewUrl,
 }: LibraryTemplatePreviewPanelProps) {
   const identity = useWhatsAppPreviewIdentity();
-  const variableCount = (form.body.match(/\{\{\d+\}\}/g) || []).length;
 
   return (
     <div className="template-wizard-panel-surface flex min-h-0 flex-col">
@@ -60,7 +43,10 @@ export default function LibraryTemplatePreviewPanel({
             </svg>
             Template Preview
           </p>
-          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300" title={languageLabel(form.language)}>
+          <span
+            className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            title={languageLabel(form.language)}
+          >
             {languageLabel(form.language)}
           </span>
         </div>
@@ -73,7 +59,7 @@ export default function LibraryTemplatePreviewPanel({
               headerFormat={
                 form.headerFormat !== 'TEXT' && form.headerFormat !== 'NONE' ? form.headerFormat : undefined
               }
-              headerMediaUrl={filledPreview.headerMediaUrl}
+              headerMediaUrl={headerPreviewUrl || filledPreview.headerMediaUrl}
               body={filledPreview.body || 'Your message body will appear here.'}
               footer={filledPreview.footer}
               buttons={previewButtons}
@@ -85,46 +71,7 @@ export default function LibraryTemplatePreviewPanel({
         </div>
       </div>
 
-      {/* Template details */}
-      <div className="template-wizard-card mt-3 overflow-hidden">
-        <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          <p className="text-[13px] font-bold leading-5 text-slate-900 dark:text-white">Template details</p>
-        </div>
-        <div className="px-4 py-1.5">
-          <DetailRow label="Category">
-            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50">
-              {categoryLabel(form.category || entry.category)}
-            </span>
-          </DetailRow>
-          <DetailRow label="Language">{languageLabel(form.language)}</DetailRow>
-          <DetailRow label="Buttons">
-            {previewButtons.length
-              ? previewButtons.map((button) => button.text).filter(Boolean).join(', ')
-              : 'None'}
-          </DetailRow>
-          <DetailRow label="Variables">
-            {variableCount
-              ? `${variableCount} variable${variableCount === 1 ? '' : 's'} ${Array.from(
-                  { length: variableCount },
-                  (_, i) => `{{${i + 1}}}`,
-                ).join(' ')}`
-              : 'None'}
-          </DetailRow>
-          <DetailRow label="Status">
-            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-              {entry.ready ? 'Ready on this number' : 'Approved by Meta'}
-            </span>
-          </DetailRow>
-        </div>
-        <div className="px-3 pb-3">
-          <AppAlert variant="info" className="!text-[11px] leading-relaxed">
-            {entry.ready
-              ? 'This sample is already live on this number — nothing to submit.'
-              : 'This is a library skeleton from Meta. You can clone it directly onto your number; Meta still reviews clones.'}
-          </AppAlert>
-        </div>
-      </div>
+      <TemplateDetailsCard entry={entry} form={form} previewButtons={previewButtons} />
     </div>
   );
 }

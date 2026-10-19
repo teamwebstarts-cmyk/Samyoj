@@ -290,7 +290,7 @@ export default function TemplateLibraryPage() {
   const selected = selectedItem;
 
   // Open/close the preview panel with an exit-then-unmount phase. Animation
-  // plays only on a fresh open from the closed state (ponytail: 200ms matches
+  // plays only on a fresh open from the closed state (ponytail: 300ms matches
   // the CSS; timer is cleared on every transition so rapid toggles stay safe).
   // `previewClosingRef` mirrors `previewClosing` synchronously so the form
   // seed effect can skip the reset while the exit animation still needs it.
@@ -319,7 +319,7 @@ export default function TemplateLibraryPage() {
       resetSeedDraft();
       setPreviewPanelItem(null);
       setPreviewClosing(false);
-    }, 200);
+    }, 300);
   }, [resetSeedDraft]);
 
   const openPreviewPanel = useCallback((item: CatalogListItem) => {

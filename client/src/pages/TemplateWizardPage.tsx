@@ -15,6 +15,8 @@ import TemplateWizardPreviewPanel, {
 } from '../components/templates/wizard/TemplateWizardPreviewPanel';
 import TemplateWizardApprovalAside from '../components/templates/wizard/TemplateWizardApprovalAside';
 import TemplateWizardReviewStep from '../components/templates/wizard/TemplateWizardReviewStep';
+import TemplateSampleEditorCard from '../components/templates/wizard/TemplateSampleEditorCard';
+import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
 import TemplateWizardPageHeader from '../components/templates/wizard/TemplateWizardPageHeader';
 import TemplateWizardPageFooter from '../components/templates/wizard/TemplateWizardPageFooter';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
@@ -736,7 +738,8 @@ export default function TemplateWizardPage() {
           </div>
         )}
 
-        <div className="template-wizard-split">
+        {/* Library edit matches the Browse split (320px aside); plain create keeps the wider one. */}
+        <div className={`template-wizard-split ${fromLibrary ? 'template-wizard-split--library' : ''}`}>
           <div className="min-w-0">
             {activeStep === 0 && (
               <TemplateWizardCreateStep
@@ -766,18 +769,31 @@ export default function TemplateWizardPage() {
             )}
           </div>
 
-          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-            <TemplateWizardPreviewPanel
-              form={form}
-              filledPreview={filledPreview}
-              previewButtons={previewButtons}
-              headerPreviewUrl={headerPreviewUrl}
-              showEditLink={activeStep === 1}
-              onEdit={() => goToStep(0)}
-              previewTitle={activeStep === 2 ? 'Submitted template' : 'Live WhatsApp preview'}
-              showTestButton={activeStep === 1}
-              onTestTemplate={handleTestTemplate}
-            />
+          <aside className={`min-w-0 xl:sticky ${fromLibrary ? 'xl:top-0' : 'xl:top-4'} xl:self-start`}>
+            {fromLibrary && state.libraryItem ? (
+              <LibraryTemplatePreviewPanel
+                entry={state.libraryItem}
+                form={form}
+                filledPreview={filledPreview}
+                previewButtons={previewButtons}
+                headerPreviewUrl={headerPreviewUrl}
+              />
+            ) : (
+              <TemplateWizardPreviewPanel
+                form={form}
+                filledPreview={filledPreview}
+                previewButtons={previewButtons}
+                headerPreviewUrl={headerPreviewUrl}
+                showEditLink={activeStep === 1}
+                onEdit={() => goToStep(0)}
+                previewTitle={activeStep === 2 ? 'Submitted template' : 'Live WhatsApp preview'}
+                showTestButton={activeStep === 1}
+                onTestTemplate={handleTestTemplate}
+              />
+            )}
+            {activeStep < 2 && (
+              <TemplateSampleEditorCard form={form} onChange={setForm} />
+            )}
             {activeStep < 2 && <TemplateWizardApprovalAside form={form} />}
             {activeStep === 2 && (
               <div className="mt-4 hidden xl:block">
