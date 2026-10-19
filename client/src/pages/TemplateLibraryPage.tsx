@@ -557,7 +557,7 @@ export default function TemplateLibraryPage() {
       activeStep === 0
         ? 'Browse template library'
         : activeStep === 1
-          ? 'Review library template'
+          ? 'Edit library template'
           : submittedStatus === 'APPROVED'
             ? 'Template ready to use'
             : 'Template submitted',
@@ -569,7 +569,7 @@ export default function TemplateLibraryPage() {
       activeStep === 0
         ? 'Pick a Meta template, then add it to this WhatsApp number'
         : activeStep === 1
-          ? 'Confirm name, language, and buttons. Meta still reviews clones on this number.'
+          ? 'Edit the name, language, and buttons. Meta still reviews clones on this number.'
           : submittedStatus === 'APPROVED'
             ? 'You can send this from Campaigns and Inbox now'
             : 'WhatsApp is reviewing this template on this number',
@@ -854,7 +854,7 @@ export default function TemplateLibraryPage() {
                 loading={saving}
               >
                 {activeStep === 0
-                  ? 'Continue'
+                  ? 'Continue to Edit'
                   : selected?.submitMode === 'ready'
                     ? selected.ready
                       ? 'Use this sample'
