@@ -29,7 +29,8 @@ const TILE_ICON: Record<string, LucideIcon> = {
   check: CheckCircle2,
 };
 
-function tileIconFor(item: CatalogListItem): LucideIcon {
+/** Same icon the card tile shows — shared with the footer picker chip. */
+export function tileIconFor(item: CatalogListItem): LucideIcon {
   if (item.icon && TILE_ICON[item.icon]) return TILE_ICON[item.icon];
   return item.category === 'AUTHENTICATION' ? KeyRound : Package;
 }

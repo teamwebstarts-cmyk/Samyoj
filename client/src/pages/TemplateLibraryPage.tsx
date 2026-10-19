@@ -7,6 +7,8 @@ import TemplateWizardPreviewPanel, {
   TemplateWizardPolicyFooter,
 } from '../components/templates/wizard/TemplateWizardPreviewPanel';
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
+import { libraryTileClass } from '../components/templates/library/templateLibraryGrid';
+import { tileIconFor } from '../components/templates/library/CatalogLibraryCard';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
 import {
   buildSubmissionId,
@@ -645,21 +647,24 @@ export default function TemplateLibraryPage() {
 
       {activeStep < 2 && (
         <footer className="template-wizard-footer">
-          <div className="wizard-footer-inner">
+          <div className="mx-auto flex w-full max-w-[1440px] flex-col items-stretch gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8">
             <div className="wizard-footer-start">
               {activeStep === 0 ? (
                 selected ? (
-                  <>
-                    <span className="hidden whitespace-nowrap text-[12px] font-bold text-slate-900 sm:block dark:text-white">
-                      {selected.submitMode === 'ready' ? 'Sample template selected' : '1 template selected'}
-                    </span>
-                    <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white py-0.5 pl-0.5 pr-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                      <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] ${selected.category === 'AUTHENTICATION' ? 'bg-violet-50 dark:bg-violet-950/40' : 'bg-sky-50 dark:bg-sky-950/40'}`}
-                        aria-hidden
-                      >
-                        {selected.category === 'AUTHENTICATION' ? '🔐' : '🔔'}
-                      </span>
+                  (() => {
+                    const ChipIcon = tileIconFor(selected);
+                    return (
+                      <>
+                        <span className="hidden whitespace-nowrap text-[12px] font-bold text-slate-900 sm:block dark:text-white">
+                          {selected.submitMode === 'ready' ? 'Sample template selected' : '1 template selected'}
+                        </span>
+                        <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white py-0.5 pl-0.5 pr-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${libraryTileClass(selected.category)}`}
+                            aria-hidden
+                          >
+                            <ChipIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
+                          </span>
                       <span className="min-w-0 truncate text-[12px] font-bold text-slate-900 dark:text-white">
                         {selected.title}
                       </span>
@@ -680,8 +685,10 @@ export default function TemplateLibraryPage() {
                       >
                         <X className="h-3.5 w-3.5" strokeWidth={2.25} />
                       </button>
-                    </span>
-                  </>
+                      </span>
+                      </>
+                    );
+                  })()
                 ) : null
               ) : (
                 <AppButton
