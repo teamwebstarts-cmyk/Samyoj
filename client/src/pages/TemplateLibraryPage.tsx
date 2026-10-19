@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep from '../components/templates/library/TemplateLibraryBrowseStep';
 import TemplateLibraryReviewStep from '../components/templates/library/TemplateLibraryReviewStep';
@@ -648,9 +648,41 @@ export default function TemplateLibraryPage() {
           <div className="wizard-footer-inner">
             <div className="wizard-footer-start">
               {activeStep === 0 ? (
-                <AppButton type="button" variant="secondary" size="sm" onClick={() => navigate('/templates')}>
-                  Cancel
-                </AppButton>
+                selected ? (
+                  <>
+                    <span className="hidden whitespace-nowrap text-[12px] font-bold text-slate-900 sm:block dark:text-white">
+                      {selected.submitMode === 'ready' ? 'Sample template selected' : '1 template selected'}
+                    </span>
+                    <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white py-0.5 pl-0.5 pr-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] ${selected.category === 'AUTHENTICATION' ? 'bg-violet-50 dark:bg-violet-950/40' : 'bg-sky-50 dark:bg-sky-950/40'}`}
+                        aria-hidden
+                      >
+                        {selected.category === 'AUTHENTICATION' ? '🔐' : '🔔'}
+                      </span>
+                      <span className="min-w-0 truncate text-[12px] font-bold text-slate-900 dark:text-white">
+                        {selected.title}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          selected.category === 'AUTHENTICATION'
+                            ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50'
+                            : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800/50'
+                        }`}
+                      >
+                        {selected.category === 'AUTHENTICATION' ? 'Authentication' : 'Utility'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItem(null)}
+                        aria-label={`Deselect ${selected.title}`}
+                        className="shrink-0 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2.25} />
+                      </button>
+                    </span>
+                  </>
+                ) : null
               ) : (
                 <AppButton
                   type="button"
@@ -665,6 +697,11 @@ export default function TemplateLibraryPage() {
               )}
             </div>
             <div className="wizard-footer-end">
+              {activeStep === 0 ? (
+                <AppButton type="button" variant="secondary" size="sm" onClick={() => navigate('/templates')}>
+                  Cancel
+                </AppButton>
+              ) : null}
               {activeStep === 1 && (
                 <AppButton
                   type="button"
