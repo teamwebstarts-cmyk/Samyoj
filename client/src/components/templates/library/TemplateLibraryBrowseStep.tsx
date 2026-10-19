@@ -115,12 +115,8 @@ export default function TemplateLibraryBrowseStep({
 
   return (
     <div className="space-y-3">
-      <div className="template-wizard-card p-3 sm:p-3.5">
-        <div className="flex items-center gap-1.5">
-          <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">Meta template library</p>
-          <InfoTip label="How library templates work" content={honesty} />
-        </div>
-        <div className="mt-3 space-y-2.5">
+      <div className="pt-1">
+        <div className="space-y-2.5">
           <div className="flex items-center gap-2">
             <SearchInput
               id="library-search"
@@ -151,7 +147,7 @@ export default function TemplateLibraryBrowseStep({
               ? Array.from({ length: 5 }).map((_, index) => (
                   <span
                     key={index}
-                    className="inline-flex shrink-0 items-center gap-2.5 rounded-xl border border-neutral-200/90 px-3 py-2 dark:border-neutral-800"
+                    className="inline-flex shrink-0 items-center gap-2.5 rounded-xl border border-neutral-200/90 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900"
                   >
                     <Skeleton className="h-9 w-9 rounded-lg" delayMs={index * 50} />
                     <span className="space-y-1">
@@ -170,9 +166,7 @@ export default function TemplateLibraryBrowseStep({
                       type="button"
                       aria-pressed={active}
                       onClick={() => onFilterChange(chip.id)}
-                      className={`${active ? LIBRARY_CHIP_ACTIVE_CLASS : LIBRARY_CHIP_CLASS} ${
-                        active ? 'border-emerald-500/50 dark:border-emerald-500/50' : 'border-neutral-200/90 dark:border-neutral-800'
-                      }`}
+                      className={active ? LIBRARY_CHIP_ACTIVE_CLASS : LIBRARY_CHIP_CLASS}
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tone}`}>
                         <ChipIcon className="h-4.5 w-4.5" strokeWidth={2.25} aria-hidden />
@@ -201,9 +195,12 @@ export default function TemplateLibraryBrowseStep({
             </>
           ) : (
             <>
-              <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
-                {`${items.length} template${items.length === 1 ? '' : 's'}`}
-              </p>
+              <span className="inline-flex items-center gap-1.5">
+                <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
+                  {`${items.length} template${items.length === 1 ? '' : 's'}`}
+                </p>
+                <InfoTip label="How library templates work" content={honesty} />
+              </span>
               <p className="text-[10px] font-medium text-slate-400">Pick one, then review and submit</p>
             </>
           )}
