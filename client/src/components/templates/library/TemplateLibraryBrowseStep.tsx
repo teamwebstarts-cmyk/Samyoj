@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, Flame, Gift, Tag, UserRound, Wrench, KeyRound, BookOpen } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import AppAlert from '../../ui/AppAlert';
 import AppButton from '../../ui/AppButton';
 import AppSelect from '../../ui/AppSelect';
@@ -19,6 +20,28 @@ import {
 } from './templateLibraryGrid';
 
 export type CatalogFilterChip = { id: string; label: string };
+
+/** Per-chip icon: server filter ids first, then recognizable label fallbacks. */
+const CHIP_ICONS: Record<string, LucideIcon> = {
+  all: LayoutGrid,
+  UTILITY: Wrench,
+  AUTHENTICATION: KeyRound,
+  hello: BookOpen,
+  welcome: BookOpen,
+  trending: Flame,
+  festivals: Gift,
+  'offers & sales': Tag,
+  'account updates': UserRound,
+};
+
+const CHIP_TONES: Record<string, string> = {
+  all: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300',
+  UTILITY: 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300',
+  AUTHENTICATION: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300',
+  hello: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300',
+  welcome: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300',
+  _default: 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300',
+};
 
 interface TemplateLibraryBrowseStepProps {
   search: string;
@@ -98,35 +121,16 @@ export default function TemplateLibraryBrowseStep({
           <InfoTip label="How library templates work" content={honesty} />
         </div>
         <div className="mt-3 space-y-2.5">
-          <SearchInput
-            id="library-search"
-            value={search}
-            onChange={onSearchChange}
-            placeholder="Search templates by name or message…"
-            compact
-            inputClassName="!h-9 !rounded-lg !pl-9 !pr-3 !text-[13px]"
-            className="min-w-0"
-          />
-
-          {/* Category chips row — the chips ARE the filter; language stays a compact select */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:flex-nowrap">
-            <div className={`min-w-0 flex-1 ${LIBRARY_CHIPS_ROW_CLASS}`}>
-              {chips.map((chip) => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  aria-pressed={filterId === chip.id}
-                  onClick={() => onFilterChange(chip.id)}
-                  className={filterId === chip.id ? LIBRARY_CHIP_ACTIVE_CLASS : LIBRARY_CHIP_CLASS}
-                >
-                  {chip.id === 'all' ? <LayoutGrid className="h-3 w-3" strokeWidth={2.25} aria-hidden /> : null}
-                  {chip.label}
-                  {chip.count > 0 && (
-                    <span className="font-bold opacity-70">· {chip.count}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
+            <SearchInput
+              id="library-search"
+              value={search}
+              onChange={onSearchChange}
+              placeholder="Search templates by name, message or category…"
+              compact
+              inputClassName="!h-9 !rounded-lg !pl-9 !pr-3 !text-[13px]"
+              className="min-w-0 flex-1"
+            />
             <AppSelect
               size="compact"
               ariaLabel="Language"
@@ -139,6 +143,51 @@ export default function TemplateLibraryBrowseStep({
               onChange={(event) => onLanguageChange(event.target.value)}
               className="w-28 shrink-0"
             />
+          </div>
+
+          {/* Category chips — the chips ARE the filter */}
+          <div className={LIBRARY_CHIPS_ROW_CLASS}>
+            {loading && items.length === 0 && !loadError
+              ? Array.from({ length: 5 }).map((_, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex shrink-0 items-center gap-2.5 rounded-xl border border-neutral-200/90 px-3 py-2 dark:border-neutral-800"
+                  >
+                    <Skeleton className="h-9 w-9 rounded-lg" delayMs={index * 50} />
+                    <span className="space-y-1">
+                      <Skeleton className="block h-3 w-16 rounded-md" delayMs={index * 50 + 30} />
+                      <Skeleton className="block h-2.5 w-12 rounded-md" delayMs={index * 50 + 60} />
+                    </span>
+                  </span>
+                ))
+              : chips.map((chip) => {
+                  const ChipIcon = CHIP_ICONS[chip.id] ?? CHIP_ICONS[chip.label] ?? LayoutGrid;
+                  const tone = CHIP_TONES[chip.id] ?? CHIP_TONES._default;
+                  const active = filterId === chip.id;
+                  return (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => onFilterChange(chip.id)}
+                      className={`${active ? LIBRARY_CHIP_ACTIVE_CLASS : LIBRARY_CHIP_CLASS} ${
+                        active ? 'border-emerald-500/50 dark:border-emerald-500/50' : 'border-neutral-200/90 dark:border-neutral-800'
+                      }`}
+                    >
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tone}`}>
+                        <ChipIcon className="h-4.5 w-4.5" strokeWidth={2.25} aria-hidden />
+                      </span>
+                      <span className="min-w-0 text-left leading-tight">
+                        <span className={`block text-[12px] font-bold ${active ? 'text-emerald-700 dark:text-emerald-300' : 'text-neutral-800 dark:text-neutral-100'}`}>
+                          {chip.id === 'all' ? 'All Templates' : chip.label}
+                        </span>
+                        <span className={`block text-[10.5px] font-medium ${active ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-neutral-400'}`}>
+                          {`${chip.count} template${chip.count === 1 ? '' : 's'}`}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
           </div>
         </div>
       </div>
