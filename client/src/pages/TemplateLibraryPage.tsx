@@ -6,6 +6,7 @@ import TemplateLibraryReviewStep from '../components/templates/library/TemplateL
 import TemplateWizardPreviewPanel, {
   TemplateWizardPolicyFooter,
 } from '../components/templates/wizard/TemplateWizardPreviewPanel';
+import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
 import TemplateWizardStepper from '../components/templates/wizard/TemplateWizardStepper';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
 import {
@@ -663,7 +664,14 @@ export default function TemplateLibraryPage() {
           </div>
 
           <aside className="min-w-0 xl:sticky xl:top-0 xl:self-start">
-            {selected ? (
+            {selected && activeStep === 0 ? (
+              <LibraryTemplatePreviewPanel
+                entry={selected}
+                form={form}
+                filledPreview={filledPreview}
+                previewButtons={previewButtons}
+              />
+            ) : activeStep !== 0 ? (
               <TemplateWizardPreviewPanel
                 compact
                 form={form}
