@@ -10,6 +10,8 @@ import {
   valueForCampaignParamSource,
   valueForInboxParamSource,
   inferVariableDescription,
+  promoteStagedVariables,
+  type TemplateVariableMeta,
 } from './templateForm';
 
 describe('applyPurposePreset', () => {
@@ -118,5 +120,46 @@ describe('inferVariableDescription', () => {
     expect(inferVariableDescription(shipped, 1)).toBe('Customer name');
     expect(inferVariableDescription(shipped, 2)).toBe('Order number');
     expect(inferVariableDescription(shipped, 3)).toBe('Tracking ID');
+  });
+});
+
+describe('promoteStagedVariables', () => {
+  const staged = (index: number, description = ''): TemplateVariableMeta => ({
+    scope: 'body',
+    index,
+    description,
+    suggestedSource: 'custom',
+  });
+
+  it('promotes a staged row once its token appears in the body text', () => {
+    const stage = [staged(1), staged(2)];
+    const afterOne = promoteStagedVariables('Hi {{1}}', [], stage);
+    expect(afterOne.variableMeta.map((m) => m.index)).toEqual([1]);
+    expect(afterOne.waiting.map((m) => m.index)).toEqual([2]);
+    const afterBoth = promoteStagedVariables('Hi {{1}} and {{2}}', afterOne.variableMeta, afterOne.waiting);
+    expect(afterBoth.variableMeta.map((m) => m.index)).toEqual([1, 2]);
+    expect(afterBoth.waiting).toEqual([]);
+  });
+
+  it('applies the first-variable default only to a blank {{1}}', () => {
+    const result = promoteStagedVariables('{{1}}', [], [staged(1)], {
+      description: 'Customer name',
+      suggestedSource: 'contact.name',
+    });
+    expect(result.variableMeta[0]).toMatchObject({
+      description: 'Customer name',
+      suggestedSource: 'contact.name',
+    });
+    const named = promoteStagedVariables('{{1}}', [], [staged(1, 'Amount')], {
+      description: 'Customer name',
+      suggestedSource: 'contact.name',
+    });
+    expect(named.variableMeta[0].description).toBe('Amount');
+  });
+
+  it('keeps rows untouched while their tokens are still missing', () => {
+    const result = promoteStagedVariables('No tokens yet', [], [staged(3)]);
+    expect(result.variableMeta).toEqual([]);
+    expect(result.waiting).toHaveLength(1);
   });
 });
