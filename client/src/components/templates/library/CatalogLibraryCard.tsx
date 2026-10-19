@@ -42,16 +42,9 @@ interface CatalogLibraryCardProps {
   selected: boolean;
   previewText: string;
   onSelect: () => void;
-  onPreview: () => void;
 }
 
-export default function CatalogLibraryCard({
-  entry,
-  selected,
-  previewText,
-  onSelect,
-  onPreview,
-}: CatalogLibraryCardProps) {
+export default function CatalogLibraryCard({ entry, selected, previewText, onSelect }: CatalogLibraryCardProps) {
   const tone = CATEGORY_TONE[(entry.category || '').toUpperCase()] ?? CATEGORY_TONE.UTILITY;
   const topCategory = TOP_CATEGORY[(entry.category || '').toUpperCase()] ?? 'Utility';
   const TileIcon = tileIconFor(entry);
@@ -89,34 +82,23 @@ export default function CatalogLibraryCard({
         <BodyPreview parts={parts} hasText={Boolean(previewText)} />
       </div>
 
-      {/* Bottom action pair — Select keeps the exact card selection flow */}
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-neutral-100 px-3 py-2.5 dark:border-neutral-800">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onPreview();
-          }}
-          className="inline-flex min-h-[32px] items-center justify-center gap-1.5 rounded-lg border border-neutral-200/90 bg-white px-2 text-[12px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
-        >
-          <Eye className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden /> Preview
-        </button>
+      {/* Single action — picking a card is what opens the WhatsApp preview bar */}
+      <div className="shrink-0 border-t border-neutral-100 p-2 dark:border-neutral-800">
         <button
           type="button"
           onClick={onSelect}
-          className={`inline-flex min-h-[32px] items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-bold text-white transition ${
+          className={`inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border px-2 text-[12px] font-bold transition ${
             selected
-              ? 'bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600/90 dark:hover:bg-emerald-500'
-              : 'bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-700 dark:hover:bg-neutral-600'
+              ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-600/90 dark:bg-emerald-600/90 dark:hover:bg-emerald-500'
+              : 'border-neutral-200/90 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800'
           }`}
         >
           {selected ? (
-            <>
-              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden /> Selected
-            </>
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
           ) : (
-            'Select'
+            <Eye className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
           )}
+          Preview
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { LayoutGrid, Flame, Gift, Tag, UserRound, Wrench, KeyRound, BookOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import AppAlert from '../../ui/AppAlert';
@@ -9,7 +9,6 @@ import Skeleton from '../../ui/Skeleton';
 import InfoTip from '../../ui/InfoTip';
 import type { CatalogListItem } from '../../../utils/templateLibrary';
 import CatalogLibraryCard from './CatalogLibraryCard';
-import LibraryPreviewModal from './LibraryPreviewModal';
 import {
   LIBRARY_CARD_CELL_CLASS,
   LIBRARY_CARDS_GRID_PAD_CLASS,
@@ -102,14 +101,10 @@ export default function TemplateLibraryBrowseStep({
   chipCounts,
   onRetry,
 }: TemplateLibraryBrowseStepProps) {
-  const [previewItem, setPreviewItem] = useState<CatalogListItem | null>(null);
-
   const chips = useMemo(() => {
     const list = filters.length ? filters : [{ id: 'all', label: 'All' }];
     return list.map((filter) => ({ ...filter, count: Math.max(0, chipCounts[filter.id] || 0) }));
   }, [filters, chipCounts]);
-
-  const previewBodyText = previewItem ? previewBody(previewItem, language) : '';
 
   return (
     <div className="space-y-3">
@@ -255,17 +250,12 @@ export default function TemplateLibraryBrowseStep({
                   selected={selectedKey === entry.id}
                   previewText={previewBody(entry, language)}
                   onSelect={() => onSelect(entry.id)}
-                  onPreview={() => setPreviewItem(entry)}
                 />
               </div>
             ))}
           </div>
         )}
       </div>
-
-      {previewItem ? (
-        <LibraryPreviewModal item={previewItem} bodyText={previewBodyText} onClose={() => setPreviewItem(null)} />
-      ) : null}
     </div>
   );
 }

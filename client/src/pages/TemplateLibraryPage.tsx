@@ -237,13 +237,8 @@ export default function TemplateLibraryPage() {
   const selectedKey = selectedItem?.id || null;
   const selected = selectedItem;
 
-  useEffect(() => {
-    if (activeStep !== 0) return;
-    if (!listItems.length) return;
-    if (selectedItem && listItems.some((item) => item.id === selectedItem.id)) return;
-    setSelectedItem(listItems[0]);
-  }, [listItems, selectedItem, activeStep]);
-
+  // No auto-select: the WhatsApp preview bar appears only after the user
+  // explicitly picks a card via its Preview button.
   useEffect(() => {
     if (!selectedItem) {
       setForm(createEmptyWizardForm());
@@ -668,14 +663,23 @@ export default function TemplateLibraryPage() {
           </div>
 
           <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-            <TemplateWizardPreviewPanel
-              compact
-              form={form}
-              filledPreview={filledPreview}
-              previewButtons={previewButtons}
-              previewTitle={activeStep === 2 ? 'Submitted template' : 'WhatsApp preview'}
-              showEditLink={false}
-            />
+            {selected ? (
+              <TemplateWizardPreviewPanel
+                compact
+                form={form}
+                filledPreview={filledPreview}
+                previewButtons={previewButtons}
+                previewTitle={activeStep === 2 ? 'Submitted template' : 'WhatsApp preview'}
+                showEditLink={false}
+              />
+            ) : (
+              <div className="template-wizard-card hidden p-6 text-center xl:block">
+                <p className="text-[13px] font-bold text-slate-900 dark:text-white">WhatsApp preview</p>
+                <p className="mt-2 text-[12px] font-medium leading-relaxed text-slate-500">
+                  Pick Preview on any template to see it here.
+                </p>
+              </div>
+            )}
             {(activeStep === 1 || activeStep === 2) && (
               <div className="mt-4 hidden xl:block">
                 <TemplateWizardPolicyFooter />
