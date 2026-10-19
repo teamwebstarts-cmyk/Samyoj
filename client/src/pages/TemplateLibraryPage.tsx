@@ -676,6 +676,7 @@ export default function TemplateLibraryPage() {
             {selected && activeStep === 0 ? (
               <LibraryTemplatePreviewPanel
                 entry={selected}
+                key={selected.id}
                 form={form}
                 filledPreview={filledPreview}
                 previewButtons={previewButtons}
