@@ -50,7 +50,7 @@ export default function LibraryTemplatePreviewPanel({
   const variableCount = (form.body.match(/\{\{\d+\}\}/g) || []).length;
 
   return (
-    <div className="template-wizard-preview-enter flex min-h-0 flex-col">
+    <div className="template-wizard-panel-surface flex min-h-0 flex-col">
       <div className="template-wizard-card overflow-hidden">
         {/* Panel header */}
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
