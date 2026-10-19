@@ -561,6 +561,11 @@ export default function TemplateLibraryPage() {
                 items={listItems}
                 selectedKey={selectedKey}
                 onSelect={(key) => {
+                  // Preview acts as a toggle: picking the picked card unpicks it.
+                  if (selectedKey === key) {
+                    setSelectedItem(null);
+                    return;
+                  }
                   const match = listItems.find((item) => item.id === key);
                   if (match) setSelectedItem(match);
                 }}
