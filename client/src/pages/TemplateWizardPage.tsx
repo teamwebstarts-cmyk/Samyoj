@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   ArrowLeft,
   ArrowRight,
-  ChevronRight,
+  BookOpen,
   FileText,
   Save,
   Sparkles,
@@ -15,7 +15,8 @@ import TemplateWizardPreviewPanel, {
 } from '../components/templates/wizard/TemplateWizardPreviewPanel';
 import TemplateWizardApprovalAside from '../components/templates/wizard/TemplateWizardApprovalAside';
 import TemplateWizardReviewStep from '../components/templates/wizard/TemplateWizardReviewStep';
-import TemplateWizardStepper from '../components/templates/wizard/TemplateWizardStepper';
+import TemplateWizardPageHeader from '../components/templates/wizard/TemplateWizardPageHeader';
+import TemplateWizardPageFooter from '../components/templates/wizard/TemplateWizardPageFooter';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
 import {
   autoFillTemplateSamples,
@@ -45,6 +46,10 @@ import { settingsApi, templateApi, WhatsappNumberScopeError } from '../services/
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { formFromMessageTemplate, persistTemplateVariableMeta } from '../utils/templateForm';
+import { libraryWizardStages } from '../utils/templateLibrary';
+import { libraryTileClass } from '../components/templates/library/templateLibraryGrid';
+import { tileIconFor } from '../components/templates/library/CatalogLibraryCard';
+import type { CatalogListItem } from '../utils/templateLibrary';
 import { getTemplateRejectedReason } from '../utils/templateUtils';
 import { getTemplateRejectionGuide, getTemplateStatusHelp } from '../utils/templateRejectionGuide';
 import { toastError, toastSuccess, toastWarning } from '../utils/toast';
@@ -72,6 +77,8 @@ type LocationState = {
   studioName?: string;
   headerMediaUrl?: string;
   studioPack?: string;
+  /** Picked catalog entry from the library wizard — drives the footer chip. */
+  libraryItem?: CatalogListItem;
 };
 
 export default function TemplateWizardPage() {
@@ -85,6 +92,9 @@ export default function TemplateWizardPage() {
 
   const isResubmit = Boolean(resubmitNameParam);
   const mode: TemplateWizardMode = isResubmit ? 'resubmit' : state.mode || 'create';
+  // Library edit mode, carried by the URL itself (survives refresh): the
+  // persistent header tracks the library wizard's Browse → Edit → Submit.
+  const fromLibrary = location.pathname === '/templates/library/edit';
 
   const [loading, setLoading] = useState(isResubmit);
   const [form, setForm] = useState<TemplateFormState>(() => {
@@ -504,6 +514,23 @@ export default function TemplateWizardPage() {
         clearTemplateDraft();
         invalidateFlowReferenceData();
         invalidateApprovedTemplatesCache();
+        if (fromLibrary) {
+          // Back to the library wizard: the persistent stepper finishes on its
+          // Submit step, rendered by TemplateLibraryPage (state re-seeds there
+          // from this result).
+          navigate('/templates/library/submitted', {
+            state: {
+              submitResult: {
+                submissionId: buildSubmissionId(),
+                submittedAt: new Date().toISOString(),
+                templateName: savedName,
+              },
+              submittedStatus: 'PENDING',
+              form,
+            },
+          });
+          return;
+        }
         setSubmitResult({
           submissionId: buildSubmissionId(),
           submittedAt: new Date().toISOString(),
@@ -542,6 +569,35 @@ export default function TemplateWizardPage() {
     e.preventDefault();
     void handleContinue();
   };
+
+  // Browse-style footer chip: which library template the user is editing.
+  // ponytail: `?` guards direct URL deep-links where the handoff state is absent.
+  const libraryItem = fromLibrary ? state.libraryItem : undefined;
+  const selectedChip = libraryItem ? (() => {
+    const ChipIcon = tileIconFor(libraryItem);
+    return (
+      <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white py-0.5 pl-0.5 pr-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${libraryTileClass(libraryItem.category)}`}
+          aria-hidden
+        >
+          <ChipIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
+        </span>
+        <span className="min-w-0 truncate text-[12px] font-bold text-slate-900 dark:text-white">
+          {libraryItem.title}
+        </span>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            libraryItem.category === 'AUTHENTICATION'
+              ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50'
+              : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800/50'
+          }`}
+        >
+          {libraryItem.category === 'AUTHENTICATION' ? 'Authentication' : 'Utility'}
+        </span>
+      </span>
+    );
+  })() : null;
 
   const handleCreateAnother = () => {
     setForm(createEmptyWizardForm());
@@ -588,24 +644,48 @@ export default function TemplateWizardPage() {
 
   return (
     <div className="template-wizard-page">
-      <div className="template-wizard-header mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-            <FileText className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-[20px] font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-[22px]">
-              {stepTitle}
-            </h1>
-            <p className="mt-0.5 text-[12px] font-medium text-slate-500">{stepSubtitle}</p>
-          </div>
-        </div>
-        <TemplateWizardStepper
-          activeStep={activeStep}
-          maxReachableStep={maxReachableStep}
-          onStepChange={goToStep}
-        />
-      </div>
+      <TemplateWizardPageHeader
+        icon={fromLibrary ? BookOpen : FileText}
+        title={
+          fromLibrary
+            ? activeStep === 0
+              ? 'Edit library template'
+              : 'Review library template'
+            : stepTitle
+        }
+        subtitle={
+          fromLibrary
+            ? activeStep === 0
+              ? 'Pick up where you left off — name, language, body, and buttons are pre-filled from the library pick.'
+              : 'Check the live preview, then submit to this WhatsApp number.'
+            : stepSubtitle
+        }
+        stepper={
+          fromLibrary
+            ? {
+                // Editor phase 0 is the wizard's Edit step; its review/submit
+                // phase maps to the wizard's Submit step.
+                activeStep: activeStep === 0 ? 1 : 2,
+                maxReachableStep: activeStep === 0 ? 1 : 2,
+                onStepChange: (step) => {
+                  if (step === 0) {
+                    navigate('/templates/library', {
+                      state: { restoreSelectedId: state.libraryItem?.id },
+                    });
+                  } else if (step === 1 && activeStep > 0) {
+                    goToStep(0);
+                  }
+                },
+                stages: libraryWizardStages,
+                ariaLabel: 'Template library steps',
+              }
+            : {
+                activeStep,
+                maxReachableStep,
+                onStepChange: goToStep,
+              }
+        }
+      />
 
       <form onSubmit={handleSubmit} className="template-wizard-scroll min-h-0 flex-1">
         {state.studioHandoff && (
@@ -714,10 +794,16 @@ export default function TemplateWizardPage() {
         )}
       </form>
 
-      {activeStep < 2 && (
-        <footer className="template-wizard-footer">
-          <div className="wizard-footer-inner">
-            <div className="wizard-footer-start">
+      <TemplateWizardPageFooter
+        start={
+          activeStep === 2 ? (
+            null
+          ) : fromLibrary ? (
+            /* Browse-style chip so the user always sees which library
+                template they're working on, same as the Browse footer. */
+            selectedChip
+          ) : (
+            <>
               {activeStep === 0 ? (
                 <AppButton
                   type="button"
@@ -740,6 +826,55 @@ export default function TemplateWizardPage() {
                   Back to edit
                 </AppButton>
               )}
+            </>
+          )
+        }
+        end={
+          activeStep === 2 ? (
+            <>
+              <AppButton type="button" variant="secondary" size="sm" onClick={() => navigate('/templates')}>
+                Back to templates
+              </AppButton>
+              <AppButton
+                type="button"
+                size="sm"
+                icon={<ArrowRight className="h-3.5 w-3.5" />}
+                onClick={handleCreateAnother}
+              >
+                Create another
+              </AppButton>
+            </>
+          ) : fromLibrary ? (
+            /* Library edit: Back + Submit together on the right. */
+            <>
+              <AppButton
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  activeStep === 0
+                    ? navigate('/templates/library', {
+                        state: { restoreSelectedId: state.libraryItem?.id },
+                      })
+                    : goToStep(0)
+                }
+                disabled={saving}
+              >
+                {activeStep === 0 ? 'Back' : 'Back to edit'}
+              </AppButton>
+              <AppButton
+                type="button"
+                size="sm"
+                loading={saving || (activeStep === 0 && studioHeaderPhase === 'loading')}
+                icon={<ArrowRight className="h-3.5 w-3.5" />}
+                onClick={() => void handleContinue()}
+                disabled={!canManageTemplates}
+              >
+                {activeStep === 0 && studioHeaderPhase === 'loading' ? 'Attaching image…' : 'Submit'}
+              </AppButton>
+            </>
+          ) : (
+            <>
               <AppButton
                 type="button"
                 variant="secondary"
@@ -747,39 +882,29 @@ export default function TemplateWizardPage() {
                 icon={<Save className="h-3.5 w-3.5" />}
                 onClick={handleSaveDraft}
                 disabled={saving}
-                className="!border-emerald-200 !bg-emerald-700 !text-white hover:!bg-emerald-800"
               >
                 Save as draft
               </AppButton>
-            </div>
-            <div className="wizard-footer-end">
               <AppButton
                 type="button"
                 size="sm"
                 loading={saving || (activeStep === 0 && studioHeaderPhase === 'loading')}
-                icon={
-                  activeStep === 0 ? (
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  ) : (
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  )
-                }
-                className="!bg-violet-600 hover:!bg-violet-700"
+                icon={<ArrowRight className="h-3.5 w-3.5" />}
                 onClick={() => void handleContinue()}
                 disabled={!canManageTemplates}
               >
                 {activeStep === 0 && studioHeaderPhase === 'loading'
                   ? 'Attaching image…'
                   : activeStep === 0
-                  ? 'Continue to review'
-                  : mode === 'resubmit'
-                    ? 'Resubmit for review'
-                    : 'Submit for review'}
+                    ? 'Continue to review'
+                    : mode === 'resubmit'
+                      ? 'Resubmit for review'
+                      : 'Submit for review'}
               </AppButton>
-            </div>
-          </div>
-        </footer>
-      )}
+            </>
+          )
+        }
+      />
     </div>
   );
 }

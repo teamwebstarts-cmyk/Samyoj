@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, LayoutGrid, Sparkles, X } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep from '../components/templates/library/TemplateLibraryBrowseStep';
 import TemplateLibraryReviewStep from '../components/templates/library/TemplateLibraryReviewStep';
 import TemplateWizardPreviewPanel, {
@@ -9,7 +9,8 @@ import TemplateWizardPreviewPanel, {
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
 import { libraryTileClass } from '../components/templates/library/templateLibraryGrid';
 import { tileIconFor } from '../components/templates/library/CatalogLibraryCard';
-import TemplateWizardStepper from '../components/templates/wizard/TemplateWizardStepper';
+import TemplateWizardPageHeader from '../components/templates/wizard/TemplateWizardPageHeader';
+import TemplateWizardPageFooter from '../components/templates/wizard/TemplateWizardPageFooter';
 import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
 import {
   buildSubmissionId,
@@ -27,7 +28,7 @@ import { templateApi, settingsApi } from '../services/api';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
-import { persistTemplateVariableMeta, previewParams } from '../utils/templateForm';
+import { persistTemplateVariableMeta, previewParams, syncFormExamples } from '../utils/templateForm';
 import {
   formFromCatalogEntry,
   isSampleLibraryButtonUrl,
@@ -84,8 +85,15 @@ export default function TemplateLibraryPage() {
   const { activeNumber, resolved, hasConnectedNumber, disconnectedNumbers, loading: numbersLoading } = useWhatsAppNumber();
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState(0);
-  const [maxReachableStep, setMaxReachableStep] = useState(0);
+  const location = useLocation();
+  // Step lives in the URL: /templates/library → Browse, /edit → Edit, /submitted → Submit.
+  // All three routes render this component, so React keeps form/selection state across steps.
+  const activeStep =
+    location.pathname === '/templates/library/edit'
+      ? 1
+      : location.pathname === '/templates/library/submitted'
+        ? 2
+        : 0;
   const [catalog, setCatalog] = useState<CatalogListItem[]>([]);
   const [filters, setFilters] = useState<Array<{ id: string; label: string }>>([]);
   const [honesty, setHonesty] = useState(DEFAULT_HONESTY);
@@ -104,15 +112,30 @@ export default function TemplateLibraryPage() {
   const [previewClosing, setPreviewClosing] = useState(false);
   const previewOpenRef = useRef(false);
   const previewCloseTimerRef = useRef<number | null>(null);
-  const [form, setForm] = useState<TemplateFormState>(createEmptyWizardForm);
   const [createName, setCreateName] = useState('');
   const [buttonUrl, setButtonUrl] = useState('');
   const [buttonPhone, setButtonPhone] = useState('');
   const [shopWebsite, setShopWebsite] = useState('');
   const [stageError, setStageError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(null);
-  const [submittedStatus, setSubmittedStatus] = useState('PENDING');
+  // Result handed over by the real editor (/templates/library/edit) when the
+  // template submitted there — seeds this Submitted step via router state.
+  const locationState = (location.state || {}) as {
+    submitResult?: TemplateWizardSubmitResult;
+    submittedStatus?: string;
+    form?: TemplateFormState;
+    /** Picked template id to re-select when returning to Browse (e.g. Back from Edit). */
+    restoreSelectedId?: string;
+  };
+  const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(
+    () => locationState.submitResult ?? null,
+  );
+  const [submittedStatus, setSubmittedStatus] = useState(
+    locationState.submittedStatus || 'PENDING',
+  );
+  const [form, setForm] = useState<TemplateFormState>(() =>
+    locationState.form ? syncFormExamples(locationState.form) : createEmptyWizardForm(),
+  );
   const activeNumberIdRef = useRef<string | null>(null);
   activeNumberIdRef.current = activeNumber?.id ?? null;
   const canManageTemplates =
@@ -169,6 +192,24 @@ export default function TemplateLibraryPage() {
     loadCatalog();
   }, [loadCatalog, resolved, activeNumber?.id]);
 
+  // Returning to Browse from the editor (Back): restore the previously picked
+  // template — chip, preview panel, and seed form — once the catalog is in.
+  const restoreSelectedId = locationState.restoreSelectedId;
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (!restoreSelectedId || activeStep !== 0) return;
+    if (loadingCatalog || !catalog.length) return;
+    restoredRef.current = true;
+    const match = catalog.find((item) => item.id === restoreSelectedId);
+    if (match) {
+      setSelectedItem(match);
+      openPreviewPanel(match);
+    }
+    // Runs once after the catalog lands; nothing else may trigger it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoreSelectedId, activeStep, loadingCatalog, catalog]);
+
   useEffect(() => {
     loadAccountNames();
   }, [loadAccountNames, resolved, activeNumber?.id]);
@@ -203,8 +244,7 @@ export default function TemplateLibraryPage() {
     setStageError(null);
     setSubmitResult(null);
     setSubmittedStatus('PENDING');
-    setActiveStep(0);
-    setMaxReachableStep(0);
+    navigate('/templates/library', { replace: true });
     setLoadingCatalog(true);
     loadCatalog();
     loadAccountNames();
@@ -299,6 +339,9 @@ export default function TemplateLibraryPage() {
   // No auto-select: the WhatsApp preview bar appears only after the user
   // explicitly picks a card via its Preview button.
   useEffect(() => {
+    // This seed belongs to Browse only — on Edit/Submitted the user's own
+    // content (or the editor handoff) must not be overwritten.
+    if (activeStep !== 0) return;
     // While the panel is playing its exit animation we keep the picked
     // template's form/preview content rendered untouched (stale on purpose);
     // the reset runs once the panel has unmounted.
@@ -371,9 +414,28 @@ export default function TemplateLibraryPage() {
       };
     });
 
+  // Stepper reachability follows what actually exists: Edit needs a picked
+  // template, Submitted needs a submission result.
+  const maxReachableStep = submitResult ? 2 : selected ? 1 : 0;
+
+  // Hand the picked template's details to the real editor page, exactly the
+  // way the old "Customize in editor" flow prefilled /templates/new. The item
+  // rides along so the editor's footer chip can match Browse's.
+  const editHandoffState = selected
+    ? { form: { ...form, name: createName || selected.id }, libraryItem: selected }
+    : undefined;
+
   const goToStep = (step: number) => {
-    if (step > maxReachableStep) return;
-    setActiveStep(step);
+    if (step === 1 && !selected) return;
+    if (step === 2 && !submitResult) return;
+    navigate(
+      step === 0
+        ? '/templates/library'
+        : step === 1
+          ? '/templates/library/edit'
+          : '/templates/library/submitted',
+      step === 1 ? { state: editHandoffState } : undefined,
+    );
   };
 
   const validateReview = (): string | null => {
@@ -425,8 +487,7 @@ export default function TemplateLibraryPage() {
         templateName: item.name || 'hello_world',
       });
       setSubmittedStatus('APPROVED');
-      setActiveStep(2);
-      setMaxReachableStep(2);
+      navigate('/templates/library/submitted');
       toastSuccess('This Meta sample is already on your number. Send it from Templates.');
       return;
     }
@@ -454,8 +515,7 @@ export default function TemplateLibraryPage() {
         templateName: name,
       });
       setSubmittedStatus(status === 'APPROVED' ? 'APPROVED' : 'PENDING');
-      setActiveStep(2);
-      setMaxReachableStep(2);
+      navigate('/templates/library/submitted');
       toastSuccess(
         status === 'APPROVED'
           ? 'Template added and ready to use in campaigns and inbox.'
@@ -481,8 +541,7 @@ export default function TemplateLibraryPage() {
       templateName: name,
     });
     setSubmittedStatus(status === 'APPROVED' ? 'APPROVED' : 'PENDING');
-    setActiveStep(2);
-    setMaxReachableStep(2);
+    navigate('/templates/library/submitted');
     toastSuccess(
       status === 'APPROVED'
         ? 'Template added and ready to use in campaigns and inbox.'
@@ -503,8 +562,20 @@ export default function TemplateLibraryPage() {
         setStageError('Pick a template from the library to continue.');
         return;
       }
-      setActiveStep(1);
-      setMaxReachableStep((prev) => Math.max(prev, 1));
+      // Ready Meta samples (hello_world already on this number) keep their
+      // one-click path — there is nothing to edit before using them.
+      if (selected.submitMode === 'ready' || selected.source === 'ready') {
+        setSaving(true);
+        try {
+          await submitCatalog(selected);
+        } catch (err: unknown) {
+          setStageError(getErrorMessage(err, 'Failed to submit this template to Meta.'));
+        } finally {
+          setSaving(false);
+        }
+        return;
+      }
+      navigate('/templates/library/edit', { state: editHandoffState });
       return;
     }
     if (activeStep === 1) {
@@ -532,22 +603,13 @@ export default function TemplateLibraryPage() {
     }
   };
 
-  const handleCustomize = () => {
-    if (!selected) {
-      setStageError('Pick a template first.');
-      return;
-    }
-    navigate('/templates/new', {
-      state: { form: { ...form, name: createName || selected.id } },
-    });
-  };
-
   const handleCreateAnother = () => {
     setSubmitResult(null);
     setSubmittedStatus('PENDING');
-    setActiveStep(0);
-    setMaxReachableStep(0);
     setStageError(null);
+    setSelectedItem(null);
+    closePreviewPanel();
+    navigate('/templates/library', { replace: true });
   };
 
   const { setExtras, clearExtras } = useTopbarExtras();
@@ -611,53 +673,41 @@ export default function TemplateLibraryPage() {
       ? 'This name is already on your account.'
       : null;
 
+  // Deep links (refresh, pasted URL) land back on Browse when the step's
+  // precondition is missing — Edit needs a picked template, Submitted needs
+  // a submission result.
+  if (activeStep === 1 && !selected) {
+    return <Navigate to="/templates/library" replace />;
+  }
+  if (activeStep === 2 && !submitResult) {
+    return <Navigate to="/templates/library" replace />;
+  }
+
   return (
     <div className="template-wizard-page">
-      <div className="template-wizard-header mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-start gap-3">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              activeStep === 2
-                ? submittedStatus === 'APPROVED'
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                  : 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
-                : 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
-            }`}
+      <TemplateWizardPageHeader
+        icon={activeStep === 2 ? (submittedStatus === 'APPROVED' ? CheckCircle2 : Sparkles) : BookOpen}
+        iconTone={activeStep === 2 && submittedStatus === 'APPROVED' ? 'emerald' : 'violet'}
+        title={stepTitle}
+        subtitle={stepSubtitle}
+        stepper={{
+          activeStep,
+          maxReachableStep,
+          onStepChange: goToStep,
+          stages: libraryWizardStages,
+          ariaLabel: 'Template library steps',
+        }}
+      >
+        {activeStep === 2 && (
+          <Link
+            to="/templates"
+            className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
           >
-            {activeStep === 2 ? (
-              submittedStatus === 'APPROVED' ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : (
-                <Sparkles className="h-5 w-5" />
-              )
-            ) : (
-              <BookOpen className="h-5 w-5" />
-            )}
-          </span>
-          <div>
-            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[22px]">
-              {stepTitle}
-            </h1>
-            <p className="mt-0 text-[12px] font-medium leading-snug text-slate-500">{stepSubtitle}</p>
-            {activeStep === 2 && (
-              <Link
-                to="/templates"
-                className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Back to template list
-              </Link>
-            )}
-          </div>
-        </div>
-        <TemplateWizardStepper
-          activeStep={activeStep}
-          maxReachableStep={maxReachableStep}
-          onStepChange={goToStep}
-          stages={libraryWizardStages}
-          ariaLabel="Template library steps"
-        />
-      </div>
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Back to template list
+          </Link>
+        )}
+      </TemplateWizardPageHeader>
 
       <div className="template-wizard-scroll min-h-0 flex-1">
         {templateGateMessage && (
@@ -770,26 +820,21 @@ export default function TemplateLibraryPage() {
         )}
       </div>
 
-      {activeStep < 2 && (
-        <footer className="template-wizard-footer">
-          <div className="mx-auto flex w-full max-w-[1440px] flex-col items-stretch gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8">
-            <div className="wizard-footer-start">
-              {activeStep === 0 ? (
-                selected ? (
-                  (() => {
-                    const ChipIcon = tileIconFor(selected);
-                    return (
-                      <>
-                        <span className="hidden whitespace-nowrap text-[12px] font-bold text-slate-900 sm:block dark:text-white">
-                          {selected.submitMode === 'ready' ? 'Sample template selected' : '1 template selected'}
-                        </span>
-                        <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white py-0.5 pl-0.5 pr-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                          <span
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${libraryTileClass(selected.category)}`}
-                            aria-hidden
-                          >
-                            <ChipIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
-                          </span>
+      <TemplateWizardPageFooter
+        start={
+          activeStep === 0 ? (
+            selected ? (
+              (() => {
+                const ChipIcon = tileIconFor(selected);
+                return (
+                  <>
+                    <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white py-0.5 pl-0.5 pr-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${libraryTileClass(selected.category)}`}
+                        aria-hidden
+                      >
+                        <ChipIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
+                      </span>
                       <span className="min-w-0 truncate text-[12px] font-bold text-slate-900 dark:text-white">
                         {selected.title}
                       </span>
@@ -810,41 +855,46 @@ export default function TemplateLibraryPage() {
                       >
                         <X className="h-3.5 w-3.5" strokeWidth={2.25} />
                       </button>
-                      </span>
-                      </>
-                    );
-                  })()
-                ) : null
-              ) : (
-                <AppButton
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  icon={<ArrowLeft className="h-3.5 w-3.5" />}
-                  onClick={() => goToStep(0)}
-                  disabled={saving}
-                >
-                  Back
-                </AppButton>
-              )}
-            </div>
-            <div className="wizard-footer-end">
+                    </span>
+                  </>
+                );
+              })()
+            ) : null
+          ) : activeStep === 1 ? (
+            <AppButton
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<ArrowLeft className="h-3.5 w-3.5" />}
+              onClick={() => goToStep(0)}
+              disabled={saving}
+            >
+              Back
+            </AppButton>
+          ) : null
+        }
+        end={
+          activeStep === 2 ? (
+            <>
+              <AppButton type="button" variant="secondary" size="sm" onClick={() => navigate('/templates')}>
+                Back to templates
+              </AppButton>
+              <AppButton
+                type="button"
+                size="sm"
+                icon={<ArrowRight className="h-3.5 w-3.5" />}
+                onClick={handleCreateAnother}
+              >
+                Create another
+              </AppButton>
+            </>
+          ) : (
+            <>
               {activeStep === 0 ? (
                 <AppButton type="button" variant="secondary" size="sm" onClick={() => navigate('/templates')}>
                   Cancel
                 </AppButton>
               ) : null}
-              {activeStep === 1 && (
-                <AppButton
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleCustomize}
-                  disabled={saving || !selected || !canManageTemplates}
-                >
-                  Customize in editor
-                </AppButton>
-              )}
               <AppButton
                 type="button"
                 size="sm"
@@ -861,10 +911,10 @@ export default function TemplateLibraryPage() {
                       : 'Need a Meta library hello'
                     : 'Submit to this number'}
               </AppButton>
-            </div>
-          </div>
-        </footer>
-      )}
+            </>
+          )
+        }
+      />
     </div>
   );
 }
