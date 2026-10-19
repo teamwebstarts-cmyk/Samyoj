@@ -108,7 +108,7 @@ export default function TemplateLibraryBrowseStep({
 
   return (
     <div className="space-y-3">
-      <div className="pt-1">
+      <div>
         <div className="space-y-2.5">
           <div className="flex items-center gap-2">
             <SearchInput

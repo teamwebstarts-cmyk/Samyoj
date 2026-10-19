@@ -662,7 +662,7 @@ export default function TemplateLibraryPage() {
             )}
           </div>
 
-          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+          <aside className="min-w-0 xl:sticky xl:top-0 xl:self-start">
             {selected ? (
               <TemplateWizardPreviewPanel
                 compact
@@ -672,14 +672,7 @@ export default function TemplateLibraryPage() {
                 previewTitle={activeStep === 2 ? 'Submitted template' : 'WhatsApp preview'}
                 showEditLink={false}
               />
-            ) : (
-              <div className="template-wizard-card hidden p-6 text-center xl:block">
-                <p className="text-[13px] font-bold text-slate-900 dark:text-white">WhatsApp preview</p>
-                <p className="mt-2 text-[12px] font-medium leading-relaxed text-slate-500">
-                  Pick Preview on any template to see it here.
-                </p>
-              </div>
-            )}
+            ) : null}
             {(activeStep === 1 || activeStep === 2) && (
               <div className="mt-4 hidden xl:block">
                 <TemplateWizardPolicyFooter />
