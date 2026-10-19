@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react';
+import { LayoutGrid } from 'lucide-react';
 import AppAlert from '../../ui/AppAlert';
 import AppButton from '../../ui/AppButton';
 import AppSelect from '../../ui/AppSelect';
@@ -6,10 +8,14 @@ import Skeleton from '../../ui/Skeleton';
 import InfoTip from '../../ui/InfoTip';
 import type { CatalogListItem } from '../../../utils/templateLibrary';
 import CatalogLibraryCard from './CatalogLibraryCard';
+import LibraryPreviewModal from './LibraryPreviewModal';
 import {
   LIBRARY_CARD_CELL_CLASS,
-  LIBRARY_CARDS_GRID_CLASS,
   LIBRARY_CARDS_GRID_PAD_CLASS,
+  LIBRARY_CARDS_GRID_CLASS,
+  LIBRARY_CHIPS_ROW_CLASS,
+  LIBRARY_CHIP_ACTIVE_CLASS,
+  LIBRARY_CHIP_CLASS,
 } from './templateLibraryGrid';
 
 export type CatalogFilterChip = { id: string; label: string };
@@ -36,19 +42,25 @@ function previewBody(item: CatalogListItem, language: string): string {
   return hindi ? item.bodyHi : item.body;
 }
 
+function countFor(items: CatalogListItem[], filter: CatalogFilterChip): number {
+  if (filter.id === 'all') return items.length;
+  return items.filter((item) => item.category === filter.id || (item.tags || []).includes(filter.id)).length;
+}
+
 function LibraryCardSkeleton({ index }: { index: number }) {
   const delay = index * 50;
   return (
-    <div
-      className="flex min-h-[16rem] flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white dark:border-neutral-800 dark:bg-neutral-950 sm:min-h-[16.5rem]"
-    >
-      <Skeleton className="mx-auto mt-12 h-12 w-12 rounded-2xl" delayMs={delay} />
+    <div className="flex min-h-[15rem] flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white dark:border-neutral-800 dark:bg-neutral-950">
+      <Skeleton className="mx-auto mt-8 h-14 w-14 rounded-2xl" delayMs={delay} />
       <div className="mt-4 flex flex-1 flex-col items-center gap-2 px-4 pb-3">
         <Skeleton className="h-4 w-3/4 max-w-[12rem] rounded-md" delayMs={delay + 40} />
         <Skeleton className="h-3 w-1/2 max-w-[8rem] rounded-md" delayMs={delay + 70} />
-        <Skeleton className="mt-2 h-16 w-full rounded-md" delayMs={delay + 100} />
+        <Skeleton className="mt-2 h-12 w-full rounded-md" delayMs={delay + 100} />
       </div>
-      <Skeleton className="h-10 w-full rounded-none" delayMs={delay + 130} />
+      <div className="grid grid-cols-2 gap-2 border-t border-neutral-100 px-3 py-2.5 dark:border-neutral-800">
+        <Skeleton className="h-8 rounded-lg" delayMs={delay + 130} />
+        <Skeleton className="h-8 rounded-lg" delayMs={delay + 160} />
+      </div>
     </div>
   );
 }
@@ -69,40 +81,55 @@ export default function TemplateLibraryBrowseStep({
   loadError,
   onRetry,
 }: TemplateLibraryBrowseStepProps) {
+  const [previewItem, setPreviewItem] = useState<CatalogListItem | null>(null);
+
+  const chips = useMemo(() => {
+    const list = filters.length ? filters : [{ id: 'all', label: 'All' }];
+    return list.map((filter) => ({ ...filter, count: countFor(items, filter) }));
+  }, [filters, items]);
+
+  const previewBodyText = previewItem ? previewBody(previewItem, language) : '';
+
   return (
     <div className="space-y-3">
       <div className="template-wizard-card p-3 sm:p-3.5">
         <div className="flex items-center gap-1.5">
-          <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">
-            Meta template library
-          </p>
-          <InfoTip
-            label="How library templates work"
-            content={honesty}
-          />
+          <p className="text-[12px] font-bold text-slate-900 dark:text-white sm:text-[13px]">Meta template library</p>
+          <InfoTip label="How library templates work" content={honesty} />
         </div>
         <div className="mt-3 space-y-2.5">
           <SearchInput
             id="library-search"
             value={search}
             onChange={onSearchChange}
-            placeholder="Search title or message…"
+            placeholder="Search templates by name or message…"
             compact
             inputClassName="!h-9 !rounded-lg !pl-9 !pr-3 !text-[13px]"
             className="min-w-0"
           />
-          <div className="grid grid-cols-2 gap-2">
+
+          {/* Category chips row — the chips ARE the filter; language stays a compact select */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:flex-nowrap">
+            <div className={`min-w-0 flex-1 ${LIBRARY_CHIPS_ROW_CLASS}`}>
+              {chips.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  aria-pressed={filterId === chip.id}
+                  onClick={() => onFilterChange(chip.id)}
+                  className={filterId === chip.id ? LIBRARY_CHIP_ACTIVE_CLASS : LIBRARY_CHIP_CLASS}
+                >
+                  {chip.id === 'all' ? <LayoutGrid className="h-3 w-3" strokeWidth={2.25} aria-hidden /> : null}
+                  {chip.label}
+                  {chip.count > 0 && (
+                    <span className="font-bold opacity-70">· {chip.count}</span>
+                  )}
+                </button>
+              ))}
+            </div>
             <AppSelect
               size="compact"
-              label="Filter"
-              value={filterId}
-              isSearchable={false}
-              options={filters.map((filter) => ({ value: filter.id, label: filter.label }))}
-              onChange={(event) => onFilterChange(event.target.value)}
-            />
-            <AppSelect
-              size="compact"
-              label="Language"
+              ariaLabel="Language"
               value={language}
               isSearchable={false}
               options={[
@@ -110,6 +137,7 @@ export default function TemplateLibraryBrowseStep({
                 { value: 'hi_IN', label: 'Hindi' },
               ]}
               onChange={(event) => onLanguageChange(event.target.value)}
+              className="w-28 shrink-0"
             />
           </div>
         </div>
@@ -183,12 +211,17 @@ export default function TemplateLibraryBrowseStep({
                   selected={selectedKey === entry.id}
                   previewText={previewBody(entry, language)}
                   onSelect={() => onSelect(entry.id)}
+                  onPreview={() => setPreviewItem(entry)}
                 />
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {previewItem ? (
+        <LibraryPreviewModal item={previewItem} bodyText={previewBodyText} onClose={() => setPreviewItem(null)} />
+      ) : null}
     </div>
   );
 }
