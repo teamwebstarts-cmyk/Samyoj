@@ -543,7 +543,9 @@ export default function TemplateLibraryPage() {
         )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4" />}
 
-        <div className="template-wizard-split template-wizard-split--library">
+        <div
+          className={selected || activeStep !== 0 ? 'template-wizard-split template-wizard-split--library' : ''}
+        >
           <div className="min-w-0">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
