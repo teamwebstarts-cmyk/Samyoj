@@ -3716,6 +3716,15 @@
     scrollbar-width: thin;
   }
 
+  /* Library Browse shell (xl+): filters stay pinned, cards grid and the
+     preview panel each scroll independently, so page-level scroll locks off. */
+  @media (min-width: 1280px) {
+    .template-wizard-scroll.is-shell {
+      overflow: hidden;
+      padding-bottom: 0;
+    }
+  }
+
   .template-wizard-footer {
     flex-shrink: 0;
     border-top: 1px solid var(--color-border);

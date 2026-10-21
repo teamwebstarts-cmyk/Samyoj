@@ -10,16 +10,14 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import TemplateWizardCreateStep from '../components/templates/wizard/TemplateWizardCreateStep';
-import TemplateWizardPreviewPanel, {
-  TemplateWizardPolicyFooter,
-} from '../components/templates/wizard/TemplateWizardPreviewPanel';
+import TemplateWizardPreviewPanel from '../components/templates/wizard/TemplateWizardPreviewPanel';
 import TemplateWizardApprovalAside from '../components/templates/wizard/TemplateWizardApprovalAside';
 import TemplateWizardReviewStep from '../components/templates/wizard/TemplateWizardReviewStep';
 import TemplateSampleEditorCard from '../components/templates/wizard/TemplateSampleEditorCard';
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
 import TemplateWizardPageHeader from '../components/templates/wizard/TemplateWizardPageHeader';
 import TemplateWizardPageFooter from '../components/templates/wizard/TemplateWizardPageFooter';
-import TemplateWizardSubmitStep from '../components/templates/wizard/TemplateWizardSubmitStep';
+import TemplateSubmittedDialog from '../components/templates/wizard/TemplateSubmittedDialog';
 import {
   autoFillTemplateSamples,
   buildCreatePayload,
@@ -122,6 +120,8 @@ export default function TemplateWizardPage() {
     () => (state.studioHandoff && state.headerMediaUrl ? 'loading' : 'idle'),
   );
   const [submitResult, setSubmitResult] = useState<TemplateWizardSubmitResult | null>(null);
+  /** Success dialog from the mock: opens on Submit, closes on Done. */
+  const [submittedDialogOpen, setSubmittedDialogOpen] = useState(false);
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [resubmitBlocked, setResubmitBlocked] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
@@ -352,21 +352,19 @@ export default function TemplateWizardPage() {
     if (activeStep === 0) {
       return mode === 'resubmit' ? 'Edit & resubmit template' : 'Create message template';
     }
-    if (activeStep === 1) return 'Review template';
-    return 'Submit for review';
+    return 'Review template';
   }, [activeStep, mode]);
 
   const stepSubtitle = useMemo(() => {
     if (activeStep === 0) return 'Connect personal fields while you write, then continue to review.';
-    if (activeStep === 1) return 'Check the live preview, then submit to WhatsApp.';
-    return 'Your template will be sent to WhatsApp for approval.';
+    return 'Check the live preview, then submit to WhatsApp.';
   }, [activeStep]);
 
   const { setExtras, clearExtras } = useTopbarExtras();
 
   useEffect(() => {
     setExtras({
-      badge: activeStep < 2 ? 'Draft' : null,
+      badge: 'Draft',
       subtitle: stepSubtitle,
     });
     return () => clearExtras();
@@ -376,8 +374,10 @@ export default function TemplateWizardPage() {
   const resubmitStatusHelp =
     resubmitStatus && mode === 'resubmit' ? getTemplateStatusHelp(resubmitStatus) : null;
 
+  // While the success dialog is open, keep its status chip live by polling
+  // the submitted template every 30s.
   useEffect(() => {
-    if (activeStep !== 2 || !submitResult?.templateName) return;
+    if (!submittedDialogOpen || !submitResult?.templateName) return;
     if (!resolved || !activeNumber) return;
     const requestNumberId = activeNumber.id;
     let cancelled = false;
@@ -405,7 +405,7 @@ export default function TemplateWizardPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeNumber, activeStep, resolved, submitResult?.templateName]);
+  }, [activeNumber, submittedDialogOpen, resolved, submitResult?.templateName]);
 
   const validateStep = useCallback(
     (step: number) => {
@@ -483,6 +483,18 @@ export default function TemplateWizardPage() {
         return;
       }
       if (!validateStep(0)) return;
+      // Library edit: Submit from here goes straight to submission — no
+      // detour through the review screen. Its checklist is validated below
+      // alongside the edit step; the spinner/dialog run on the same screen.
+      if (fromLibrary) {
+        if (!wizardChecklistReady(form)) {
+          setStageError('Complete all required approval checks before submitting.');
+          requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+          return;
+        }
+        await runSubmission();
+        return;
+      }
       const withSamples = autoFillTemplateSamples(form);
       setForm(withSamples);
       setActiveStep(1);
@@ -492,67 +504,72 @@ export default function TemplateWizardPage() {
 
     if (activeStep === 1) {
       if (!validateStep(1)) return;
-      setSaving(true);
-      const savedName = form.name;
-      try {
-        const payload = buildCreatePayload(form);
-        if (state.studioHandoff && state.studioPack) {
-          (payload as Record<string, unknown>).studioPackId = state.studioPack;
-        }
-        if (mode === 'resubmit' && resubmitNameParam) {
-          await templateApi.resubmit(resubmitNameParam, payload);
-        } else {
-          await templateApi.create(payload);
-        }
-        await persistTemplateVariableMeta(resubmitNameParam || savedName, form.variableMeta, form.language).then(
-          (synced) => {
-            if (!synced) {
-              toastWarning(
-                'Template submitted, but the variable mapping could not sync for the team. Auto-fill may only work on this device until you save it again.',
-              );
-            }
-          },
-        );
-        clearTemplateDraft();
-        invalidateFlowReferenceData();
-        invalidateApprovedTemplatesCache();
-        if (fromLibrary) {
-          // Back to the library wizard: the persistent stepper finishes on its
-          // Submit step, rendered by TemplateLibraryPage (state re-seeds there
-          // from this result).
-          navigate('/templates/library/submitted', {
-            state: {
-              submitResult: {
-                submissionId: buildSubmissionId(),
-                submittedAt: new Date().toISOString(),
-                templateName: savedName,
-              },
-              submittedStatus: 'PENDING',
-              form,
-            },
-          });
-          return;
-        }
-        setSubmitResult({
-          submissionId: buildSubmissionId(),
-          submittedAt: new Date().toISOString(),
-          templateName: savedName,
-        });
-        setSubmittedStatus('PENDING');
-        setActiveStep(2);
-        setMaxReachableStep(2);
-        toastSuccess('Template submitted for approval');
-      } catch (err: unknown) {
-        const raw =
-          (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-            ?.message || 'Failed to save template.';
-        const friendly = mapTemplateApiError(raw);
-        setStageError(friendly);
-        requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-        toastError(friendly);
-      } finally {
-        setSaving(false);
+      await runSubmission();
+    }
+  };
+
+  /** Shared create/resubmit request — success dialog with View in Templates /
+   *  Done; Submitting… shows on the wizard footer's Submit button. */
+  // TODO(testing): UI-check mode — simulates the request (2.5s) instead of
+  // calling the real API/creating a template. Flip to false to restore
+  // actual submission before merging.
+  const MOCK_SUBMIT = true;
+  const runSubmission = async () => {
+    setSaving(true);
+    // Success dialog opens on click; while the request runs it shows only
+    // its Submitting… state, then the View in Templates / Done actions.
+    setSubmittedDialogOpen(true);
+    const savedName = form.name;
+    if (MOCK_SUBMIT) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      setSubmitResult({
+        submissionId: buildSubmissionId(),
+        submittedAt: new Date().toISOString(),
+        templateName: savedName,
+      });
+      setSubmittedStatus('PENDING');
+      return;
+    }
+    try {
+      const payload = buildCreatePayload(form);
+      if (state.studioHandoff && state.studioPack) {
+        (payload as Record<string, unknown>).studioPackId = state.studioPack;
       }
+      if (mode === 'resubmit' && resubmitNameParam) {
+        await templateApi.resubmit(resubmitNameParam, payload);
+      } else {
+        await templateApi.create(payload);
+      }
+      await persistTemplateVariableMeta(resubmitNameParam || savedName, form.variableMeta, form.language).then(
+        (synced) => {
+          if (!synced) {
+            toastWarning(
+              'Template submitted, but the variable mapping could not sync for the team. Auto-fill may only work on this device until you save it again.',
+            );
+          }
+        },
+      );
+      clearTemplateDraft();
+      invalidateFlowReferenceData();
+      invalidateApprovedTemplatesCache();
+      setSubmitResult({
+        submissionId: buildSubmissionId(),
+        submittedAt: new Date().toISOString(),
+        templateName: savedName,
+      });
+      setSubmittedStatus('PENDING');
+      toastSuccess('Template submitted for approval');
+    } catch (err: unknown) {
+      setSubmittedDialogOpen(false);
+      const raw =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message || 'Failed to save template.';
+      const friendly = mapTemplateApiError(raw);
+      setStageError(friendly);
+      requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+      toastError(friendly);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -600,16 +617,6 @@ export default function TemplateWizardPage() {
       </span>
     );
   })() : null;
-
-  const handleCreateAnother = () => {
-    setForm(createEmptyWizardForm());
-    setActiveStep(0);
-    setMaxReachableStep(0);
-    setSubmitResult(null);
-    setSubmittedStatus('PENDING');
-    setHeaderPreviewUrl(null);
-    navigate('/templates/new', { replace: true, state: {} });
-  };
 
   if (numbersLoading && !hasConnectedNumber) {
     return (
@@ -758,15 +765,6 @@ export default function TemplateWizardPage() {
                 onAutoFill={() => setForm(autoFillTemplateSamples(form))}
               />
             )}
-            {activeStep === 2 && submitResult && (
-              <TemplateWizardSubmitStep
-                result={submitResult}
-                status={submittedStatus}
-                language={form.language}
-                category={form.category}
-                onCreateAnother={handleCreateAnother}
-              />
-            )}
           </div>
 
           <aside className={`min-w-0 xl:sticky ${fromLibrary ? 'xl:top-0' : 'xl:top-4'} xl:self-start`}>
@@ -786,35 +784,35 @@ export default function TemplateWizardPage() {
                 headerPreviewUrl={headerPreviewUrl}
                 showEditLink={activeStep === 1}
                 onEdit={() => goToStep(0)}
-                previewTitle={activeStep === 2 ? 'Submitted template' : 'Live WhatsApp preview'}
+                previewTitle="Live WhatsApp preview"
                 showTestButton={activeStep === 1}
                 onTestTemplate={handleTestTemplate}
               />
             )}
-            {activeStep < 2 && (
-              <TemplateSampleEditorCard form={form} onChange={setForm} />
-            )}
-            {activeStep < 2 && <TemplateWizardApprovalAside form={form} />}
-            {activeStep === 2 && (
-              <div className="mt-4 hidden xl:block">
-                <TemplateWizardPolicyFooter />
-              </div>
-            )}
+            <TemplateSampleEditorCard form={form} onChange={setForm} />
+            <TemplateWizardApprovalAside form={form} />
           </aside>
         </div>
-
-        {activeStep === 2 && (
-          <div className="mt-4 xl:hidden">
-            <TemplateWizardPolicyFooter />
-          </div>
-        )}
       </form>
+
+      <TemplateSubmittedDialog
+        open={submittedDialogOpen}
+        submitting={saving}
+        templateName={submitResult?.templateName || form.name}
+        displayTitle={libraryItem?.title}
+        category={form.category}
+        language={form.language}
+        status={submittedStatus}
+        onClose={() => setSubmittedDialogOpen(false)}
+        onViewTemplates={() => {
+          setSubmittedDialogOpen(false);
+          navigate('/templates');
+        }}
+      />
 
       <TemplateWizardPageFooter
         start={
-          activeStep === 2 ? (
-            null
-          ) : fromLibrary ? (
+          fromLibrary ? (
             /* Browse-style chip so the user always sees which library
                 template they're working on, same as the Browse footer. */
             selectedChip
@@ -846,21 +844,7 @@ export default function TemplateWizardPage() {
           )
         }
         end={
-          activeStep === 2 ? (
-            <>
-              <AppButton type="button" variant="secondary" size="sm" onClick={() => navigate('/templates')}>
-                Back to templates
-              </AppButton>
-              <AppButton
-                type="button"
-                size="sm"
-                icon={<ArrowRight className="h-3.5 w-3.5" />}
-                onClick={handleCreateAnother}
-              >
-                Create another
-              </AppButton>
-            </>
-          ) : fromLibrary ? (
+          fromLibrary ? (
             /* Library edit: Back + Submit together on the right. */
             <>
               <AppButton
@@ -886,7 +870,11 @@ export default function TemplateWizardPage() {
                 onClick={() => void handleContinue()}
                 disabled={!canManageTemplates}
               >
-                {activeStep === 0 && studioHeaderPhase === 'loading' ? 'Attaching image…' : 'Submit'}
+                {saving
+                  ? 'Submitting…'
+                  : activeStep === 0 && studioHeaderPhase === 'loading'
+                    ? 'Attaching image…'
+                    : 'Submit'}
               </AppButton>
             </>
           ) : (
@@ -909,13 +897,15 @@ export default function TemplateWizardPage() {
                 onClick={() => void handleContinue()}
                 disabled={!canManageTemplates}
               >
-                {activeStep === 0 && studioHeaderPhase === 'loading'
-                  ? 'Attaching image…'
-                  : activeStep === 0
-                    ? 'Continue to review'
-                    : mode === 'resubmit'
-                      ? 'Resubmit for review'
-                      : 'Submit for review'}
+                {saving
+                  ? 'Submitting…'
+                  : activeStep === 0 && studioHeaderPhase === 'loading'
+                    ? 'Attaching image…'
+                    : activeStep === 0
+                      ? 'Continue to review'
+                      : mode === 'resubmit'
+                        ? 'Resubmit for review'
+                        : 'Submit for review'}
               </AppButton>
             </>
           )

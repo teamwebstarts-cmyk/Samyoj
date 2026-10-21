@@ -215,7 +215,7 @@ export default function TemplateLibraryBrowseStep({
 
         {loading && items.length === 0 && !loadError ? (
           <div
-            className={`flex-1 ${LIBRARY_CARDS_GRID_PAD_CLASS} p-3 content-start sm:p-3.5 ${LIBRARY_CARDS_GRID_CLASS}`}
+            className={`flex-1 min-h-0 overflow-y-auto ${LIBRARY_CARDS_GRID_PAD_CLASS} p-3 content-start sm:p-3.5 ${LIBRARY_CARDS_GRID_CLASS}`}
           >
             {Array.from({ length: 6 }).map((_, index) => (
               <LibraryCardSkeleton key={index} index={index} />
@@ -239,7 +239,7 @@ export default function TemplateLibraryBrowseStep({
           </p>
         ) : (
           <div
-            className={`flex-1 ${LIBRARY_CARDS_GRID_PAD_CLASS} p-3 content-start sm:p-3.5 ${LIBRARY_CARDS_GRID_CLASS}`}
+            className={`flex-1 min-h-0 overflow-y-auto ${LIBRARY_CARDS_GRID_PAD_CLASS} p-3 content-start sm:p-3.5 ${LIBRARY_CARDS_GRID_CLASS}`}
             role="list"
             aria-label="Meta template library"
           >
