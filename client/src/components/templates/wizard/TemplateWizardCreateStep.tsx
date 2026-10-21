@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, FileText, Image, Info, Loader2, Minus, Plus, Type, Upload, Video } from 'lucide-react';
+import { AlertCircle, FileText, Image, Info, Loader2, Minus, Plus, Smile, Type, Upload, Video } from 'lucide-react';
 import AppInput from '../../ui/AppInput';
 import AppAlert from '../../ui/AppAlert';
 import AppSelect from '../../ui/AppSelect';
@@ -15,13 +15,27 @@ import {
 import { HEADER_MEDIA_SIZE_HINT, headerMediaAccept } from '../../../utils/headerMedia';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import {
-  promoteStagedVariables,
+  sampleForVariable,
   syncFormExamples,
   type TemplateFormState,
   type TemplateVariableMeta,
 } from '../../../utils/templateForm';
+import { autoFillTemplateSamples } from './templateWizardModel';
 import TemplateVariableConnect from './TemplateVariableConnect';
 import { toastError } from '../../../utils/toast';
+
+/** No-code insert chips: place {{n}} at cursor and pre-map the source in one click. */
+const INSERT_VARIABLE_CHIPS: Array<{
+  label: string;
+  description: string;
+  source: TemplateVariableMeta['suggestedSource'];
+  customKey?: string;
+}> = [
+  { label: 'Customer name', description: 'Customer name', source: 'contact.name' },
+  { label: 'Phone number', description: 'Phone number', source: 'contact.phone' },
+  { label: 'Email', description: 'Email address', source: 'contact.email' },
+  { label: 'Date / time', description: 'Date or time', source: 'custom' },
+];
 
 const FOOTER_PRESET_STATIC = [
   { value: '__none__', label: 'No footer' },
@@ -136,8 +150,6 @@ export default function TemplateWizardCreateStep({
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>('idle');
-  /** Rows added via "Add variable" before their {{n}} exists in the body text. */
-  const [stagedVars, setStagedVars] = useState<TemplateVariableMeta[]>([]);
   const footerOptions = useMemo(() => buildFooterPresetOptions(brandName), [brandName]);
   const [footerChoice, setFooterChoice] = useState(() => resolveFooterChoice(form.footer, footerOptions));
 
@@ -154,38 +166,55 @@ export default function TemplateWizardCreateStep({
     onChange(syncFormExamples({ ...form, ...patch }));
   };
 
-  // A staged row (added via "Add variable") turns real as soon as its {{n}}
-  // lands in the body text — typed by hand or inserted via its chip.
-  useEffect(() => {
-    if (!stagedVars.length) return;
-    const { variableMeta, waiting } = promoteStagedVariables(
-      form.body,
-      form.variableMeta,
-      stagedVars,
-      mapFirstBodyVariableToName
-        ? { description: 'Customer name', suggestedSource: 'contact.name' }
-        : undefined,
-    );
-    if (waiting.length !== stagedVars.length) {
-      setStagedVars(waiting);
-      onChange(syncFormExamples({ ...form, variableMeta }));
-    }
-  }, [form.body]); // eslint-disable-line react-hooks/exhaustive-deps -- promote exactly when body text changes
-
-  // Shared insertion mechanics for both targets: splice `token` in at the
-  // textarea cursor (or append when the textarea is not mounted) without
-  // touching variableMeta — text drives the list.
-  const insertToken = (target: 'body' | 'header', token: string) => {
+  const insertVariable = (
+    target: 'body' | 'header',
+    chip?: { description: string; source: TemplateVariableMeta['suggestedSource']; customKey?: string }
+  ) => {
     const text = target === 'body' ? form.body : form.header;
+    const nextIndex = countTemplateVars(text) + 1;
+    const token = `{{${nextIndex}}}`;
     const el = target === 'body' ? bodyRef.current : null;
 
     const applyText = (nextText: string) => {
-      onChange(
-        syncFormExamples({
-          ...form,
-          ...(target === 'body' ? { body: nextText } : { header: nextText }),
-        }),
-      );
+      let variableMeta = form.variableMeta;
+      const inferredChip =
+        chip ||
+        (target === 'body' && nextIndex === 1 && mapFirstBodyVariableToName
+          ? { description: 'Customer name', source: 'contact.name' as const }
+          : undefined);
+      if (inferredChip) {
+        const scope = target;
+        const existing = variableMeta.filter((m) => !(m.scope === scope && m.index === nextIndex));
+        variableMeta = [
+          ...existing,
+          {
+            scope,
+            index: nextIndex,
+            description: inferredChip.description,
+            suggestedSource: inferredChip.source,
+            ...(inferredChip.customKey ? { customKey: inferredChip.customKey } : {}),
+          },
+        ];
+      }
+      const synced = syncFormExamples({
+        ...form,
+        ...(target === 'body' ? { body: nextText } : { header: nextText }),
+        variableMeta,
+      });
+      if (inferredChip) {
+        const examplesKey = target === 'body' ? 'bodyExamples' : 'headerExamples';
+        const examples = [...synced[examplesKey]];
+        if (!examples[nextIndex - 1]?.trim()) {
+          examples[nextIndex - 1] = sampleForVariable(
+            inferredChip.description,
+            nextIndex,
+            inferredChip.source,
+          );
+        }
+        onChange({ ...synced, [examplesKey]: examples });
+        return;
+      }
+      onChange(synced);
     };
 
     if (el) {
@@ -200,36 +229,6 @@ export default function TemplateWizardCreateStep({
       return;
     }
     applyText(`${text}${token}`);
-  };
-
-  /**
-   * "Add variable" (Connect panel header): create the next unused row in the
-   * list only. The textarea is never touched — the row is staged and turns
-   * real when its {{n}} is typed or inserted via its chip.
-   */
-  const addVariableRow = () => {
-    // Next free index counts both text tokens and already-staged rows.
-    const used = new Set<number>(
-      form.variableMeta
-        .filter((m) => m.scope === 'body')
-        .map((m) => m.index),
-    );
-    for (const row of stagedVars) {
-      if (row.scope === 'body') used.add(row.index);
-    }
-    let index = 1;
-    while (used.has(index)) index += 1;
-    const isFirst = index === 1 && countTemplateVars(form.body) === 0;
-    setStagedVars((prev) => [
-      ...prev,
-      {
-        scope: 'body',
-        index,
-        description: isFirst && mapFirstBodyVariableToName ? 'Customer name' : '',
-        suggestedSource:
-          isFirst && mapFirstBodyVariableToName ? 'contact.name' : 'custom',
-      },
-    ]);
   };
 
   const handleHeaderUpload = async (file: File) => {
@@ -429,27 +428,6 @@ export default function TemplateWizardCreateStep({
           </div>
         )}
 
-        <TemplateVariableConnect
-          form={form}
-          onChange={onChange}
-          headerAction={
-            <button
-              type="button"
-              onClick={addVariableRow}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add variable
-            </button>
-          }
-          stagedVars={stagedVars}
-          onRemoveStaged={(index) => setStagedVars((prev) => prev.filter((row) => row.index !== index))}
-          onEditStaged={(index, patch) =>
-            setStagedVars((prev) => prev.map((row) => (row.index === index ? { ...row, ...patch } : row)))
-          }
-          variant="create"
-        />
-
         <div className="mt-4">
           <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
             <label
@@ -459,27 +437,32 @@ export default function TemplateWizardCreateStep({
               <span>
                 Body text <span className="text-red-500">*</span>
               </span>
-              <FieldInfoTip text="Use the chips below to insert {{n}} fields. Map each one in the Connect variables panel above." />
+              <FieldInfoTip text="Use the chips below to insert {{n}} fields. Connect each one to a contact field in the panel that appears." />
             </label>
-            <span className="text-[10px] font-medium text-slate-400">
-              {form.body.length}/1024
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => insertVariable('body')}
+                className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
+              >
+                <Plus className="h-3 w-3" />
+                Add variable
+              </button>
+              <span className="text-[10px] font-medium text-slate-400">
+                {form.body.length}/1024
+              </span>
+            </div>
           </div>
           <div className="mb-2 flex flex-wrap gap-1.5">
-            {/* One chip per existing (and staged) {{n}}, labeled with its live
-                description so Connect panel edits reflect here immediately. */}
-            {[
-              ...form.variableMeta.filter((meta) => meta.scope === 'body'),
-              ...stagedVars.filter((meta) => meta.scope === 'body'),
-            ].map((meta) => (
+            {INSERT_VARIABLE_CHIPS.map((chip) => (
               <button
-                key={`chip-${meta.index}`}
+                key={chip.label}
                 type="button"
-                onClick={() => insertToken('body', `{{${meta.index}}}`)}
+                onClick={() => insertVariable('body', chip)}
                 className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
               >
                 <Plus className="h-3 w-3" />
-                {meta.description || 'Variable'}
+                {chip.label}
               </button>
             ))}
           </div>
@@ -495,6 +478,15 @@ export default function TemplateWizardCreateStep({
             required
             maxLength={1024}
             className="!mt-0"
+          />
+          <div className="mt-1 flex justify-end">
+            <Smile className="h-4 w-4 text-slate-300" aria-hidden />
+          </div>
+          <TemplateVariableConnect
+            form={form}
+            onChange={onChange}
+            onAutoFill={() => onChange(autoFillTemplateSamples(form))}
+            variant="create"
           />
         </div>
 

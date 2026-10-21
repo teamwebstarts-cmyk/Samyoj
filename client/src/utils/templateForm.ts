@@ -594,40 +594,6 @@ export function buildCreatePayload(form: TemplateFormState) {
   };
 }
 
-export interface FirstBodyVarDefault {
-  description: string;
-  suggestedSource: TemplateVariableMeta['suggestedSource'];
-}
-
-/**
- * A "staged" variable row is declared in the Connect list before its {{n}}
- * exists in the template text (the Add variable button). It becomes a real
- * row once the token appears in the text — typed by hand or inserted via its
- * chip. Returns the merged metadata plus the rows still waiting.
- */
-export function promoteStagedVariables(
-  text: string,
-  variableMeta: TemplateVariableMeta[],
-  staged: TemplateVariableMeta[],
-  firstBodyVarDefault?: FirstBodyVarDefault,
-): { variableMeta: TemplateVariableMeta[]; waiting: TemplateVariableMeta[] } {
-  const maxIndex = countTemplateVars(text);
-  const ready = staged.filter((row) => row.scope === 'body' && row.index <= maxIndex);
-  if (!ready.length) return { variableMeta, waiting: staged };
-  const mapped = ready.map((row) =>
-    firstBodyVarDefault && row.index === 1 && !row.description.trim()
-      ? { ...row, ...firstBodyVarDefault }
-      : row,
-  );
-  return {
-    variableMeta: [
-      ...variableMeta.filter((m) => !mapped.some((r) => r.scope === m.scope && r.index === m.index)),
-      ...mapped,
-    ],
-    waiting: staged.filter((row) => !ready.includes(row)),
-  };
-}
-
 export function syncFormExamples(form: TemplateFormState): TemplateFormState {
   const bodyExamples = syncExamples(form.body, form.bodyExamples);
   const headerExamples = syncExamples(form.header, form.headerExamples);
