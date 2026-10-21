@@ -129,9 +129,16 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
           )
         : null;
 
+  const placeholderBg =
+    platform === 'instagram'
+      ? 'inbox-placeholder-bg inbox-placeholder-bg--instagram'
+      : platform === 'facebook'
+        ? 'inbox-placeholder-bg inbox-placeholder-bg--facebook'
+        : 'inbox-placeholder-bg';
+
   return (
     <div
-      className="inbox-placeholder-bg relative flex h-full min-h-0 flex-1 flex-col overflow-hidden md:flex-row"
+      className={`${placeholderBg} relative flex h-full min-h-0 flex-1 flex-col overflow-hidden md:flex-row`}
       role="status"
       aria-live="polite"
       aria-label="Your inbox is ready"
@@ -145,9 +152,9 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
         aria-hidden
       />
 
-      <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
-        <div className="inbox-placeholder-enter flex h-full min-h-0 w-full max-w-[42rem] flex-col items-center justify-center mx-auto">
-          <div className="flex min-h-0 w-full max-w-[38rem] flex-[1.15] items-center justify-center">
+      <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4">
+        <div className="inbox-placeholder-enter flex min-h-full w-full max-w-[42rem] flex-col items-center justify-center mx-auto py-2">
+          <div className="flex min-h-0 w-full max-w-[38rem] flex-[1_1_auto] max-h-[min(46vh,22rem)] items-center justify-center md:max-h-[min(52vh,26rem)]">
             <EmptyStateHeroImage id={heroId} width={heroSize.width} height={heroSize.height} />
           </div>
 

@@ -41,7 +41,6 @@ import { useWhatsAppNumber } from '../contexts/WhatsAppNumberContext';
 import PaneHandle from '../components/inbox/PaneHandle';
 import KeyboardShortcutsOverlay from '../components/inbox/KeyboardShortcutsOverlay';
 import { InboxGlassTipProvider } from '../components/inbox/ComposerGlassTip';
-import ChatAiToggleBanner from '../components/inbox/ChatAiToggleBanner';
 import { useChatBots } from '../hooks/useChatBots';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
@@ -774,40 +773,28 @@ export default function InboxPage() {
   return (
     <InboxGlassTipProvider>
     <PageShell inbox>
-      <div className="mb-2 sm:mb-3">
-        {inboxGateMessage && (
-          <div className="mb-2">
-            <EntitlementNotice
-              message={inboxGateMessage}
-              upgradePlan={
-                entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('advancedInbox')
-              }
-            />
-          </div>
-        )}
-        {chatAiGateMessage && (
-          <div className="mb-2">
-            <EntitlementNotice
-              message={chatAiGateMessage}
-              upgradePlan={entitlements?.getUpgradePlan('aiBots') ?? 'growth'}
-            />
-          </div>
-        )}
-        <ChatAiToggleBanner
-          enabled={chatBots.chatAiEnabled}
-          saving={chatBots.assigning}
-          defaultChatBotId={chatBots.defaultChatBotId}
-          chatBots={chatBots.enabledChatBots}
-          botsLoading={chatBots.loading}
-          botAssigning={chatBots.assigning}
-          onSelectBot={canUseChatAi ? chatBots.selectChatBot : undefined}
-          onChange={(enabled) => {
-            if (canUseChatAi) chatBots.setChatAiEnabled(enabled);
-          }}
-          canToggle={canUseChatAi}
-          hasBots={chatBots.chatBots.length > 0}
-        />
-      </div>
+      {(inboxGateMessage || chatAiGateMessage) && (
+        <div className="mb-2 sm:mb-3">
+          {inboxGateMessage && (
+            <div className="mb-2">
+              <EntitlementNotice
+                message={inboxGateMessage}
+                upgradePlan={
+                  entitlements?.isLocked ? 'growth' : entitlements?.getUpgradePlan('advancedInbox')
+                }
+              />
+            </div>
+          )}
+          {chatAiGateMessage && (
+            <div className="mb-2">
+              <EntitlementNotice
+                message={chatAiGateMessage}
+                upgradePlan={entitlements?.getUpgradePlan('aiBots') ?? 'growth'}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <a
         href="#inbox-thread"
         className="skip-to-content focus:not-sr-only"
@@ -840,6 +827,20 @@ export default function InboxPage() {
               onRefresh={() => void loadConversations()}
               inboundHealth={inboundHealth}
               onRetryHealth={() => void refreshInboundHealth()}
+              channelChatAi={{
+                enabled: chatBots.chatAiEnabled,
+                saving: chatBots.assigning,
+                disabled: !canUseChatAi,
+                defaultChatBotId: chatBots.defaultChatBotId,
+                chatBots: chatBots.enabledChatBots,
+                botsLoading: chatBots.loading,
+                botAssigning: chatBots.assigning,
+                hasBots: chatBots.chatBots.length > 0,
+                onSelectBot: canUseChatAi ? (botId) => void chatBots.selectChatBot(botId) : undefined,
+                onChange: (enabled) => {
+                  if (canUseChatAi) void chatBots.setChatAiEnabled(enabled);
+                },
+              }}
             />
 
             <ConversationList

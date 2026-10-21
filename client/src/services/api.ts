@@ -641,6 +641,18 @@ export const facebookApi = {
       api.post('/facebook/inbox/bulk', { ids, action, agentId }),
     setBot: (id: string, botActive: boolean) =>
       api.patch(`/facebook/inbox/${id}/bot`, { botActive }),
+    getChatAi: () =>
+      api.get<{
+        data: {
+          connected?: boolean;
+          chatAiEnabled?: boolean;
+          defaultChatBotId?: string | null;
+        };
+      }>('/facebook/inbox/chat-ai'),
+    setChatAi: (enabled: boolean, botId?: string) =>
+      api.patch<{
+        data: { chatAiEnabled?: boolean; defaultChatBotId?: string | null; updated?: number };
+      }>('/facebook/inbox/chat-ai', { enabled, ...(botId ? { botId } : {}) }),
     markRead: (id: string) => api.post(`/facebook/inbox/${id}/read`),
     markUnread: (id: string) => api.post(`/facebook/inbox/${id}/unread`),
     favorite: (id: string, isFavorite: boolean) =>
@@ -823,6 +835,18 @@ export const instagramApi = {
       api.post('/instagram/inbox/bulk', { ids, action, agentId }),
     setBot: (id: string, botActive: boolean) =>
       api.patch(`/instagram/inbox/${id}/bot`, { botActive }),
+    getChatAi: () =>
+      api.get<{
+        data: {
+          connected?: boolean;
+          chatAiEnabled?: boolean;
+          defaultChatBotId?: string | null;
+        };
+      }>('/instagram/inbox/chat-ai'),
+    setChatAi: (enabled: boolean, botId?: string) =>
+      api.patch<{
+        data: { chatAiEnabled?: boolean; defaultChatBotId?: string | null; updated?: number };
+      }>('/instagram/inbox/chat-ai', { enabled, ...(botId ? { botId } : {}) }),
     markRead: (id: string) => api.post(`/instagram/inbox/${id}/read`),
     markUnread: (id: string) => api.post(`/instagram/inbox/${id}/unread`),
     favorite: (id: string, isFavorite: boolean) =>

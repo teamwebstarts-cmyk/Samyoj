@@ -146,6 +146,14 @@ export async function ingestInstagramTextMessage(opts: {
         select: { id: true, unreadCount: true },
       });
       createdConversation = true;
+      const { applyGlobalChatToChannelConversation } = await import(
+        '../chat/channel-chat-settings.service'
+      );
+      await applyGlobalChatToChannelConversation(
+        opts.organizationId,
+        conversation.id,
+        opts.channelId
+      );
     } catch (err) {
       const raced = await prisma.conversation.findFirst({
         where: {

@@ -213,6 +213,46 @@
     linear-gradient(116deg, #fffaf5 0%, #f7f2ff 52%, #f0ebff 100%);
   isolation: isolate;
 }
+
+/* Hero layout: container width drives columns (avoids fixed pr-[400px] crushing copy). */
+.ai-studio .hero-banner {
+  container-type: inline-size;
+  container-name: ai-hero;
+  display: grid;
+  gap: 1rem;
+  align-items: center;
+}
+.ai-studio .hero-banner__copy {
+  position: relative;
+  z-index: 10;
+  min-width: 0;
+}
+.ai-studio .hero-banner__stage {
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+  margin-inline: auto;
+  width: min(100%, 360px);
+  aspect-ratio: 460 / 240;
+}
+@container ai-hero (min-width: 520px) {
+  .ai-studio .hero-banner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, clamp(150px, 38%, 430px));
+    column-gap: clamp(0.5rem, 2.5cqi, 1.25rem);
+    min-height: 200px;
+  }
+  .ai-studio .hero-banner__stage {
+    margin-inline: 0;
+    width: 100%;
+    max-width: none;
+  }
+}
+@container ai-hero (min-width: 680px) {
+  .ai-studio .hero-banner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, clamp(200px, 42%, 430px));
+    min-height: 228px;
+  }
+}
 .ai-studio .hero-bg::before {
   position: absolute;
   inset: 0;

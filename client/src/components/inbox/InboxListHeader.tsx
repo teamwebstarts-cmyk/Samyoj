@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, MoreHorizontal, Plus, RefreshCw, User, X } from 'lucide-react';
 import SearchInput from '../ui/SearchInput';
+import ChatAiPicker from './ChatAiPicker';
+import type { AiBot } from '../../types';
 import { useGlassTipProps } from './ComposerGlassTip';
 import { FOCUS_RING_CLASS } from '../../hooks/inboxA11y';
 import { useHorizontalWheelScroll } from '../../hooks/useHorizontalWheelScroll';
@@ -68,6 +70,19 @@ interface InboxListHeaderProps {
   inboundHealth?: InboundHealth;
   onRetryHealth: () => void;
   variant?: 'whatsapp' | 'messenger' | 'instagram';
+  /** Global AI for all chats on this inbox (list header — WhatsApp number or Meta channel). */
+  channelChatAi?: {
+    enabled: boolean;
+    saving?: boolean;
+    disabled?: boolean;
+    defaultChatBotId?: string | null;
+    chatBots?: AiBot[];
+    botsLoading?: boolean;
+    botAssigning?: boolean;
+    hasBots?: boolean;
+    onSelectBot?: (botId: string) => void;
+    onChange: (enabled: boolean) => void;
+  };
 }
 
 const squareBtn = (active = false) =>
@@ -148,6 +163,7 @@ export default function InboxListHeader({
   inboundHealth = { state: 'unknown' as const },
   onRetryHealth,
   variant = 'whatsapp',
+  channelChatAi,
 }: InboxListHeaderProps) {
   const tipFor = useGlassTipProps();
   const [agentsMenuOpen, setAgentsMenuOpen] = useState(false);
@@ -346,16 +362,36 @@ export default function InboxListHeader({
               <X className="h-4 w-4" strokeWidth={2.25} />
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={onRefresh}
-              aria-label="Refresh list"
-              {...tipFor('Refresh list')}
-              data-testid="inbox-refresh-list"
-              className={squareBtn()}
-            >
-              <RefreshCw className="h-4 w-4" strokeWidth={2.25} />
-            </button>
+            <>
+              {channelChatAi ? (
+                <ChatAiPicker
+                  orgMode
+                  enabled={channelChatAi.enabled}
+                  saving={channelChatAi.saving}
+                  disabled={
+                    channelChatAi.disabled ??
+                    (channelChatAi.hasBots === false && !channelChatAi.botsLoading)
+                  }
+                  defaultChatBotId={channelChatAi.defaultChatBotId}
+                  chatBots={channelChatAi.chatBots}
+                  botsLoading={channelChatAi.botsLoading}
+                  botAssigning={channelChatAi.botAssigning}
+                  onSelectBot={channelChatAi.onSelectBot}
+                  onChange={channelChatAi.onChange}
+                  showTrainLink
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={onRefresh}
+                aria-label="Refresh list"
+                {...tipFor('Refresh list')}
+                data-testid="inbox-refresh-list"
+                className={squareBtn()}
+              >
+                <RefreshCw className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+            </>
           )}
 
           {!isMessenger && (
@@ -363,10 +399,14 @@ export default function InboxListHeader({
               type="button"
               onClick={onNewChat}
               data-testid="inbox-new-chat"
-              className={`hidden h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 px-3 text-[12.5px] font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] md:inline-flex ${FOCUS_RING_CLASS}`}
+              aria-label="Start a new chat"
+              {...tipFor('Start a new chat')}
+              className={`hidden h-9 items-center justify-center rounded-lg bg-gradient-to-br from-whatsapp-500 to-whatsapp-600 font-bold text-white shadow-[0_2px_8px_rgba(37,211,102,0.35)] transition hover:brightness-105 active:scale-[0.98] md:inline-flex ${FOCUS_RING_CLASS} ${
+                channelChatAi ? 'w-9 px-0' : 'gap-1.5 px-3 text-[12.5px]'
+              }`}
             >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.75} />
-              New chat
+              <Plus className="h-3.5 w-3.5 shrink-0" strokeWidth={2.75} />
+              {channelChatAi ? null : 'New chat'}
             </button>
           )}
         </div>

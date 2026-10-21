@@ -21,11 +21,15 @@ import {
   type PostRow,
 } from './types';
 
+export type PostTileEngagement = { likes?: number | null; comments?: number | null };
+
 type GridProps = {
   posts: PostRow[];
   loading: boolean;
   selectedId: string | null;
   onOpen: (post: PostRow) => void;
+  /** Live IG metrics keyed by `igMediaId` (from library fetch). */
+  engagementByIgMediaId?: Map<string, PostTileEngagement>;
 };
 
 function tileThumb(post: PostRow): string {
@@ -147,6 +151,7 @@ export function PostsGrid({
   loading,
   selectedId,
   onOpen,
+  engagementByIgMediaId,
 }: GridProps) {
   if (loading) return <GridSkeleton />;
 
@@ -163,13 +168,21 @@ export function PostsGrid({
       {posts.map((post) => {
         const date = postDisplayDate(post);
         const thumb = tileThumb(post);
+        const live =
+          post.status === 'PUBLISHED' && post.igMediaId
+            ? engagementByIgMediaId?.get(post.igMediaId)
+            : undefined;
+        const metricsLabel =
+          live
+            ? `, ${metric(live.likes)} likes, ${metric(live.comments)} comments`
+            : '';
         return (
           <button
             key={post.id}
             type="button"
             className={`igp-tile ${selectedId === post.id ? 'igp-tile--on' : ''}`}
             onClick={() => onOpen(post)}
-            aria-label={`${statusLabel(post.status)} post${date ? `, ${date}` : ''}`}
+            aria-label={`${statusLabel(post.status)} post${date ? `, ${date}` : ''}${metricsLabel}`}
           >
             <span className="igp-tile__frame">
               {thumb ? (
@@ -179,6 +192,15 @@ export function PostsGrid({
                   <ImagePlus className="h-8 w-8 opacity-40" strokeWidth={1.5} />
                 </span>
               )}
+              {live ? (
+                <span
+                  className="igp-lib__metrics"
+                  aria-label={`${metric(live.likes)} likes, ${metric(live.comments)} comments`}
+                >
+                  <span><Heart className="h-3 w-3" /> {metric(live.likes)}</span>
+                  <span><MessageCircle className="h-3 w-3" /> {metric(live.comments)}</span>
+                </span>
+              ) : null}
               <span className={`igp-status igp-status--${statusModifier(post.status)}`}>
                 {statusLabel(post.status)}
               </span>

@@ -16,6 +16,11 @@ import {
   findMessageByIdempotencyKey,
   isIdempotencyConflict,
 } from '../messages/outbound-idempotency';
+import {
+  disableGlobalChatAiForChannel,
+  enableGlobalChatAiForChannel,
+  getChatSettingsForChannel,
+} from '../chat/channel-chat-settings.service';
 
 const deleteMessagesSchema = z.object({
   messageIds: z.array(z.string().uuid()).min(1).max(200),
@@ -130,6 +135,87 @@ export function attachChannelInboxActions(
     loadChannel: (orgId: string) => Promise<{ id: string } | null>;
   }
 ): void {
+  router.get(
+    '/chat-ai',
+    asyncHandler(async (req: Request, res: Response) => {
+      const orgId = req.user!.organizationId!;
+      const channel = await opts.loadChannel(orgId);
+      if (!channel) {
+        sendSuccess(res, { chatAiEnabled: false, defaultChatBotId: null, connected: false });
+        return;
+      }
+      const settings = await getChatSettingsForChannel(orgId, channel.id);
+      sendSuccess(res, {
+        connected: true,
+        channelId: channel.id,
+        chatAiEnabled: settings.aiEnabled,
+        defaultChatBotId: settings.botId,
+      });
+    })
+  );
+
+  router.patch(
+    '/chat-ai',
+    asyncHandler(async (req: Request, res: Response) => {
+      const orgId = req.user!.organizationId!;
+      const channel = await opts.loadChannel(orgId);
+      if (!channel) throw new AppError(404, opts.missing);
+      const { enabled, botId } = z
+        .object({
+          enabled: z.boolean(),
+          botId: z.string().uuid().optional(),
+        })
+        .parse(req.body);
+
+      if (enabled) {
+        const settings = await getChatSettingsForChannel(orgId, channel.id);
+        const targetBotId = botId ?? settings.botId;
+        if (!targetBotId) {
+          const fallback = await prisma.aiBot.findFirst({
+            where: { organizationId: orgId, channel: 'CHAT', enabled: true },
+            orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+            select: { id: true },
+          });
+          if (!fallback) {
+            throw new AppError(400, 'Create and enable a chat agent first.');
+          }
+          const result = await enableGlobalChatAiForChannel({
+            organizationId: orgId,
+            channelId: channel.id,
+            botId: fallback.id,
+          });
+          sendSuccess(res, {
+            chatAiEnabled: result.settings.aiEnabled,
+            defaultChatBotId: result.settings.botId,
+            updated: result.updated,
+          });
+          return;
+        }
+        const result = await enableGlobalChatAiForChannel({
+          organizationId: orgId,
+          channelId: channel.id,
+          botId: targetBotId,
+        });
+        sendSuccess(res, {
+          chatAiEnabled: result.settings.aiEnabled,
+          defaultChatBotId: result.settings.botId,
+          updated: result.updated,
+        });
+        return;
+      }
+
+      const result = await disableGlobalChatAiForChannel({
+        organizationId: orgId,
+        channelId: channel.id,
+      });
+      sendSuccess(res, {
+        chatAiEnabled: result.settings.aiEnabled,
+        defaultChatBotId: result.settings.botId,
+        updated: result.updated,
+      });
+    })
+  );
+
   async function owned(req: Request) {
     const orgId = req.user!.organizationId!;
     const channel = await opts.loadChannel(orgId);

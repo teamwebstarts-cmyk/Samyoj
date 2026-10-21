@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useChannelChatBots } from '../hooks/useChannelChatBots';
 import { useSearchParams } from 'react-router-dom';
 import PageShell from '../components/ui/PageShell';
 import { cannedRepliesApi, inboxApi, instagramApi, teamApi } from '../services/api';
@@ -193,6 +194,23 @@ export default function InstagramInboxPage() {
     }
   }, []);
 
+  const instagramChannelChatApi = useMemo(
+    () => ({
+      getChatAi: () => instagramApi.inbox.getChatAi(),
+      setChatAi: (enabled: boolean, botId?: string) => instagramApi.inbox.setChatAi(enabled, botId),
+    }),
+    []
+  );
+
+  const channelChatBots = useChannelChatBots(instagramChannelChatApi, {
+    label: 'Instagram DMs',
+    onChanged: () => {
+      void loadList();
+      const id = selectedIdRef.current;
+      if (id && !isMetaMockId(id)) void openThread(id);
+    },
+  });
+
   useEffect(() => {
     const thread = searchParams.get('thread');
     if (thread) void openThread(thread);
@@ -340,16 +358,6 @@ export default function InstagramInboxPage() {
       void loadList();
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not update favorite');
-    }
-  };
-
-  const onToggleBot = async () => {
-    if (!selected) return;
-    try {
-      const { data } = await instagramApi.inbox.setBot(selected.id, !selected.botActive);
-      setSelected({ ...selected, botActive: Boolean(data.data.botActive) });
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not toggle the bot');
     }
   };
 
@@ -549,6 +557,18 @@ export default function InstagramInboxPage() {
                 onNewChat={() => undefined}
                 onRefresh={() => void loadList()}
                 onRetryHealth={() => undefined}
+                channelChatAi={{
+                  enabled: channelChatBots.chatAiEnabled,
+                  saving: channelChatBots.assigning,
+                  disabled: connected === false,
+                  defaultChatBotId: channelChatBots.defaultChatBotId,
+                  chatBots: channelChatBots.enabledChatBots,
+                  botsLoading: channelChatBots.loading,
+                  botAssigning: channelChatBots.assigning,
+                  hasBots: channelChatBots.chatBots.length > 0,
+                  onSelectBot: (botId) => void channelChatBots.selectChatBot(botId),
+                  onChange: (enabled) => void channelChatBots.setChatAiEnabled(enabled),
+                }}
               />
               <ConversationList
                 conversations={conversations}
@@ -615,8 +635,9 @@ export default function InstagramInboxPage() {
                     <ChatHeader
                       conversation={selected}
                       serviceWindow={serviceWindow}
-                      botIsLive={Boolean(selected.botActive)}
+                      botIsLive={false}
                       canUseAi
+                      hideBot
                       botToggling={false}
                       callingBack={false}
                       assigning={assigning}
@@ -630,7 +651,7 @@ export default function InstagramInboxPage() {
                       }}
                       onCallBack={() => undefined}
                       onAssign={(agentId) => void onAssign(agentId)}
-                      onToggleBot={() => void onToggleBot()}
+                      onToggleBot={() => undefined}
                       onToggleFavorite={() => void onFavorite()}
                       onToggleSearch={() => setChatSearchOpen((open) => !open)}
                       onOpenDetails={() => detailsToggle.toggle()}

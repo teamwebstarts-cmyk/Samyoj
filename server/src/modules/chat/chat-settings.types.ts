@@ -16,6 +16,8 @@ export interface ChatNumberSettings {
 
 export interface OrgChatSettings {
   byNumber: Record<string, ChatNumberSettings>;
+  /** Instagram / Messenger channel workspaces (Channel.id). */
+  byChannel?: Record<string, ChatNumberSettings>;
 }
 
 export const DEFAULT_CHAT_NUMBER_SETTINGS: ChatNumberSettings = {

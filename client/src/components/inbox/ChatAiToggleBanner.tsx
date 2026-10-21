@@ -15,6 +15,8 @@ interface ChatAiToggleBannerProps {
   onSelectBot?: (botId: string) => void;
   /** False when the org has zero AI agents — the card is disabled until one is created. */
   hasBots?: boolean;
+  /** Override info tooltip (e.g. Instagram / Messenger all-DM scope). */
+  infoText?: string;
 }
 
 export default function ChatAiToggleBanner({
@@ -28,15 +30,18 @@ export default function ChatAiToggleBanner({
   botAssigning = false,
   onSelectBot,
   hasBots = true,
+  infoText: infoTextOverride,
 }: ChatAiToggleBannerProps) {
   const tone = enabled
     ? 'text-emerald-600 dark:text-emerald-400'
     : 'text-[#64748b] dark:text-slate-400';
   const statusLabel = enabled ? 'On' : 'Off';
   const autoLabel = enabled ? 'AI replies' : 'Human replies';
-  const infoText = enabled
-    ? 'AI chat is on for every conversation on this number — all chats reply with your global bot (unless handed off to a human).'
-    : 'AI chat is off org-wide — turn on per chat from the bot menu, or enable global AI here. Personal picks are remembered when you toggle global.';
+  const infoText =
+    infoTextOverride ??
+    (enabled
+      ? 'AI chat is on for every conversation on this number — all chats reply with your global bot (unless handed off to a human).'
+      : 'AI chat is off org-wide — turn on per chat from the bot menu, or enable global AI here. Personal picks are remembered when you toggle global.');
 
   const noBots = !hasBots;
 

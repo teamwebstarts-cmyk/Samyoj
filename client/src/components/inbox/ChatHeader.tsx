@@ -55,6 +55,9 @@ interface ChatHeaderProps {
   hideBot?: boolean;
   hideFavorite?: boolean;
   windowVariant?: 'whatsapp' | 'messenger' | 'instagram';
+  /** Instagram / Messenger: header bot controls all DMs on the channel. */
+  channelGlobalBot?: boolean;
+  globalDefaultBotId?: string | null;
 }
 
 function HeaderIconButton({
@@ -144,6 +147,8 @@ export default function ChatHeader({
   hideBot = false,
   hideFavorite = false,
   windowVariant = 'whatsapp',
+  channelGlobalBot = false,
+  globalDefaultBotId = null,
 }: ChatHeaderProps) {
   const assignAccentClass =
     windowVariant === 'instagram'
@@ -169,6 +174,13 @@ export default function ChatHeader({
   const assignedId = conversation.assignedAgent?.id;
 
   const botDisplayName = useMemo(() => {
+    if (channelGlobalBot) {
+      const picked =
+        bots.find((b) => b.id === globalDefaultBotId) ??
+        bots.find((b) => b.isDefault && b.enabled) ??
+        bots.find((b) => b.enabled);
+      if (picked?.name) return picked.name;
+    }
     if (globalChatLocked) {
       const globalBot =
         bots.find((b) => b.appliedToAll && b.enabled) ??
@@ -180,9 +192,12 @@ export default function ChatHeader({
     const enabled = bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT');
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
     return defaultBot?.name || 'AI Bot';
-  }, [conversation.activeBot?.name, bots, globalChatLocked]);
+  }, [channelGlobalBot, conversation.activeBot?.name, bots, globalChatLocked, globalDefaultBotId]);
 
   const botTipDetail = useMemo(() => {
+    if (channelGlobalBot) {
+      return botIsLive ? 'AI on for all DMs' : 'AI off for all DMs';
+    }
     if (globalChatLocked) {
       return 'Global AI on for all chats';
     }
@@ -190,7 +205,7 @@ export default function ChatHeader({
     const enabled = bots.filter((b) => b.enabled && (b.channel ?? 'CHAT') === 'CHAT');
     const defaultBot = enabled.find((b) => b.isDefault) ?? enabled[0];
     return defaultBot?.name || 'Choose chatbot';
-  }, [conversation.activeBot?.name, bots, globalChatLocked]);
+  }, [botIsLive, channelGlobalBot, conversation.activeBot?.name, bots, globalChatLocked]);
 
   const avatarPresence =
     status === 'OPEN' || status === 'PENDING' || status === 'CLOSED' || status === 'SNOOZED'
@@ -431,9 +446,17 @@ export default function ChatHeader({
             <BotPickerPopover
               bots={bots}
               loading={botsLoading}
-              activeBotId={conversation.activeBot?.id ?? null}
+              activeBotId={
+                channelGlobalBot
+                  ? (globalDefaultBotId ??
+                    bots.find((b) => b.isDefault && b.enabled)?.id ??
+                    bots.find((b) => b.enabled)?.id ??
+                    null)
+                  : (conversation.activeBot?.id ?? null)
+              }
               botIsLive={botIsLive}
               globalChatLocked={globalChatLocked}
+              channelInbox={channelGlobalBot}
               botToggling={botToggling}
               botAssigning={botAssigning}
               anchorRef={botBtnRef}

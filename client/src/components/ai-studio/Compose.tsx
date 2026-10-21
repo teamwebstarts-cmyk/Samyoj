@@ -25,21 +25,21 @@ function HeroIllustration() {
 
 function Hero() {
   return (
-    <section className="hero-bg relative overflow-hidden rounded-[18px] border border-white/10 px-4 py-5 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:rounded-[24px] sm:px-6 sm:py-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(168px,40%)] md:items-center md:gap-2 md:px-6 lg:block lg:min-h-[248px] lg:px-8 lg:py-8 lg:pr-[400px] xl:pr-[450px]">
-      <div className="relative z-10 min-w-0 max-w-[520px]">
+    <section className="hero-bg hero-banner relative overflow-hidden rounded-[18px] border border-white/10 px-4 py-5 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:rounded-[24px] sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <div className="hero-banner__copy">
         <span className="mb-3 inline-flex items-center gap-2 rounded-md border border-[#6d3df2]/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6d3df2] backdrop-blur">
           <Sparkles size={12} /> AI creative studio
         </span>
-        <h2 className="text-[22px] font-extrabold leading-[1.12] tracking-tight text-[#241b3b] sm:text-[28px] lg:text-[34px] 2xl:text-[38px]">
+        <h2 className="text-[22px] font-extrabold leading-[1.12] tracking-tight text-[#241b3b] sm:text-[28px] lg:text-[32px] xl:text-[34px] 2xl:text-[38px]">
           Describe your idea,
           <br />
           we'll <span className="gradient-text">create the content.</span>
         </h2>
-        <p className="mt-3 max-w-[470px] text-[13px] leading-relaxed text-[#685f7d] sm:text-[15px]">
+        <p className="mt-3 max-w-[36rem] text-[13px] leading-relaxed text-[#685f7d] sm:text-[15px]">
           Share your product, offer, or campaign idea. Get polished visuals and ready-to-use copy for Instagram, WhatsApp, and Email — all from one brief.
         </p>
       </div>
-      <div className="hero-stage pointer-events-none relative mx-auto mt-4 aspect-[460/240] w-full max-w-[280px] sm:max-w-[360px] md:mx-0 md:mt-0 md:max-w-none md:w-full lg:absolute lg:right-2 lg:top-1/2 lg:mx-0 lg:mt-0 lg:w-[380px] lg:-translate-y-1/2 xl:w-[430px]" aria-hidden="true">
+      <div className="hero-banner__stage hero-stage" aria-hidden="true">
         <HeroIllustration />
       </div>
     </section>

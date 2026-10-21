@@ -4853,6 +4853,39 @@
     background-blend-mode: multiply;
   }
 
+  /* Meta channel inboxes — avoid WhatsApp-green wash on IG / Messenger placeholders */
+  .inbox-placeholder-bg--instagram {
+    background-image:
+      radial-gradient(ellipse 70% 50% at 88% 12%, rgba(228, 64, 95, 0.1), transparent 55%),
+      radial-gradient(ellipse 60% 45% at 8% 88%, rgba(193, 53, 132, 0.07), transparent 50%),
+      var(--chat-wallpaper-wash),
+      var(--chat-wallpaper);
+  }
+
+  .dark .inbox-placeholder-bg--instagram {
+    background-image:
+      linear-gradient(rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0.55)),
+      radial-gradient(ellipse 70% 50% at 88% 12%, rgba(228, 64, 95, 0.14), transparent 55%),
+      radial-gradient(ellipse 55% 40% at 10% 90%, rgba(193, 53, 132, 0.1), transparent 50%),
+      var(--chat-wallpaper);
+  }
+
+  .inbox-placeholder-bg--facebook {
+    background-image:
+      radial-gradient(ellipse 70% 50% at 88% 12%, rgba(24, 119, 242, 0.1), transparent 55%),
+      radial-gradient(ellipse 60% 45% at 8% 88%, rgba(66, 103, 178, 0.07), transparent 50%),
+      var(--chat-wallpaper-wash),
+      var(--chat-wallpaper);
+  }
+
+  .dark .inbox-placeholder-bg--facebook {
+    background-image:
+      linear-gradient(rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0.55)),
+      radial-gradient(ellipse 70% 50% at 88% 12%, rgba(24, 119, 242, 0.14), transparent 55%),
+      radial-gradient(ellipse 55% 40% at 10% 90%, rgba(66, 103, 178, 0.1), transparent 50%),
+      var(--chat-wallpaper);
+  }
+
   /* Empty chat pane — stage + tip cards enter */
   @keyframes inboxPlaceholderIn {
     from {

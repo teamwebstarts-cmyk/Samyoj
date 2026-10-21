@@ -13,6 +13,7 @@ import ConversationList from '../components/inbox/ConversationList';
 import ChatHeader from '../components/inbox/ChatHeader';
 import ChatComposer from '../components/inbox/ChatComposer';
 import ChatPlaceholder from '../components/inbox/ChatPlaceholder';
+import { useChannelChatBots } from '../hooks/useChannelChatBots';
 import ThreadSkeleton from '../components/inbox/ThreadSkeleton';
 import GroupedThreadMessages from '../components/inbox/GroupedThreadMessages';
 import {
@@ -193,6 +194,23 @@ export default function FacebookInboxPage() {
     }
   }, []);
 
+  const messengerChannelChatApi = useMemo(
+    () => ({
+      getChatAi: () => facebookApi.inbox.getChatAi(),
+      setChatAi: (enabled: boolean, botId?: string) => facebookApi.inbox.setChatAi(enabled, botId),
+    }),
+    []
+  );
+
+  const channelChatBots = useChannelChatBots(messengerChannelChatApi, {
+    label: 'Messenger chats',
+    onChanged: () => {
+      void loadList();
+      const id = selectedIdRef.current;
+      if (id && !isMetaMockId(id)) void openThread(id);
+    },
+  });
+
   useEffect(() => {
     const thread = searchParams.get('thread');
     if (thread) void openThread(thread);
@@ -340,16 +358,6 @@ export default function FacebookInboxPage() {
       void loadList();
     } catch (err) {
       toastError(getErrorMessage(err) || 'Could not update favorite');
-    }
-  };
-
-  const onToggleBot = async () => {
-    if (!selected) return;
-    try {
-      const { data } = await facebookApi.inbox.setBot(selected.id, !selected.botActive);
-      setSelected({ ...selected, botActive: Boolean(data.data.botActive) });
-    } catch (err) {
-      toastError(getErrorMessage(err) || 'Could not toggle the bot');
     }
   };
 
@@ -549,6 +557,18 @@ export default function FacebookInboxPage() {
                 onNewChat={() => undefined}
                 onRefresh={() => void loadList()}
                 onRetryHealth={() => undefined}
+                channelChatAi={{
+                  enabled: channelChatBots.chatAiEnabled,
+                  saving: channelChatBots.assigning,
+                  disabled: connected === false,
+                  defaultChatBotId: channelChatBots.defaultChatBotId,
+                  chatBots: channelChatBots.enabledChatBots,
+                  botsLoading: channelChatBots.loading,
+                  botAssigning: channelChatBots.assigning,
+                  hasBots: channelChatBots.chatBots.length > 0,
+                  onSelectBot: (botId) => void channelChatBots.selectChatBot(botId),
+                  onChange: (enabled) => void channelChatBots.setChatAiEnabled(enabled),
+                }}
               />
               <ConversationList
                 conversations={conversations}
@@ -615,8 +635,9 @@ export default function FacebookInboxPage() {
                     <ChatHeader
                       conversation={selected}
                       serviceWindow={serviceWindow}
-                      botIsLive={Boolean(selected.botActive)}
+                      botIsLive={false}
                       canUseAi
+                      hideBot
                       botToggling={false}
                       callingBack={false}
                       assigning={assigning}
@@ -630,7 +651,7 @@ export default function FacebookInboxPage() {
                       }}
                       onCallBack={() => undefined}
                       onAssign={(agentId) => void onAssign(agentId)}
-                      onToggleBot={() => void onToggleBot()}
+                      onToggleBot={() => undefined}
                       onToggleFavorite={() => void onFavorite()}
                       onToggleSearch={() => setChatSearchOpen((open) => !open)}
                       onOpenDetails={() => detailsToggle.toggle()}

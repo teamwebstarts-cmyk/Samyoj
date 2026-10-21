@@ -16,7 +16,7 @@ import {
 
 function readOrgChatSettings(settings: Record<string, unknown> | null | undefined): OrgChatSettings {
   const raw = settings?.chat as Partial<OrgChatSettings> | undefined;
-  return { byNumber: raw?.byNumber ?? {} };
+  return { byNumber: raw?.byNumber ?? {}, byChannel: raw?.byChannel ?? {} };
 }
 
 function normalizeChatNumberSettings(
@@ -88,6 +88,7 @@ async function saveChatSettingsForNumber(
             ...chat.byNumber,
             [whatsappNumberId]: merged,
           },
+          byChannel: chat.byChannel ?? {},
         },
       } as unknown as Prisma.InputJsonValue,
     },

@@ -17,7 +17,6 @@ import {
 } from '../utils/instagramPostMedia';
 import ConnectScreen from '../components/instagram/posts/ConnectScreen';
 import PostPanel from '../components/instagram/posts/PostPanel';
-import InstagramPostsHub from '../components/instagram/posts/InstagramPostsHub';
 import PostComposerTab, { type ScheduleError } from '../components/instagram/posts/PostComposerTab';
 import PostPreviewTab, { type PreviewData } from '../components/instagram/posts/PostPreviewTab';
 import PostAutomationTab from '../components/instagram/posts/PostAutomationTab';
@@ -224,6 +223,13 @@ export default function InstagramPostsPage() {
     [posts],
   );
   const libraryTiles = library.filter((row) => !samyojIgIds.has(row.igMediaId));
+  const engagementByIgMediaId = useMemo(() => {
+    const m = new Map<string, { likes?: number | null; comments?: number | null }>();
+    for (const row of library) {
+      m.set(row.igMediaId, { likes: row.likes, comments: row.comments });
+    }
+    return m;
+  }, [library]);
   const selectedLiveStats = selected?.igMediaId
     ? library.find((row) => row.igMediaId === selected.igMediaId)
     : null;
@@ -248,6 +254,13 @@ export default function InstagramPostsPage() {
     setAutoDm('');
     setAutoId(null);
   };
+
+  // Desktop: keep the create composer docked instead of the three-option hub.
+  useEffect(() => {
+    if (!isDesktop || connected !== true || selectedId !== null) return;
+    openNew('IMAGE');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openNew resets composer; only when selection clears
+  }, [isDesktop, connected, selectedId]);
 
   /* ---------------- AI Studio hand-off ----------------
      Studio navigates here with the generated pack: media (rendered PNGs) +
@@ -300,6 +313,10 @@ export default function InstagramPostsPage() {
   }, []);
 
   const closePanel = () => {
+    if (isDesktop && connected) {
+      openNew('IMAGE');
+      return;
+    }
     setSelectedId(null);
     setStudioOpen(false);
   };
@@ -1035,6 +1052,7 @@ export default function InstagramPostsPage() {
                     loading={loading}
                     selectedId={selectedId}
                     onOpen={(post) => openExisting(post)}
+                    engagementByIgMediaId={engagementByIgMediaId}
                   />
                 )}
               </div>
@@ -1050,11 +1068,6 @@ export default function InstagramPostsPage() {
                   automationReady={Boolean(autoId || inlineAutomationReady)}
                   body={renderPanelBody()}
                   footer={renderFooter()}
-                />
-              ) : isDesktop ? (
-                <InstagramPostsHub
-                  className="igp-panel !w-[clamp(320px,38%,480px)] !flex-shrink-0 !self-stretch"
-                  onNewPost={() => openNew('IMAGE')}
                 />
               ) : null}
             </div>
