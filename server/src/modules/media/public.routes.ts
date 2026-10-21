@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../../utils/response';
 import { readMediaFile, mediaFileExists } from './storage';
-import { isValidPublicMediaSig } from './public-sign';
+import { publicMediaSigStatus } from './public-sign';
 
 const router = Router();
 
@@ -16,7 +16,15 @@ router.get(
     }
 
     const relativePath = `${orgId}/${filename}`;
-    if (!isValidPublicMediaSig(relativePath, req.query.exp, req.query.sig)) {
+    const sigStatus = publicMediaSigStatus(relativePath, req.query.exp, req.query.sig);
+    if (sigStatus === 'expired') {
+      res.status(403).json({
+        success: false,
+        error: { code: 'MEDIA_URL_EXPIRED', message: 'Media URL expired' },
+      });
+      return;
+    }
+    if (sigStatus !== 'ok') {
       res.status(401).send('Unauthorized');
       return;
     }

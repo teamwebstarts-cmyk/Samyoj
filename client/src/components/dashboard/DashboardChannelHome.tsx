@@ -273,7 +273,7 @@ function AdsPerformancePanel({
       </div>
       <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map(([label, value]) => <div key={label} className="min-w-0"><strong className="block truncate text-[15px] font-extrabold tabular-nums">{value}</strong><p className="mt-1 text-[11px] text-slate-500">{label}</p></div>)}
-      </div>
+            </div>
       {hasActivity ? (
         <SmoothHoverChart
           labels={days.map((day) => day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}
@@ -433,12 +433,12 @@ function ChannelEmptyState({
       </span>
       <strong className="text-[12px] font-bold text-slate-800">{title}</strong>
       <p className="mt-1 max-w-[19rem] text-[11px] leading-relaxed text-slate-500">{description}</p>
-      <Link
+            <Link
         to={to}
         className={`mt-3 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10.5px] font-bold transition ${tone.button}`}
-      >
+            >
         {action} <ArrowRight className="h-3 w-3" />
-      </Link>
+            </Link>
     </div>
   );
 }
@@ -494,7 +494,7 @@ function InstagramHero({
       />
       <InstagramHeroArt />
       <ChannelHeroActions manageHref="/settings?tab=instagram" period={period} onPeriodChange={onPeriodChange} />
-    </section>
+        </section>
   );
 }
 
@@ -656,7 +656,7 @@ function InstagramTrend({
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-[15.5px] font-extrabold tracking-[-0.01em]"><MessageCircle className="h-4 w-4 text-violet-500" /> Inbox & Comments trend</h3>
         <span className="rounded-lg border border-slate-200 px-2.5 py-1 text-[12px] font-semibold text-slate-500">{periodLabel}</span>
-      </div>
+            </div>
       <div className="mb-2 flex gap-4 text-[12px] font-semibold text-slate-500">
         <span className="inline-flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-rose-500" />DM Messages</span>
         <span className="inline-flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-violet-500" />Comments</span>
@@ -675,7 +675,7 @@ function InstagramTrend({
           icon={<BarChart3 className="h-4 w-4" />}
           title="No trend data yet"
           description="Your DMs and comments will form a trend here after the first activity."
-          to="/instagram/inbox"
+              to="/instagram/inbox"
           action="Open Inbox"
           accent="instagram"
         />
@@ -800,7 +800,7 @@ function InstagramQuickActions() {
       <h3 className="mb-3.5 flex items-center gap-2 text-[15.5px] font-extrabold tracking-[-0.01em]"><Bot className="h-4 w-4 text-violet-500" /> Quick actions</h3>
       <div className="flex flex-col gap-2">
         {actions.map(([href, title, subtitle, Icon, tone]) => (
-          <Link
+            <Link
             key={title}
             to={href}
             className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 transition duration-300 hover:translate-x-[3px] hover:shadow-[0_6px_16px_rgba(15,23,42,0.06)]"
@@ -813,9 +813,9 @@ function InstagramQuickActions() {
               <small className="block truncate text-[10.5px] text-slate-500">{subtitle}</small>
             </span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400 transition group-hover:translate-x-[3px]" />
-          </Link>
+            </Link>
         ))}
-      </div>
+          </div>
         </section>
   );
 }

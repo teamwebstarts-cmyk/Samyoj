@@ -4,7 +4,7 @@ import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from './types';
 import { estimateCampaignCost } from '../billing/usage.service';
 import { parseMessagingLimitCap } from '../whatsapp/messaging-limit-tier';
 import { randomUUID } from 'node:crypto';
-import { ownsCampaignQuotaReservation, utcDayStart } from './safety';
+import { businessDayStart, ownsCampaignQuotaReservation } from './safety';
 import type { Prisma } from '@prisma/client';
 
 export async function getCampaignSettings(organizationId: string): Promise<CampaignSettings> {
@@ -20,7 +20,7 @@ export async function getCampaignSettings(organizationId: string): Promise<Campa
 export async function getDailySendUsage(organizationId: string, whatsappNumberId?: string) {
   const settings = await getCampaignSettings(organizationId);
 
-  const startOfDay = utcDayStart();
+  const startOfDay = businessDayStart();
   const rolling24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const numberFilter = whatsappNumberId ? { whatsappNumberId } : {};
 
@@ -106,7 +106,7 @@ export async function assertDailySendQuota(
   if (!meta.known || meta.unlimited || meta.cap == null) return;
 
   const uniqueUsed24h = await uniqueCampaignPhones24h(organizationId, whatsappNumberId);
-  const day = utcDayStart();
+  const day = businessDayStart();
   const reserved = await prisma.campaignQuotaLedger.findUnique({
     where: { organizationId_periodStart: { organizationId, periodStart: day } },
     select: { reservedSendCount: true },
@@ -128,7 +128,7 @@ export async function assertDailyBudget(
   const settings = await getCampaignSettings(organizationId);
   const budget = settings.dailyBudgetInr ?? DEFAULT_CAMPAIGN_SETTINGS.dailyBudgetInr!;
 
-  const startOfDay = utcDayStart();
+  const startOfDay = businessDayStart();
 
   const sentToday = await prisma.campaignRecipient.count({
     where: {
@@ -175,7 +175,7 @@ export async function reserveCampaignQuota(
   whatsappNumberId?: string | null,
 ) {
   const budgetCents = Math.round(estimateCampaignCost(recipientCount, category).estimatedCostInr * 100);
-  const day = utcDayStart();
+  const day = businessDayStart();
   return prisma.$transaction(async (tx) => {
     const ledger = await tx.campaignQuotaLedger.upsert({
       where: { organizationId_periodStart: { organizationId, periodStart: day } },

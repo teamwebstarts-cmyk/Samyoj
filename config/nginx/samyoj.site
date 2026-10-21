@@ -1,0 +1,41 @@
+server {
+    server_name app.samyoj.com admin.samyoj.com;
+    client_max_body_size 60m;
+
+    location = /api/whatsapp/webhook {
+        limit_req zone=samyoj_hook burst=100 nodelay;
+        include /etc/nginx/snippets/samyoj-proxy.conf;
+    }
+
+    location /api/ {
+        limit_req zone=samyoj_api burst=40 nodelay;
+        include /etc/nginx/snippets/samyoj-proxy.conf;
+    }
+
+    location / {
+        limit_req zone=samyoj_web burst=80 nodelay;
+        include /etc/nginx/snippets/samyoj-proxy.conf;
+    }
+
+    listen [::]:443 ssl http2 ipv6only=on; # managed by Certbot
+    listen 443 ssl http2; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/app.samyoj.com/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/app.samyoj.com/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+    if ($host = admin.samyoj.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    if ($host = app.samyoj.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name app.samyoj.com admin.samyoj.com;
+    return 404; # managed by Certbot
+}

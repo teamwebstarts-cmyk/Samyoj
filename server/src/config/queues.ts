@@ -12,7 +12,19 @@ export const defaultJobOptions = {
   removeOnFail: 500,
 };
 
-export const webhookQueue = new Queue('webhook-queue', { connection });
+// Webhook queue: bounded retries with a capped failed-set so a poison payload
+// cannot sit in Redis forever. The matching backoffStrategy lives on the worker.
+export const webhookQueueDefaultJobOptions = {
+  attempts: 5,
+  backoff: { type: 'custom' as const },
+  removeOnComplete: 500,
+  removeOnFail: 200,
+};
+
+export const webhookQueue = new Queue('webhook-queue', {
+  connection,
+  defaultJobOptions: webhookQueueDefaultJobOptions,
+});
 export const messageQueue = new Queue('message-queue', { connection });
 export const broadcastQueue = new Queue('broadcast-queue', { connection, defaultJobOptions });
 export const automationQueue = new Queue('automation-queue', { connection });

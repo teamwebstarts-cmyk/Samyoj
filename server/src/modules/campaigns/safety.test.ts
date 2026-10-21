@@ -27,6 +27,7 @@ import {
   shouldRetryCampaignSetup,
   shouldRetryProviderSend,
   stopTransition,
+  businessDayStart,
   utcDayStart,
 } from './safety';
 
@@ -35,6 +36,8 @@ describe('campaign safety boundaries', () => {
     expect(utcDayStart(new Date('2026-08-08T23:59:59.999Z')).toISOString()).toBe('2026-08-08T00:00:00.000Z');
     expect(utcDayStart(new Date('2026-08-09T00:00:00.000Z')).toISOString()).toBe('2026-08-09T00:00:00.000Z');
     expect(utcDayStart(new Date('2026-08-09T00:00:00.001Z')).toISOString()).toBe('2026-08-09T00:00:00.000Z');
+    expect(businessDayStart(new Date('2026-10-21T18:29:59.999Z')).toISOString()).toBe('2026-10-20T18:30:00.000Z');
+    expect(businessDayStart(new Date('2026-10-21T18:30:00.000Z')).toISOString()).toBe('2026-10-21T18:30:00.000Z');
   });
 
   it('expires a claimed lease deterministically', () => {

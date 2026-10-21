@@ -1,0 +1,17 @@
+[Unit]
+Description=Nightly Samyoj PostgreSQL logical backup
+Documentation=file:///usr/local/sbin/samyoj-db-backup.sh
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+# Must be root: peer auth as postgres, writes to /var/backups, uses the instance role.
+User=root
+UMask=0077
+# flock exits 0 when another run holds the lock; that run is already making a dump.
+ExecStart=/usr/bin/flock -n /run/lock/samyoj-db-backup.lock /usr/local/sbin/samyoj-db-backup.sh
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

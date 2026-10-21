@@ -76,6 +76,16 @@ describe('public media routes', () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 
+  it('returns 403 MEDIA_URL_EXPIRED for a signed URL past exp', async () => {
+    mockMediaFileExists.mockResolvedValue(true);
+    const app = createApp();
+    const { exp, sig } = signPublicMediaQuery('org-1/photo.jpg', Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const res = await request(app).get(`/api/media/public/org-1/photo.jpg?exp=${exp}&sig=${sig}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('MEDIA_URL_EXPIRED');
+    expect(mockReadMediaFile).not.toHaveBeenCalled();
+  });
+
   it('rejects unsigned public media with 401', async () => {
     mockMediaFileExists.mockResolvedValue(true);
     mockReadMediaFile.mockResolvedValue(Buffer.from('fake-image'));

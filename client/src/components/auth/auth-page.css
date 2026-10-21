@@ -1,24 +1,25 @@
 /**
- * Auth split layout — fluid to viewport.
- * Left pane: copy on top of a full-bleed hero photo (contain, never hard-cropped).
+ * Auth split layout — copy on the left, form on the right.
+ * The hero photo fills the bottom-right of the left pane; floating channel
+ * cards put their own colour on the photo, so they must sit over it (z 2).
  */
 .auth-page {
   color-scheme: light;
-  background-color: #f4f7f5;
+  background-color: #ffffff;
   --auth-green: #0a8954;
   --auth-accent: #732bfd;
   --auth-accent-hover: #5f22d4;
   --auth-accent-focus: rgb(115 43 253 / 0.28);
   --auth-ink: #12182a;
   --auth-mint: #f4f7f5;
-  --auth-pad: clamp(2.85rem, 4.6vh, 4.15rem);
+  --auth-pad: clamp(1.65rem, 3.8vh, 2.75rem);
   --auth-pad-x: var(--auth-pad);
   --auth-pad-y: var(--auth-pad);
-  --auth-gap: clamp(1.75rem, 3.8vh, 3.35rem);
-  --auth-headline: clamp(1.85rem, 4.8vh + 0.6vw, 3.35rem);
-  --auth-sub: clamp(0.9rem, 1.5vh + 0.22vw, 1.125rem);
-  --auth-icon: clamp(2.5rem, 4.8vh, 3.25rem);
-  --auth-brand-mark: clamp(2.85rem, 5.2vh, 3.85rem);
+  --auth-gap: clamp(1.25rem, 2.8vh, 2rem);
+  --auth-headline: clamp(1.75rem, 3.4vh + 0.5vw, 2.75rem);
+  --auth-sub: clamp(0.86rem, 1.35vh + 0.14vw, 0.95rem);
+  --auth-icon: clamp(2.65rem, 4.8vh, 3.15rem);
+  --auth-brand-mark: clamp(2.5rem, 4.4vh, 3rem);
   --auth-brand-name: clamp(1.35rem, 2.5vh, 1.85rem);
   --auth-form-title: clamp(1.4rem, 2.2vh + 0.25vw, 1.95rem);
 }
@@ -29,7 +30,20 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
-  background: var(--auth-mint);
+  background:
+    radial-gradient(120% 78% at 88% 8%, #f3eeff 0%, transparent 58%),
+    radial-gradient(90% 62% at 4% 92%, #effaf3 0%, transparent 55%),
+    #ffffff;
+}
+
+.auth-showcase-orbs {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 92% 4%, rgb(115 43 253 / 0.1) 0, transparent 30%),
+    radial-gradient(circle at 2% 78%, rgb(37 211 102 / 0.1) 0, transparent 32%);
 }
 
 /* Photo sits bottom-right of the left pane; copy stays on the left. */
@@ -44,14 +58,16 @@
 .auth-showcase-hero img,
 .auth-showcase-hero-photo {
   position: absolute;
-  right: -6%;
-  bottom: 0;
+  right: -4%;
+  bottom: -2%;
   left: auto;
   width: auto;
-  height: 74%;
-  max-width: 100%;
+  height: clamp(62%, 68vh, 76%);
+  max-width: min(88%, 50rem);
   object-fit: contain;
-  object-position: left bottom;
+  object-position: right bottom;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 5%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 5%);
 }
 
 .auth-showcase-content {
@@ -61,36 +77,40 @@
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  padding: var(--auth-pad);
+  padding: var(--auth-pad-y) var(--auth-pad-x);
   gap: var(--auth-gap);
+  pointer-events: none;
+}
+
+.auth-showcase-content > * {
+  pointer-events: auto;
 }
 
 .auth-showcase-brand {
-  z-index: 2;
+  z-index: 3;
   flex-shrink: 0;
   min-width: 0;
-  margin-bottom: calc(-1 * clamp(0.55rem, 1.6vh, 1rem));
 }
 
 .auth-showcase-brand .auth-brand-logo {
-  height: clamp(3.35rem, 6.2vh, 3.75rem);
+  height: clamp(3.1rem, 5.8vh, 3.85rem);
   width: auto;
-  max-width: 18.25rem;
-  mix-blend-mode: screen;
+  max-width: min(22rem, 92%);
 }
 
 .auth-showcase-copy {
-  z-index: 2;
+  z-index: 3;
   flex-shrink: 0;
   min-width: 0;
   max-width: 100%;
-  width: min(100%, 36.5rem);
+  width: min(100%, 36rem);
 }
 
 .auth-showcase-copy h2 {
   font-size: var(--auth-headline);
-  line-height: 1.12;
+  line-height: 1.1;
   letter-spacing: -0.045em;
+  color: var(--auth-ink);
 }
 
 .auth-showcase-headline-gradient {
@@ -102,30 +122,35 @@
 
 .auth-showcase-copy p,
 .auth-showcase-sub {
-  margin-top: clamp(0.85rem, 1.8vh, 1.35rem);
-  max-width: 100%;
-  line-height: 1.48;
-}
-
-.auth-showcase-sub {
-  font-size: clamp(0.84rem, 1.25vh + 0.14vw, 1.02rem);
-}
-
-.auth-showcase-sub__line {
-  display: block;
+  margin-top: clamp(0.75rem, 1.5vh, 1.1rem);
+  max-width: 26rem;
+  line-height: 1.5;
+  color: #64748b;
+  font-size: var(--auth-sub);
+  letter-spacing: -0.012em;
 }
 
 .auth-showcase-features {
-  z-index: 2;
+  z-index: 3;
   display: flex;
   min-height: 0;
   width: 100%;
-  max-width: 20.5rem;
+  max-width: 22rem;
   flex: 1 1 auto;
   flex-direction: column;
   justify-content: flex-start;
-  gap: clamp(1.85rem, 3.8vh, 2.75rem);
+  gap: clamp(1.35rem, 2.8vh, 2rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   overflow: hidden;
+}
+
+.auth-feature {
+  display: flex;
+  min-height: 0;
+  align-items: flex-start;
+  gap: 1rem;
 }
 
 .auth-feature-icon {
@@ -136,12 +161,15 @@
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #e8f5ee;
-  color: var(--auth-green);
+}
+
+.auth-feature-icon svg {
+  height: 54%;
+  width: 54%;
 }
 
 .auth-feature-icon--channels {
-  background: #dcfce7;
+  background: #e6f9ec;
   color: #22c55e;
 }
 
@@ -151,48 +179,199 @@
 }
 
 .auth-feature-icon--grow {
-  background: #fce7f3;
+  background: #fde9f3;
   color: #ec4899;
 }
 
-.auth-feature-icon svg {
-  height: 50%;
-  width: 50%;
-}
-
 .auth-feature-title {
-  font-size: clamp(0.98rem, 1.7vh + 0.18vw, 1.2rem);
+  font-size: clamp(0.92rem, 1.5vh + 0.16vw, 1.05rem);
+  font-weight: 700;
   line-height: 1.25;
+  letter-spacing: -0.024em;
+  color: #0b1220;
 }
 
 .auth-feature-desc {
-  margin-top: 0.4rem;
-  max-width: 18rem;
-  font-size: clamp(0.78rem, 1.3vh + 0.12vw, 0.95rem);
+  margin-top: 0.28rem;
+  max-width: 17rem;
+  font-size: clamp(0.76rem, 1.15vh + 0.1vw, 0.84rem);
+  font-weight: 500;
   line-height: 1.4;
+  color: #64748b;
 }
 
 .auth-showcase-cta {
-  z-index: 3;
+  z-index: 4;
   flex-shrink: 0;
   min-width: 0;
-  max-width: min(100%, 24.5rem);
+  width: fit-content;
+  max-width: min(100%, 16.5rem);
   margin-top: auto;
-  padding-top: clamp(0.15rem, 0.6vh, 0.5rem);
 }
 
-.auth-showcase-cta .auth-cta-card {
-  gap: clamp(0.65rem, 1.2vh, 0.9rem);
-  padding: clamp(0.65rem, 1.35vh, 0.9rem) clamp(0.85rem, 1.4vw, 1rem);
+.auth-cta-card {
+  display: flex;
+  width: fit-content;
+  max-width: min(100%, 16.5rem);
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.9);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 0.55rem 0.75rem;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 0.08);
 }
 
-.auth-showcase-cta .auth-cta-card > span {
-  height: var(--auth-icon) !important;
-  width: var(--auth-icon) !important;
+.auth-cta-card__well {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #f3eeff;
+  color: #732bfd;
 }
+
+.auth-cta-card__well svg {
+  height: 1.1rem;
+  width: 1.1rem;
+}
+
+.auth-cta-card__text {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.auth-cta-card__strong {
+  font-weight: 700;
+  color: #12182a;
+}
+
+.auth-cta-card__link {
+  margin-top: 0.15rem;
+  display: inline-flex;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--auth-accent);
+}
+
+/* Channel pills are baked into the hero art — no HTML overlay (avoids double cards). */
+
+.auth-showcase-channels {
+  display: none;
+}
+
+.auth-showcase-channel-float {
+  display: none !important;
+}
+
+.auth-channel-card {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 12px;
+  padding: 0.35rem 0.55rem;
+  background: #ffffff;
+  box-shadow:
+    0 10px 26px rgb(15 23 42 / 0.1),
+    0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.auth-channel-card__tile {
+  display: flex;
+  height: 2.15rem;
+  width: 2.15rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.06);
+}
+
+.auth-channel-card__label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.auth-channel-card__title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: #12182a;
+  white-space: nowrap;
+}
+
+.auth-channel-card__desc {
+  margin-top: 0.1rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.auth-channel-card__badge {
+  margin-left: 0.35rem;
+  border-radius: 9999px;
+  background: #732bfd;
+  padding: 0.12rem 0.4rem;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+}
+
+.auth-channel-card--whatsapp {
+  border: 1.5px solid #a7f3d0;
+}
+
+.auth-channel-card--instagram {
+  border: 1.5px solid #f5d0fe;
+}
+
+.auth-channel-card--facebook {
+  border: 1.5px solid #bfdbfe;
+}
+
+.auth-channel-card--email {
+  border: 1.5px solid #fecdd3;
+}
+
+.auth-channel-card--ai {
+  border: 1.5px solid #ddd6fe;
+  padding-right: 0.6rem;
+}
+
+.auth-channel-card--ai .auth-channel-card__tile {
+  height: 2.1rem;
+  width: 2.1rem;
+  background: #f5f3ff;
+}
+
+@media (min-width: 1024px) {
+  .auth-showcase-content {
+    padding-right: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  .auth-showcase-hero img,
+  .auth-showcase-hero-photo {
+    height: clamp(66%, 72vh, 80%);
+    max-width: min(92%, 52rem);
+    right: -3%;
+  }
+}
+
+/* ── Form panel ─────────────────────────────────────────────────────────── */
 
 .auth-form-stack header {
-  margin-bottom: clamp(0.85rem, 2.1vh, 1.75rem);
+  margin-bottom: clamp(0.9rem, 2.1vh, 1.5rem);
 }
 
 .auth-form-stack > p:last-child {
@@ -205,15 +384,30 @@
 }
 
 @media (min-width: 1024px) {
+  .auth-form-scroll {
+    width: 100%;
+    padding-inline: clamp(1.75rem, 4.4vw, 4.6rem);
+  }
+
   .auth-form-stack {
-    max-width: 25rem;
+    max-width: 24.5rem;
     margin-block: auto;
     padding-block: 0.5rem;
+  }
+
+  /* Design hero headline is much larger than the old clamp on wide screens. */
+  .auth-showcase-copy h2 {
+    font-size: clamp(1.95rem, 2.6vw, 2.85rem);
   }
 }
 
 .auth-form-title {
   font-size: var(--auth-form-title);
+}
+
+/* Input chrome matches the design's rounded 1px fields. */
+.auth-form-stack label {
+  letter-spacing: -0.01em;
 }
 
 @media (max-height: 760px) {
@@ -227,18 +421,25 @@
 
 @media (max-height: 680px) {
   .auth-showcase-features {
-    gap: 1rem;
+    gap: 0.9rem;
   }
 
   .auth-feature-desc {
     display: none;
   }
+
+  .auth-showcase-hero img,
+  .auth-showcase-hero-photo {
+    height: 58%;
+    max-width: min(82%, 40rem);
+  }
 }
 
-/* Mobile / tablet: blurred desktop hero behind a compact floating card. */
+/* ── Mobile / tablet: blurred hero behind a floating white card ─────────── */
+
 @media (max-width: 1023px) {
   .auth-page {
-    overflow: hidden;
+    overflow-x: hidden;
     background: #dfe8e3;
   }
 
@@ -262,13 +463,12 @@
     content: '';
     position: absolute;
     inset: 0;
-    background:
-      linear-gradient(
-        180deg,
-        rgb(244 247 245 / 0.12) 0%,
-        rgb(244 247 245 / 0.22) 42%,
-        rgb(244 247 245 / 0.38) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      rgb(244 247 245 / 0.12) 0%,
+      rgb(244 247 245 / 0.22) 42%,
+      rgb(244 247 245 / 0.38) 100%
+    );
   }
 
   .auth-form-panel {
@@ -296,7 +496,6 @@
     width: auto;
     max-width: min(17.5rem, 78vw);
     object-position: center;
-    mix-blend-mode: normal;
   }
 
   .auth-form-stack {

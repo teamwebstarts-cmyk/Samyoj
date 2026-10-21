@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate, requireOrg } from '../../middleware/auth';
 import { withPermission } from '../../middleware/permissions';
 import { AppError, sendSuccess, asyncHandler } from '../../utils/response';
-import { isWhatsAppRateLimit, MetaApiError, MetaWhatsAppService } from '../whatsapp/meta.service';
+import { isMetaUnavailableError, isWhatsAppRateLimit, MetaApiError, MetaWhatsAppService } from '../whatsapp/meta.service';
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { resolveMetaCredentials } from '../whatsapp/org-meta.service';
 import { resolveActiveWhatsappNumber } from '../whatsapp/active-number';
@@ -36,6 +36,65 @@ import {
 } from '../../middleware/plan-guard';
 
 const router = Router();
+
+// Active-number list works even when no single number can be resolved (409).
+router.get(
+  '/by-any-active-number',
+  authenticate,
+  requireOrg,
+  ...withPermission('manageTemplates'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const orgId = req.user!.organizationId!;
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const all = req.query.all === 'true';
+    const numbers = await prisma.whatsappNumber.findMany({
+      where: { organizationId: orgId, isActive: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+    });
+    if (!numbers.length) {
+      throw new AppError(400, 'No WhatsApp number connected. Connect WhatsApp in Settings first.');
+    }
+    const unavailableNumbers: string[] = [];
+    let lastError: unknown = null;
+    for (const number of numbers) {
+      try {
+        const accessToken = MetaWhatsAppService.decryptToken(number.accessToken);
+        if (all) {
+          const templates = await MetaWhatsAppService.listAllMessageTemplates(number.wabaId, accessToken, { status });
+          sendSuccess(res, {
+            templates,
+            paging: null,
+            whatsappNumberId: number.id,
+            unavailableNumbers,
+          });
+          return;
+        }
+        const result = await MetaWhatsAppService.listMessageTemplates(number.wabaId, accessToken, {
+          status,
+          after: typeof req.query.after === 'string' ? req.query.after : undefined,
+        });
+        sendSuccess(res, {
+          templates: result.templates,
+          paging: result.paging ?? null,
+          whatsappNumberId: number.id,
+          unavailableNumbers,
+        });
+        return;
+      } catch (error) {
+        lastError = error;
+        if (!isMetaUnavailableError(error)) throw error;
+        unavailableNumbers.push(number.phoneNumber);
+      }
+    }
+    void lastError;
+    throw new AppError(
+      503,
+      'Every connected WhatsApp number has lost Meta access. Reconnect it in Settings.',
+      'META_OBJECT_UNAVAILABLE'
+    );
+  })
+);
 
 router.use(authenticate, requireOrg, resolveActiveWhatsappNumber, ...withPermission('manageTemplates'));
 router.use(requireActiveCommercialOnMutation(), requireFeatureOnMutation('templates'));

@@ -31,6 +31,17 @@ describe('registerAppWebhook', () => {
   it('refuses to overwrite a live production callback with ngrok', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
+      text: async () =>
+        JSON.stringify({
+          data: [
+            {
+              object: 'whatsapp_business_account',
+              active: true,
+              callback_url: 'https://app.samyoj.com/api/whatsapp/webhook',
+              fields: [{ name: 'messages' }, { name: 'calls' }],
+            },
+          ],
+        }),
       json: async () => ({
         data: [
           {

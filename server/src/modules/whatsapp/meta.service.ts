@@ -204,7 +204,29 @@ export function formatGraphErrorMessage(
 }
 
 /** Structured Meta Graph failures — preserve code + fbtrace for Inbox/server logs. */
+export function graphApiError(
+  httpStatus: number,
+  error: GraphError['error'] | undefined,
+  fallback: string
+) {
+  return new MetaApiError(formatGraphErrorMessage(error, fallback), {
+    metaCode: error?.code,
+    metaSubcode: error?.error_subcode,
+    fbtraceId: error?.fbtrace_id,
+    status: httpStatus,
+    statusCode: httpStatus,
+  });
+}
+
+export function isMetaUnavailableError(err: unknown): boolean {
+  if (err instanceof MetaApiError) {
+    return err.metaCode === 100 || err.metaCode === 190 || err.metaCode === 200;
+  }
+  return false;
+}
+
 export function isWhatsAppRateLimit(err: unknown): boolean {
+  if (err instanceof MetaApiError && (err.metaCode === 80008 || err.status === 429)) return true;
   const text = err instanceof Error ? err.message : String(err);
   return text.includes('80008') || /too many calls/i.test(text);
 }
@@ -680,11 +702,24 @@ export class MetaWhatsAppService {
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const data = (await res.json()) as T & GraphError;
-    if (!res.ok) {
-      throw new Error((data as GraphError).error?.message || `Graph API request failed: ${path}`);
+    // Parse defensively: a proxy/HTML error page must not throw a raw SyntaxError.
+    const raw = await res.text().catch(() => '');
+    let parsed: (T & GraphError) | null = null;
+    try {
+      parsed = raw ? (JSON.parse(raw) as T & GraphError) : null;
+    } catch {
+      parsed = null;
     }
-    return data;
+    if (!res.ok || !parsed) {
+      throw graphApiError(
+        res.status,
+        parsed?.error,
+        parsed
+          ? `Graph API request failed: ${path}`
+          : `Graph API returned a non-JSON body (${res.status}) for ${path}`
+      );
+    }
+    return parsed;
   }
 
   static async resolveWabaId(accessToken: string): Promise<string> {
@@ -955,11 +990,16 @@ export class MetaWhatsAppService {
     if (options?.industry) params.set('industry', options.industry);
     if (options?.name) params.set('name', options.name);
 
-    const data = await this.graphGet<{ data?: TemplateLibraryEntry[] }>(
-      `/message_template_library?${params.toString()}`,
-      accessToken
-    );
-    return data.data || [];
+    try {
+      const data = await this.graphGet<{ data?: TemplateLibraryEntry[] }>(
+        `/message_template_library?${params.toString()}`,
+        accessToken
+      );
+      return data.data || [];
+    } catch (error) {
+      if (isMetaUnavailableError(error)) return [];
+      throw error;
+    }
   }
 
   static async createMessageTemplateFromLibrary(

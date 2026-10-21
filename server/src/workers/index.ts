@@ -42,6 +42,7 @@ import { trackWebhookFailed, trackWebhookProcessed } from '../modules/whatsapp/w
 import { safeRecordMetaSendFailure } from '../modules/platform/meta-errors';
 import { startPlatformTelemetryWorker } from '../modules/platform/worker';
 import { whatsappSendFailurePatches } from '../modules/whatsapp/send-failure-explain';
+import { abandonStaleWebhookEnvelopes } from '../modules/whatsapp/webhook-accept';
 import { reconcileStalePaymentOrders } from '../modules/billing/fulfillment';
 import { reconcileBillingSubscriptions } from '../modules/billing/subscription.service';
 import {
@@ -68,7 +69,7 @@ export function setSocketIO(socketServer: Server) {
   io = socketServer;
 }
 
-function getRetryDelay(attemptsMade: number): number {
+export function getRetryDelay(attemptsMade: number): number {
   return retryDelays[Math.min(attemptsMade, retryDelays.length - 1)];
 }
 
@@ -965,9 +966,17 @@ attachWorkerErrorHandlers(contentVideoWorker, 'content-video');
 void reconcileGmailSends().catch((err) =>
   logError(err, { source: 'worker', action: 'reconcileGmailSends' })
 );
+// Envelopes stuck RECEIVED/PROCESSING for over an hour are crashes or poison
+// payloads; ABANDON them so webhook health reflects only live backlog.
+void abandonStaleWebhookEnvelopes().catch((err) =>
+  logError(err, { source: 'worker', action: 'abandonStaleWebhookEnvelopes' })
+);
 setInterval(() => {
   reconcileGmailSends().catch((err) =>
     logError(err, { source: 'worker', action: 'reconcileGmailSends' })
+  );
+  abandonStaleWebhookEnvelopes().catch((err) =>
+    logError(err, { source: 'worker', action: 'abandonStaleWebhookEnvelopes' })
   );
 }, 60_000);
 

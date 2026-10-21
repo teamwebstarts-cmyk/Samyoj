@@ -12,14 +12,17 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [mailReady, setMailReady] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await authApi.forgotPassword(email);
+      const res = await authApi.forgotPassword(email);
+      const configured = res.data?.data?.smtpConfigured !== false;
+      setMailReady(configured);
       setSent(true);
-      toastSuccess('Check your email for a reset link');
+      toastSuccess(configured ? 'Check your email for a reset link' : 'Email delivery is not configured on this server');
     } catch (err: unknown) {
       toastError(getErrorMessage(err, 'Failed to send reset email'));
     } finally {
@@ -32,7 +35,9 @@ export default function ForgotPasswordPage() {
       title="Forgot password?"
       subtitle={
         sent
-          ? 'If that email is registered, you will receive a reset link shortly.'
+          ? mailReady
+            ? 'If that email is registered, you will receive a reset link shortly.'
+            : 'This server is not sending email yet. A reset link was not delivered.'
           : 'Enter your work email and we will send you a reset link.'
       }
     >

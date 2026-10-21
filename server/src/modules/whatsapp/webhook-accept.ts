@@ -74,13 +74,61 @@ async function resolveMetaChannelOrg(payload: Record<string, unknown>) {
   return organizations.size === 1 ? { organizationId: [...organizations][0] } : null;
 }
 
+// A payload whose ciphertext could exceed the btree limit (~2.7 KB index row)
+// is persisted as an oversize tombstone and ACKed, never retried.
+const MAX_PERSIST_BYTES = 512 * 1024;
+
+function isIndexRowOverflow(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === '54000' ||
+      /exceeds btree|Values larger than 1\/3 of a buffer page/i.test(error.message))
+  );
+}
+
+export type EnvelopePersist = 'created' | 'duplicate' | 'skipped' | 'oversize';
+
+/** Persist the envelope; oversize payloads become small COMPLETED tombstones. */
 async function persistEnvelope(params: {
   organizationId: string;
   eventKey: string;
   requestId: string;
   phoneNumberIds: string[];
   payload: Record<string, unknown>;
-}): Promise<'created' | 'duplicate'> {
+}): Promise<EnvelopePersist> {
+  const ciphertext = encrypt(JSON.stringify(params.payload));
+  // Oversize check before the insert: the unique index spans the row, so a
+  // giant ciphertext is a guaranteed 54000 poison pill. Store a tombstone
+  // instead (small, still proves the event arrived) and ACK.
+  if (ciphertext.length > MAX_PERSIST_BYTES) {
+    log.warn('Webhook envelope oversize; persisting tombstone', {
+      ciphertextBytes: ciphertext.length,
+      eventKey: params.eventKey,
+    });
+    try {
+      await prisma.providerWebhookEvent.create({
+        data: {
+          organizationId: params.organizationId,
+          eventKey: params.eventKey,
+          field: 'envelope',
+          status: 'COMPLETED',
+          claimedAt: new Date(),
+          processedAt: new Date(),
+          payloadCiphertext: `oversize:${ciphertext.length}`,
+          requestId: params.requestId,
+          phoneNumberId: params.phoneNumberIds.join(',') || null,
+        },
+      });
+      return 'oversize';
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return 'duplicate';
+      }
+      // Tombstone itself too big must never happen; treat like duplicate-safe skip.
+      log.error('Oversize tombstone insert failed', { error: String(error) });
+      return 'oversize';
+    }
+  }
   try {
     await prisma.providerWebhookEvent.create({
       data: {
@@ -89,7 +137,7 @@ async function persistEnvelope(params: {
         field: 'envelope',
         status: 'RECEIVED',
         claimedAt: new Date(),
-        payloadCiphertext: encrypt(JSON.stringify(params.payload)),
+        payloadCiphertext: ciphertext,
         requestId: params.requestId,
         phoneNumberId: params.phoneNumberIds.join(',') || null,
       },
@@ -98,6 +146,37 @@ async function persistEnvelope(params: {
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return 'duplicate';
+    }
+    if (isIndexRowOverflow(error)) {
+      log.error('Webhook envelope hit index row limit; persisting tombstone', {
+        eventKey: params.eventKey,
+        error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+      });
+      await prisma.providerWebhookEvent
+        .create({
+          data: {
+            organizationId: params.organizationId,
+            eventKey: params.eventKey,
+            field: 'envelope',
+            status: 'COMPLETED',
+            claimedAt: new Date(),
+            processedAt: new Date(),
+            payloadCiphertext: `oversize:${ciphertext.length}`,
+            requestId: params.requestId,
+            phoneNumberId: params.phoneNumberIds.join(',') || null,
+          },
+        })
+        .catch((tombstoneError) => {
+          if (
+            !(
+              tombstoneError instanceof Prisma.PrismaClientKnownRequestError &&
+              tombstoneError.code === 'P2002'
+            )
+          ) {
+            log.error('Tombstone insert failed after overflow', { error: String(tombstoneError) });
+          }
+        });
+      return 'oversize';
     }
     throw error;
   }
@@ -119,7 +198,9 @@ async function enqueueEnvelope(params: {
         eventKey: params.eventKey,
         organizationId: params.organizationId,
       },
-      { jobId: params.jobId, attempts: 4 }
+      // Queue defaults carry attempts/backoff/removeOnFail; the jobId keeps
+      // Meta's redeliveries deduplicated.
+      { jobId: params.jobId }
     );
     return 'queued';
   } catch (error) {
@@ -136,7 +217,7 @@ export async function persistAndEnqueueInboundWebhook(params: {
 }): Promise<{
   eventKey: string;
   organizationId: string | null;
-  persist: 'created' | 'duplicate' | 'skipped';
+  persist: EnvelopePersist;
   queue: 'queued' | 'duplicate';
 }> {
   const eventKey = inboundWebhookEnvelopeKey(params.payload);
@@ -145,7 +226,7 @@ export async function persistAndEnqueueInboundWebhook(params: {
   const routed =
     (await resolveEnvelopeOrg(phoneNumberIds)) || (await resolveMetaChannelOrg(params.payload));
 
-  let persist: 'created' | 'duplicate' | 'skipped' = 'skipped';
+  let persist: EnvelopePersist = 'skipped';
   if (routed) {
     persist = await persistEnvelope({
       organizationId: routed.organizationId,
@@ -222,6 +303,28 @@ export async function completeInboundWebhookEnvelope(
     },
     data: { status: 'COMPLETED', processedAt: new Date() },
   });
+}
+
+/**
+ * Reclaim envelopes that never completed. A row stuck RECEIVED/PROCESSING past
+ * this window is a crash or a poison payload; mark it ABANDONED so
+ * oldestWebhookWaitingMs() reflects only genuinely waiting work.
+ */
+const STALE_ENVELOPE_MS = 60 * 60 * 1000;
+
+export async function abandonStaleWebhookEnvelopes(nowMs = Date.now()): Promise<number> {
+  const cutoff = new Date(nowMs - STALE_ENVELOPE_MS);
+  const result = await prisma.providerWebhookEvent.updateMany({
+    where: {
+      status: { in: ['RECEIVED', 'PROCESSING'] },
+      claimedAt: { lt: cutoff },
+    },
+    data: { status: 'ABANDONED', processedAt: new Date() },
+  });
+  if (result.count > 0) {
+    log.warn('Abandoned stale webhook envelopes', { count: result.count, olderThan: cutoff.toISOString() });
+  }
+  return result.count;
 }
 
 export async function oldestWebhookWaitingMs(nowMs = Date.now()): Promise<number | null> {

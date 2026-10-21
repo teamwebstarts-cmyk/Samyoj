@@ -20,14 +20,23 @@ export function signPublicMediaQuery(relativePath: string, nowMs = Date.now()) {
   return { exp, sig: hmac(relativePath, exp) };
 }
 
-export function isValidPublicMediaSig(relativePath: string, expRaw: unknown, sigRaw: unknown) {
+export function publicMediaSigStatus(
+  relativePath: string,
+  expRaw: unknown,
+  sigRaw: unknown,
+  nowMs = Date.now()
+): 'ok' | 'expired' | 'invalid' {
   const exp = Number(expRaw);
   const sig = typeof sigRaw === 'string' ? sigRaw : '';
-  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return false;
-  if (!/^[a-f0-9]{64}$/i.test(sig)) return false;
+  if (!Number.isFinite(exp) || !/^[a-f0-9]{64}$/i.test(sig)) return 'invalid';
   const expected = hmac(relativePath, exp);
   const left = Buffer.from(sig.toLowerCase());
   const right = Buffer.from(expected);
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
+  if (left.length !== right.length || !crypto.timingSafeEqual(left, right)) return 'invalid';
+  if (exp < Math.floor(nowMs / 1000)) return 'expired';
+  return 'ok';
+}
+
+export function isValidPublicMediaSig(relativePath: string, expRaw: unknown, sigRaw: unknown) {
+  return publicMediaSigStatus(relativePath, expRaw, sigRaw) === 'ok';
 }

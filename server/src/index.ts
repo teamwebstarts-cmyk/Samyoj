@@ -1,5 +1,8 @@
 import express from 'express';
 import path from 'path';
+import { readDeployedCommit } from './config/build-info';
+import { shouldServeSpaShell } from './config/spa-shell';
+import { rejectBadJsonBody } from './middleware/body-parser-errors';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -222,10 +225,17 @@ app.use(
 );
 
 app.use(express.json({ limit: '10mb' }));
+app.use(rejectBadJsonBody);
 
 app.use(requireTenantCsrf);
 
 app.use(requestLogger);
+
+function cacheHashedAsset(res: express.Response, filePath: string) {
+  if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}
 
 app.get('/health', async (_req, res) => {
   const checks: Record<string, string> = { api: 'ok' };
@@ -255,12 +265,14 @@ app.get('/health', async (_req, res) => {
   }
 
   const healthy = Object.values(checks).every((v) => v === 'ok');
+  const commit = readDeployedCommit();
   res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     checks,
     workersStarted,
     version: '1.0.0',
+    ...(commit ? { commit } : {}),
   });
 });
 
@@ -321,9 +333,14 @@ if (serveAdmin) {
     }
     express.static(adminPublic)(req, res, (err) => {
       if (err) return next(err);
-      express.static(adminDist)(req, res, (staticErr) => {
+      express.static(adminDist, { setHeaders: cacheHashedAsset })(req, res, (staticErr) => {
         if (staticErr) return next(staticErr);
-        if (req.method !== 'GET') return next();
+        if (!shouldServeSpaShell(req.method, req.path)) return next();
+        res.setHeader('Cache-Control', 'no-cache');
+        if (req.method === 'HEAD') {
+          res.status(200).type('html').end();
+          return;
+        }
         res.sendFile(path.join(adminDist, 'index.html'), (sendErr) => {
           if (sendErr) next(sendErr);
         });
@@ -340,19 +357,15 @@ if (serveClient) {
     next();
   });
   app.use(express.static(clientPublic));
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, { setHeaders: cacheHashedAsset }));
 
-  app.get('*', (req, res, next) => {
-    if (req.method !== 'GET') return next();
-    if (
-      req.path.startsWith('/api') ||
-      req.path === '/health' ||
-      req.path.startsWith('/socket.io')
-    ) {
-      return next();
-    }
-    if (isPlatformAdminHost(req.get('host'), config.platformAdminUrl)) {
-      return next();
+  app.use((req, res, next) => {
+    if (!shouldServeSpaShell(req.method, req.path)) return next();
+    if (isPlatformAdminHost(req.get('host'), config.platformAdminUrl)) return next();
+    res.setHeader('Cache-Control', 'no-cache');
+    if (req.method === 'HEAD') {
+      res.status(200).type('html').end();
+      return;
     }
     res.sendFile(path.join(clientDist, 'index.html'), (err) => {
       if (err) next(err);

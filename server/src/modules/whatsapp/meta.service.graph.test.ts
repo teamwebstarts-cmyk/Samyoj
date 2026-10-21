@@ -22,6 +22,7 @@ describe('Meta Graph GET auth', () => {
   it('sends the user token as Bearer and never on the query string', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
+      text: async () => JSON.stringify({ data: [] }),
       json: async () => ({ data: [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -42,6 +43,7 @@ describe('Meta Graph GET auth', () => {
   it('drops an access_token already present on paging.next query strings', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
+      text: async () => JSON.stringify({ data: [] }),
       json: async () => ({ data: [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -96,6 +98,12 @@ describe('getConversationAnalytics', () => {
   it('uses nested field expansion, not conversation_analytics.data(querystring)', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
+      text: async () =>
+        JSON.stringify({
+          conversation_analytics: {
+            data: [{ data_points: [{ conversation_category: 'SERVICE', conversation: 2, cost: 0 }] }],
+          },
+        }),
       json: async () => ({
         conversation_analytics: {
           data: [{ data_points: [{ conversation_category: 'SERVICE', conversation: 2, cost: 0 }] }],

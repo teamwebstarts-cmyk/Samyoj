@@ -2,8 +2,24 @@ import { randomUUID } from 'node:crypto';
 
 export const CAMPAIGN_CLAIM_LEASE_MS = 15 * 60 * 1000;
 
+export const BUSINESS_TZ = 'Asia/Kolkata';
+
 export function utcDayStart(now = new Date()) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/** 00:00 in BUSINESS_TZ, stored as a UTC instant. Quota days follow this, not the host clock. */
+export function businessDayStart(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BUSINESS_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+  return new Date(Date.UTC(year, month - 1, day, -5, -30));
 }
 
 export function isClaimLeaseExpired(
