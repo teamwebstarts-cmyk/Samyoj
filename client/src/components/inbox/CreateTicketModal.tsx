@@ -6,6 +6,10 @@ import AppInput from '../ui/AppInput';
 import AppTextarea from '../ui/AppTextarea';
 import { FOCUS_RING_CLASS, useAutoFocus } from '../../hooks/inboxA11y';
 import type { TeamAgent } from '../../types';
+import {
+  TICKET_CHANNEL_ACCENT,
+  type TicketChannelAccent,
+} from '../tickets/ticketChannelAccent';
 
 export interface TicketFormValues {
   title: string;
@@ -22,6 +26,7 @@ interface CreateTicketModalProps {
   defaultAssigneeId?: string | null;
   onClose: () => void;
   onSubmit: (values: TicketFormValues) => void;
+  accent?: TicketChannelAccent;
 }
 
 const PRIORITIES: Array<{
@@ -43,7 +48,9 @@ export default function CreateTicketModal({
   defaultAssigneeId,
   onClose,
   onSubmit,
+  accent = 'whatsapp',
 }: CreateTicketModalProps) {
+  const theme = TICKET_CHANNEL_ACCENT[accent];
   const [title, setTitle] = useState(defaultTitle);
   const [priority, setPriority] = useState<TicketFormValues['priority']>('MEDIUM');
   const [description, setDescription] = useState('');
@@ -79,8 +86,7 @@ export default function CreateTicketModal({
       title="Create ticket"
       subtitle="Create a follow-up and hand it to an agent. Works from WhatsApp, Messenger, and Instagram chats."
       icon={Ticket}
-      // Match the inbox Create-ticket rail button: emerald token + Lucide Ticket icon.
-      iconClassName="bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-500/25"
+      iconClassName={theme.iconClassName}
     >
       <form onSubmit={handleSubmit} className="space-y-3.5">
         <AppInput
@@ -109,7 +115,7 @@ export default function CreateTicketModal({
                   aria-pressed={selected}
                   className={`rounded-lg px-1.5 py-2 text-[12px] font-bold transition ${FOCUS_RING_CLASS} ${
                     selected
-                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_2px_8px_rgba(16,185,129,0.28)]'
+                      ? theme.prioritySelected
                       : 'text-theme-secondary hover:bg-theme-surface/80 hover:text-theme-fg'
                   }`}
                 >

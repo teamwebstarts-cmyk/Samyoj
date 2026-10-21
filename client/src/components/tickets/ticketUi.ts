@@ -1,3 +1,5 @@
+export type TicketSourceChannel = 'whatsapp' | 'messenger' | 'instagram';
+
 export interface TicketItem {
   id: string;
   title: string;
@@ -7,11 +9,13 @@ export interface TicketItem {
   slaDueAt?: string | null;
   createdAt?: string;
   updatedAt: string;
+  whatsappNumberId?: string | null;
   contact?: { id: string; name?: string | null; phone: string } | null;
   conversationId?: string | null;
   conversation?: {
     id: string;
     status: string;
+    channel?: { platform?: 'FB' | 'IG' | 'WA' | string } | null;
     internalNotes?: Array<{
       id: string;
       content: string;
@@ -20,6 +24,40 @@ export interface TicketItem {
   } | null;
   assignedAgent?: { id: string; name: string } | null;
 }
+
+export const TICKET_CHANNEL_FILTER_OPTIONS = [
+  { value: '', label: 'All channels' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'messenger', label: 'Messenger' },
+  { value: 'instagram', label: 'Instagram' },
+] as const;
+
+export function ticketSourceChannel(ticket: TicketItem): TicketSourceChannel {
+  const platform = ticket.conversation?.channel?.platform;
+  if (platform === 'FB') return 'messenger';
+  if (platform === 'IG') return 'instagram';
+  return 'whatsapp';
+}
+
+export function ticketMatchesChannelFilter(ticket: TicketItem, channel: string) {
+  if (!channel) return true;
+  return ticketSourceChannel(ticket) === channel;
+}
+
+export function ticketConversationHref(ticket: TicketItem): string | null {
+  const id = ticketConversationId(ticket);
+  if (!id) return null;
+  const source = ticketSourceChannel(ticket);
+  if (source === 'messenger') return `/facebook/inbox?thread=${id}`;
+  if (source === 'instagram') return `/instagram/inbox?thread=${id}`;
+  return `/inbox?conversation=${id}`;
+}
+
+export const ticketSourceLabels: Record<TicketSourceChannel, string> = {
+  whatsapp: 'WhatsApp',
+  messenger: 'Messenger',
+  instagram: 'Instagram',
+};
 
 export const TICKET_STATUS_CHIPS = [
   { value: '', label: 'All' },

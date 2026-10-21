@@ -96,6 +96,14 @@ export function ticketsForNumberFilter(numberId: string | undefined): Prisma.Tic
   return { whatsappNumberId: numberId };
 }
 
+/** Tickets page + inbox chips: active WhatsApp number plus Meta channel tickets (null number id). */
+export function ticketsForInboxView(numberId: string | undefined): Prisma.TicketWhereInput {
+  if (!numberId) return { whatsappNumberId: null };
+  return {
+    OR: [{ whatsappNumberId: numberId }, { whatsappNumberId: null }],
+  };
+}
+
 export function ordersForNumberFilter(numberId: string | undefined): Prisma.OrderWhereInput {
   if (!numberId) return EMPTY_ID_FILTER;
   return { whatsappNumberId: numberId };

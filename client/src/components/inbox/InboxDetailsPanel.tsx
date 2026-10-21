@@ -32,6 +32,10 @@ import type {
   InternalNote,
 } from '../../types';
 import { toastError } from '../../utils/toast';
+import {
+  TICKET_CHANNEL_ACCENT,
+  type TicketChannelAccent,
+} from '../tickets/ticketChannelAccent';
 
 type PanelSection = 'labels' | 'notes' | 'tags';
 
@@ -97,6 +101,7 @@ interface InboxDetailsPanelProps {
   onAddNoteOverride?: (content: string) => Promise<InternalNote>;
   onDeleteNoteOverride?: (noteId: string) => Promise<void>;
   allowDeleteNotes?: boolean;
+  ticketAccent?: TicketChannelAccent;
 }
 
 export default function InboxDetailsPanel({
@@ -121,7 +126,9 @@ export default function InboxDetailsPanel({
   onAddNoteOverride,
   onDeleteNoteOverride,
   allowDeleteNotes = true,
+  ticketAccent = 'whatsapp',
 }: InboxDetailsPanelProps) {
+  const ticketTheme = TICKET_CHANNEL_ACCENT[ticketAccent];
   const tipFor = useGlassTipProps();
   const { resolved: themeResolved } = useTheme();
   const pillDark = themeResolved === 'dark';
@@ -396,8 +403,7 @@ export default function InboxDetailsPanel({
     const btn = opts.compact
       ? 'relative flex h-8 w-8 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-45'
       : actionBtnClass;
-    const ticketBadge =
-      'absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white bg-emerald-600';
+    const ticketBadge = `absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ${ticketTheme.ticketBadge}`;
     return (
     <>
       {showTicket && (
@@ -406,7 +412,7 @@ export default function InboxDetailsPanel({
           aria-label={hasTicket ? 'View ticket for this chat' : 'Create ticket'}
           title={hasTicket ? 'Ticket already exists for this chat' : 'Create ticket'}
           onClick={onConvertToTicket}
-          className={`${btn} text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40`}
+          className={`${btn} ${ticketTheme.ticketBtn}`}
           {...tipFor(hasTicket ? 'Ticket exists' : 'Create ticket', opts.tipSide)}
         >
           <Ticket className="h-4 w-4" strokeWidth={iconStroke} />

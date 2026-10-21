@@ -8,7 +8,7 @@ import { computeSlaDueAt } from '../sla/service';
 import { emitToOrg } from '../../realtime';
 import { emitTicketEvent } from './events';
 
-import { resolveActiveWhatsappNumber, ticketsForNumberFilter } from '../whatsapp/active-number';
+import { resolveActiveWhatsappNumber, ticketsForInboxView } from '../whatsapp/active-number';
 
 const router = Router();
 
@@ -20,6 +20,7 @@ const ticketInclude = {
     select: {
       id: true,
       status: true,
+      channel: { select: { platform: true } },
       // The "private note" from the create-ticket modal is stored as the
       // conversation's most recent internal note. Surface it on the ticket so
       // the sidebar can show it back to the team.
@@ -134,7 +135,7 @@ router.get(
       where: {
         organizationId: orgId,
         ...(status ? { status: status as never } : {}),
-        ...ticketsForNumberFilter(numberId),
+        ...ticketsForInboxView(numberId),
       },
       include: ticketInclude,
       orderBy: { updatedAt: 'desc' },
@@ -252,7 +253,7 @@ router.patch(
     const data = ticketSchema.partial().parse(req.body);
 
     const existing = await prisma.ticket.findFirst({
-      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+      where: { id, organizationId: orgId, ...ticketsForInboxView(req.activeWhatsappNumberId) },
     });
     if (!existing) throw new AppError(404, 'Ticket not found');
     if (
@@ -261,16 +262,17 @@ router.patch(
     ) {
       throw new AppError(409, `Cannot move a ${existing.status.toLowerCase()} ticket to ${data.status.toLowerCase()}`);
     }
-    const whatsappNumberId = req.activeWhatsappNumberId;
-    if (!whatsappNumberId) throw new AppError(400, 'Connect a WhatsApp number before updating tickets');
+    const whatsappNumberId = existing.whatsappNumberId ?? req.activeWhatsappNumberId;
     const conversationId = data.conversationId === undefined ? existing.conversationId : data.conversationId;
     const contactId = data.contactId === undefined ? existing.contactId : data.contactId;
-    await validateTicketScope(
-      orgId,
-      whatsappNumberId,
-      conversationId ?? undefined,
-      contactId ?? undefined
-    );
+    if (existing.whatsappNumberId && whatsappNumberId) {
+      await validateTicketScope(
+        orgId,
+        whatsappNumberId,
+        conversationId ?? undefined,
+        contactId ?? undefined
+      );
+    }
     if (data.assignedAgentId) await assertAgentInOrg(orgId, data.assignedAgentId);
 
     const ticket = await prisma.ticket.update({
@@ -306,7 +308,7 @@ router.delete(
       throw new AppError(403, 'Only workspace admins can delete tickets');
     }
     const existing = await prisma.ticket.findFirst({
-      where: { id, organizationId: orgId, whatsappNumberId: req.activeWhatsappNumberId },
+      where: { id, organizationId: orgId, ...ticketsForInboxView(req.activeWhatsappNumberId) },
       select: { id: true, whatsappNumberId: true, conversationId: true, status: true },
     });
     if (!existing) throw new AppError(404, 'Ticket not found');

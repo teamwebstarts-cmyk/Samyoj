@@ -2,7 +2,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { useChannelChatBots } from '../hooks/useChannelChatBots';
 import { useSearchParams } from 'react-router-dom';
 import PageShell from '../components/ui/PageShell';
-import { cannedRepliesApi, inboxApi, instagramApi, teamApi } from '../services/api';
+import { cannedRepliesApi, inboxApi, instagramApi, teamApi, ticketApi } from '../services/api';
+import type { TicketItem } from '../components/tickets/ticketUi';
 import CreateTicketModal from '../components/inbox/CreateTicketModal';
 import { useInboxModals } from '../components/inbox/useInboxModals';
 import { toastError, toastSuccess } from '../utils/toast';
@@ -502,8 +503,23 @@ export default function InstagramInboxPage() {
     setTicketModalOpen,
     ticketSubmitting,
     ticketConversationIds,
+    setTicketConversationIds,
     handleSubmitTicket,
   } = useInboxModals({ selected });
+
+  useEffect(() => {
+    ticketApi
+      .list()
+      .then((res) => {
+        const ids = new Set<string>();
+        for (const t of (res.data.data.tickets || []) as TicketItem[]) {
+          const cid = t.conversation?.id;
+          if (cid && !['RESOLVED', 'CLOSED'].includes(t.status)) ids.add(cid);
+        }
+        setTicketConversationIds(ids);
+      })
+      .catch(() => {});
+  }, [setTicketConversationIds]);
 
   const channelDetailsFlags = useMemo(
     () => ({
@@ -737,6 +753,7 @@ export default function InstagramInboxPage() {
                     onOverlayClose={detailsToggle.close}
                     channelLabels={channelLabels}
                     featureFlags={channelDetailsFlags}
+                    ticketAccent="instagram"
                     onAddNoteOverride={
                       selectedId
                         ? async (content) => {
@@ -771,6 +788,7 @@ export default function InstagramInboxPage() {
         defaultAssigneeId={selected?.assignedAgent?.id}
         onClose={() => setTicketModalOpen(false)}
         onSubmit={(values) => void handleSubmitTicket(values)}
+        accent="instagram"
       />
     </InboxGlassTipProvider>
   );

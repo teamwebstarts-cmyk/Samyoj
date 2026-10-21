@@ -12,6 +12,7 @@ import {
   ticketStatusLabel,
   type TicketItem,
 } from './ticketUi';
+import TicketSourceChip from './TicketSourceChip';
 
 interface TicketListProps {
   tickets: TicketItem[];
@@ -35,7 +36,7 @@ export default function TicketList({ tickets, onOpen, onUpdateStatus, updatingId
         />
       )}
       renderTable={() => (
-        <DataTable headers={['Customer', 'Ticket', 'Priority', 'Status', 'Actions']} serialNo={false} embedded>
+        <DataTable headers={['Customer', 'Ticket', 'Source', 'Priority', 'Status', 'Actions']} serialNo={false} embedded>
           {tickets.map((ticket) => {
             const action = nextTicketAction(ticket.status);
             const customer = ticketContactLabel(ticket);
@@ -75,6 +76,9 @@ export default function TicketList({ tickets, onOpen, onUpdateStatus, updatingId
                   ) : (
                     <p className="mt-0.5 truncate text-[11px] text-theme-muted">Unassigned</p>
                   )}
+                </td>
+                <td className="whitespace-nowrap">
+                  <TicketSourceChip ticket={ticket} />
                 </td>
                 <td className="whitespace-nowrap">
                   <PriorityBadge priority={ticket.priority} />

@@ -8,6 +8,8 @@ import {
   TICKET_STATUS_FILTER_OPTIONS,
   isOverdue,
   ticketMatchesChip,
+  ticketMatchesChannelFilter,
+  TICKET_CHANNEL_FILTER_OPTIONS,
   ticketUpdateToast,
   type TicketItem,
 } from '../components/tickets/ticketUi';
@@ -40,6 +42,7 @@ export default function TicketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [status, setStatus] = useState('');
+  const [channel, setChannel] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -145,6 +148,7 @@ export default function TicketsPage() {
     const q = search.trim().toLowerCase();
     return tickets.filter((ticket) => {
       if (!ticketMatchesChip(ticket, status)) return false;
+      if (!ticketMatchesChannelFilter(ticket, channel)) return false;
       if (!q) return true;
       const contact = ticket.contact?.name || ticket.contact?.phone || '';
       const owner = ticket.assignedAgent?.name || '';
@@ -156,7 +160,7 @@ export default function TicketsPage() {
         category.toLowerCase().includes(q)
       );
     });
-  }, [tickets, search, status]);
+  }, [tickets, search, status, channel]);
 
   const stats = useMemo(
     () => ({
@@ -169,7 +173,7 @@ export default function TicketsPage() {
     [tickets]
   );
 
-  const hasActiveFilters = Boolean(search || status);
+  const hasActiveFilters = Boolean(search || status || channel);
 
   if (numbersLoading || !resolved) {
     return (
@@ -228,16 +232,28 @@ export default function TicketsPage() {
             onSearchChange={setSearch}
             searchPlaceholder="Search name or phone..."
             filters={
-              <AppSelect
-                ariaLabel="Filter ticket status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                options={TICKET_STATUS_FILTER_OPTIONS.map((opt) => ({
-                  value: opt.value,
-                  label: opt.label,
-                }))}
-                placeholder="All tickets"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <AppSelect
+                  ariaLabel="Filter ticket status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  options={TICKET_STATUS_FILTER_OPTIONS.map((opt) => ({
+                    value: opt.value,
+                    label: opt.label,
+                  }))}
+                  placeholder="All tickets"
+                />
+                <AppSelect
+                  ariaLabel="Filter by channel"
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value)}
+                  options={TICKET_CHANNEL_FILTER_OPTIONS.map((opt) => ({
+                    value: opt.value,
+                    label: opt.label,
+                  }))}
+                  placeholder="All channels"
+                />
+              </div>
             }
           />
 
@@ -251,6 +267,7 @@ export default function TicketsPage() {
                   ? () => {
                       setSearch('');
                       setStatus('');
+                      setChannel('');
                     }
                   : undefined
               }

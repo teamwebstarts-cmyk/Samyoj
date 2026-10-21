@@ -9,10 +9,11 @@ import {
   isSlaBreached,
   nextTicketAction,
   ticketContactLabel,
-  ticketConversationId,
+  ticketConversationHref,
   ticketStatusLabel,
   type TicketItem,
 } from './ticketUi';
+import TicketSourceChip from './TicketSourceChip';
 
 interface TicketCardProps {
   ticket: TicketItem;
@@ -24,7 +25,7 @@ interface TicketCardProps {
 export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }: TicketCardProps) {
   const breached = isSlaBreached(ticket);
   const contactLabel = ticketContactLabel(ticket);
-  const conversationId = ticketConversationId(ticket);
+  const conversationHref = ticketConversationHref(ticket);
   const action = nextTicketAction(ticket.status);
 
   return (
@@ -49,6 +50,7 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
           <p className="truncate text-[13px] font-bold text-theme-fg">{contactLabel}</p>
           <p className="mt-0.5 truncate text-[12px] text-theme-secondary">{ticket.title}</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <TicketSourceChip ticket={ticket} />
             <StatusBadge status={ticket.status} label={ticketStatusLabel(ticket.status)} />
             <PriorityBadge priority={ticket.priority} />
             {ticket.assignedAgent?.name ? (
@@ -62,11 +64,11 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
         </div>
       </button>
 
-      {(conversationId || action) && (
+      {(conversationHref || action) && (
         <div className="flex flex-col gap-2 border-t border-theme-border/60 bg-theme-subtle/20 px-3 py-2.5 min-[400px]:flex-row">
-          {conversationId && (
+          {conversationHref && (
             <Link
-              to={`/inbox?conversation=${conversationId}`}
+              to={conversationHref}
               className={action ? 'min-[400px]:flex-1' : 'w-full'}
               onClick={(e) => e.stopPropagation()}
             >
@@ -80,7 +82,7 @@ export default function TicketCard({ ticket, onUpdateStatus, updating, onClick }
               variant="secondary"
               size="sm"
               fullWidth
-              className={conversationId ? 'min-[400px]:flex-1' : 'w-full'}
+              className={conversationHref ? 'min-[400px]:flex-1' : 'w-full'}
               loading={updating}
               icon={canResolve(ticket.status) ? <CheckCircle2 size={14} /> : undefined}
               onClick={(e) => {
