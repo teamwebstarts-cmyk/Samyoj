@@ -1,6 +1,8 @@
-/** Card grid + filter chips for Meta template library browse (second section). */
+/** Card grid + filter chips for Meta template library browse (second section).
+ * 2-up on phones, 3-up from tablet/laptop width, 4-up on very wide screens;
+ * rows stay equal-height (cards stretch, clamped text keeps content uniform). */
 export const LIBRARY_CARDS_GRID_CLASS =
-  'grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4';
+  'grid grid-cols-2 items-stretch gap-2.5 sm:gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-3 min-[1800px]:grid-cols-4';
 
 /** Room for card corner badges that sit inside the card edge. */
 export const LIBRARY_CARDS_GRID_PAD_CLASS = 'pl-1.5 pt-1';

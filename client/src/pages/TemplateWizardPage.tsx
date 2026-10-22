@@ -507,17 +507,14 @@ export default function TemplateWizardPage() {
     }
   };
 
-  /** Shared create/resubmit request — success dialog with View in Templates /
-   *  Done; Submitting… shows on the wizard footer's Submit button. */
+  /** Shared create/resubmit request — the Submit button shows Submitting…
+   *  while the request runs, then the success dialog opens on completion. */
   // TODO(testing): UI-check mode — simulates the request (2.5s) instead of
   // calling the real API/creating a template. Flip to false to restore
   // actual submission before merging.
   const MOCK_SUBMIT = true;
   const runSubmission = async () => {
     setSaving(true);
-    // Success dialog opens on click; while the request runs it shows only
-    // its Submitting… state, then the View in Templates / Done actions.
-    setSubmittedDialogOpen(true);
     const savedName = form.name;
     if (MOCK_SUBMIT) {
       await new Promise((resolve) => setTimeout(resolve, 2500));
@@ -527,6 +524,8 @@ export default function TemplateWizardPage() {
         templateName: savedName,
       });
       setSubmittedStatus('PENDING');
+      setSubmittedDialogOpen(true);
+      setSaving(false);
       return;
     }
     try {
@@ -557,6 +556,7 @@ export default function TemplateWizardPage() {
         templateName: savedName,
       });
       setSubmittedStatus('PENDING');
+      setSubmittedDialogOpen(true);
       toastSuccess('Template submitted for approval');
     } catch (err: unknown) {
       setSubmittedDialogOpen(false);
@@ -695,9 +695,12 @@ export default function TemplateWizardPage() {
         }
       />
 
-      <form onSubmit={handleSubmit} className="template-wizard-scroll min-h-0 flex-1">
+      <form
+        onSubmit={handleSubmit}
+        className={`template-wizard-scroll min-h-0 flex-1 flex flex-col ${fromLibrary ? 'is-shell xl:overflow-hidden' : ''}`}
+      >
         {state.studioHandoff && (
-          <p className="mb-4 flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-medium text-violet-800 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-200">
+          <p className="mb-4 flex shrink-0 items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-medium text-violet-800 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-200">
             <Sparkles className="h-4 w-4 flex-none text-violet-600 dark:text-violet-300" />
             Loaded from AI Studio{state.studioName ? ` — “${state.studioName}”` : ''}. Name, category, body, footer, buttons and example values are pre-filled.
             {state.headerMediaUrl
@@ -710,24 +713,24 @@ export default function TemplateWizardPage() {
           </p>
         )}
         {templateGateMessage && (
-          <EntitlementNotice className="mb-4" message={templateGateMessage} upgradePlan="starter" />
+          <EntitlementNotice className="mb-4 shrink-0" message={templateGateMessage} upgradePlan="starter" />
         )}
         {resubmitBlocked && (
-          <AppAlert variant="error" className="mb-4">
+          <AppAlert variant="error" className="mb-4 shrink-0">
             <p className="font-semibold">Cannot resubmit this template</p>
             <p className="mt-1 text-[12px]">{resubmitBlocked}</p>
           </AppAlert>
         )}
 
         {isResubmit && resubmitStatusHelp && !resubmitBlocked && (
-          <AppAlert variant={resubmitStatus === 'DISABLED' ? 'error' : 'warning'} className="mb-4">
+          <AppAlert variant={resubmitStatus === 'DISABLED' ? 'error' : 'warning'} className="mb-4 shrink-0">
             <p className="font-semibold">{resubmitStatusHelp.title}</p>
             <p className="mt-1 text-[12px]">{resubmitStatusHelp.message}</p>
           </AppAlert>
         )}
 
         {isResubmit && rejectionReason && rejectionGuide && !resubmitBlocked && (
-          <AppAlert variant="warning" className="mb-4">
+          <AppAlert variant="warning" className="mb-4 shrink-0">
             <p className="font-semibold">{rejectionGuide.title}</p>
             <p className="mt-1 text-[12px]">{rejectionReason}</p>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-[12px]">
@@ -739,14 +742,16 @@ export default function TemplateWizardPage() {
         )}
 
         {stageError && (
-          <div ref={errorRef}>
+          <div ref={errorRef} className="shrink-0">
             <TemplateIssueAlert message={stageError} className="mb-4" />
           </div>
         )}
 
         {/* Library edit matches the Browse split (320px aside); plain create keeps the wider one. */}
-        <div className={`template-wizard-split ${fromLibrary ? 'template-wizard-split--library' : ''}`}>
-          <div className="min-w-0">
+        <div
+          className={`template-wizard-split ${fromLibrary ? 'template-wizard-split--library' : ''} ${fromLibrary ? 'xl:min-h-0 xl:flex-1 xl:grid-rows-[minmax(0,1fr)]' : ''}`}
+        >
+          <div className={`min-w-0 ${fromLibrary ? 'app-thin-scroll xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain' : ''}`}>
             {activeStep === 0 && (
               <TemplateWizardCreateStep
                 form={form}
@@ -766,7 +771,13 @@ export default function TemplateWizardPage() {
             )}
           </div>
 
-          <aside className={`min-w-0 xl:sticky ${fromLibrary ? 'xl:top-0' : 'xl:top-4'} xl:self-start`}>
+          <aside
+            className={
+              fromLibrary
+                ? 'app-thin-scroll min-w-0 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain'
+                : `min-w-0 xl:sticky xl:top-4 xl:self-start`
+            }
+          >
             {fromLibrary && state.libraryItem ? (
               <LibraryTemplatePreviewPanel
                 entry={state.libraryItem}

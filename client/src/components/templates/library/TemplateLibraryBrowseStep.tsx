@@ -107,7 +107,7 @@ export default function TemplateLibraryBrowseStep({
   }, [filters, chipCounts]);
 
   return (
-    <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1">
+    <div className="flex flex-col gap-3">
       <div>
         <div className="space-y-2.5">
           <div className="flex items-center gap-2">
@@ -179,7 +179,7 @@ export default function TemplateLibraryBrowseStep({
         </div>
       </div>
 
-      <div className="flex flex-col overflow-hidden template-wizard-card xl:min-h-0 xl:flex-1">
+      <div className="flex flex-col overflow-hidden template-wizard-card">
         <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800 sm:px-3.5">
           {loading && items.length === 0 && !loadError ? (
             <>
@@ -239,7 +239,7 @@ export default function TemplateLibraryBrowseStep({
           </p>
         ) : (
           <div
-            className={`app-thin-scroll flex-1 min-h-0 ${LIBRARY_CARDS_GRID_PAD_CLASS} p-3 content-start sm:p-3.5 ${LIBRARY_CARDS_GRID_CLASS} xl:overflow-y-auto xl:overscroll-contain`}
+            className={`app-thin-scroll min-h-0 ${LIBRARY_CARDS_GRID_PAD_CLASS} p-3 content-start sm:p-3.5 ${LIBRARY_CARDS_GRID_CLASS}`}
             role="list"
             aria-label="Meta template library"
           >

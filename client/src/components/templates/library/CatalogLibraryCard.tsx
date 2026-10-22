@@ -71,12 +71,13 @@ export default function CatalogLibraryCard({ entry, selected, previewText, onSel
         </span>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col items-center gap-1.5 px-4 pb-3 pt-9">
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-1.5 px-3 pb-3 pt-9 sm:px-4">
         <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1 ${tone.tile}`}>
           <TileIcon className="h-7 w-7" strokeWidth={2} aria-hidden />
         </div>
 
-        <h3 className="line-clamp-2 text-center text-[13px] font-bold leading-tight text-neutral-900 sm:text-sm dark:text-neutral-100">
+        {/* min-h holds the 2-line clamp space so every card in a row is the same height */}
+        <h3 className="line-clamp-2 min-h-[2.5rem] text-center text-[13px] font-bold leading-tight text-neutral-900 sm:text-sm dark:text-neutral-100">
           {entry.title}
         </h3>
 

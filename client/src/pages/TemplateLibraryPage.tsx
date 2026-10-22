@@ -415,14 +415,14 @@ export default function TemplateLibraryPage() {
         }}
       />
 
-      <div className="template-wizard-scroll is-shell min-h-0 flex-1 flex flex-col xl:overflow-hidden">
+      <div className="template-wizard-scroll min-h-0 flex-1 xl:flex xl:flex-col xl:overflow-hidden">
         {templateGateMessage && (
           <EntitlementNotice className="mb-4 shrink-0" message={templateGateMessage} upgradePlan="starter" />
         )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4 shrink-0" />}
 
         <div className="template-wizard-split template-wizard-split--library xl:min-h-0 xl:flex-1 xl:grid-rows-[minmax(0,1fr)]">
-          <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-col xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
                 search={search}
