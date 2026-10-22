@@ -13,7 +13,6 @@ import TemplateWizardCreateStep from '../components/templates/wizard/TemplateWiz
 import TemplateWizardPreviewPanel from '../components/templates/wizard/TemplateWizardPreviewPanel';
 import TemplateWizardApprovalAside from '../components/templates/wizard/TemplateWizardApprovalAside';
 import TemplateWizardReviewStep from '../components/templates/wizard/TemplateWizardReviewStep';
-import TemplateSampleEditorCard from '../components/templates/wizard/TemplateSampleEditorCard';
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
 import TemplateWizardPageHeader from '../components/templates/wizard/TemplateWizardPageHeader';
 import TemplateWizardPageFooter from '../components/templates/wizard/TemplateWizardPageFooter';
@@ -789,7 +788,6 @@ export default function TemplateWizardPage() {
                 onTestTemplate={handleTestTemplate}
               />
             )}
-            <TemplateSampleEditorCard form={form} onChange={setForm} />
             <TemplateWizardApprovalAside form={form} />
           </aside>
         </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, BookOpen, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Eye } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep from '../components/templates/library/TemplateLibraryBrowseStep';
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
@@ -86,14 +86,7 @@ export default function TemplateLibraryPage() {
   const [filterId, setFilterId] = useState('all');
   const [language, setLanguage] = useState('en_US');
   const [selectedItem, setSelectedItem] = useState<CatalogListItem | null>(null);
-  // Preview panel lifecycle: stays mounted while the exit animation plays.
-  // `previewAnimated` is true only for a fresh open from the closed state —
-  // switching templates while the panel is already open animates nothing.
   const [previewPanelItem, setPreviewPanelItem] = useState<CatalogListItem | null>(null);
-  const [previewAnimated, setPreviewAnimated] = useState(false);
-  const [previewClosing, setPreviewClosing] = useState(false);
-  const previewOpenRef = useRef(false);
-  const previewCloseTimerRef = useRef<number | null>(null);
   const [createName, setCreateName] = useState('');
   const [buttonUrl, setButtonUrl] = useState('');
   const [buttonPhone, setButtonPhone] = useState('');
@@ -175,7 +168,7 @@ export default function TemplateLibraryPage() {
     const match = catalog.find((item) => item.id === restoreSelectedId);
     if (match) {
       setSelectedItem(match);
-      openPreviewPanel(match);
+      setPreviewPanelItem(match);
     }
     // Runs once after the catalog lands; nothing else may trigger it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,7 +200,7 @@ export default function TemplateLibraryPage() {
     if (isInitial) return;
     setCatalog([]);
     setSelectedItem(null);
-    closePreviewPanel();
+    setPreviewPanelItem(null);
     setForm(createEmptyWizardForm());
     setCreateName('');
     setButtonUrl('');
@@ -258,52 +251,9 @@ export default function TemplateLibraryPage() {
   const selectedKey = selectedItem?.id || null;
   const selected = selectedItem;
 
-  // Open/close the preview panel with an exit-then-unmount phase. Animation
-  // plays only on a fresh open from the closed state (ponytail: 300ms matches
-  // the CSS; timer is cleared on every transition so rapid toggles stay safe).
-  // `previewClosingRef` mirrors `previewClosing` synchronously so the form
-  // seed effect can skip the reset while the exit animation still needs it.
-  const previewClosingRef = useRef(false);
-
-  const resetSeedDraft = useCallback(() => {
-    setForm(createEmptyWizardForm());
-    setCreateName('');
-    setButtonUrl('');
-    setButtonPhone('');
-  }, []);
-
-  const closePreviewPanel = useCallback(() => {
-    if (!previewOpenRef.current) return;
-    previewOpenRef.current = false;
-    previewClosingRef.current = true;
-    setSelectedItem(null);
-    setPreviewClosing(true);
-    setPreviewAnimated(false);
-    if (previewCloseTimerRef.current !== null) window.clearTimeout(previewCloseTimerRef.current);
-    previewCloseTimerRef.current = window.setTimeout(() => {
-      previewCloseTimerRef.current = null;
-      previewClosingRef.current = false;
-      // selectedKey is already null here, so the seed effect won't re-run;
-      // reset the draft explicitly on unmount.
-      resetSeedDraft();
-      setPreviewPanelItem(null);
-      setPreviewClosing(false);
-    }, 300);
-  }, [resetSeedDraft]);
-
-  const openPreviewPanel = useCallback((item: CatalogListItem) => {
-    if (previewCloseTimerRef.current !== null) {
-      window.clearTimeout(previewCloseTimerRef.current);
-      previewCloseTimerRef.current = null;
-    }
-    const wasOpen = previewOpenRef.current || previewClosingRef.current;
-    previewOpenRef.current = true;
-    previewClosingRef.current = false;
-    setPreviewPanelItem(item);
-    setPreviewClosing(false);
-    // Cross-fade between different templates is silent; only a fresh open animates.
-    setPreviewAnimated(!wasOpen);
-  }, []);
+  // The preview panel is static: it shows the picked card (clicking another
+  // card switches it) and a placeholder hint when nothing is picked. No
+  // toggle-off, no slide animation.
 
   // No auto-select: the WhatsApp preview bar appears only after the user
   // explicitly picks a card via its Preview button.
@@ -311,10 +261,6 @@ export default function TemplateLibraryPage() {
     // This seed belongs to Browse only — on Edit/Submitted the user's own
     // content (or the editor handoff) must not be overwritten.
     if (activeStep !== 0) return;
-    // While the panel is playing its exit animation we keep the picked
-    // template's form/preview content rendered untouched (stale on purpose);
-    // the reset runs once the panel has unmounted.
-    if (previewClosingRef.current) return;
     if (!selectedItem) {
       setForm(createEmptyWizardForm());
       setCreateName('');
@@ -475,7 +421,7 @@ export default function TemplateLibraryPage() {
         )}
         {stageError && <TemplateIssueAlert message={stageError} className="mb-4 shrink-0" />}
 
-        <div className="template-wizard-split template-wizard-split--library min-h-0 flex-1 xl:grid-rows-[minmax(0,1fr)]">
+        <div className="template-wizard-split template-wizard-split--library xl:min-h-0 xl:flex-1 xl:grid-rows-[minmax(0,1fr)]">
           <div className="flex min-w-0 min-h-0 flex-1 flex-col">
             {activeStep === 0 && (
               <TemplateLibraryBrowseStep
@@ -491,15 +437,12 @@ export default function TemplateLibraryPage() {
                 items={listItems}
                 selectedKey={selectedKey}
                 onSelect={(key) => {
-                  // Preview acts as a toggle: picking the picked card unpicks it.
-                  if (selectedKey === key) {
-                    closePreviewPanel();
-                    return;
-                  }
+                  // Clicking a card previews it; clicking the active card
+                  // again keeps the selection (no toggle-off).
                   const match = listItems.find((item) => item.id === key);
                   if (match) {
                     setSelectedItem(match);
-                    openPreviewPanel(match);
+                    setPreviewPanelItem(match);
                   }
                 }}
                 honesty={honesty}
@@ -509,18 +452,27 @@ export default function TemplateLibraryPage() {
             )}
           </div>
 
-          <aside className="min-w-0 xl:min-h-0 xl:overflow-y-auto">
+          <aside className="app-thin-scroll min-w-0 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain">
             {previewPanelItem ? (
-              <div className={previewClosing ? 'template-wizard-preview-exit' : previewAnimated ? 'template-wizard-preview-enter' : undefined}>
-                <LibraryTemplatePreviewPanel
-                  entry={previewPanelItem}
-                  form={form}
-                  filledPreview={filledPreview}
-                  previewButtons={previewButtons}
-                />
+              <LibraryTemplatePreviewPanel
+                entry={previewPanelItem}
+                form={form}
+                filledPreview={filledPreview}
+                previewButtons={previewButtons}
+              />
+            ) : (
+              <div className="template-wizard-panel-surface flex min-h-40 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-theme-subtle text-theme-muted ring-1 ring-theme-border/70" aria-hidden>
+                  <Eye className="h-4 w-4" strokeWidth={2.25} />
+                </span>
+                <p className="text-[13px] font-bold text-theme-fg">Nothing to preview yet</p>
+                <p className="max-w-[220px] text-[11.5px] font-medium leading-relaxed text-theme-secondary">
+                  Click Preview on a template card to see it filled in a WhatsApp chat here.
+                </p>
               </div>
-            ) : null}
-          </aside>        </div>
+            )}
+          </aside>
+        </div>
       </div>
 
       <TemplateWizardPageFooter
@@ -548,14 +500,6 @@ export default function TemplateLibraryPage() {
                   >
                     {selected.category === 'AUTHENTICATION' ? 'Authentication' : 'Utility'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={closePreviewPanel}
-                    aria-label={`Deselect ${selected.title}`}
-                    className="shrink-0 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    <X className="h-3.5 w-3.5" strokeWidth={2.25} />
-                  </button>
                 </span>
               );
             })()

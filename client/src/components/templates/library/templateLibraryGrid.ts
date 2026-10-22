@@ -8,7 +8,7 @@ export const LIBRARY_CARDS_GRID_PAD_CLASS = 'pl-1.5 pt-1';
 export const LIBRARY_CARD_CELL_CLASS = 'flex min-h-0 min-w-0 w-full';
 
 /** Filter chip toolbar: single horizontally scrollable row (like the mock's card chips). */
-export const LIBRARY_CHIPS_ROW_CLASS = 'flex items-center gap-2 overflow-x-auto pb-1';
+export const LIBRARY_CHIPS_ROW_CLASS = 'app-thin-scroll flex items-center gap-2 overflow-x-auto pb-1 overscroll-x-contain';
 
 /** Shared chip geometry — active/inactive differ only in state colors. */
 const CHIP_BASE =

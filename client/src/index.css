@@ -809,6 +809,36 @@
     height: 0;
   }
 
+  /* Shared thin scrollbar for inner scroll areas (library grid, chips row,
+     preview aside) — matches the .app-main-scroll look. */
+  .app-thin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .app-thin-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .app-thin-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 6px 0;
+  }
+
+  .app-thin-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.38);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .app-thin-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.55);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
   .sidebar-collapse-btn {
     color: var(--color-text-secondary);
     background: #ffffff;
@@ -3714,6 +3744,24 @@
     overscroll-behavior: contain;
     padding-bottom: 1rem;
     scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .template-wizard-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .template-wizard-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 6px 0;
+  }
+
+  .template-wizard-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.38);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 
   /* Library Browse shell (xl+): filters stay pinned, cards grid and the
@@ -3743,48 +3791,6 @@
   .dark .template-wizard-card {
     border-color: rgba(51, 65, 85, 0.65);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  }
-
-  @keyframes tw-preview-slide-in {
-    from {
-      opacity: 0;
-      transform: translateX(28px) scale(0.985);
-    }
-    60% {
-      opacity: 1;
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0) scale(1);
-    }
-  }
-
-  @keyframes tw-preview-slide-out {
-    from {
-      opacity: 1;
-      transform: translateX(0) scale(1);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(28px) scale(0.985);
-    }
-  }
-
-  /* Close mirrors the open slide, just with an easing tuned for exits. */
-  .template-wizard-preview-enter {
-    animation: tw-preview-slide-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .template-wizard-preview-exit {
-    animation: tw-preview-slide-out 0.3s cubic-bezier(0.4, 0, 0.68, 0.86) both;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .template-wizard-preview-enter,
-    .template-wizard-preview-exit {
-      animation-duration: 0.01ms;
-      animation-fill-mode: none;
-    }
   }
 
   .template-wizard-phone-frame {
