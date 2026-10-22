@@ -35,7 +35,7 @@ export function tileIconFor(item: CatalogListItem): LucideIcon {
   return item.category === 'AUTHENTICATION' ? KeyRound : Package;
 }
 
-const VARIABLE_CHIP =
+export const VARIABLE_CHIP =
   'mx-px inline-flex translate-y-px items-center rounded-md bg-emerald-50 px-1 py-0.5 font-mono text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200/70 dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-800/60';
 
 interface CatalogLibraryCardProps {

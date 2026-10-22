@@ -114,10 +114,11 @@ export default function TemplateSubmittedDialog({
           </div>
 
           <h2 id="template-submitted-title" className="mt-4 text-[19px] font-extrabold tracking-tight text-theme-fg">
-            Template submitted successfully
+            Template submitted for review
           </h2>
           <p className="mt-1.5 max-w-[22rem] text-[13px] font-medium leading-relaxed text-theme-secondary">
-            Your template has been added to your WhatsApp number. You'll be notified once there's an update.
+            We've sent this template to Meta for approval. Once approved it's ready to use in messages — you can
+            check its status anytime in Templates.
           </p>
         </div>
 
@@ -142,12 +143,8 @@ export default function TemplateSubmittedDialog({
               </div>
               <p className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
                 Template name: <span className="font-mono text-[11px]">{templateName}</span>
+                {lang ? <span> · Language: {lang}</span> : null}
               </p>
-              {lang ? (
-                <p className="truncate text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
-                  Language: {lang}
-                </p>
-              ) : null}
             </div>
             <span
               className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${statusStyle}`}

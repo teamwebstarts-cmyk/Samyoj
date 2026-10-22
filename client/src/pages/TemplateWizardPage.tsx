@@ -751,7 +751,7 @@ export default function TemplateWizardPage() {
         <div
           className={`template-wizard-split ${fromLibrary ? 'template-wizard-split--library' : ''} ${fromLibrary ? 'xl:min-h-0 xl:flex-1 xl:grid-rows-[minmax(0,1fr)]' : ''}`}
         >
-          <div className={`min-w-0 ${fromLibrary ? 'app-thin-scroll xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain' : ''}`}>
+          <div className={`min-w-0 ${fromLibrary ? 'app-thin-scroll pb-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain' : ''}`}>
             {activeStep === 0 && (
               <TemplateWizardCreateStep
                 form={form}
