@@ -509,25 +509,9 @@ export default function TemplateWizardPage() {
 
   /** Shared create/resubmit request — the Submit button shows Submitting…
    *  while the request runs, then the success dialog opens on completion. */
-  // TODO(testing): UI-check mode — simulates the request (2.5s) instead of
-  // calling the real API/creating a template. Flip to false to restore
-  // actual submission before merging.
-  const MOCK_SUBMIT = true;
   const runSubmission = async () => {
     setSaving(true);
     const savedName = form.name;
-    if (MOCK_SUBMIT) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      setSubmitResult({
-        submissionId: buildSubmissionId(),
-        submittedAt: new Date().toISOString(),
-        templateName: savedName,
-      });
-      setSubmittedStatus('PENDING');
-      setSubmittedDialogOpen(true);
-      setSaving(false);
-      return;
-    }
     try {
       const payload = buildCreatePayload(form);
       if (state.studioHandoff && state.studioPack) {
