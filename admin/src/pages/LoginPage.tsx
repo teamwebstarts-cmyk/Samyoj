@@ -99,7 +99,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[minmax(20rem,26rem)_1fr]">
       {/* Left Brand Showcase Column */}
-      <aside className="hidden bg-gradient-to-b from-[#0a1511] via-[#0f211b] to-[#0c1813] p-10 text-white md:flex md:flex-col justify-between shadow-2xl z-10 border-r border-emerald-900/30">
+      <aside className="hidden bg-gradient-to-b from-[#0f172a] via-[#1a1b4b] to-[#1e293b] p-10 text-white md:flex md:flex-col justify-between shadow-2xl z-10 border-r border-indigo-900/30">
         <div>
           <PlatformBrand size="md" />
           <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-400/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-300">

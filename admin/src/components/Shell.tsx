@@ -85,7 +85,7 @@ export function Shell() {
       </a>
       
       {/* Sidebar Rail */}
-      <aside className="flex items-center gap-2 border-b border-emerald-950/40 bg-gradient-to-b from-[#0c1813] via-[#0f211b] to-[#0c1813] px-3 py-3 text-white md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-emerald-900/20 md:px-3 md:py-4 shadow-xl z-20">
+      <aside className="flex items-center gap-2 border-b border-indigo-950/40 bg-gradient-to-b from-[#0f172a] via-[#16233f] to-[#1e293b] px-3 py-3 text-white md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-indigo-900/20 md:px-3 md:py-4 shadow-xl z-20">
         <div className="hidden min-w-0 px-1 md:block">
           <PlatformBrand size="sm" />
           <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/30 px-2 py-1 text-[10px] text-emerald-300">
