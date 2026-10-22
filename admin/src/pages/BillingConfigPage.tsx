@@ -49,7 +49,7 @@ interface BillingSkuDef {
 
 const TIER_THEMES: Record<PlanTier, { bg: string; border: string; badge: string; accent: string }> = {
   launch: { bg: 'from-slate-50 to-slate-100', border: 'border-slate-300', badge: 'bg-slate-200 text-slate-800', accent: 'text-slate-700' },
-  starter: { bg: 'from-emerald-50/50 to-teal-50/30', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-800', accent: 'text-emerald-700' },
+  starter: { bg: 'from-emerald-50/50 to-purple-50/30', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-800', accent: 'text-emerald-700' },
   growth: { bg: 'from-purple-50/50 to-indigo-50/30', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-800', accent: 'text-purple-700' },
   pro: { bg: 'from-sky-50/50 to-blue-50/30', border: 'border-sky-200', badge: 'bg-sky-100 text-sky-800', accent: 'text-sky-700' },
   enterprise: { bg: 'from-amber-50/50 to-orange-50/30', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-800', accent: 'text-amber-800' },
