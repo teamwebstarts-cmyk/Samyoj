@@ -406,7 +406,7 @@ select:focus-visible {
   background: var(--table-row-hover);
 }
 
-/* Navigation Rail Links */
+/* Navigation Rail Links (light sidebar) */
 .rail-nav-item {
   display: flex;
   align-items: center;
@@ -416,20 +416,20 @@ select:focus-visible {
   border-radius: 0.65rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
+  color: #475569;
   transition: all 0.15s ease;
 }
 
 .rail-nav-item:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: #0f172a;
+  background: rgba(241, 245, 249, 0.9);
 }
 
 .rail-nav-item[aria-current='page'] {
-  color: #eef2ff;
-  background: rgba(122, 59, 255, 0.18);
+  color: #3b22c7;
+  background: #eef2ff;
   font-weight: 600;
-  box-shadow: inset 3px 0 0 #7a3bff, 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 3px 0 0 #4b2eeb;
 }
 
 .rail-nav-icon {
@@ -439,14 +439,14 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(241, 245, 249, 0.9);
   color: inherit;
   flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
 .rail-nav-item:hover .rail-nav-icon {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(226, 232, 240, 0.9);
 }
 
 .rail-nav-item[aria-current='page'] .rail-nav-icon {
@@ -467,6 +467,6 @@ select:focus-visible {
     text-transform: uppercase;
   }
   .rail-nav-item[aria-current='page'] {
-    box-shadow: inset 0 -2px 0 #7a3bff;
+    box-shadow: inset 0 -2px 0 #4b2eeb;
   }
 }

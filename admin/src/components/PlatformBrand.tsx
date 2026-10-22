@@ -1,6 +1,6 @@
 export const PLATFORM_NAME = 'Samyoj';
-export const PLATFORM_MARK_SRC = '/brand/samyoj-mark.png';
-export const PLATFORM_LOGO_SRC = '/brand/samyoj-logo.jpeg';
+export const PLATFORM_MARK_SRC = '/brand/logo-mark.webp';
+export const PLATFORM_LOGO_SRC = '/brand/samyoj-logo.png';
 
 export function PlatformLogoMark({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const box = size === 'sm' ? 'h-7 w-7 rounded-[8px]' : 'h-8 w-8 rounded-[9px]';
