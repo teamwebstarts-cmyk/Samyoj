@@ -461,14 +461,41 @@ export default function TemplateLibraryPage() {
                 previewButtons={previewButtons}
               />
             ) : (
-              <div className="template-wizard-panel-surface flex min-h-40 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-theme-subtle text-theme-muted ring-1 ring-theme-border/70" aria-hidden>
-                  <Eye className="h-4 w-4" strokeWidth={2.25} />
-                </span>
-                <p className="text-[13px] font-bold text-theme-fg">Nothing to preview yet</p>
-                <p className="max-w-[220px] text-[11.5px] font-medium leading-relaxed text-theme-secondary">
-                  Click Preview on a template card to see it filled in a WhatsApp chat here.
-                </p>
+              /* Same shell as the real preview — header bar and phone frame —
+                 so the aside keeps its shape before a card is picked. */
+              <div className="template-wizard-panel-surface flex min-h-0 flex-col">
+                <div className="template-wizard-card overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                    <p className="flex min-w-0 items-center gap-2 text-[13px] font-bold leading-5 text-slate-900 dark:text-white">
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-[#25D366] opacity-40" aria-hidden>
+                        <path d="M12 2a10 10 0 0 0-8.66 15.02L2 22l5.12-1.34A10 10 0 1 0 12 2Zm5.4 14.02c-.23.64-1.35 1.23-1.86 1.27-.5.05-.97.23-3.27-.68-2.77-1.09-4.53-3.9-4.66-4.08-.14-.18-1.12-1.48-1.12-2.82 0-1.34.7-2 .95-2.27.25-.28.55-.35.73-.35h.52c.17 0 .4-.06.62.48.23.55.77 1.9.84 2.04.07.14.11.3.02.48-.09.19-.5.75-.68.96-.13.15-.22.24-.1.48.12.23.55.9 1.18 1.46.81.72 1.49.95 1.7 1.05.21.1.34.08.46-.05.14-.14.55-.64.7-.86.14-.23.28-.19.48-.11.19.07 1.23.58 1.44.69.21.1.35.15.4.24.05.09.05.53-.18 1.17Z" />
+                      </svg>
+                      Template Preview
+                    </p>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                      —
+                    </span>
+                  </div>
+                  <div className="template-wizard-phone-frame p-3">
+                    <div className="mx-auto w-full max-w-[280px] rounded-2xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                      <div className="relative mx-auto h-12 w-12">
+                        <div
+                          className="pointer-events-none absolute -inset-2.5 rounded-full bg-gradient-to-br from-whatsapp-400/25 via-emerald-300/15 to-transparent blur-lg"
+                          aria-hidden
+                        />
+                        <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-whatsapp-500 via-emerald-500 to-teal-600 text-white shadow-[0_10px_28px_rgba(37,211,102,0.25)]">
+                          <Eye className="h-5 w-5" strokeWidth={2} />
+                        </div>
+                      </div>
+                      <p className="mt-3 text-[13px] font-extrabold tracking-tight text-theme-fg">
+                        Nothing to preview yet
+                      </p>
+                      <p className="mx-auto mt-1 max-w-[210px] text-[11.5px] font-medium leading-relaxed text-theme-secondary">
+                        Click a template card to see it filled into a WhatsApp chat here.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </aside>
