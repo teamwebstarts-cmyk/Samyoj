@@ -143,7 +143,7 @@ export function OperatorsPage() {
                     <td>
                       <div className="flex items-center gap-1.5 text-xs">
                         {row.mfaEnabled ? (
-                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                          <span className="inline-flex items-center gap-1 font-semibold text-success-700">
                             <ShieldCheck className="h-3.5 w-3.5" /> Enrolled
                           </span>
                         ) : (

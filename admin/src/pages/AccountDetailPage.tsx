@@ -314,7 +314,7 @@ export function AccountDetailPage() {
                   {detail.timeline.map((row) => (
                     <li key={row.capturedAt} className="flex items-center justify-between text-xs border-b border-slate-100 pb-2.5 last:border-0">
                       <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        <span className="h-2 w-2 rounded-full bg-success-500" />
                         <span className="font-semibold text-slate-800">{STAGE_LABELS[row.stage]}</span>
                       </div>
                       <span className="text-slate-400 font-mono text-[11px]">{formatWhen(row.capturedAt)}</span>

@@ -59,7 +59,7 @@ export function Notice({
     <div className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[13px] leading-relaxed ring-1 ${cls}`}>
       {tone === 'error' && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
       {tone === 'warning' && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
-      {tone === 'info' && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
+      {tone === 'info' && <span className="h-2 w-2 shrink-0 rounded-full bg-success-500" />}
       <div className="flex-1 min-w-0">{children}</div>
     </div>
   );

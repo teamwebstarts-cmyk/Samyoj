@@ -90,7 +90,7 @@ export function Shell() {
           <PlatformBrand size="sm" />
           <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/30 px-2 py-1 text-[10px] text-emerald-300">
             <span className="flex items-center gap-1.5 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-success-400 animate-pulse" />
               Samyoj Ops
             </span>
             <span className="font-mono text-[9px] text-emerald-400/70">v2.4</span>
@@ -153,7 +153,7 @@ export function Shell() {
             <div className="flex items-center gap-3 shrink-0">
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 font-medium text-emerald-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-success-500 animate-pulse" />
                   Live Platform
                 </span>
               </div>
