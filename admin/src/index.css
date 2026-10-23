@@ -496,6 +496,9 @@ select:focus-visible {
 
 /* Collapsed icon-only rail (desktop) */
 .rail-collapse-toggle {
+  display: inline-flex;
+  position: relative;
+  z-index: 30;
   align-items: center;
   justify-content: center;
   height: 2rem;
@@ -515,36 +518,48 @@ select:focus-visible {
 }
 
 @media (min-width: 768px) {
-  aside:has(.rail-collapse-toggle[aria-pressed='true']) {
+  .rail-collapsed {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
   }
 
-  aside:has(.rail-collapse-toggle[aria-pressed='true']) .rail-group-label {
+  .rail-collapsed .rail-group-label {
     display: none;
   }
 
-  aside:has(.rail-collapse-toggle[aria-pressed='true']) .rail-nav-item {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  aside:has(.rail-collapse-toggle[aria-pressed='true']) .rail-nav-item > span:last-child {
-    display: none;
-  }
-
-  aside:has(.rail-collapse-toggle[aria-pressed='true']) nav {
+  .rail-collapsed nav {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.75rem;
   }
 
-  aside:has(.rail-collapse-toggle[aria-pressed='true']) nav > div {
+  .rail-collapsed nav > div {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
+  }
+
+  /* Icon mode: strip the pill, the inset bar, and the hover wash off the
+     item — active/hover state lives on the icon tile alone. */
+  .rail-collapsed .rail-nav-item {
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .rail-collapsed .rail-nav-item:hover {
+    background: transparent;
+  }
+
+  .rail-collapsed .rail-nav-item[aria-current='page'] {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .rail-collapsed .rail-nav-item > span:last-child {
+    display: none;
   }
 }

@@ -96,33 +96,32 @@ export function Shell() {
       </a>
 
       {/* Sidebar Rail */}
-      <aside className="flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 shadow-sm z-20">
-        <div className={collapsed ? 'hidden' : 'hidden min-w-0 px-1 md:block'}>
-          <PlatformBrand size="sm" />
-          <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200/60 px-2 py-1 text-[10px] text-indigo-700">
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-              Samyoj Ops
-            </span>
-            <span className="font-mono text-[9px] text-indigo-400">v2.4</span>
+      <aside className={`flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 shadow-sm z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
+        <div className="hidden min-w-0 px-1 md:block">
+          <div className="flex min-w-0 items-center justify-between gap-1.5">
+            <PlatformBrand size="sm" collapsed={collapsed} />
+            {/* Collapse toggler — right of the brand; beside the mark when collapsed */}
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              aria-pressed={collapsed}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="rail-collapse-toggle"
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
           </div>
+          {!collapsed && (
+            <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200/60 px-2 py-1 text-[10px] text-indigo-700">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                Samyoj Ops
+              </span>
+              <span className="font-mono text-[9px] text-indigo-400">v2.4</span>
+            </div>
+          )}
         </div>
-
-        <div className={`px-1 ${collapsed ? 'hidden md:block' : 'md:hidden'}`}>
-          <PlatformBrand size="sm" collapsed />
-        </div>
-
-        {/* Collapse toggler — visible on desktop, top of the rail */}
-        <button
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-pressed={collapsed}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="rail-collapse-toggle hidden md:inline-flex"
-        >
-          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </button>
 
         <nav className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
           <NavGroup label="Work" items={work} />
