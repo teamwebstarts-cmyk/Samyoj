@@ -483,13 +483,33 @@ export function TemplateEditorPage() {
         {/* Left column — single create-step card like the client comp, then admin metadata */}
         <div className="min-w-0 space-y-4">
           <section className="dashboard-card p-4 sm:p-5">
-            <Input
-              label="Template name"
-              hint="Shown to tenants in the library."
-              value={draft.title}
-              disabled={!canWrite}
-              onChange={(event) => set('title', event.target.value)}
-            />
+            {/* Identity fields — name + slug + category + language, 2 per row */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Template name"
+                hint="Shown to tenants in the library."
+                value={draft.title}
+                disabled={!canWrite}
+                onChange={(event) => set('title', event.target.value)}
+              />
+              <Input
+                label="Slug"
+                hint="Tenants submit this draft by slug."
+                value={draft.slug}
+                disabled={!canWrite || Boolean(row)}
+                onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
+              />
+              <Select label="Category" value={draft.category} disabled={!canWrite} onChange={(event) => set('category', event.target.value as Draft['category'])}>
+                <option value="UTILITY">Utility</option>
+                <option value="MARKETING">Marketing</option>
+                <option value="AUTHENTICATION">Authentication</option>
+              </Select>
+              <Select label="Language" value={draft.language} disabled={!canWrite || Boolean(row)} onChange={(event) => set('language', event.target.value)}>
+                {LANGUAGES.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+            </div>
             {draft.category !== 'UTILITY' ? (
               <p className="mt-3 inline-flex rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700">
                 {draft.category} template
@@ -925,24 +945,7 @@ export function TemplateEditorPage() {
 
           <section className="dashboard-card p-4 sm:p-5">
             <h2 className="text-sm font-bold tracking-tight text-slate-900">Template details</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Input
-                label="Slug"
-                hint="Tenants submit this draft by slug."
-                value={draft.slug}
-                disabled={!canWrite || Boolean(row)}
-                onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
-              />
-              <Select label="Category" value={draft.category} disabled={!canWrite} onChange={(event) => set('category', event.target.value as Draft['category'])}>
-                <option value="UTILITY">Utility</option>
-                <option value="MARKETING">Marketing</option>
-                <option value="AUTHENTICATION">Authentication</option>
-              </Select>
-              <Select label="Language" value={draft.language} disabled={!canWrite || Boolean(row)} onChange={(event) => set('language', event.target.value)}>
-                {LANGUAGES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </Select>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Input label="Tags" hint="Comma-separated" value={draft.tags} disabled={!canWrite} onChange={(event) => set('tags', event.target.value)} />
               <Input label="Short help text" hint="Shown under the template in the tenant library." value={draft.copy} disabled={!canWrite} onChange={(event) => set('copy', event.target.value)} />
               <Input label="Sort order" value={draft.sortOrder} disabled={!canWrite} onChange={(event) => set('sortOrder', event.target.value)} />
