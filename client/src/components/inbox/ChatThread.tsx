@@ -754,6 +754,7 @@ export default function ChatThread({
                       ) : null}
                       <MessageBubble
                         message={msg}
+                        recipientName={conversation.contact.name}
                         grouping={{
                           first,
                           last: !nextMsg || nextMsg.direction !== msg.direction,

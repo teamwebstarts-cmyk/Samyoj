@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
   Bot,
+  Check,
   Clock,
   Facebook,
   GitBranch,
@@ -62,6 +63,7 @@ const triggerMeta: Record<
     label: string;
     tableLabel: string;
     description: string;
+    idea: string;
     icon: LucideIcon;
     accent: string;
     iconBg: string;
@@ -72,6 +74,7 @@ const triggerMeta: Record<
     label: 'Keyword Reply',
     tableLabel: 'Keyword',
     description: 'A word in chat, or in any Instagram comment',
+    idea: 'Replies when a customer types a word you choose, on WhatsApp, Facebook, or Instagram.',
     icon: Hash,
     accent: 'from-violet-500/10 to-purple-500/5 border-violet-200/70',
     iconBg: 'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
@@ -81,6 +84,7 @@ const triggerMeta: Record<
     label: 'Welcome Message',
     tableLabel: 'Welcome',
     description: 'WhatsApp only — first message',
+    idea: 'Sends once, the first time someone messages your WhatsApp number.',
     icon: Sparkles,
     accent: 'from-emerald-500/10 to-teal-500/5 border-emerald-200/70',
     iconBg: 'bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
@@ -90,6 +94,7 @@ const triggerMeta: Record<
     label: 'Away Message',
     tableLabel: 'Away',
     description: 'WhatsApp only — outside working hours',
+    idea: 'Replies when a message arrives outside the hours you set in Settings.',
     icon: Clock,
     accent: 'from-amber-500/10 to-orange-500/5 border-amber-200/70',
     iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_4px_14px_rgba(245,158,11,0.35)]',
@@ -99,6 +104,7 @@ const triggerMeta: Record<
     label: 'Business Hours',
     tableLabel: 'Hours',
     description: 'WhatsApp only — open and closed hours',
+    idea: 'Sends one message while you are open, and a different one after you close.',
     icon: Bot,
     accent: 'from-sky-500/10 to-blue-500/5 border-sky-200/70',
     iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
@@ -108,6 +114,7 @@ const triggerMeta: Record<
     label: 'Lead Capture',
     tableLabel: 'Lead',
     description: 'WhatsApp only — reply, tag, handoff',
+    idea: 'Replies, tags the contact as a lead, and can hand them to your team.',
     icon: UserPlus,
     accent: 'from-rose-500/10 to-pink-500/5 border-rose-200/70',
     iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)]',
@@ -117,6 +124,7 @@ const triggerMeta: Record<
     label: 'AI Chatbot',
     tableLabel: 'AI',
     description: 'Set up in AI Bots — answers customers automatically',
+    idea: 'Set this up in AI Bots. It answers customers on its own.',
     icon: Bot,
     accent: 'from-indigo-500/10 to-violet-500/5 border-indigo-200/70',
     iconBg: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]',
@@ -183,6 +191,7 @@ function getTriggerMeta(triggerType: string) {
       label: triggerType,
       tableLabel: triggerType,
       description: 'Custom start rule',
+      idea: 'This reply uses a custom start rule.',
       icon: MessageSquareQuote,
       accent: 'from-neutral-500/10 to-neutral-500/5 border-neutral-200/70',
       iconBg: 'bg-gradient-to-br from-neutral-600 to-neutral-700 text-white',
@@ -555,10 +564,9 @@ export default function AutomationsPage() {
   const availableCreatableTriggers = hasConnectedNumber
     ? creatableTriggers
     : (['KEYWORD'] as const);
-  const availableTriggerOptions = availableCreatableTriggers.map((value) => ({
-    value,
-    label: triggerMeta[value].label,
-  }));
+  const pickerTypes = (availableCreatableTriggers as readonly string[]).includes(form.triggerType)
+    ? [...availableCreatableTriggers]
+    : [form.triggerType, ...availableCreatableTriggers];
   const availableChannelOptions = [
     ...(hasConnectedNumber ? [{ id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' }] : []),
     ...(facebookConnected ? [{ id: 'FB' as const, label: 'Facebook', hint: 'Messenger keyword' }] : []),
@@ -984,8 +992,9 @@ export default function AutomationsPage() {
         open={slideOpen}
         onClose={closeSlide}
         title={editing ? 'Edit auto-reply' : 'New auto-reply'}
-        subtitle="Choose when to send, write your message, and preview it"
-        size="lg"
+        subtitle="Pick a reply on the left. Write the message and preview it on the right."
+        size="wide"
+        still
         accent="violet"
         footer={
           <SlideOverFooter
@@ -997,73 +1006,76 @@ export default function AutomationsPage() {
           />
         }
       >
-        <form id="slideover-form" onSubmit={handleSubmit} className="space-y-5">
-          {!editing && (
-            <section className="space-y-2">
-              <p className="text-[13px] font-extrabold text-neutral-900">1. When should we reply?</p>
-              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                {availableCreatableTriggers.map((type) => {
-                  const meta = triggerMeta[type];
-                  const Icon = meta.icon;
-                  const selected = form.triggerType === type;
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => {
-                        const defaults = triggerDefaults[type] || {};
+        <form id="slideover-form" onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:overflow-hidden">
+            <section className="flow-template-scroll min-h-0 space-y-1.5 lg:overflow-y-auto lg:pr-1">
+              <p className="text-[13px] font-bold text-neutral-900">
+                {pickerTypes.length} {pickerTypes.length === 1 ? 'reply' : 'replies'}
+              </p>
+              {pickerTypes.map((type) => {
+                const meta = getTriggerMeta(type);
+                const Icon = meta.icon;
+                const selected = form.triggerType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      if (editing) {
                         setForm((prev) => ({
                           ...prev,
                           triggerType: type,
-                          ...defaults,
                           platform: type === 'KEYWORD' ? prev.platform : 'WA',
-                          buttons: type === 'KEYWORD' && prev.platform === 'IG' ? [] : prev.buttons,
                         }));
-                      }}
-                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
-                        selected
-                          ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
-                          : 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
-                      }`}
-                    >
-                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${meta.iconBg}`}>
-                        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-extrabold leading-tight text-neutral-900">{meta.label}</p>
-                        <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-600">
-                          {meta.description}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                        return;
+                      }
+                      const defaults = triggerDefaults[type] || {};
+                      setForm((prev) => ({
+                        ...prev,
+                        triggerType: type,
+                        ...defaults,
+                        platform: type === 'KEYWORD' ? prev.platform : 'WA',
+                        buttons: type === 'KEYWORD' && prev.platform === 'IG' ? [] : prev.buttons,
+                      }));
+                    }}
+                    className={`relative flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition ${
+                      selected
+                        ? 'border-violet-300 bg-violet-50/80 ring-2 ring-violet-500/30'
+                        : 'border-theme-border bg-theme-surface hover:border-violet-200 hover:bg-violet-50/30'
+                    }`}
+                  >
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.iconBg}`}>
+                      <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    </div>
+                    <div className="min-w-0 pr-5">
+                      <p className="truncate text-[13px] font-semibold text-neutral-900">{meta.label}</p>
+                      <p className="truncate text-[11px] text-neutral-500">{meta.description}</p>
+                    </div>
+                    {selected && (
+                      <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-white">
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </section>
-          )}
 
-          {editing && (
-            <div className={`rounded-2xl border bg-gradient-to-r p-4 ${selectedTrigger.accent}`}>
-              <div className="flex items-start gap-3">
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${selectedTrigger.iconBg}`}
-                >
-                  <SelectedTriggerIcon className="h-4 w-4" strokeWidth={2.25} />
-                </div>
-                <div>
-                  <p className="text-[13px] font-extrabold text-neutral-900">{selectedTrigger.label}</p>
-                  <p className="mt-0.5 text-[12px] font-medium text-neutral-600">
-                    {selectedTrigger.description}
-                  </p>
+            <section className="flow-template-scroll min-h-0 space-y-3 lg:overflow-y-auto lg:pr-1">
+              <div className="rounded-2xl border border-violet-100 bg-gradient-to-b from-violet-50/70 to-white p-3.5">
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${selectedTrigger.iconBg}`}>
+                    <SelectedTriggerIcon className="h-4 w-4" strokeWidth={2.25} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-neutral-900">{selectedTrigger.label}</p>
+                    <p className="mt-1 text-[12px] font-semibold text-violet-800">Idea</p>
+                    <p className="mt-0.5 text-[13px] leading-snug text-neutral-600">{selectedTrigger.idea}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          <section className="space-y-3">
-            <p className="text-[13px] font-extrabold text-neutral-900">
-              {editing ? 'Your auto-reply' : '2. Write your message'}
-            </p>
             <AppInput
               id="automation-name"
               label="Name (for your reference)"
@@ -1072,24 +1084,6 @@ export default function AutomationsPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
-
-            {editing && (
-              <AppSelect
-                id="trigger-type"
-                label="When to reply"
-                value={form.triggerType}
-                options={availableTriggerOptions}
-                isSearchable={false}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    triggerType: e.target.value,
-                    platform: e.target.value === 'KEYWORD' ? form.platform : 'WA',
-                  })
-                }
-                required
-              />
-            )}
 
             {form.triggerType === 'KEYWORD' && (
               <>
@@ -1276,7 +1270,6 @@ export default function AutomationsPage() {
               )}
             </div>
             )}
-          </section>
 
           {(form.message.trim() || form.duringHoursMessage.trim() || form.awayMessage.trim()) && (
             <section className="space-y-3 rounded-2xl border border-neutral-200/70 bg-neutral-50/50 p-4">
@@ -1350,6 +1343,8 @@ export default function AutomationsPage() {
               </AppButton>
             </section>
           )}
+            </section>
+          </div>
         </form>
       </SlideOver>
     </PageShell>

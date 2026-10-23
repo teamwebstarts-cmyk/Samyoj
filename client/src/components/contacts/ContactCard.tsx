@@ -29,7 +29,7 @@ export default function ContactCard({
 }: ContactCardProps) {
   return (
     <article className="bg-white transition-colors hover:bg-neutral-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900/50">
-      <div className="flex items-start gap-3 px-4 py-3.5">
+      <div className="flex items-start gap-3 px-4 py-2.5">
         <input
           type="checkbox"
           checked={selected}
@@ -39,17 +39,26 @@ export default function ContactCard({
           aria-label={`Select ${contact.name || contact.phone}`}
         />
         <button type="button" onClick={onView} className="flex min-w-0 flex-1 items-start gap-3 text-left">
-          <ContactAvatar name={contact.name} phone={contact.phone} size="md" />
+          <ContactAvatar
+            name={contact.name}
+            phone={contact.phone}
+            size="sm"
+            palette="contacts"
+            shape="circle"
+            showStatus={false}
+          />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-bold text-theme-fg">
-              {contact.name || contact.phone}
-            </p>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="min-w-0 truncate text-[13px] font-bold text-theme-fg">
+                {contact.name || contact.phone}
+              </p>
+              <ContactSourceBadge source={contact.source} inline />
+            </div>
             {contact.name && (
               <p className="truncate text-[11px] text-theme-muted">{contact.phone}</p>
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <ContactOptInBadge contact={contact} />
-              <ContactSourceBadge source={contact.source} />
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <ContactOptInBadge contact={contact} compact />
             </div>
             {contact.tags.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">

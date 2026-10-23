@@ -133,6 +133,14 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     retryHelps: false,
     action: 'retry',
   },
+  131049: {
+    title: 'WhatsApp held this message back',
+    body: 'Meta did not deliver this marketing message to this person, to limit how often businesses message people who have not been replying. The template and the other recipients are fine. Sending it again right away will not get through.',
+    notice: 'WhatsApp held this one back to limit marketing to people who are not engaging. The template itself is fine.',
+    footnote: 'Retry stays off. A later reply from this person, or a utility template, is what opens the door again.',
+    retryHelps: false,
+    action: 'template',
+  },
   131000: {
     title: 'WhatsApp profile is not ready',
     body: 'The business profile or display name is incomplete. Finish it in WhatsApp Manager, then retry.',
@@ -207,6 +215,9 @@ export function explainWhatsAppSendFailure(input: {
   }
   if (/business eligibility payment issue/i.test(raw)) {
     return { code: code ?? 131042, ...BY_CODE[131042] };
+  }
+  if (/healthy ecosystem engagement/i.test(raw)) {
+    return { code: code ?? 131049, ...BY_CODE[131049] };
   }
   const cleaned = raw.replace(/^\(#\d+\)\s*/, '').trim();
   if (cleaned) {

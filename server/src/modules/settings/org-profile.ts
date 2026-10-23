@@ -23,6 +23,11 @@ export const BUSINESS_INDUSTRIES: Array<{ value: string; label: string }> = [
   { value: 'OTHER', label: 'Other' },
 ];
 
+/** Stored once from a PDF. Prompt injection uses a shorter slice so chat turns stay cheap. */
+export const PROFILE_SOURCE_STORE_CHARS = 8000;
+export const PROFILE_SOURCE_PROMPT_CHARS = 2400;
+export const PROFILE_SOURCE_MAX_BYTES = 2 * 1024 * 1024;
+
 export interface OrgBusinessProfile {
   description?: string;
   industry?: string;
@@ -31,6 +36,10 @@ export interface OrgBusinessProfile {
   address?: string;
   aiNotes?: string;
   profileCompleteAt?: string;
+  sourceText?: string;
+  sourceFileName?: string;
+  sourceBytes?: number;
+  sourceUploadedAt?: string;
 }
 
 export interface OrgProfileResponse {
@@ -46,6 +55,13 @@ export interface OrgProfileResponse {
     percent: number;
     isComplete: boolean;
   };
+  source: {
+    fileName: string;
+    bytes: number;
+    chars: number;
+    uploadedAt: string;
+    preview: string;
+  } | null;
 }
 
 export function parseOrgProfile(settings: Record<string, unknown>): OrgBusinessProfile {
@@ -58,7 +74,15 @@ export function parseOrgProfile(settings: Record<string, unknown>): OrgBusinessP
     address: raw.address?.trim() || undefined,
     aiNotes: raw.aiNotes?.trim() || undefined,
     profileCompleteAt: raw.profileCompleteAt || undefined,
+    sourceText: raw.sourceText?.trim() || undefined,
+    sourceFileName: raw.sourceFileName?.trim() || undefined,
+    sourceBytes: typeof raw.sourceBytes === 'number' ? raw.sourceBytes : undefined,
+    sourceUploadedAt: raw.sourceUploadedAt || undefined,
   };
+}
+
+export function clipProfileSource(text: string, max = PROFILE_SOURCE_STORE_CHARS): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 export function isProfileCoreComplete(
@@ -130,7 +154,62 @@ export async function getOrgProfile(organizationId: string): Promise<OrgProfileR
     defaultLocale: brandKit.defaultLocale || 'en-IN',
     timezone: hours.timezone || DEFAULT_BUSINESS_HOURS.timezone || 'Asia/Kolkata',
     completeness: computeProfileCompleteness(companyName, profile),
+    source: profile.sourceText
+      ? {
+          fileName: profile.sourceFileName || 'business.pdf',
+          bytes: profile.sourceBytes || 0,
+          chars: profile.sourceText.length,
+          uploadedAt: profile.sourceUploadedAt || '',
+          preview: profile.sourceText.slice(0, 180),
+        }
+      : null,
   };
+}
+
+export async function saveProfileSource(
+  organizationId: string,
+  input: { fileName: string; bytes: number; text: string }
+): Promise<OrgProfileResponse> {
+  const text = clipProfileSource(input.text);
+  if (text.length < 40) {
+    throw new Error('Could not read enough text from that PDF');
+  }
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  if (!org) throw new Error('Organization not found');
+  const currentSettings = (org.settings as Record<string, unknown>) || {};
+  const currentProfile = parseOrgProfile(currentSettings);
+  const nextProfile: OrgBusinessProfile = {
+    ...currentProfile,
+    sourceText: text,
+    sourceFileName: input.fileName.slice(0, 120),
+    sourceBytes: input.bytes,
+    sourceUploadedAt: new Date().toISOString(),
+  };
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { settings: { ...currentSettings, profile: nextProfile } as object },
+  });
+  return getOrgProfile(organizationId);
+}
+
+export async function clearProfileSource(organizationId: string): Promise<OrgProfileResponse> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  if (!org) throw new Error('Organization not found');
+  const currentSettings = (org.settings as Record<string, unknown>) || {};
+  const currentProfile = parseOrgProfile(currentSettings);
+  const { sourceText: _t, sourceFileName: _n, sourceBytes: _b, sourceUploadedAt: _u, ...rest } =
+    currentProfile;
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { settings: { ...currentSettings, profile: rest } as object },
+  });
+  return getOrgProfile(organizationId);
 }
 
 export type SaveOrgProfileInput = {

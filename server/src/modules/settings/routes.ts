@@ -15,7 +15,14 @@ import { DEFAULT_CAMPAIGN_SETTINGS, type CampaignSettings } from '../campaigns/t
 import { getOrgCallingSettings } from '../calling/settings.service';
 import { getOrgFeatureFlags, setFeatureFlag } from './feature-flags';
 import { resolveActiveWhatsappNumberId } from '../whatsapp/active-number';
-import { BUSINESS_INDUSTRIES, getOrgProfile, saveOrgProfile } from './org-profile';
+import {
+  BUSINESS_INDUSTRIES,
+  clearProfileSource,
+  getOrgProfile,
+  saveOrgProfile,
+  saveProfileSource,
+} from './org-profile';
+import { extractPdfText } from '../ai/ingest.service';
 import {
   requireActiveCommercialOnMutation,
   requireFeatureOnMutation,
@@ -244,6 +251,44 @@ router.get(
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
     const profile = await getOrgProfile(req.user!.organizationId!);
+    sendSuccess(res, { profile, industries: BUSINESS_INDUSTRIES });
+  })
+);
+
+router.post(
+  '/profile/source',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body;
+    if (!Buffer.isBuffer(body) || body.length < 32) {
+      throw new AppError('Upload a PDF (max 2 MB)', 400);
+    }
+    const rawName = String(req.headers['x-file-name'] || 'business.pdf');
+    const fileName = rawName.replace(/[^\w.\- ()]+/g, '').slice(0, 120) || 'business.pdf';
+    let text = '';
+    try {
+      text = await extractPdfText(body);
+    } catch {
+      throw new AppError('Could not read that PDF. Export it as a text PDF and try again.', 400);
+    }
+    try {
+      const profile = await saveProfileSource(req.user!.organizationId!, {
+        fileName,
+        bytes: body.length,
+        text,
+      });
+      sendSuccess(res, { profile, industries: BUSINESS_INDUSTRIES });
+    } catch (error) {
+      throw new AppError(error instanceof Error ? error.message : 'Could not save the PDF', 400);
+    }
+  })
+);
+
+router.delete(
+  '/profile/source',
+  ...adminGuard,
+  asyncHandler(async (req: Request, res: Response) => {
+    const profile = await clearProfileSource(req.user!.organizationId!);
     sendSuccess(res, { profile, industries: BUSINESS_INDUSTRIES });
   })
 );

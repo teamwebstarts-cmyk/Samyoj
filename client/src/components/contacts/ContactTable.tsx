@@ -10,7 +10,6 @@ import {
   ContactInboxStatusCell,
   ContactOptInBadge,
   ContactRowPreview,
-  ContactSourceBadge,
   ContactTagBadge,
 } from './contactUi';
 
@@ -41,7 +40,7 @@ const headers = [
   { key: 'actions', label: 'Actions', className: 'text-right' },
 ] as const;
 
-const cellPad = 'px-3 py-3 sm:px-4 sm:py-3.5';
+const cellPad = 'px-3 py-2 sm:px-4 sm:py-2.5';
 
 export default function ContactTable({
   contacts,
@@ -123,24 +122,23 @@ export default function ContactTable({
                     <button
                       type="button"
                       onClick={() => onView(contact)}
-                      className="flex w-full min-w-0 items-center gap-2.5 rounded-xl py-0.5 text-left transition sm:gap-3"
+                      className="flex w-full min-w-0 items-center gap-2 rounded-xl py-0.5 text-left transition sm:gap-2.5"
                     >
                       <ContactAvatar
                         name={contact.name}
                         phone={contact.phone}
-                        size="sm"
-                        active={hasConversation}
+                        size="xs"
+                        palette="contacts"
+                        shape="circle"
+                        showStatus={false}
                       />
                       <div className="min-w-0 flex-1">
                         <ContactRowPreview contact={contact} />
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          <ContactSourceBadge source={contact.source} />
-                          {contact.notes && (
-                            <span className="max-w-full truncate text-[10px] font-medium text-theme-muted xl:max-w-[120px]">
-                              {contact.notes}
-                            </span>
-                          )}
-                        </div>
+                        {contact.notes && (
+                          <p className="mt-0.5 max-w-full truncate text-[10px] font-medium text-theme-muted xl:max-w-[160px]">
+                            {contact.notes}
+                          </p>
+                        )}
                       </div>
                     </button>
                   </td>

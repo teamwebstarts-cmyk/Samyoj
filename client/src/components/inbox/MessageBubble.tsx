@@ -27,6 +27,7 @@ import {
   messageHasMedia,
 } from './inboxUtils';
 import { computeFixedPopoverPosition, type PopoverCoords } from './inboxPopoverPosition';
+import { resolvePublicMediaUrl } from '../../utils/publicMediaUrl';
 import {
   AuthenticatedAudio,
   AuthenticatedDocument,
@@ -94,6 +95,8 @@ interface MessageBubbleProps {
   isActiveMatch?: boolean;
   /** When true, play the enter fade/slide (fresh insert only — not initial history). */
   animateEnter?: boolean;
+  /** Conversation contact, used to correct older template bubbles that stored a sample name. */
+  recipientName?: string | null;
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -391,6 +394,7 @@ export default function MessageBubble({
   highlightQuery,
   isActiveMatch,
   animateEnter = false,
+  recipientName,
 }: MessageBubbleProps) {
   const tipFor = useGlassTipProps();
   const [localViewer, setLocalViewer] = useState<MediaViewerItem | null>(null);
@@ -412,7 +416,11 @@ export default function MessageBubble({
   const type = message.type?.toUpperCase();
   const templateBody =
     type === 'TEMPLATE'
-      ? fillTemplateMessageContent(message.content, message.metadata?.templateParams)
+      ? fillTemplateMessageContent(
+          message.content,
+          message.metadata?.templateParams,
+          recipientName
+        )
       : message.content;
   const isSticker = Boolean(message.metadata?.isSticker);
   const isCallEvent = Boolean(message.metadata?.isCallEvent) || message.content === '[call]';
@@ -1064,9 +1072,28 @@ export default function MessageBubble({
               </p>
             ) : null}
             {quoteStrip}
+            {type === 'TEMPLATE' && message.metadata?.templateParams?.headerMediaUrl ? (
+              <img
+                src={resolvePublicMediaUrl(message.metadata.templateParams.headerMediaUrl)}
+                alt=""
+                className="mb-2 max-h-40 w-full rounded-md object-cover"
+              />
+            ) : null}
             <CollapsibleMessageText endMeta={metaRow()}>
               {highlightText(templateBody, highlightQuery)}
             </CollapsibleMessageText>
+            {type === 'TEMPLATE' && message.metadata?.templateButtons?.length ? (
+              <div className="-mx-3 -mb-2 mt-2 border-t border-black/10 dark:border-white/10">
+                {message.metadata.templateButtons.map((button, index) => (
+                  <div
+                    key={`${button.type}-${button.text}-${index}`}
+                    className="border-b border-black/10 py-2 text-center text-[13px] font-semibold text-[#027eb5] last:border-b-0 dark:border-white/10 dark:text-sky-300"
+                  >
+                    {button.text}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           {reactionChips}
           <FailedRetryRow

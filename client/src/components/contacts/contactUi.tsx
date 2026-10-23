@@ -61,11 +61,13 @@ export function ContactOptInBadge({
   );
 }
 
-export function ContactSourceBadge({ source }: { source?: ContactSource }) {
+export function ContactSourceBadge({ source, inline }: { source?: ContactSource; inline?: boolean }) {
   const meta = getContactSourceMeta(source);
   return (
     <span
-      className={`inline-flex rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta.bg} ${meta.tone}`}
+      className={`inline-flex shrink-0 rounded-md font-bold uppercase tracking-wide ring-1 ring-inset ${
+        inline ? 'px-1.5 py-0 text-[8px] leading-4' : 'px-2 py-0.5 text-[9px]'
+      } ${meta.bg} ${meta.tone}`}
     >
       {meta.label}
     </span>
@@ -148,10 +150,13 @@ export function ContactActiveIndicator({ lastActiveAt }: { lastActiveAt?: string
 export function ContactRowPreview({ contact }: { contact: Contact }) {
   return (
     <div className="min-w-0">
-      <p className="truncate font-semibold text-theme-fg group-hover:text-sky-700 dark:group-hover:text-sky-300">
-        {contact.name || 'Unnamed contact'}
-      </p>
-      <p className="mt-0.5 truncate font-mono text-[11px] font-medium text-theme-muted">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <p className="min-w-0 truncate font-semibold text-theme-fg group-hover:text-sky-700 dark:group-hover:text-sky-300">
+          {contact.name || 'Unnamed contact'}
+        </p>
+        <ContactSourceBadge source={contact.source} inline />
+      </div>
+      <p className="truncate font-mono text-[11px] font-medium text-theme-muted">
         {formatContactPhone(contact.phone)}
       </p>
     </div>

@@ -47,6 +47,15 @@ describe('explainWhatsAppSendFailure', () => {
     expect(explained.body.toLowerCase()).toMatch(/not registered/);
   });
 
+  it('explains a healthy-ecosystem hold as a per-person limit, not a broken template', () => {
+    const explained = explainWhatsAppSendFailure({
+      rawMessage: 'This message was not delivered to maintain healthy ecosystem engagement.',
+    });
+    expect(explained.code).toBe(131049);
+    expect(explained.retryHelps).toBe(false);
+    expect(explained.body.toLowerCase()).toMatch(/other recipients are fine/);
+  });
+
   it('explains 24h window and template param mismatch', () => {
     expect(explainWhatsAppSendFailure({ code: 131047 }).action).toBe('window');
     expect(explainWhatsAppSendFailure({ code: 132012 }).retryHelps).toBe(true);

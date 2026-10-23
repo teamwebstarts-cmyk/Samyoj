@@ -14,4 +14,10 @@ describe('fillTemplateMessageContent', () => {
   it('leaves placeholders when no values were saved', () => {
     expect(fillTemplateMessageContent('Hi {{1}}', { body: [] })).toBe('Hi {{1}}');
   });
+
+  it('replaces the stored sample name with the name that was sent', () => {
+    expect(
+      fillTemplateMessageContent('Dear Rahul,\n\nWarm regards,', { body: ['Surendra'] })
+    ).toBe('Dear Surendra,\n\nWarm regards,');
+  });
 });

@@ -45,8 +45,8 @@ const leadSchema = z.object({
   contactId: z.string().uuid().optional(),
   stage: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST']).optional(),
   source: z.string().optional(),
-  assignedAgentId: z.string().uuid().optional(),
-  notes: z.string().optional(),
+  assignedAgentId: z.string().uuid().nullable().optional(),
+  notes: z.string().nullable().optional(),
   amount: z.number().nonnegative().nullable().optional(),
 });
 

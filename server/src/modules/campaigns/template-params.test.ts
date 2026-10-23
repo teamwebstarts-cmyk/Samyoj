@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTemplateComponents, mergeTemplateParams } from './template-params';
+import { applyTemplateParamsToPreview, buildTemplateComponents, mergeTemplateParams } from './template-params';
 import type { MessageTemplate } from '../whatsapp/meta.service';
 
 function templateWith(bodyText?: string, headerText?: string): MessageTemplate {
@@ -114,6 +114,20 @@ describe('buildTemplateComponents', () => {
       index: '0',
       parameters: [{ type: 'coupon_code', coupon_code: '123456' }],
     });
+  });
+});
+
+describe('applyTemplateParamsToPreview', () => {
+  it('stores the recipient name when the inbox passes the contact', () => {
+    const text = applyTemplateParamsToPreview(
+      templateWith('Dear {{1}},\n\nWarm regards,'),
+      { body: ['{{name}}'] },
+      'deepawali',
+      { name: 'Surendra' }
+    );
+    expect(text).toContain('Dear Surendra');
+    expect(text).not.toContain('Rahul');
+    expect(text).toContain('Warm regards');
   });
 });
 

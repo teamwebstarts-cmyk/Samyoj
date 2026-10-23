@@ -125,6 +125,7 @@ export default function LeadFormSlideOver({
       accent="sky"
       footer={
         <SlideOverFooter
+          formId="lead-slideover-form"
           onCancel={onClose}
           submitLabel={isEdit ? 'Save' : 'Create'}
           loading={saving}
@@ -132,7 +133,7 @@ export default function LeadFormSlideOver({
         />
       }
     >
-      <form id="slideover-form" onSubmit={handleSubmit} className="space-y-5">
+      <form id="lead-slideover-form" onSubmit={handleSubmit} className="space-y-5">
         {contactName && (
           <div className="text-[12px]">
             On contact: <span className="font-semibold text-theme-fg">{contactName}</span>

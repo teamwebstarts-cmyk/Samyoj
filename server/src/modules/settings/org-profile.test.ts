@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clipProfileSource,
   computeProfileCompleteness,
   isProfileCoreComplete,
   parseOrgProfile,
+  PROFILE_SOURCE_STORE_CHARS,
 } from './org-profile';
+import { formatBusinessExtrasBlock } from '../ai/business-context';
 
 describe('org-profile', () => {
   it('parses profile from settings JSON', () => {
@@ -31,6 +34,21 @@ describe('org-profile', () => {
     const partial = computeProfileCompleteness('Acme', { description: 'Hi' });
     expect(partial.isComplete).toBe(false);
     expect(partial.requiredFilled).toBe(2);
+  });
+
+  it('keeps a short slice of PDF text and feeds AI prompts', () => {
+    const clipped = clipProfileSource('  Price  list   ₹999  '.repeat(2000));
+    expect(clipped.length).toBe(PROFILE_SOURCE_STORE_CHARS);
+    expect(clipped.startsWith('Price list')).toBe(true);
+    const block = formatBusinessExtrasBlock({
+      companyName: 'Acme',
+      website: '',
+      notes: '',
+      audience: '',
+      valueProps: [],
+      sourceExcerpt: 'Price list ₹999',
+    });
+    expect(block).toContain('Price list ₹999');
   });
 
   it('isProfileCoreComplete matches four required fields', () => {

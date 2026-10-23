@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Activity,
   ArrowRight,
   CheckCircle2,
   Clock,
@@ -559,7 +558,6 @@ export default function ContactsPage() {
       : [
           { label: 'Contacts', value: summary.total, tone: 'total', icon: Users },
           { label: messagingConsent.statsLabel, value: summary.optedIn, tone: 'optedIn', icon: CheckCircle2 },
-          { label: 'Active (7d)', value: summary.active7d, tone: 'active', icon: Activity },
           { label: 'Tagged', value: summary.tagged, tone: 'tagged', icon: Tag },
         ];
 
@@ -580,18 +578,8 @@ export default function ContactsPage() {
       list={viewTab === 'all'}
       className={selectedIds.length > 0 ? 'pb-28' : undefined}
     >
-      <div
-        className={
-          viewTab === 'all'
-            ? 'list-page-stack'
-            : 'min-w-0 space-y-2 sm:space-y-4 lg:space-y-5'
-        }
-      >
-        <div
-          className={
-            viewTab === 'all' ? 'shrink-0 space-y-2 sm:space-y-4 lg:space-y-5' : 'contents'
-          }
-        >
+      <div className={viewTab === 'all' ? 'list-page-stack' : 'list-page-stack min-w-0'}>
+        <div className="flex shrink-0 flex-col gap-2 sm:gap-4 lg:gap-5">
           <ContactHero
             badge={viewTab === 'pipeline' ? 'Pipeline' : 'Audience'}
             badgeIcon={viewTab === 'pipeline' ? Target : Users}
@@ -617,12 +605,14 @@ export default function ContactsPage() {
         </div>
 
         {viewTab === 'pipeline' ? (
-          <ContactPipelineTab
-            refreshToken={pipelineRefresh}
-            onStatsChange={setPipelineStats}
-            onLeadCreated={handleLeadCreated}
-            onBrowseContacts={() => setViewTab('all')}
-          />
+          <div className="list-shell-body min-h-0 min-w-0 flex-1">
+            <ContactPipelineTab
+              refreshToken={pipelineRefresh}
+              onStatsChange={setPipelineStats}
+              onLeadCreated={handleLeadCreated}
+              onBrowseContacts={() => setViewTab('all')}
+            />
+          </div>
         ) : (
           <div className="inbox-shell list-shell-body min-w-0 overflow-hidden">
             <ListToolbar

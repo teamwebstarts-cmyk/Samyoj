@@ -9,6 +9,7 @@ export function buildStudioSystemPrompt(
   outputs: string[],
   brandKit: StudioBrand,
   photoNames: string[] = [],
+  businessFacts = '',
 ): string {
   const asked = outputs.join(', ');
   return [
@@ -16,6 +17,9 @@ export function buildStudioSystemPrompt(
     brandSystemPrompt(brandKit, language),
     `Language: ${language}.`,
     `User brief: ${brief}`,
+    businessFacts
+      ? `Business facts from the uploaded PDF. Use real names, prices, and offers from this text. Do not invent products that are not here:\n${businessFacts}`
+      : '',
     photoNames.length ? `Reference photo file names (subject hints only): ${photoNames.join(', ')}.` : '',
     `Write only these modes: ${asked}.`,
     'Return ONE JSON object and nothing else. No markdown fences. No explanation.',

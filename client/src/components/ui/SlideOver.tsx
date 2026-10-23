@@ -30,7 +30,7 @@ const widths = {
   lg: 'w-full max-w-lg sm:max-w-[min(100vw,32rem)]',
   xl: 'w-full max-w-xl sm:max-w-[min(100vw,36rem)]',
   '2xl': 'w-full sm:max-w-[min(100vw,46rem)]',
-  wide: 'w-full sm:max-w-[min(100vw,64rem)]',
+  wide: 'w-full max-w-[min(100vw,52rem)]',
 };
 
 const EXIT_MS = 220;
@@ -172,6 +172,8 @@ export default function SlideOver({
 }
 
 interface SlideOverFooterProps {
+  /** Defaults to `slideover-form` — use a unique id when multiple slide-overs can mount together. */
+  formId?: string;
   onCancel: () => void;
   submitLabel?: string;
   loading?: boolean;
@@ -188,6 +190,7 @@ interface SlideOverFooterProps {
 }
 
 export function SlideOverFooter({
+  formId = 'slideover-form',
   onCancel,
   submitLabel = 'Save',
   loading,
@@ -229,7 +232,7 @@ export function SlideOverFooter({
         {!hideSubmit && (
           <button
             type="submit"
-            form="slideover-form"
+            form={formId}
             disabled={loading || submitDisabled}
             className={`${submitClass} ${FOCUS_RING_CLASS}`}
           >

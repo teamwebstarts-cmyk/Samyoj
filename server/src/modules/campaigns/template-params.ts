@@ -225,10 +225,25 @@ export function buildTemplateComponents(
   return components;
 }
 
+/** Buttons to draw on the inbox bubble. Meta does not echo these back on the message. */
+export function templateSendButtons(
+  template?: MessageTemplate | null
+): Array<{ type: string; text: string }> {
+  const buttons =
+    template?.components?.find((c) => c.type?.toUpperCase() === 'BUTTONS')?.buttons || [];
+  return buttons
+    .map((button) => ({
+      type: (button.type || 'URL').toUpperCase(),
+      text: (button.text || '').trim(),
+    }))
+    .filter((button) => button.text);
+}
+
 export function applyTemplateParamsToPreview(
   template: MessageTemplate | null | undefined,
   params: TemplateParams | null | undefined,
-  fallbackName?: string
+  fallbackName?: string,
+  contact?: RecipientContactContext
 ): string {
   if (!template?.components?.length) {
     return fallbackName ? `Template: ${fallbackName}` : '';
@@ -240,24 +255,31 @@ export function applyTemplateParamsToPreview(
     let text = component.text?.trim();
     if (!text) continue;
 
-    const values = type === 'BODY' ? params?.body : params?.header;
+    const values = type === 'BODY' ? params?.body : type === 'HEADER' ? params?.header : undefined;
     if (values?.length) {
       values.forEach((value, index) => {
-        // Preview is campaign-level (no recipient yet) — show a friendly sample for tokens.
         const token = sanitizeFieldToken(value);
-        const display =
-          token === 'contact.name'
-            ? 'Rahul'
-            : token === 'contact.phone'
-              ? '+91 98765 43210'
-              : token === 'contact.email'
-                ? 'rahul@example.com'
-                : token?.startsWith('custom.')
-                  ? `{${token.slice(7)}}`
-                  : value;
+        // Campaign preview has no recipient yet. Inbox passes the contact so the
+        // stored bubble matches what WhatsApp delivered.
+        const display = token
+          ? contact
+            ? resolveToken(token, contact)
+            : token === 'contact.name'
+              ? 'Rahul'
+              : token === 'contact.phone'
+                ? '+91 98765 43210'
+                : token === 'contact.email'
+                  ? 'rahul@example.com'
+                  : token.startsWith('custom.')
+                    ? `{${token.slice(7)}}`
+                    : value
+          : value;
         text = text!.replace(new RegExp(`\\{\\{${index + 1}\\}\\}`, 'g'), display);
       });
-      if (values[0]) text = text!.replace(/\{\{name\}\}/g, values[0]);
+      const nameValue = contact
+        ? resolveToken('contact.name', contact)
+        : values[0];
+      if (nameValue) text = text!.replace(/\{\{name\}\}/g, nameValue);
     }
 
     if (type === 'HEADER' || type === 'BODY' || type === 'FOOTER') {

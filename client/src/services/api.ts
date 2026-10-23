@@ -1029,6 +1029,14 @@ export const settingsApi = {
     defaultLocale?: string;
     timezone?: string;
   }) => api.patch('/settings/profile', data),
+  uploadProfileSource: (file: File) =>
+    api.post('/settings/profile/source', file, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'X-File-Name': file.name,
+      },
+    }),
+  clearProfileSource: () => api.delete('/settings/profile/source'),
   getUiToggles: () => api.get('/settings/ui-toggles'),
   updateUiToggles: (data: { hiddenModules?: string[]; hiddenSettingsTabs?: string[] }) =>
     api.patch('/settings/ui-toggles', data),

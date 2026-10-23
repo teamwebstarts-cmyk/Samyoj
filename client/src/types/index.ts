@@ -239,6 +239,8 @@ export interface MessageMetadata {
   templateName?: string;
   templateLanguage?: string;
   templateParams?: TemplateParams;
+  /** Approved buttons, stored at send time so the bubble can show them. */
+  templateButtons?: Array<{ type: string; text: string }>;
   /** Reused by the client when recovering a timed-out logical send. */
   idempotencyKey?: string;
   source?: 'flow' | 'automation' | 'biz_app';
@@ -1350,6 +1352,13 @@ export interface OrgProfilePayload {
     percent: number;
     isComplete: boolean;
   };
+  source: {
+    fileName: string;
+    bytes: number;
+    chars: number;
+    uploadedAt: string;
+    preview: string;
+  } | null;
 }
 
 export interface Campaign {

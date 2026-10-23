@@ -11,12 +11,13 @@ import {
   templateNeedsHeaderMedia,
 } from '../campaigns/campaignPreviewUtils';
 import TemplateButtonExtras from '../templates/TemplateButtonExtras';
-import { templateApi } from '../../services/api';
+import { contentStudioApi, templateApi } from '../../services/api';
 import { getErrorMessage } from '../../utils/errors';
 import { countTemplateVars, getTemplateBodyText, getTemplateHeaderText } from '../../utils/templateUtils';
 import {
   fetchTemplateVariableMeta,
   previewParams,
+  getTemplateButtons,
   templateDynamicUrlButtons,
   templateNeedsCoupon,
   tokenForMeta,
@@ -24,6 +25,7 @@ import {
   type TemplateVariableMeta,
 } from '../../utils/templateForm';
 import { isLikelyPublicHttpsUrl } from '../../utils/headerMedia';
+import { resolvePublicMediaUrl } from '../../utils/publicMediaUrl';
 import type { MessageTemplate, TemplateParams } from '../../types';
 import { asCustomAttributes } from '../../utils/customAttributes';
 
@@ -71,6 +73,10 @@ export default function TemplateComposer({
   const [bodyParams, setBodyParams] = useState<string[]>([]);
   const [headerParams, setHeaderParams] = useState<string[]>([]);
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
+  const [savedHeaderUrl, setSavedHeaderUrl] = useState('');
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [gallery, setGallery] = useState<Array<{ id: string; publicUrl: string | null }>>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [buttonUrlSuffixes, setButtonUrlSuffixes] = useState<string[]>([]);
   const [variableMeta, setVariableMeta] = useState<TemplateVariableMeta[]>([]);
@@ -127,6 +133,7 @@ export default function TemplateComposer({
       setBodyParams([]);
       setHeaderParams([]);
       setHeaderMediaUrl('');
+      setSavedHeaderUrl('');
       setCouponCode('');
       setButtonUrlSuffixes([]);
       setVariableMeta([]);
@@ -137,6 +144,7 @@ export default function TemplateComposer({
     setBodyParams(Array.from({ length: bodyCount }, () => ''));
     setHeaderParams(Array.from({ length: headerCount }, () => ''));
     setHeaderMediaUrl('');
+    setSavedHeaderUrl('');
     setCouponCode('');
     setButtonUrlSuffixes(Array.from({ length: templateDynamicUrlButtons(selected).length }, () => ''));
     let cancelled = false;
@@ -145,6 +153,7 @@ export default function TemplateComposer({
       .then(({ data }) => {
         const mediaUrl = data.data?.mediaUrl;
         if (!cancelled && typeof mediaUrl === 'string' && mediaUrl) {
+          setSavedHeaderUrl(mediaUrl);
           setHeaderMediaUrl((current) => current || mediaUrl);
         }
       })
@@ -296,6 +305,7 @@ export default function TemplateComposer({
     Boolean(selected && (templateNeedsCoupon(selected) || templateDynamicUrlButtons(selected).length > 0));
 
   return (
+    <>
     <form
       onSubmit={handleSubmit}
       className="flex max-h-[min(62vh,560px)] flex-col bg-theme-surface"
@@ -348,6 +358,22 @@ export default function TemplateComposer({
                           id="inbox-header-media-url"
                           compact
                           required
+                          showInlinePreview={false}
+                          savedUrl={savedHeaderUrl || undefined}
+                          onBrowseLibrary={() => {
+                            setGalleryOpen(true);
+                            setGalleryLoading(true);
+                            contentStudioApi
+                              .listAssets({ kind: 'IMAGE', limit: '24' })
+                              .then(({ data }) => {
+                                const assets =
+                                  (data as { data?: { assets?: Array<{ id: string; publicUrl: string | null }> } })
+                                    .data?.assets || [];
+                                setGallery(assets.filter((asset) => asset.publicUrl));
+                              })
+                              .catch(() => setGallery([]))
+                              .finally(() => setGalleryLoading(false));
+                          }}
                           format={
                             (getTemplateParts(selected).headerFormat || 'IMAGE') as
                               | 'IMAGE'
@@ -386,6 +412,18 @@ export default function TemplateComposer({
                     ))}
                   </div>
                 )}
+
+                {selected && getTemplateButtons(selected).length > 0 ? (
+                  <p className="text-[11px] leading-snug text-theme-muted">
+                    Buttons stay as approved
+                    {getTemplateButtons(selected)
+                      .map((button) => button.text)
+                      .filter(Boolean)
+                      .map((text) => ` · ${text}`)
+                      .join('')}
+                    . A link can be changed here only when that approved URL has a variable.
+                  </p>
+                ) : null}
 
                 <TemplateButtonExtras
                   compact
@@ -443,5 +481,39 @@ export default function TemplateComposer({
         </AppButton>
       </div>
     </form>
+    {galleryOpen ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+        <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-theme-surface p-4 shadow-xl">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-theme-primary">Choose an image</p>
+            <AppButton type="button" variant="ghost" size="sm" onClick={() => setGalleryOpen(false)}>
+              Close
+            </AppButton>
+          </div>
+          {galleryLoading ? (
+            <p className="text-[12px] text-theme-muted">Loading images…</p>
+          ) : gallery.length === 0 ? (
+            <p className="text-[12px] text-theme-muted">No saved images yet. Upload a file instead.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {gallery.map((asset) => (
+                <button
+                  key={asset.id}
+                  type="button"
+                  className="overflow-hidden rounded-lg border border-theme-border"
+                  onClick={() => {
+                    if (asset.publicUrl) setHeaderMediaUrl(asset.publicUrl);
+                    setGalleryOpen(false);
+                  }}
+                >
+                  <img src={resolvePublicMediaUrl(asset.publicUrl)} alt="" className="h-24 w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

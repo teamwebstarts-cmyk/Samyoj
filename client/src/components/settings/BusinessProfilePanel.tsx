@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Building2, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import SettingsPanel from './SettingsPanel';
 import { SettingsTabSkeleton } from './SettingsSkeleton';
 import AppButton from '../ui/AppButton';
@@ -25,6 +25,9 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
   const [website, setWebsite] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [source, setSource] = useState<OrgProfilePayload['source']>(null);
+  const [uploading, setUploading] = useState(false);
   const [completeness, setCompleteness] = useState({
     requiredFilled: 0,
     requiredTotal: 4,
@@ -45,6 +48,7 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
         setWebsite(payload.profile?.website || '');
         setEmail(payload.profile?.email || '');
         setAddress(payload.profile?.address || '');
+        setSource(payload.source || null);
         setCompleteness(payload.completeness);
       })
       .catch(() => toastError('Could not load business profile'))
@@ -76,6 +80,7 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
       });
       const payload = data.data.profile as OrgProfilePayload;
       setCompleteness(payload.completeness);
+      setSource(payload.source || null);
       toastSuccess('Business profile saved successfully');
       onSaved?.();
     } catch {
@@ -201,6 +206,92 @@ export default function BusinessProfilePanel({ canEdit, onSaved }: BusinessProfi
             onChange={(e) => setDescription(e.target.value)}
             disabled={!canEdit}
           />
+
+          <div className="rounded-xl border border-theme-border bg-theme-surface px-3.5 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[13px] font-semibold text-theme-text">
+                  <FileText size={14} />
+                  Business PDF
+                </p>
+                <p className="mt-1 text-[12px] text-theme-muted">
+                  One PDF up to 2 MB (catalog, price list, or about). We keep the text, not the file.
+                  AI Studio, the chat bot, and calling use it. No extra AI credit to read the PDF.
+                </p>
+              </div>
+              {canEdit && (
+                <AppButton
+                  variant="secondary"
+                  loading={uploading}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {source ? 'Replace' : 'Upload'}
+                </AppButton>
+              )}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file || !canEdit) return;
+                if (file.size > 2 * 1024 * 1024) {
+                  toastError('PDF must be 2 MB or smaller');
+                  return;
+                }
+                if (file.type && file.type !== 'application/pdf') {
+                  toastError('Upload a PDF');
+                  return;
+                }
+                setUploading(true);
+                try {
+                  const { data } = await settingsApi.uploadProfileSource(file);
+                  const payload = data.data.profile as OrgProfilePayload;
+                  setSource(payload.source || null);
+                  toastSuccess('PDF text saved for AI');
+                } catch {
+                  toastError('Could not read that PDF');
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            />
+            {source && (
+              <div className="mt-3 flex items-start justify-between gap-3 rounded-lg bg-theme-muted/10 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-[12px] font-semibold text-theme-text">{source.fileName}</p>
+                  <p className="text-[11px] text-theme-muted">
+                    {source.chars.toLocaleString()} characters saved
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-[12px] text-theme-muted">{source.preview}</p>
+                </div>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-[12px] font-semibold text-red-600"
+                    onClick={async () => {
+                      setUploading(true);
+                      try {
+                        const { data } = await settingsApi.clearProfileSource();
+                        const payload = data.data.profile as OrgProfilePayload;
+                        setSource(payload.source || null);
+                        toastSuccess('Business PDF removed');
+                      } catch {
+                        toastError('Could not remove the PDF');
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </SettingsPanel>
     </div>

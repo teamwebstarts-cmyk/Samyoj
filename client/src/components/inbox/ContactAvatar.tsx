@@ -13,7 +13,9 @@ export type AvatarPresence =
 interface ContactAvatarProps {
   name?: string;
   phone: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  /** `contacts` uses a smaller muted gradient set for CRM lists. */
+  palette?: 'inbox' | 'contacts';
   /**
    * Legacy: when true and `presence` is unset, shows an online (green) pip.
    * Prefer `presence` for new call sites.
@@ -34,7 +36,8 @@ interface ContactAvatarProps {
 }
 
 const sizes = {
-  sm: 'h-10 w-10 text-[11px]',
+  xs: 'h-8 w-8 text-[10px]',
+  sm: 'h-9 w-9 text-[11px]',
   md: 'h-11 w-11 text-[12px]',
   lg: 'h-12 w-12 text-[13px]',
   xl: 'h-20 w-20 text-[22px]',
@@ -42,6 +45,7 @@ const sizes = {
 
 /** Dot diameter scales with avatar (~10–12px on 40px / sm). */
 const statusDotSizes = {
+  xs: 'h-2 w-2',
   sm: 'h-2.5 w-2.5',
   md: 'h-3 w-3',
   lg: 'h-3 w-3',
@@ -49,8 +53,8 @@ const statusDotSizes = {
 } as const;
 
 const shapes = {
-  squircle: { sm: 'rounded-xl', md: 'rounded-2xl', lg: 'rounded-2xl', xl: 'rounded-3xl' },
-  circle: { sm: 'rounded-full', md: 'rounded-full', lg: 'rounded-full', xl: 'rounded-full' },
+  squircle: { xs: 'rounded-lg', sm: 'rounded-xl', md: 'rounded-2xl', lg: 'rounded-2xl', xl: 'rounded-3xl' },
+  circle: { xs: 'rounded-full', sm: 'rounded-full', md: 'rounded-full', lg: 'rounded-full', xl: 'rounded-full' },
 } as const;
 
 const PRESENCE_META: Record<AvatarPresence, { label: string; color: string }> = {
@@ -76,6 +80,7 @@ export default function ContactAvatar({
   name,
   phone,
   size = 'md',
+  palette = 'inbox',
   active,
   shape = 'squircle',
   presence,
@@ -85,7 +90,7 @@ export default function ContactAvatar({
   const tipFor = useGlassTipProps();
   const glassTips = useInboxGlassTipActive();
   const key = name || phone;
-  const gradient = getAvatarGradient(key);
+  const gradient = getAvatarGradient(key, palette);
   const initials = getInitials(name, phone);
   const resolved = showStatus ? resolvePresence(presence, active) : null;
   const meta = resolved ? PRESENCE_META[resolved] : null;

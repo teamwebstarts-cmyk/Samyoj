@@ -365,7 +365,10 @@ export default function ContactPipelineTab({
                           <ContactAvatar
                             name={lead.contact.name || undefined}
                             phone={lead.contact.phone || ''}
-                            size="sm"
+                            size="xs"
+                            palette="contacts"
+                            shape="circle"
+                            showStatus={false}
                           />
                           <span className="truncate font-medium text-theme-fg">{contactLabel}</span>
                         </div>

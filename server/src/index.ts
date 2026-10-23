@@ -217,6 +217,11 @@ app.use(
 // Instagram post media is uploaded as the original bytes. Keeping this
 // route-scoped avoids base64's 4/3 expansion against the global JSON limit.
 app.use(
+  '/api/settings/profile/source',
+  express.raw({ type: 'application/pdf', limit: '2mb' })
+);
+
+app.use(
   '/api/instagram/posts/media',
   express.raw({
     type: ['image/*', 'video/*', 'application/octet-stream'],

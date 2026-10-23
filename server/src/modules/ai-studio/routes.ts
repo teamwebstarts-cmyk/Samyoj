@@ -13,6 +13,7 @@ import { buildStudioSystemPrompt } from './studio-prompts';
 import { fetchStudioPackFromLlm } from './studio-llm';
 import { assembleStudioPack } from './assemble-studio-pack';
 import { config } from '../../config';
+import { loadBusinessContext } from '../ai/business-context';
 
 const router = Router();
 
@@ -91,12 +92,14 @@ router.post(
         }
       : null;
 
+    const business = await loadBusinessContext(orgId).catch(() => null);
     const systemPrompt = buildStudioSystemPrompt(
       data.brief,
       data.language,
       data.outputs,
       brandKit as Parameters<typeof buildStudioSystemPrompt>[3],
       data.photoNames || [],
+      business?.sourceExcerpt || '',
     );
 
     const job = await prisma.generationJob.create({

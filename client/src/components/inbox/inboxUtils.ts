@@ -61,6 +61,15 @@ const AVATAR_GRADIENTS = [
   'from-blue-600 to-indigo-700',
 ] as const;
 
+/** Muted palette for Contacts / CRM lists (less rainbow than inbox). */
+const CONTACT_AVATAR_GRADIENTS = [
+  'from-slate-500 to-slate-600',
+  'from-violet-500 to-violet-700',
+  'from-sky-500 to-sky-700',
+  'from-teal-500 to-teal-700',
+  'from-indigo-500 to-indigo-700',
+] as const;
+
 export function getInitials(name?: string, phone?: string) {
   if (name?.trim()) {
     return name
@@ -74,15 +83,16 @@ export function getInitials(name?: string, phone?: string) {
   return phone?.replace(/\D/g, '').slice(-2) || '?';
 }
 
-export function getAvatarGradient(key: string) {
-  if (!key.trim()) return AVATAR_GRADIENTS[0];
+export function getAvatarGradient(key: string, palette: 'inbox' | 'contacts' = 'inbox') {
+  const gradients = palette === 'contacts' ? CONTACT_AVATAR_GRADIENTS : AVATAR_GRADIENTS;
+  if (!key.trim()) return gradients[0];
   // FNV-1a spreads short strings (names, emails, ids) more evenly across the palette.
   let hash = 2166136261;
   for (let i = 0; i < key.length; i += 1) {
     hash ^= key.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
-  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+  return gradients[Math.abs(hash) % gradients.length];
 }
 
 /** Clock time only — date belongs on thread dividers, not in every bubble. */
@@ -261,22 +271,42 @@ export function alignCallSummariesInThread(messages: Message[]): Message[] {
   return ordered;
 }
 
+const SAMPLE_NAME = 'Rahul';
+
+function concreteTemplateValue(value: string | undefined, contactName?: string | null): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed === '{{name}}' || trimmed === 'contact.name') return contactName?.trim() || undefined;
+  if (trimmed.startsWith('{{')) return undefined;
+  return trimmed;
+}
+
 /** Replace {{1}} / {{2}} with the values that were actually sent. */
 export function fillTemplateMessageContent(
   content: string,
-  params?: { body?: string[]; header?: string[] } | null
+  params?: { body?: string[]; header?: string[] } | null,
+  contactName?: string | null
 ): string {
-  if (!content || !/\{\{\d+\}\}/.test(content)) return content;
+  if (!content) return content;
   const body = params?.body ?? [];
   const header = params?.header ?? [];
-  return content.replace(/\{\{(\d+)\}\}/g, (match, raw: string) => {
-    const i = Number(raw) - 1;
-    const fromBody = body[i]?.trim();
-    if (fromBody) return fromBody;
-    const fromHeader = header[i]?.trim();
-    if (fromHeader) return fromHeader;
-    return match;
-  });
+  let text = content;
+  if (/\{\{\d+\}\}/.test(text)) {
+    text = text.replace(/\{\{(\d+)\}\}/g, (match, raw: string) => {
+      const i = Number(raw) - 1;
+      const fromBody = concreteTemplateValue(body[i], contactName);
+      if (fromBody) return fromBody;
+      const fromHeader = concreteTemplateValue(header[i], contactName);
+      if (fromHeader) return fromHeader;
+      return match;
+    });
+  }
+  // Older sends stored the campaign sample "Rahul" while WhatsApp got the real name.
+  const sentName = concreteTemplateValue(body[0], contactName);
+  if (sentName && sentName !== SAMPLE_NAME && text.includes(SAMPLE_NAME)) {
+    text = text.replace(SAMPLE_NAME, sentName);
+  }
+  return text;
 }
 
 export function getMessagePreview(message?: Pick<Message, 'type' | 'content' | 'metadata'>) {

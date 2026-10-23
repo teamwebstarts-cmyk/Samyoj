@@ -14,7 +14,7 @@ import { getOrgWhatsappContext } from '../whatsapp/context';
 import { getCachedMessageTemplate } from '../templates/cache';
 import { resolveActiveWhatsappNumber, conversationFilter, scopedConversationWhere, scopedConversationParent, ticketsForNumberFilter } from '../whatsapp/active-number';
 import { deliverOutboundMessage, type DeliverMessageType } from '../messages/send.service';
-import { mergeTemplateParams, applyTemplateParamsToPreview, pickHydratedTemplateContent } from '../campaigns/template-params';
+import { mergeTemplateParams, applyTemplateParamsToPreview, pickHydratedTemplateContent, templateSendButtons } from '../campaigns/template-params';
 import { assertApprovedCampaignTemplate } from '../campaigns/template-validation';
 import { validateInteractive, type InteractiveMessageOptions } from '../messages/interactive';
 import { getMessageMediaBuffer, type MessageMediaMetadata } from '../media/download.service';
@@ -875,6 +875,12 @@ router.get(
     if (templateNames.size > 0) {
       try {
         const orgId = req.user!.organizationId!;
+        const templateContact = conversation.contactId
+          ? await prisma.contact.findFirst({
+              where: { id: conversation.contactId, organizationId: orgId },
+              select: { name: true, phone: true, email: true, customAttributes: true },
+            })
+          : null;
         const { wabaId, accessToken } = await getOrgWhatsappContext(
           orgId,
           req.activeWhatsappNumberId
@@ -896,11 +902,26 @@ router.get(
             meta?.templateName ||
             (msg.content.startsWith('Template: ') ? msg.content.slice('Template: '.length).trim() : '');
           const template = name ? templateByName.get(name) : undefined;
-          const rendered = name
-            ? applyTemplateParamsToPreview(template, meta?.templateParams, name)
+          const renderedRaw = name
+            ? applyTemplateParamsToPreview(
+                template,
+                meta?.templateParams,
+                name,
+                templateContact ?? undefined
+              )
             : '';
+          // Without the contact, a leftover {{name}} token renders as the sample "Rahul"
+          // and would replace a bubble that already has the real name.
+          const rendered = templateContact || !renderedRaw.includes('Rahul') ? renderedRaw : '';
           const content = pickHydratedTemplateContent(msg.content, rendered);
-          return content !== msg.content ? { ...msg, content } : msg;
+          const buttons = templateSendButtons(template);
+          const storedButtons = (msg.metadata as { templateButtons?: unknown } | null)?.templateButtons;
+          const metadata =
+            buttons.length && !Array.isArray(storedButtons)
+              ? { ...((msg.metadata as object) || {}), templateButtons: buttons }
+              : msg.metadata;
+          if (content === msg.content && metadata === msg.metadata) return msg;
+          return { ...msg, content, metadata };
         });
       } catch {
         /* keep stored content if Meta lookup fails */
@@ -1595,7 +1616,8 @@ router.post(
       messageContent = applyTemplateParamsToPreview(
         template,
         resolvedTemplateParams,
-        data.templateName
+        data.templateName,
+        conversation.contact
       );
       try {
         assertApprovedCampaignTemplate(template, {
@@ -1610,6 +1632,7 @@ router.post(
         templateName: data.templateName,
         templateLanguage: data.templateLanguage || template?.language || 'en_US',
         templateParams: resolvedTemplateParams,
+        templateButtons: templateSendButtons(template),
       };
     }
 

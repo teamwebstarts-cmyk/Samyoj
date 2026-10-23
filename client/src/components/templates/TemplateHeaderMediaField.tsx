@@ -21,6 +21,11 @@ interface TemplateHeaderMediaFieldProps {
   compact?: boolean;
   required?: boolean;
   labelClassName?: string;
+  /** Inbox shows the picture only in the phone preview, not beside this field. */
+  showInlinePreview?: boolean;
+  /** Image already stored with this template. */
+  savedUrl?: string;
+  onBrowseLibrary?: () => void;
 }
 
 export default function TemplateHeaderMediaField({
@@ -31,6 +36,9 @@ export default function TemplateHeaderMediaField({
   compact,
   required,
   labelClassName,
+  showInlinePreview = true,
+  savedUrl,
+  onBrowseLibrary,
 }: TemplateHeaderMediaFieldProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -90,6 +98,21 @@ export default function TemplateHeaderMediaField({
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           {uploading ? 'Uploading…' : 'Upload file'}
         </AppButton>
+        {savedUrl ? (
+          <AppButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onChange(savedUrl)}
+          >
+            Use saved image
+          </AppButton>
+        ) : null}
+        {onBrowseLibrary ? (
+          <AppButton type="button" variant="secondary" size="sm" onClick={onBrowseLibrary}>
+            Choose from gallery
+          </AppButton>
+        ) : null}
         <span className="text-[10px] font-medium text-slate-400">{HEADER_MEDIA_SIZE_HINT[format]}</span>
       </div>
 
@@ -105,17 +128,17 @@ export default function TemplateHeaderMediaField({
         error={urlInvalid ? 'Use a public https:// link' : undefined}
       />
 
-      {value.trim() && isLikelyPublicHttpsUrl(value) && format === 'IMAGE' ? (
+      {showInlinePreview && value.trim() && isLikelyPublicHttpsUrl(value) && format === 'IMAGE' ? (
         <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
           <img src={value} alt="" className="max-h-28 w-full object-cover" />
         </div>
       ) : null}
-      {value.trim() && isLikelyPublicHttpsUrl(value) && format === 'VIDEO' ? (
+      {showInlinePreview && value.trim() && isLikelyPublicHttpsUrl(value) && format === 'VIDEO' ? (
         <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
           <video src={value} className="max-h-28 w-full object-cover" controls muted playsInline />
         </div>
       ) : null}
-      {value.trim() && isLikelyPublicHttpsUrl(value) && format === 'DOCUMENT' ? (
+      {showInlinePreview && value.trim() && isLikelyPublicHttpsUrl(value) && format === 'DOCUMENT' ? (
         <p className="flex items-center gap-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
           <FileText className="h-3.5 w-3.5" aria-hidden />
           PDF link ready to send

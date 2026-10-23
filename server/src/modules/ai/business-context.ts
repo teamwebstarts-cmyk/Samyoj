@@ -1,5 +1,9 @@
 import prisma from '../../config/database';
-import { parseOrgProfile, BUSINESS_INDUSTRIES } from '../settings/org-profile';
+import {
+  parseOrgProfile,
+  BUSINESS_INDUSTRIES,
+  PROFILE_SOURCE_PROMPT_CHARS,
+} from '../settings/org-profile';
 
 export type BusinessExtras = {
   companyName: string;
@@ -9,6 +13,7 @@ export type BusinessExtras = {
   valueProps: string[];
   description?: string;
   industry?: string;
+  sourceExcerpt?: string;
 };
 
 /** Try-it / live preview — only fields from the slide-over About tab. */
@@ -48,6 +53,9 @@ export function formatBusinessExtrasBlock(extras: BusinessExtras): string {
   if (extras.audience) lines.push(`Who we serve: ${extras.audience}`);
   const offers = extras.valueProps.filter((item) => item.trim());
   if (offers.length > 0) lines.push(`What we offer: ${offers.join('; ')}`);
+  if (extras.sourceExcerpt) {
+    lines.push(`Facts from the business PDF (use these, do not invent beyond them):\n${extras.sourceExcerpt}`);
+  }
   return lines.join('\n');
 }
 
@@ -85,5 +93,6 @@ export async function loadBusinessContext(
     valueProps: Array.isArray(kit?.valueProps) ? kit.valueProps : [],
     description: description || undefined,
     industry: profile.industry || undefined,
+    sourceExcerpt: profile.sourceText?.slice(0, PROFILE_SOURCE_PROMPT_CHARS) || undefined,
   };
 }
