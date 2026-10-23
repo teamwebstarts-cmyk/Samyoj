@@ -31,6 +31,7 @@ import {
   upsertMockRow,
   type Draft,
   type LibraryRow,
+  type TemplateButtonForm,
   type TemplateButtonType,
 } from '../lib/library-catalog';
 
@@ -183,6 +184,166 @@ const HINDI_FOOTERS: Record<string, string> = {
   'Not interested? Reply STOP': 'रुचि नहीं है? STOP भेजें',
 };
 const toHindiFooter = (english: string) => HINDI_FOOTERS[english] ?? '';
+
+/** What the AI bar returns for a prompt. Shape matches what the real LLM endpoint will return. */
+type AiDraftSuggestion = {
+  title: string;
+  slug: string;
+  category: Draft['category'];
+  body: string;
+  bodyHi: string;
+  footer: string;
+  footerHi: string;
+  buttons: TemplateButtonForm[];
+  variables: Array<{ index: number; description: string; suggestedSource: string }>;
+};
+
+/**
+ * Mock generator standing in for `POST /platform/ai/template-draft`. Deliberately
+ * keyword-based and bilingual — the response shape (and the populate logic in the
+ * editor) is exactly what the real LLM endpoint will return, so switching over is
+ * a swap of this function for a fetch + zod parse.
+ * ponytail: keyword heuristics, not AI — replaced once platform-level AI config is settled.
+ */
+export function generateMockAiDraft(prompt: string): AiDraftSuggestion {
+  const p = prompt.toLowerCase();
+
+  // "code" is deliberately NOT an auth trigger — it's ambiguous with discount codes.
+  const category: Draft['category'] = /\b(otp|verify|verification|login|one[- ]time|auth)\b/.test(p)
+    ? 'AUTHENTICATION'
+    : /\b(offer|sale|discount|diwali|festive|promotional|launch|deal|blast)\b/.test(p)
+      ? 'MARKETING'
+      : 'UTILITY';
+
+  // Variable roster from prompt keywords, re-indexed 1..n in order of appearance.
+  const variables: AiDraftSuggestion['variables'] = [];
+  const pushVar = (description: string, suggestedSource: string) => {
+    if (!variables.some((v) => v.description === description)) {
+      variables.push({ index: variables.length + 1, description, suggestedSource });
+    }
+  };
+  if (category === 'AUTHENTICATION') {
+    pushVar('Code', 'custom');
+  } else {
+    if (/\b(customer|user|name|personal|hi|you)\b/.test(p)) pushVar('Customer name', 'contact.name');
+    if (/\border\b/.test(p)) pushVar('Order number', 'contact.custom');
+    if (/\b(code|coupon|promo)\b/.test(p) || category === 'MARKETING') pushVar('Code', 'custom');
+    if (variables.length === 0) pushVar('Customer name', 'contact.name');
+  }
+  const tok = (description: string) => `{{${variables.find((v) => v.description === description)?.index ?? 1}}}`;
+
+  const english =
+    category === 'AUTHENTICATION'
+      ? `${tok('Code')} is your verification code. It expires in 10 minutes. Do not share it with anyone.`
+      : category === 'MARKETING'
+        ? `Hi ${tok('Customer name')}! Our biggest festive sale is live — enjoy 20% off with code ${tok('Code')}. Hurry, the offer ends soon!`
+        : `Hi ${tok('Customer name')}, your order ${tok('Order number')} status has been updated. Reply here if you need any help.`;
+  const hindi =
+    category === 'AUTHENTICATION'
+      ? `${tok('Code')} आपका वेरिफिकेशन कोड है। यह 10 मिनट में समाप्त हो जाएगा। इसे किसी के साथ साझा न करें।`
+      : category === 'MARKETING'
+        ? `नमस्ते ${tok('Customer name')}! हमारी सबसे बड़ी त्योहार सेल लाइव है — कोड ${tok('Code')} से 20% छूट पाएं। जल्दी करें, ऑफ़र जल्द खत्म होगा!`
+        : `नमस्ते ${tok('Customer name')}, आपका ऑर्डर ${tok('Order number')} अपडेट हो गया है। किसी सहायता के लिए यहाँ उत्तर दें।`;
+
+  const title =
+    category === 'AUTHENTICATION' ? 'Login OTP code' : category === 'MARKETING' ? 'Festive offer blast' : 'Order status update';
+
+  return {
+    title,
+    slug: title.toLowerCase().replace(/\s+/g, '_'),
+    category,
+    body: english,
+    bodyHi: hindi,
+    footer: category === 'MARKETING' ? 'Reply STOP to unsubscribe' : '',
+    footerHi: category === 'MARKETING' ? toHindiFooter('Reply STOP to unsubscribe') : '',
+    buttons:
+      category === 'MARKETING'
+        ? [{ type: 'URL', text: 'Shop now', url: 'https://example.com/shop', phone_number: '', example: '' }]
+        : [],
+    variables,
+  };
+}
+
+/** AI assist bar — prompt + Generate, mock-populates the draft until the real endpoint lands. */
+function AiAssistBar({
+  canWrite,
+  hasContent,
+  onApply,
+}: {
+  canWrite: boolean;
+  hasContent: boolean;
+  onApply: (suggestion: AiDraftSuggestion) => void;
+}) {
+  const [prompt, setPrompt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const run = () => {
+    setBusy(true);
+    // ponytail: mock latency; swap for POST /platform/ai/template-draft + zod parse
+    // once the platform-level AI config question is settled.
+    window.setTimeout(() => {
+      onApply(generateMockAiDraft(prompt));
+      setPrompt('');
+      setConfirming(false);
+      setBusy(false);
+    }, 700);
+  };
+
+  const click = () => {
+    if (hasContent && !confirming) {
+      setConfirming(true);
+      return;
+    }
+    run();
+  };
+
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-violet-50/60 to-fuchsia-50/50 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          type="text"
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !busy && prompt.trim()) click();
+          }}
+          placeholder="Describe the template you want — e.g. Create a Diwali offer message for ecommerce customers…"
+          aria-label="Describe the template to generate"
+          disabled={!canWrite || busy}
+          className="h-9 min-w-0 flex-1 rounded-lg border border-indigo-200/80 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        <div className="flex shrink-0 items-center gap-2">
+          {confirming ? (
+            <>
+              <span className="hidden text-[11px] font-semibold text-slate-600 xl:inline">Replace current content?</span>
+              <button
+                type="button"
+                onClick={run}
+                disabled={busy}
+                className="rounded-md bg-slate-900 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-700 disabled:opacity-60"
+              >
+                Replace
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={busy}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Keep mine
+              </button>
+            </>
+          ) : null}
+          <Button onClick={click} disabled={!canWrite || busy || !prompt.trim()}>
+            <Wand2 className="h-3.5 w-3.5" />
+            {busy ? 'Generating…' : 'Generate'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Shared chips roster for one body textarea (client wizard pattern): "Add variable"
@@ -378,6 +539,30 @@ export function TemplateEditorPage() {
 
   const insertVariable = (lang: 'en' | 'hi' = 'en') => insertToken(variableCount + 1, lang);
 
+  // AI assist (mock generator for now): pour the suggestion into the draft. Variables
+  // map to body-scope connect rows so chips/Connect examples work identically.
+  const applyAiSuggestion = (s: AiDraftSuggestion) => {
+    setDraft((prev) => ({
+      ...prev,
+      title: s.title,
+      slug: row ? prev.slug : s.slug,
+      category: s.category,
+      body: s.body,
+      bodyHi: s.bodyHi,
+      footer: s.footer,
+      footerHi: s.footerHi,
+      buttons: s.buttons,
+      variableMeta: s.variables.map((v) => ({
+        scope: 'body' as const,
+        index: v.index,
+        description: v.description,
+        suggestedSource: v.suggestedSource,
+        customKey: '',
+      })),
+      bodyExamples: s.variables.map((v) => sampleForVariable(v.description, v.index, v.suggestedSource)),
+    }));
+  };
+
   // Client autoFillTemplateSamples: fill only empties, sample from description/source.
   const autoFillSamples = () => {
     setDraft((prev) => ({
@@ -526,8 +711,13 @@ export function TemplateEditorPage() {
       ) : null}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
-        {/* Left column — single create-step card like the client comp, then admin metadata */}
+        {/* Left column — AI assist, then the create-step card, then admin metadata */}
         <div className="min-w-0 space-y-4">
+          <AiAssistBar
+            canWrite={canWrite}
+            hasContent={Boolean(draft.body.trim() || draft.bodyHi.trim() || draft.title.trim())}
+            onApply={applyAiSuggestion}
+          />
           <section className="dashboard-card p-4 sm:p-5">
             {/* Identity fields — name + slug + category + language, 2 per row */}
             <div className="grid gap-3 sm:grid-cols-2">
