@@ -1,11 +1,13 @@
 import { getOrgWhatsappContext } from '../whatsapp/context';
 import { isWhatsAppRateLimit, MetaWhatsAppService } from '../whatsapp/meta.service';
+import prisma from '../../config/database';
 import {
   buildTenantLibraryCards,
   META_LIBRARY_FILTERS,
   META_LIBRARY_HONESTY,
   type LibraryGraphRow,
 } from './meta-library-pack';
+import { toTenantDto } from './catalog-store';
 
 export async function listTenantTemplateLibrary(opts?: {
   organizationId?: string;
@@ -54,9 +56,29 @@ export async function listTenantTemplateLibrary(opts?: {
     }
   }
 
+  // Samyoj-authored catalog drafts (platform admin) listed after the Meta pack.
+  // Same row schema, same bilingual clone path — one identity, two surfaces.
+  let samyojRows: ReturnType<typeof toTenantDto>[] = [];
+  try {
+    const rows = await prisma.platformLibraryTemplate.findMany({
+      where: { published: true },
+      orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
+    });
+    samyojRows = rows.map(toTenantDto);
+  } catch {
+    /* catalog table unavailable — Meta pack alone still renders */
+  }
+
   return {
-    templates: buildTenantLibraryCards(library, approvedWabaNames),
-    filters: META_LIBRARY_FILTERS,
-    honesty: META_LIBRARY_HONESTY,
+    templates: [
+      ...buildTenantLibraryCards(library, approvedWabaNames),
+      ...samyojRows,
+    ],
+    filters: samyojRows.some((row) => row.category === 'MARKETING')
+      ? [...META_LIBRARY_FILTERS, { id: 'MARKETING', label: 'Marketing' } as const]
+      : META_LIBRARY_FILTERS,
+    honesty: samyojRows.length
+      ? `${META_LIBRARY_HONESTY} Samyoj templates are listed too — pick one and submit it on your number; Meta still reviews it.`
+      : META_LIBRARY_HONESTY,
   };
 }

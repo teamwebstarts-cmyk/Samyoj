@@ -51,3 +51,22 @@ describe('Meta tenant library pack', () => {
     expect(delivery?.libraryTemplateName).toBe('delivery_update_1');
   });
 });
+
+
+describe('Samyoj catalog in tenant starters list', () => {
+  it('force-unpublish is gone from the codebase', async () => {
+    const fs = await import('node:fs');
+    const store = fs.readFileSync(new URL('./catalog-store.ts', import.meta.url), 'utf8');
+    const routes = fs.readFileSync(new URL('./routes.ts', import.meta.url), 'utf8');
+    expect(store).not.toContain('hideSamyojHostedCatalogDrafts');
+    expect(routes).not.toContain('hideSamyojHostedCatalogDrafts');
+  });
+
+  it('merges published admin rows after the Meta pack (source of listTenantTemplateLibrary)', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('./library-tenant.ts', import.meta.url), 'utf8');
+    expect(src).toContain('toTenantDto');
+    expect(src.indexOf('buildTenantLibraryCards(library, approvedWabaNames)')).toBeGreaterThan(-1);
+    expect(src).toContain('where: { published: true }');
+  });
+});
