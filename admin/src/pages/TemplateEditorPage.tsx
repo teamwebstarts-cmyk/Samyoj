@@ -184,6 +184,72 @@ const HINDI_FOOTERS: Record<string, string> = {
 };
 const toHindiFooter = (english: string) => HINDI_FOOTERS[english] ?? '';
 
+/**
+ * Shared chips roster for one body textarea (client wizard pattern): "Add variable"
+ * appends the next unused {{n}}, and every chip inserts that token at the cursor.
+ * Rendered once per language above its textarea; both share the Connect-variables roster.
+ */
+function BodyChipsRoster({
+  lang,
+  items,
+  canWrite,
+  charCount,
+  onInsert,
+  onAddVariable,
+}: {
+  lang: 'en' | 'hi';
+  items: Array<{ index: number; description: string }>;
+  canWrite: boolean;
+  charCount: number;
+  onInsert: (index: number) => void;
+  onAddVariable: () => void;
+}) {
+  return (
+    <div className="mb-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
+          {lang === 'en' ? 'Body text (English)' : 'Body text (Hindi)'} <span className="text-rose-500">*</span>
+          <span title="Use the chips below to insert {{n}} fields. Fill a sample for each so Meta can review a realistic message." className="inline-flex">
+            <Info className="h-3.5 w-3.5 cursor-help text-slate-400" aria-label="Body info" />
+          </span>
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onAddVariable}
+            disabled={!canWrite}
+            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Plus className="h-3 w-3" />
+            Add variable
+          </button>
+          <span className="text-[10px] font-medium text-slate-400">{charCount}/1024</span>
+        </div>
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {items.length === 0 ? (
+          <span className="text-[10.5px] font-medium text-slate-400">
+            No variables yet — “Add variable” inserts {'{{n}}'} and lists it here.
+          </span>
+        ) : (
+          items.map((item) => (
+            <button
+              key={item.index}
+              type="button"
+              onClick={() => onInsert(item.index)}
+              title={`Insert {{${item.index}}} at the cursor — rename it in Connect variables below`}
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Plus className="h-2.5 w-2.5" />
+              {item.description.trim() ? item.description : `Untitled ({{${item.index}}})`}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function TemplateEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -196,7 +262,7 @@ export function TemplateEditorPage() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-
+  const bodyHiRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!USE_MOCK_CATALOG || isNew || row) return;
     setMissing(true);
@@ -266,15 +332,21 @@ export function TemplateEditorPage() {
       .map((index) => ({ index, description: metaForIndex(draft.variableMeta, 'body', index)?.description || '' }));
   }, [draft.body, draft.bodyHi, draft.variableMeta]);
 
-  // Cursor-aware token insertion into the English body (client insertVariable mechanics).
+  // Cursor-aware token insertion into either body (client insertVariable mechanics).
   // insertNewVariable appends the next unused index; insertToken re-inserts an existing one (reuse allowed).
-  const insertToken = (index: number) => {
+  const textOf = (lang: 'en' | 'hi') => (lang === 'hi' ? draft.bodyHi : draft.body);
+  const setTextOf = (lang: 'en' | 'hi', value: string) =>
+    lang === 'hi' ? set('bodyHi', value) : set('body', value);
+  const refOf = (lang: 'en' | 'hi') => (lang === 'hi' ? bodyHiRef : bodyRef);
+
+  const insertToken = (index: number, lang: 'en' | 'hi' = 'en') => {
     const token = `{{${index}}}`;
-    const el = bodyRef.current;
+    const current = textOf(lang);
+    const el = refOf(lang).current;
     if (el) {
-      const start = el.selectionStart ?? bodyText.length;
-      const end = el.selectionEnd ?? bodyText.length;
-      setBodyText(bodyText.slice(0, start) + token + bodyText.slice(end));
+      const start = el.selectionStart ?? current.length;
+      const end = el.selectionEnd ?? current.length;
+      setTextOf(lang, current.slice(0, start) + token + current.slice(end));
       requestAnimationFrame(() => {
         el.focus();
         const pos = start + token.length;
@@ -282,10 +354,10 @@ export function TemplateEditorPage() {
       });
       return;
     }
-    setBodyText(`${bodyText}${bodyText && !bodyText.endsWith(' ') ? ' ' : ''}${token}`);
+    setTextOf(lang, `${current}${current && !current.endsWith(' ') ? ' ' : ''}${token}`);
   };
 
-  const insertVariable = () => insertToken(variableCount + 1);
+  const insertVariable = (lang: 'en' | 'hi' = 'en') => insertToken(variableCount + 1, lang);
 
   // Client autoFillTemplateSamples: fill only empties, sample from description/source.
   const autoFillSamples = () => {
@@ -524,48 +596,17 @@ export function TemplateEditorPage() {
               </div>
             ) : null}
 
-            {/* Body — English and Hindi edited in one pass (both required by the catalog) */}
+            {/* Body — English and Hindi edited in one pass (both required by the catalog).
+                Each language gets its own chips roster; insertions go to that textarea. */}
             <div className="mt-4">
-              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
-                  Body text (English) <span className="text-rose-500">*</span>
-                  <span title="Use the chips below to insert {{n}} fields. Fill a sample for each so Meta can review a realistic message." className="inline-flex">
-                    <Info className="h-3.5 w-3.5 cursor-help text-slate-400" aria-label="Body info" />
-                  </span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={insertVariable}
-                    disabled={!canWrite}
-                    className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Plus className="h-3 w-3" />
-                    Add variable
-                  </button>
-                  <span className="text-[10px] font-medium text-slate-400">{bodyText.length}/1024</span>
-                </div>
-              </div>
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {bodyVariables.length === 0 ? (
-                  <span className="text-[10.5px] font-medium text-slate-400">
-                    No variables yet — “Add variable” inserts {'{{n}}'} and lists it here.
-                  </span>
-                ) : (
-                  bodyVariables.map((item) => (
-                    <button
-                      key={item.index}
-                      type="button"
-                      onClick={() => insertToken(item.index)}
-                      title={`Insert {{${item.index}}} at the cursor — rename it in Connect variables below`}
-                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Plus className="h-2.5 w-2.5" />
-                      {item.description.trim() ? item.description : `Untitled ({{${item.index}}})`}
-                    </button>
-                  ))
-                )}
-              </div>
+              <BodyChipsRoster
+                lang="en"
+                items={bodyVariables}
+                canWrite={canWrite}
+                charCount={bodyText.length}
+                onInsert={(index) => insertToken(index, 'en')}
+                onAddVariable={() => insertVariable('en')}
+              />
               <textarea
                 ref={bodyRef}
                 aria-label="Body text (English)"
@@ -576,19 +617,27 @@ export function TemplateEditorPage() {
                 onChange={(event) => setBodyText(event.target.value)}
                 className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
               />
-              <label className="mt-4 block space-y-1 text-[13px]">
-                <span className="font-semibold text-slate-700">
-                  Body text (Hindi) <span className="text-rose-500">*</span>
-                </span>
+
+              <div className="mt-4">
+                <BodyChipsRoster
+                  lang="hi"
+                  items={bodyVariables}
+                  canWrite={canWrite}
+                  charCount={(draft.bodyHi || '').length}
+                  onInsert={(index) => insertToken(index, 'hi')}
+                  onAddVariable={() => insertVariable('hi')}
+                />
                 <textarea
+                  ref={bodyHiRef}
                   aria-label="Body text (Hindi)"
-                  className="min-h-20 w-full rounded-lg border bg-white px-3 py-2 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder="नमस्ते {{1}}, आपका ऑर्डर {{2}} तैयार है।"
                   value={draft.bodyHi}
                   maxLength={1024}
                   disabled={!canWrite}
                   onChange={(event) => set('bodyHi', event.target.value)}
+                  className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 />
-              </label>
+              </div>
 
               {/* Connect variables — client TemplateVariableConnect (create variant), emerald panel */}
               {variableCount > 0 || headerCount > 0 ? (
