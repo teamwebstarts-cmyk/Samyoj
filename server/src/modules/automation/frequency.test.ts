@@ -11,6 +11,7 @@ vi.mock('../../config/database', () => ({
 import prisma from '../../config/database';
 import {
   FREQUENCY_CAP_WINDOW_MS,
+  flowWaitIsStale,
   frequencyCapSince,
   hasRecentFlowStart,
   hasRecentStaticReply,
@@ -26,6 +27,9 @@ describe('frequency cap', () => {
   it('uses a 24h window', () => {
     const now = Date.parse('2026-08-14T12:00:00.000Z');
     expect(frequencyCapSince(now).toISOString()).toBe('2026-08-13T12:00:00.000Z');
+    expect(flowWaitIsStale(undefined, now)).toBe(true);
+    expect(flowWaitIsStale(new Date(now - 25 * 60 * 60 * 1000).toISOString(), now)).toBe(true);
+    expect(flowWaitIsStale(new Date(now - 60 * 1000).toISOString(), now)).toBe(false);
     expect(FREQUENCY_CAP_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
   });
 

@@ -12,8 +12,25 @@ import { buildSlideImagePrompt, generateOneStudioImage, isImageCount, stampPackW
 import { buildStudioSystemPrompt } from './studio-prompts';
 import { fetchStudioPackFromLlm } from './studio-llm';
 import { assembleStudioPack } from './assemble-studio-pack';
+import { config } from '../../config';
 
 const router = Router();
+
+/** What the live studio can do on this deployment (reference URLs must be HTTPS for the image API). */
+export function getStudioCapabilities() {
+  const imageGeneration = Boolean(config.gmi.imageApiKey);
+  const referenceImages = imageGeneration && /^https:\/\//i.test(config.serverUrl);
+  return { imageGeneration, referenceImages };
+}
+
+router.get(
+  '/capabilities',
+  authenticate,
+  requireOrg,
+  asyncHandler(async (_req: Request, res: Response) => {
+    sendSuccess(res, getStudioCapabilities());
+  }),
+);
 
 export function cryptoId(): string {
   return 'pack_' + crypto.randomBytes(8).toString('hex');

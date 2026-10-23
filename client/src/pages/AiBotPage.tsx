@@ -60,11 +60,36 @@ import { getErrorMessage, normalizeError } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
 import { explainAiSkipReason, httpStatusToAiSkipReason } from '../utils/aiSkipReasons';
 import type { AiBot, BotAnalytics, BotTestResult, KnowledgeBaseItem, OrgProfilePayload } from '../types';
+import { clearWork, readWork, writeWork } from '../utils/workResume';
 import { useEntitlements } from '../hooks/useEntitlements';
 import EntitlementNotice from '../components/billing/EntitlementNotice';
 
 type Channel = 'CHAT' | 'CALL';
 type SlideTab = 'setup' | 'train' | 'try' | 'pickup';
+
+type BotResume = {
+  open: true;
+  editingId: string | null;
+  formChannel: Channel;
+  slideTab: SlideTab;
+  name: string;
+  instructions: string;
+  enabled: boolean;
+  isDefault: boolean;
+  businessHoursOnly: boolean;
+  offerHandoff: boolean;
+  voiceGreeting: string;
+  voiceSpeaker: string;
+  voiceLanguage: string;
+  answersCalls: boolean;
+  businessWebsite: string;
+  businessName: string;
+  businessNotes: string;
+  personalityTweak: string;
+  faqs: KnowledgeBaseItem[];
+  faqForm: { title: string; content: string };
+  trainIntent: string;
+};
 type FaqDraft = { key: string; title: string; content: string };
 
 const emptyFaq = { title: '', content: '' };
@@ -205,6 +230,7 @@ export default function AiBotPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [slideOpen, setSlideOpen] = useState(false);
+  const [botResumeReady, setBotResumeReady] = useState(false);
   const [slideTab, setSlideTab] = useState<SlideTab>('setup');
   const [editing, setEditing] = useState<AiBot | null>(null);
   const [formChannel, setFormChannel] = useState<Channel>('CHAT');
@@ -345,6 +371,7 @@ export default function AiBotPage() {
     setLoading(true);
     setEditing(null);
     setSlideOpen(false);
+    clearWork('aibot');
     setAggregateAnalytics(null);
     setPerBotAnalytics([]);
   });
@@ -446,9 +473,95 @@ export default function AiBotPage() {
   };
 
   const closeSlide = () => {
+    clearWork('aibot');
     setSlideOpen(false);
     setEditing(null);
   };
+
+  useEffect(() => {
+    if (botResumeReady || loading) return;
+    const saved = readWork<BotResume>('aibot');
+    if (saved?.open) {
+      const existing = saved.editingId ? bots.find((bot) => bot.id === saved.editingId) : null;
+      setEditing(existing ?? (saved.editingId ? ({ id: saved.editingId } as AiBot) : null));
+      setFormChannel(saved.formChannel);
+      setSlideTab(saved.slideTab);
+      setName(saved.name);
+      setInstructions(saved.instructions);
+      setEnabled(saved.enabled);
+      setIsDefault(saved.isDefault);
+      setBusinessHoursOnly(saved.businessHoursOnly);
+      setOfferHandoff(saved.offerHandoff);
+      setVoiceGreeting(saved.voiceGreeting);
+      setVoiceSpeaker(saved.voiceSpeaker);
+      setVoiceLanguage(saved.voiceLanguage);
+      setAnswersCalls(saved.answersCalls);
+      setBusinessWebsite(saved.businessWebsite);
+      setBusinessName(saved.businessName);
+      setBusinessNotes(saved.businessNotes);
+      setPersonalityTweak(saved.personalityTweak);
+      setFaqs(saved.faqs || []);
+      setFaqForm(saved.faqForm || emptyFaq);
+      setTrainIntent(saved.trainIntent || '');
+      setSlideOpen(true);
+    }
+    setBotResumeReady(true);
+  }, [botResumeReady, bots, loading]);
+
+  useEffect(() => {
+    if (!botResumeReady) return;
+    if (!slideOpen) {
+      clearWork('aibot');
+      return;
+    }
+    const snapshot: BotResume = {
+      open: true,
+      editingId: editing?.id ?? null,
+      formChannel,
+      slideTab,
+      name,
+      instructions,
+      enabled,
+      isDefault,
+      businessHoursOnly,
+      offerHandoff,
+      voiceGreeting,
+      voiceSpeaker,
+      voiceLanguage,
+      answersCalls,
+      businessWebsite,
+      businessName,
+      businessNotes,
+      personalityTweak,
+      faqs,
+      faqForm,
+      trainIntent,
+    };
+    writeWork('aibot', snapshot);
+  }, [
+    answersCalls,
+    botResumeReady,
+    businessHoursOnly,
+    businessName,
+    businessNotes,
+    businessWebsite,
+    editing?.id,
+    enabled,
+    faqForm,
+    faqs,
+    formChannel,
+    instructions,
+    isDefault,
+    name,
+    offerHandoff,
+    personalityTweak,
+    slideOpen,
+    slideTab,
+    trainIntent,
+    voiceGreeting,
+    voiceLanguage,
+    voiceSpeaker,
+  ]);
 
   const applyWorkspaceProfile = () => {
     const workspace = workspaceProfileRef.current;
@@ -941,8 +1054,8 @@ export default function AiBotPage() {
       <PageShell>
         <div className="space-y-[var(--density-stack-gap)]">
           <AiBotHero
-            title="AI Agents"
-            description="Smart assistants for chat and calls on your connected channels — answer 24/7 and hand off to your team when needed."
+            title="Chat and calling assistants"
+            description="They reply around the clock and hand off to your team when needed."
             stats={heroStats}
           />
 

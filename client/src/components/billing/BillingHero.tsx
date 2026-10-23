@@ -64,8 +64,8 @@ export default function BillingHero({ info }: BillingHeroProps) {
   let statusText = 'Active';
   let statusTone: BillingHeroTone = 'emerald';
   let statusIcon = CheckCircle2;
-  let title = 'Billing & Subscriptions';
-  let description = 'Plan, seats & WhatsApp charges.';
+  let title = 'Plan and usage';
+  let description = 'What this workspace can use, and when it renews.';
   const workspaceOpen = info.entitlements?.isLocked === false;
 
   if (workspaceOpen && info.subscriptionStatus && info.subscriptionStatus !== 'trial' && info.subscriptionStatus !== 'active') {
@@ -151,16 +151,12 @@ export default function BillingHero({ info }: BillingHeroProps) {
       aria-label="Billing overview"
       className="rounded-2xl border border-theme-border bg-theme-surface p-4 sm:p-5 md:p-6"
     >
-      <div className="flex flex-col gap-4 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
-            <CreditCard className="h-3 w-3" strokeWidth={2.5} />
-            Billing & Subscriptions
-          </span>
-          <h1 className="mt-2 text-xl font-extrabold tracking-tight text-theme-fg sm:text-2xl">
+          <h1 className="surface-title text-theme-fg">
             {title}
           </h1>
-          <p className="mt-1 text-xs font-medium text-theme-secondary sm:text-[13px]">
+          <p className="mt-1 text-xs font-normal text-theme-secondary sm:text-[13px]">
             {description}
           </p>
         </div>
@@ -184,7 +180,7 @@ export default function BillingHero({ info }: BillingHeroProps) {
                     {stat.label}
                   </p>
                   <p
-                    className={`mt-0.5 truncate text-base font-extrabold leading-none tracking-tight tabular-nums sm:text-lg ${config.valueClass}`}
+                    className={`mt-0.5 truncate text-base font-bold leading-none tracking-tight tabular-nums sm:text-lg ${config.valueClass}`}
                   >
                     {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
                   </p>

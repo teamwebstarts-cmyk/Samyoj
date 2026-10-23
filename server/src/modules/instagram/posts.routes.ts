@@ -147,6 +147,55 @@ function uploadFilename(req: Request): string | undefined {
   }
 }
 
+/** Permalink for published Samyoj posts so "View on Instagram" matches the live library. */
+async function permalinksByMediaId(
+  channelId: string,
+  encryptedToken: string | null,
+  igMediaIds: Array<string | null>,
+): Promise<Map<string, string>> {
+  const unique = [...new Set(igMediaIds.filter((id): id is string => Boolean(id)))];
+  const out = new Map<string, string>();
+  if (!unique.length) return out;
+
+  const cached = await prisma.instagramMediaCache.findMany({
+    where: { channelId, igMediaId: { in: unique }, permalink: { not: null } },
+    select: { igMediaId: true, permalink: true },
+  });
+  for (const row of cached) {
+    if (row.permalink) out.set(row.igMediaId, row.permalink);
+  }
+
+  const missing = unique.filter((id) => !out.has(id)).slice(0, 8);
+  if (!encryptedToken || !missing.length) return out;
+  const token = MetaWhatsAppService.decryptToken(encryptedToken);
+  await Promise.all(
+    missing.map(async (igMediaId) => {
+      try {
+        const media = await fetchInstagramMedia(igMediaId, token);
+        if (!media?.permalink) return;
+        out.set(igMediaId, media.permalink);
+        await prisma.instagramMediaCache.upsert({
+          where: { channelId_igMediaId: { channelId, igMediaId } },
+          create: {
+            channelId,
+            igMediaId,
+            permalink: media.permalink,
+            mediaType: media.media_type || null,
+            fetchedAt: new Date(),
+          },
+          update: { permalink: media.permalink },
+        });
+      } catch (err) {
+        log.warn('Instagram permalink lookup failed', {
+          igMediaId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }),
+  );
+  return out;
+}
+
 function toDto(row: {
   id: string;
   status: string;
@@ -259,10 +308,18 @@ router.get(
       orderBy: { updatedAt: 'desc' },
       take: 100,
     });
+    const permalinks = await permalinksByMediaId(
+      channel.id,
+      channel.accessToken,
+      posts.map((row) => row.igMediaId),
+    );
     sendSuccess(res, {
       connected: true,
       account: { username: channel.name, igUserId: channel.platformAccountId },
-      posts: posts.map(toDto),
+      posts: posts.map((row) => ({
+        ...toDto(row),
+        permalink: row.igMediaId ? permalinks.get(row.igMediaId) ?? null : null,
+      })),
     });
   })
 );

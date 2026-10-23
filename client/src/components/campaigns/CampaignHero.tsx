@@ -1,4 +1,3 @@
-import { Send } from 'lucide-react';
 import MetaDailyLimitCard from './MetaDailyLimitCard';
 
 interface CampaignHeroStat {
@@ -83,13 +82,9 @@ export default function CampaignHero({ stats }: CampaignHeroProps) {
     <section className="relative overflow-hidden rounded-xl border border-[#c9efe0] bg-[linear-gradient(100deg,#eafff4_0%,#f4fff9_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(16,185,129,0.06)] dark:border-emerald-900/50 dark:bg-[linear-gradient(100deg,#10251f_0%,#13231f_45%,#151c24_100%)] sm:rounded-[22px] sm:p-5 md:p-6">
       <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-500/10 max-sm:hidden" />
 
-      <div className="relative grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-6 xl:gap-8">
+      <div className="relative grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 xl:gap-8">
         <div className="min-w-0">
-          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-violet-700 ring-1 ring-violet-200/70 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
-            <Send className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.5} />
-            Broadcast
-          </span>
-          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-[#0f172a] dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem]">
+          <h1 className="surface-title text-[#0f172a] dark:text-white">
             Plan, send, and monitor campaigns
           </h1>
           <p className="mt-0.5 max-w-lg text-[12px] font-medium leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:text-[13px]">
@@ -114,7 +109,7 @@ export default function CampaignHero({ stats }: CampaignHeroProps) {
                   <p className="truncate text-[9px] font-semibold leading-tight text-neutral-800 dark:text-slate-200 sm:text-[12px]">
                     {stat.label}
                   </p>
-                  <p className="mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums text-neutral-950 dark:text-white sm:text-[1.35rem]">
+                  <p className="mt-0.5 text-[1rem] font-bold leading-none tracking-tight tabular-nums text-neutral-950 dark:text-white sm:text-[1.35rem]">
                     {stat.value.toLocaleString()}
                   </p>
                   <p className="mt-1 hidden truncate text-[10px] font-medium leading-snug text-neutral-400 dark:text-slate-400 sm:block sm:text-[11px]">

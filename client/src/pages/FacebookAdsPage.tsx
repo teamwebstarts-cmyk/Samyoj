@@ -87,7 +87,7 @@ function Guide({
   return (
     <div className="fads-card fads-empty mt-5">
       <EmptyArt />
-      <h2 className="mt-2 text-[18px] font-extrabold tracking-[-0.02em] text-[var(--fads-ink)]">{title}</h2>
+      <h2 className="empty-lead mt-2 text-[var(--fads-ink)]">{title}</h2>
       <p className="mt-1 max-w-md text-[13px] text-[var(--fads-muted)]">{body}</p>
       <ol className="mt-5 space-y-2.5 text-left">
         {steps.map((step, index) => (
@@ -358,9 +358,8 @@ export default function FacebookAdsPage() {
               <Facebook className="h-4 w-4" strokeWidth={2} />
             </span>
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#1877F2]">Facebook · read only</p>
-              <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                <h2 className="text-[22px] font-extrabold tracking-[-0.03em] text-[var(--fads-ink)]">Ads performance</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="surface-title text-[var(--fads-ink)]">Spend, clicks, and leads</h2>
                 {mockMetricsOnly ? (
                   <span className="rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[11px] font-bold text-[#1877F2]">Sample metrics</span>
                 ) : null}

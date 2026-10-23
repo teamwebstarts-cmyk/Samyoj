@@ -1552,6 +1552,8 @@ export const contentStudioApi = {
  * sample data is on, otherwise a clear error state (see AiStudio.tsx).
  */
 export const aiStudioApi = {
+  capabilities: () =>
+    api.get<{ data: { imageGeneration: boolean; referenceImages: boolean } }>('/ai-studio/capabilities'),
   generate: (data: {
     brief: string;
     language: string;

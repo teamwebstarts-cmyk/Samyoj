@@ -77,10 +77,12 @@ export function matchChannelKeyword(rows: Rule[], platform: 'FB' | 'IG', text: s
     // Comment automations are delivered by comment-ingest with an explicit
     // media id. They must never become account-wide DM rules just because they
     // also contain a private reply body.
-    if (platform === 'IG' && (config.publicMessage?.trim() || config.igMediaId?.trim() || config.igPostId?.trim())) {
+    // A rule tied to one Meta post stays on that post's comments.
+    // An account-wide rule still replies in DMs, even when it also has a public comment line.
+    if (platform === 'IG' && (config.igMediaId?.trim() || config.igPostId?.trim())) {
       return false;
     }
-    if (!keywordMatches(text, { keyword: config.keyword })) return false;
+    if (!instagramTriggerMatches(text, config.keyword)) return false;
     return Boolean((config.response || config.message || '').trim());
   });
   if (!match) return null;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ChevronRight, Save, Send, Trash2 } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { clearWork, readWork, writeWork } from '../utils/workResume';
 import CampaignAudienceStep from '../components/campaigns/wizard/CampaignAudienceStep';
 import CampaignMessageStep from '../components/campaigns/wizard/CampaignMessageStep';
 import CampaignReviewStep from '../components/campaigns/wizard/CampaignReviewStep';
@@ -12,6 +13,7 @@ import {
   buildCampaignPayload,
   campaignToWizardForm,
   countTemplateVariables,
+  campaignWizardHasWork,
   createEmptyCampaignWizardForm,
   eligibleCampaignSendCount,
   getCampaignScheduleMinimum,
@@ -80,6 +82,9 @@ export default function CampaignWizardPage() {
   const [editing, setEditing] = useState<CampaignWizardDetail | null>(null);
   const [form, setForm] = useState<CampaignWizardForm>(createEmptyCampaignWizardForm);
   const [activeStep, setActiveStep] = useState(0);
+  const [resumeReady, setResumeReady] = useState(false);
+  const holdResume = useRef(false);
+  const restoredFor = useRef<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
   const [audiencePreviewCount, setAudiencePreviewCount] = useState<number | null>(null);
   const [audienceMetrics, setAudienceMetrics] = useState<AudiencePreviewMetrics | null>(null);
@@ -203,6 +208,7 @@ export default function CampaignWizardPage() {
     setEditing(null);
     setForm(createEmptyCampaignWizardForm());
     setActiveStep(0);
+    holdResume.current = false;
     setStageError(null);
     setAudiencePreviewCount(null);
     setAudienceMetrics(null);
@@ -212,6 +218,56 @@ export default function CampaignWizardPage() {
     setLoading(Boolean(isEdit));
     loadTemplates();
   });
+
+  const leaveWizard = (replace = false) => {
+    if (activeNumber?.id) clearWork(`campaign:${activeNumber.id}`);
+    holdResume.current = false;
+    navigate('/campaigns', replace ? { replace: true } : undefined);
+  };
+
+  useEffect(() => {
+    if (!resolved || !activeNumber?.id) return;
+    const token = `${activeNumber.id}:${id ?? 'new'}`;
+    if (restoredFor.current === token) return;
+    restoredFor.current = token;
+    const deepLink = ['fromCampaign', 'template', 'contacts', 'phones', 'tags', 'name'].some((key) =>
+      searchParams.get(key),
+    );
+    if (!deepLink) {
+      const saved = readWork<{ form: CampaignWizardForm; step: number; campaignId: string | null }>(
+        `campaign:${activeNumber.id}`,
+      );
+      const matches = Boolean(
+        saved &&
+          campaignWizardHasWork(saved.form, saved.step) &&
+          (id ? saved.campaignId === id : !saved.campaignId),
+      );
+      if (matches && saved) {
+        holdResume.current = true;
+        setForm(saved.form);
+        setActiveStep(saved.step);
+      }
+    }
+    setResumeReady(true);
+    // Restore once per number and route. searchParams is read only for a deep link on that first pass.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNumber?.id, id, resolved]);
+
+  useEffect(() => {
+    if (!resumeReady || !activeNumber?.id) return;
+    const key = `campaign:${activeNumber.id}`;
+    if (id && loading && !holdResume.current) return;
+    if (!campaignWizardHasWork(form, activeStep)) {
+      clearWork(key);
+      return;
+    }
+    writeWork(key, {
+      form,
+      step: activeStep,
+      path: id ? `/campaigns/${id}/edit` : '/campaigns/new',
+      campaignId: id ?? null,
+    });
+  }, [activeNumber?.id, activeStep, form, id, loading, resumeReady]);
 
   useEffect(() => {
     if (!id || !resolved || !activeNumber) return;
@@ -224,16 +280,17 @@ export default function CampaignWizardPage() {
         const campaign = data.data as CampaignWizardDetail;
         if (!canEditCampaign(campaign.status)) {
           toastError('Only draft and scheduled campaigns can be edited.');
-          navigate('/campaigns', { replace: true });
+          leaveWizard(true);
           return;
         }
         setEditing(campaign);
         createdCampaignIdRef.current = campaign.id;
+        if (holdResume.current) return;
         setForm(campaignToWizardForm(campaign, templates));
       })
       .catch((error) => {
         toastError(getErrorMessage(error, 'Campaign details could not load. Refresh and try again.'));
-        navigate('/campaigns', { replace: true });
+        leaveWizard(true);
       })
       .finally(() => {
         if (requestNumberId === activeNumberIdRef.current) setLoading(false);
@@ -241,7 +298,7 @@ export default function CampaignWizardPage() {
   }, [activeNumber, id, navigate, resolved]);
 
   useEffect(() => {
-    if (!editing || !templates.length) return;
+    if (!editing || !templates.length || holdResume.current) return;
     setForm(campaignToWizardForm(editing, templates));
   }, [editing, templates]);
 
@@ -466,7 +523,7 @@ export default function CampaignWizardPage() {
           await campaignApi.send(campaignId);
           toastSuccess('Campaign queued — track delivery on the Campaigns page');
           setConfirmState(null);
-          navigate('/campaigns');
+          leaveWizard();
           return campaignId;
         } catch (error) {
           toastError(
@@ -483,7 +540,7 @@ export default function CampaignWizardPage() {
             ? 'Campaign saved'
             : 'Campaign saved as draft',
       );
-      navigate('/campaigns');
+      leaveWizard();
       return campaignId;
     } catch (error) {
       toastError(
@@ -561,7 +618,7 @@ export default function CampaignWizardPage() {
           await campaignApi.delete(editing.id);
           toastSuccess('Campaign deleted');
           setConfirmState(null);
-          navigate('/campaigns');
+          leaveWizard();
         } catch (error) {
           toastError(getErrorMessage(error, 'Campaign could not be deleted. Try again.'));
         } finally {
@@ -749,7 +806,7 @@ export default function CampaignWizardPage() {
                   size="sm"
                   variant="secondary"
                   className="!min-h-10"
-                  onClick={() => navigate('/campaigns')}
+                  onClick={() => leaveWizard()}
                   disabled={saving}
                 >
                   Cancel

@@ -1,6 +1,6 @@
 export const PLATFORM_NAME = 'Samyoj';
 export const PLATFORM_TAGLINE = 'CRM & Automation';
-export const PLATFORM_LOGO_SRC = '/brand/samyoj-logo.jpeg';
+export const PLATFORM_LOGO_SRC = '/brand/samyoj-logo.png';
 export const PLATFORM_MARK_SRC = '/brand/samyoj-mark.png';
 
 interface PlatformBrandProps {
@@ -31,8 +31,8 @@ export function PlatformLogoMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' })
 
 /**
  * Real Samyoj brand:
- * - Expanded → full logo JPEG (icon + wordmark + tagline)
- * - Collapsed → cropped mark PNG only (same left slot, no Lucide fallback)
+ * - Expanded → full logo PNG (icon + wordmark + tagline)
+ * - Collapsed → cropped mark PNG only (icon from logo, no wordmark)
  */
 export function PlatformBrand({
   size = 'md',

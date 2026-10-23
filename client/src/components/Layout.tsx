@@ -147,7 +147,7 @@ function LayoutShell() {
       <div className="flex h-[100dvh] overflow-hidden platform-gradient">
         <aside
           data-sidebar-accent={sidebarAccent}
-          className={`sidebar-glass hidden h-full min-h-0 shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
+          className={`sidebar-glass relative z-[70] hidden h-full min-h-0 shrink-0 overflow-hidden transition-[width] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
             effectiveCollapsed ? 'w-[var(--density-sidebar-collapsed)]' : 'w-[var(--density-sidebar-width)]'
           }`}
         >

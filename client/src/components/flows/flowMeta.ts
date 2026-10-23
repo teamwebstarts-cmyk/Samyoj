@@ -319,6 +319,23 @@ export const triggerMeta: Record<
   },
 };
 
+const TRIGGER_TABLE_LABEL: Record<string, string> = {
+  WELCOME: 'First message',
+  KEYWORD: 'Keyword',
+  BUSINESS_HOURS: 'During hours',
+  OFF_HOURS: 'After hours',
+  ANY_MESSAGE: 'Any message',
+  CONTACT_TAG: 'Has tag',
+  SEGMENT: 'Has tags',
+  MISSED_CALL: 'Missed call',
+  CAMPAIGN_REPLY: 'Campaign',
+  CALL_COMPLETED: 'Call ended',
+};
+
+export function triggerTableLabel(type: string, fallback?: string) {
+  return TRIGGER_TABLE_LABEL[type] || fallback || type;
+}
+
 export function createNode(type: FlowNodeType, index: number): import('../../types').FlowNode {
   const id = `${type}-${Date.now()}-${index}`;
   const base = { id, type };

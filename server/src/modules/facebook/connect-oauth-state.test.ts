@@ -86,6 +86,7 @@ describe('Facebook Page OAuth state', () => {
     expect(launch.url).not.toContain('ads_read');
     expect(launch.url).not.toContain('instagram_manage_comments');
     expect(launch.url).toContain('instagram_manage_messages');
+    expect(launch.url).toContain('business_management');
     expect(FACEBOOK_SCOPES_WAITING_ON_REVIEW).toEqual([
       'instagram_manage_comments',
       'ads_read',

@@ -110,7 +110,7 @@ function StepCard({
     <>
       <div className="flex items-center gap-2.5 sm:block sm:text-center">
         <span
-          className={`flex shrink-0 items-center justify-center rounded-xl font-extrabold tabular-nums ${
+          className={`flex shrink-0 items-center justify-center rounded-xl font-medium tabular-nums ${
             styles.stepNum
           } ${compact ? 'h-7 w-7 text-[11px]' : 'h-8 w-8 text-[12px] sm:mx-auto'}`}
         >
@@ -118,7 +118,7 @@ function StepCard({
         </span>
         <div className={`min-w-0 flex-1 sm:mt-3 ${compact ? '' : ''}`}>
           <p
-            className={`font-extrabold leading-snug text-theme-fg ${
+            className={`font-medium leading-snug text-theme-fg ${
               compact ? 'text-[13px]' : 'text-[13px] sm:text-[14px]'
             }`}
           >
@@ -173,7 +173,6 @@ export default function EmptyState({
   illustration,
   variant = 'default',
   steps,
-  stepsLabel = 'How it works',
   hint,
   compact = false,
   bare = false,
@@ -242,18 +241,8 @@ export default function EmptyState({
           </div>
         )}
 
-        {variant === 'default' && normalizedSteps.length > 0 && !compact && !bare && (
-          <span
-            className={`mt-5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ring-1 ${styles.badge}`}
-          >
-            Get started
-          </span>
-        )}
-
         <h3
-          className={`font-extrabold tracking-tight text-theme-fg ${
-            compact ? 'mt-4 text-[15px]' : 'mt-4 text-lg sm:mt-5 sm:text-xl'
-          }`}
+          className={`empty-lead text-theme-fg ${compact ? 'mt-4' : 'mt-4 sm:mt-5'}`}
         >
           {title}
         </h3>
@@ -270,15 +259,7 @@ export default function EmptyState({
 
         {normalizedSteps.length > 0 && (
           <div className={`w-full ${compact ? 'mt-4 max-w-sm' : 'mt-7 max-w-2xl sm:mt-8'}`}>
-            {!compact && normalizedSteps.length > 1 && (
-              <div className="mb-4 flex items-center justify-center gap-3">
-                <div className={`h-px flex-1 max-w-[60px] bg-gradient-to-r from-transparent ${styles.accentLine}`} />
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-theme-muted">
-                  {stepsLabel}
-                </span>
-                <div className={`h-px flex-1 max-w-[60px] bg-gradient-to-l from-transparent ${styles.accentLine}`} />
-              </div>
-            )}
+            {!compact && normalizedSteps.length > 1 ? <div className="mb-4" /> : null}
 
             <div
               className={`relative ${

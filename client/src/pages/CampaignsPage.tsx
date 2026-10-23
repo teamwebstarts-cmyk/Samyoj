@@ -17,7 +17,8 @@ import {
 import CampaignHero from '../components/campaigns/CampaignHero';
 import CampaignRetargetPanel from '../components/campaigns/CampaignRetargetPanel';
 import CampaignAudienceSection from '../components/campaigns/CampaignAudienceSection';
-import { recipientsFromPhones, type CampaignRecipientDetail } from '../components/campaigns/wizard/campaignWizardModel';
+import { campaignWizardHasWork, recipientsFromPhones, type CampaignRecipientDetail, type CampaignWizardForm } from '../components/campaigns/wizard/campaignWizardModel';
+import { readWork } from '../utils/workResume';
 import CampaignTable, { CampaignListPagination, type CampaignSortKey } from '../components/campaigns/CampaignTable';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CampaignDetailHeader from '../components/campaigns/CampaignDetailHeader';
@@ -232,6 +233,14 @@ export default function CampaignsPage() {
   const { entitlements, loading: entitlementsLoading } = useEntitlements();
   const { activeNumber, disconnectedNumbers, hasConnectedNumber, resolved } = useWhatsAppNumber();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!activeNumber?.id) return;
+    const saved = readWork<{ form: CampaignWizardForm; step: number; path: string }>(`campaign:${activeNumber.id}`);
+    if (!saved?.path || !campaignWizardHasWork(saved.form, saved.step)) return;
+    navigate(saved.path, { replace: true });
+  }, [activeNumber?.id, navigate]);
+
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [templatesLoadError, setTemplatesLoadError] = useState<string | null>(null);
@@ -992,14 +1001,9 @@ export default function CampaignsPage() {
                         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[0_8px_20px_rgba(16,185,129,0.22)]">
                           <Send className="h-5 w-5" strokeWidth={2.1} />
                         </span>
-                        <div>
-                          <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
-                            Campaigns
-                          </p>
-                          <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                            Ready to reach people
-                          </p>
-                        </div>
+                        <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                          Ready to reach people
+                        </p>
                       </div>
                       <div className="mt-4 space-y-2">
                         <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-2 text-[10px] font-bold text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
@@ -1014,7 +1018,7 @@ export default function CampaignsPage() {
                     </div>
 
                     <div className="min-w-0">
-                      <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                      <h3 className="empty-lead text-slate-900 dark:text-white">
                         Launch your first campaign
                       </h3>
                       <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
@@ -1036,10 +1040,10 @@ export default function CampaignsPage() {
                             </span>
                             <span className="min-w-0">
                               <span className="flex items-center gap-1.5">
-                                <span className="text-[9px] font-extrabold tabular-nums text-emerald-600 dark:text-emerald-300">
+                                <span className="text-[11px] font-medium tabular-nums text-emerald-600 dark:text-emerald-300">
                                   0{index + 1}
                                 </span>
-                                <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                <span className="truncate text-[12px] font-medium text-slate-700 dark:text-slate-200">
                                   {label}
                                 </span>
                               </span>

@@ -7,6 +7,14 @@ export function frequencyCapSince(now = Date.now()): Date {
   return new Date(now - FREQUENCY_CAP_WINDOW_MS);
 }
 
+/** A button/text/form wait older than the cap should not swallow a later command. */
+export function flowWaitIsStale(waitingSince: string | undefined, now = Date.now()): boolean {
+  if (!waitingSince) return true;
+  const at = Date.parse(waitingSince);
+  if (!Number.isFinite(at)) return true;
+  return now - at >= FREQUENCY_CAP_WINDOW_MS;
+}
+
 export async function hasRecentFlowStart(params: {
   organizationId: string;
   conversationId: string;

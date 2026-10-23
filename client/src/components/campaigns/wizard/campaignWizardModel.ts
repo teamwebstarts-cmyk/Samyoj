@@ -104,6 +104,26 @@ export function createEmptyCampaignWizardForm(): CampaignWizardForm {
   };
 }
 
+/** True once the user has started a campaign. A blank wizard must not pull them back. */
+export function campaignWizardHasWork(form: CampaignWizardForm, step: number): boolean {
+  if (step > 0) return true;
+  return Boolean(
+    form.name.trim() ||
+      form.templateName ||
+      form.phones.trim() ||
+      form.audienceTags.trim() ||
+      form.headerMediaUrl.trim() ||
+      form.couponCode.trim() ||
+      form.selectedContactIds.length ||
+      form.bodyParams.some((value) => value.trim()) ||
+      form.headerParams.some((value) => value.trim()) ||
+      form.buttonUrlSuffixes.some((value) => value.trim()) ||
+      form.scheduleEnabled ||
+      form.repeatEnabled ||
+      form.dripEnabled,
+  );
+}
+
 export function recipientsFromPhones(
   phones: string[],
   details?: Record<string, CampaignRecipientDetail>,

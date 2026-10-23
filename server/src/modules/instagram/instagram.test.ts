@@ -561,14 +561,17 @@ describe('Phase 4 Instagram', () => {
     expect(sendInstagramPrivateReply).not.toHaveBeenCalled();
   });
 
-  it('skips keyword automation when the same author already commented on the post', async () => {
+  it('skips keyword automation when the same author was replied to on this post within 24h', async () => {
     commentMock.findUnique.mockResolvedValue(null as never);
     commentMock.create.mockResolvedValue({
       id: 'row_2',
       igCommentId: 'cmt_2',
       commentedAt: new Date(),
     } as never);
-    commentMock.findFirst.mockResolvedValue({ id: 'row_1' } as never);
+    commentMock.findFirst.mockResolvedValue({
+      id: 'row_1',
+      privateReplySentAt: new Date(),
+    } as never);
 
     const stored = await ingestInstagramComment({
       organizationId: 'org_1',
@@ -583,6 +586,29 @@ describe('Phase 4 Instagram', () => {
     expect(automationMock.findMany).not.toHaveBeenCalled();
   });
 
+  it('runs keyword automation again when the last reply is outside 24h', async () => {
+    commentMock.findUnique.mockResolvedValue(null as never);
+    commentMock.create.mockResolvedValue({
+      id: 'row_3',
+      igCommentId: 'cmt_3',
+      commentedAt: new Date(),
+    } as never);
+    commentMock.findFirst.mockResolvedValue(null as never);
+    automationMock.findMany.mockResolvedValue([] as never);
+
+    const stored = await ingestInstagramComment({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igCommentId: 'cmt_3',
+      igMediaId: 'media_1',
+      fromId: 'igsid_1',
+      text: 'PRICE again',
+    });
+    expect(stored.created).toBe(true);
+    expect(automationMock.findMany).toHaveBeenCalled();
+    expect(stored.automationSent).toBe(false);
+  });
+
   it('shouldSkipCommentKeywordAutomation is false without a prior row', async () => {
     commentMock.findFirst.mockResolvedValue(null as never);
     const skip = await shouldSkipCommentKeywordAutomation({
@@ -593,6 +619,29 @@ describe('Phase 4 Instagram', () => {
       excludeCommentId: 'row_new',
     });
     expect(skip).toBe(false);
+  });
+
+  it('only treats a reply from the last 24h as a repeat', async () => {
+    commentMock.findFirst.mockResolvedValue(null as never);
+    const now = new Date('2026-10-23T12:00:00.000Z');
+    await shouldSkipCommentKeywordAutomation({
+      organizationId: 'org_1',
+      channelId: 'ch_ig',
+      igMediaId: 'media_1',
+      fromId: 'igsid_1',
+      excludeCommentId: 'row_new',
+      now,
+    });
+    expect(commentMock.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { privateReplySentAt: { gte: new Date('2026-10-22T12:00:00.000Z') } },
+            { publicReplySentAt: { gte: new Date('2026-10-22T12:00:00.000Z') } },
+          ],
+        }),
+      })
+    );
   });
 
   it('keyword with both texts posts on the comment and sends a DM', async () => {

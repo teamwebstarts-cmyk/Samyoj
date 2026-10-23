@@ -39,7 +39,7 @@ import {
   flowToggleSuccessMessage,
   isUnpublishedFlow,
 } from '../../utils/flow-live';
-import { triggerMeta } from './flowMeta';
+import { triggerMeta, triggerTableLabel } from './flowMeta';
 import type { Flow, FlowTemplate } from '../../types';
 
 export interface FlowSummary {
@@ -258,11 +258,8 @@ export default function FlowsTab({
                         <Workflow className="h-5 w-5" strokeWidth={2.1} />
                       </span>
                       <div>
-                        <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-700 dark:text-violet-300">
-                          Flows
-                        </p>
-                        <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                          Smart chat journeys
+                        <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                          Step-by-step chats
                         </p>
                       </div>
                     </div>
@@ -279,7 +276,7 @@ export default function FlowsTab({
                   </div>
 
                   <div className="min-w-0">
-                    <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                    <h3 className="empty-lead text-slate-900 dark:text-white">
                       Build your first conversation flow
                     </h3>
                     <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
@@ -313,10 +310,10 @@ export default function FlowsTab({
                           </span>
                           <span className="min-w-0">
                             <span className="flex items-center gap-1.5">
-                              <span className="text-[9px] font-extrabold tabular-nums text-violet-600 dark:text-violet-300">
+                              <span className="text-[11px] font-medium tabular-nums text-violet-600 dark:text-violet-300">
                                 0{index + 1}
                               </span>
-                              <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                              <span className="truncate text-[12px] font-medium text-slate-700 dark:text-slate-200">
                                 {label}
                               </span>
                             </span>
@@ -364,6 +361,7 @@ export default function FlowsTab({
               renderTable={() => (
                 <DataTable
                   headers={['Flow', 'Starts when', 'Keyword', 'Steps', 'Status', 'Actions']}
+                  columnWidths={['34%', '14%', '14%', '8%', '12%', '18%']}
                   serialNo={false}
                   page={page}
                   pageSize={DEFAULT_PAGE_SIZE}
@@ -403,9 +401,9 @@ export default function FlowsTab({
                         </td>
                         <td className="px-5 py-3.5">
                           <span
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${trigger?.accent || 'bg-theme-subtle text-theme-secondary ring-theme-border'}`}
+                            className={`inline-flex max-w-full truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[12px] font-semibold ring-1 ${trigger?.accent || 'bg-theme-subtle text-theme-secondary ring-theme-border'}`}
                           >
-                            {trigger?.label || flow.triggerType}
+                            {triggerTableLabel(flow.triggerType, trigger?.label)}
                           </span>
                         </td>
                         <td className="px-5 py-3.5">
@@ -476,6 +474,7 @@ export default function FlowsTab({
         templates={templates}
         creating={creating}
         onSelect={createFromTemplate}
+        onDraftsChange={load}
       />
     </>
   );

@@ -18,6 +18,8 @@ interface DataTableProps {
   paginationItemLabel?: string;
   /** Skip outer dashboard-card chrome when nested inside another card shell */
   embedded?: boolean;
+  /** Lock column widths so the table stays inside the card. */
+  columnWidths?: string[];
 }
 
 export function getTableSerialNo(page: number, pageSize: number, rowIndex: number) {
@@ -57,6 +59,7 @@ export default function DataTable({
   paginationVariant = 'default',
   paginationItemLabel,
   embedded = false,
+  columnWidths,
 }: DataTableProps) {
   const showPagination =
     page !== undefined &&
@@ -72,8 +75,15 @@ export default function DataTable({
         embedded ? '' : 'dashboard-card'
       } ${className}`.trim()}
     >
-      <div className="overflow-x-auto">
-        <table className={`w-full ${minTableWidth} text-sm ${tableClassName}`}>
+      <div className="data-table-scroll overflow-x-auto">
+        <table className={`w-full ${columnWidths ? 'table-fixed' : minTableWidth} text-sm ${tableClassName}`}>
+          {columnWidths && (
+            <colgroup>
+              {displayHeaders.map((header, index) => (
+                <col key={header} style={{ width: columnWidths[index] }} />
+              ))}
+            </colgroup>
+          )}
           <thead>
             <tr className="border-b border-theme-border bg-theme-subtle/80">
               {displayHeaders.map((header) => {
@@ -85,7 +95,7 @@ export default function DataTable({
                     scope="col"
                     className={`px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-theme-muted ${
                       isActions
-                        ? 'min-w-[9rem] text-right'
+                        ? `${columnWidths ? '' : 'min-w-[9rem] '}text-right`
                         : isSerial
                           ? 'w-14 px-3 text-center'
                           : 'text-left'

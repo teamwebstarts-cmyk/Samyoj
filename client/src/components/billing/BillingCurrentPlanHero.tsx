@@ -80,10 +80,10 @@ export default function BillingCurrentPlanHero({ info, onUnlockGrowth, isNearLim
         <div className="space-y-2">
           {/* Plan name + badges */}
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-extrabold tracking-tight text-theme-fg sm:text-xl">
+            <h2 className="surface-title text-theme-fg">
               {plan.name} Plan
             </h2>
-            <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ring-1 ring-inset ${accent.bg} ${accent.text} ${accent.ring}`}>
+            <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${accent.bg} ${accent.text} ${accent.ring}`}>
               {planTier}
             </span>
             <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${status.bg} ${status.color} ring-transparent`}>

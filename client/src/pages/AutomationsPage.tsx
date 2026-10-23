@@ -60,6 +60,7 @@ const triggerMeta: Record<
   string,
   {
     label: string;
+    tableLabel: string;
     description: string;
     icon: LucideIcon;
     accent: string;
@@ -69,7 +70,8 @@ const triggerMeta: Record<
 > = {
   KEYWORD: {
     label: 'Keyword Reply',
-    description: 'Reply when a customer sends a matching keyword',
+    tableLabel: 'Keyword',
+    description: 'A word in chat, or in any Instagram comment',
     icon: Hash,
     accent: 'from-violet-500/10 to-purple-500/5 border-violet-200/70',
     iconBg: 'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_14px_rgba(139,92,246,0.35)]',
@@ -77,7 +79,8 @@ const triggerMeta: Record<
   },
   WELCOME: {
     label: 'Welcome Message',
-    description: 'Greet customers on their first message',
+    tableLabel: 'Welcome',
+    description: 'WhatsApp only — first message',
     icon: Sparkles,
     accent: 'from-emerald-500/10 to-teal-500/5 border-emerald-200/70',
     iconBg: 'bg-gradient-to-br from-whatsapp-600 to-whatsapp-700 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',
@@ -85,7 +88,8 @@ const triggerMeta: Record<
   },
   AWAY: {
     label: 'Away Message',
-    description: 'Auto-reply when your team is unavailable',
+    tableLabel: 'Away',
+    description: 'WhatsApp only — outside working hours',
     icon: Clock,
     accent: 'from-amber-500/10 to-orange-500/5 border-amber-200/70',
     iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_4px_14px_rgba(245,158,11,0.35)]',
@@ -93,7 +97,8 @@ const triggerMeta: Record<
   },
   BUSINESS_HOURS: {
     label: 'Business Hours',
-    description: 'Different replies during and after working hours',
+    tableLabel: 'Hours',
+    description: 'WhatsApp only — open and closed hours',
     icon: Bot,
     accent: 'from-sky-500/10 to-blue-500/5 border-sky-200/70',
     iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
@@ -101,7 +106,8 @@ const triggerMeta: Record<
   },
   LEAD_CAPTURE: {
     label: 'Lead Capture',
-    description: 'Reply, tag as lead, and optionally connect to your team',
+    tableLabel: 'Lead',
+    description: 'WhatsApp only — reply, tag, handoff',
     icon: UserPlus,
     accent: 'from-rose-500/10 to-pink-500/5 border-rose-200/70',
     iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-[0_4px_14px_rgba(244,63,94,0.3)]',
@@ -109,6 +115,7 @@ const triggerMeta: Record<
   },
   AI_CHATBOT: {
     label: 'AI Chatbot',
+    tableLabel: 'AI',
     description: 'Set up in AI Bots — answers customers automatically',
     icon: Bot,
     accent: 'from-indigo-500/10 to-violet-500/5 border-indigo-200/70',
@@ -174,6 +181,7 @@ function getTriggerMeta(triggerType: string) {
   return (
     triggerMeta[triggerType] ?? {
       label: triggerType,
+      tableLabel: triggerType,
       description: 'Custom start rule',
       icon: MessageSquareQuote,
       accent: 'from-neutral-500/10 to-neutral-500/5 border-neutral-200/70',
@@ -554,7 +562,7 @@ export default function AutomationsPage() {
   const availableChannelOptions = [
     ...(hasConnectedNumber ? [{ id: 'WA' as const, label: 'WhatsApp', hint: 'Chat keyword' }] : []),
     ...(facebookConnected ? [{ id: 'FB' as const, label: 'Facebook', hint: 'Messenger keyword' }] : []),
-    ...(instagramConnected ? [{ id: 'IG' as const, label: 'Instagram', hint: 'Comment keyword' }] : []),
+    ...(instagramConnected ? [{ id: 'IG' as const, label: 'Instagram', hint: 'Every post’s comments' }] : []),
   ];
 
   if (resolved && !hasConnectedNumber && !facebookConnected && !instagramConnected) {
@@ -702,11 +710,8 @@ export default function AutomationsPage() {
                             <Zap className="h-5 w-5" strokeWidth={2.1} />
                           </span>
                           <div>
-                            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-violet-700 dark:text-violet-300">
-                              Quick Replies
-                            </p>
-                            <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                              Instant responses
+                            <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                              One automatic reply
                             </p>
                           </div>
                         </div>
@@ -723,7 +728,7 @@ export default function AutomationsPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                        <h3 className="empty-lead text-slate-900 dark:text-white">
                           Set up your first auto-reply
                         </h3>
                         <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
@@ -757,10 +762,10 @@ export default function AutomationsPage() {
                               </span>
                               <span className="min-w-0">
                                 <span className="flex items-center gap-1.5">
-                                  <span className="text-[9px] font-extrabold tabular-nums text-violet-600 dark:text-violet-300">
+                                  <span className="text-[11px] font-medium tabular-nums text-violet-600 dark:text-violet-300">
                                     0{index + 1}
                                   </span>
-                                  <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                  <span className="truncate text-[12px] font-medium text-slate-700 dark:text-slate-200">
                                     {label}
                                   </span>
                                 </span>
@@ -842,6 +847,7 @@ export default function AutomationsPage() {
                 renderTable={() => (
                   <DataTable
                     headers={['Auto-reply', 'Starts when', 'Keyword', 'Status', 'Actions']}
+                    columnWidths={['36%', '16%', '22%', '10%', '16%']}
                     serialNo={false}
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
@@ -891,9 +897,9 @@ export default function AutomationsPage() {
                           </td>
                           <td className="px-5 py-3.5">
                             <span
-                              className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${meta.badge}`}
+                              className={`inline-flex max-w-full truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[12px] font-semibold ring-1 ${meta.badge}`}
                             >
-                              {meta.label}
+                              {meta.tableLabel}
                             </span>
                           </td>
                           <td className="px-5 py-3.5">
@@ -995,7 +1001,7 @@ export default function AutomationsPage() {
           {!editing && (
             <section className="space-y-2">
               <p className="text-[13px] font-extrabold text-neutral-900">1. When should we reply?</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {availableCreatableTriggers.map((type) => {
                   const meta = triggerMeta[type];
                   const Icon = meta.icon;
@@ -1014,17 +1020,17 @@ export default function AutomationsPage() {
                           buttons: type === 'KEYWORD' && prev.platform === 'IG' ? [] : prev.buttons,
                         }));
                       }}
-                      className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition ${
+                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                         selected
                           ? `bg-gradient-to-br ring-2 ring-violet-400/40 ${meta.accent}`
                           : 'border-neutral-200/80 bg-white hover:border-violet-200 hover:bg-violet-50/30'
                       }`}
                     >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.iconBg}`}>
-                        <Icon className="h-4 w-4" strokeWidth={2.25} />
+                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${meta.iconBg}`}>
+                        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
                       </div>
-                      <div>
-                        <p className="text-[12px] font-extrabold text-neutral-900">{meta.label}</p>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-extrabold leading-tight text-neutral-900">{meta.label}</p>
                         <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-600">
                           {meta.description}
                         </p>
@@ -1132,7 +1138,7 @@ export default function AutomationsPage() {
                   label={form.platform === 'IG' ? 'Word in a comment' : 'Word or phrase to watch for'}
                   hint={
                     form.platform === 'IG'
-                      ? 'One public reply, one private DM, or both. A 24h chat starts only after they reply in DMs.'
+                      ? 'Matches this word on every Instagram post. A rule saved on one post in Instagram Posts replaces this for that post only.'
                       : `We'll reply when a customer sends this word on ${form.platform === 'FB' ? 'Facebook Messenger' : 'WhatsApp'}`
                   }
                   placeholder="pricing"
@@ -1142,6 +1148,12 @@ export default function AutomationsPage() {
                 />
               </>
             )}
+
+            {form.triggerType !== 'KEYWORD' ? (
+              <p className="text-[11px] font-medium leading-snug text-neutral-600">
+                WhatsApp inbox only, on your connected number. This does not reply to Instagram comments or Facebook Messenger.
+              </p>
+            ) : null}
 
             {form.triggerType === 'LEAD_CAPTURE' && (
               <>
@@ -1216,8 +1228,8 @@ export default function AutomationsPage() {
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
                   rows={3}
                 />
-                <p className="text-[11px] font-medium text-neutral-500">
-                  A comment like PRICE can post “Check your DMs” and send the price in a private DM. Leave either box empty to send only the other.
+                <p className="text-[11px] font-medium leading-snug text-neutral-600">
+                  This runs on all of your Instagram posts, not one post you pick here. A comment like PRICE can post “Check your DMs” and send the price in a private DM. Leave either box empty to send only the other. To limit it to a single post, set comment automation on that post under Instagram Posts.
                 </p>
               </>
             ) : (

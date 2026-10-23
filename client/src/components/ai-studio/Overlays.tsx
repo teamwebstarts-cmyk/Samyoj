@@ -1,43 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, Bookmark, Check, FileText, FolderOpen, History, Info, Plus, Search, Trash2, X } from "lucide-react";
+import { Bookmark, FileText, FolderOpen, History, Plus, Search, Trash2, X } from "lucide-react";
 import type { Channel, Draft, OutputId, Pack } from "./data/types";
 import type { HistoryEntry } from "../../utils/aiStudioStore";
 import { outputSummary, timeAgo } from "./data/mock";
 import { ChannelIcon } from "./brand";
 import { SlideArt } from "./SlideArt";
-
-/* ------------------------------ Toast ------------------------------ */
-
-export interface ToastItem {
-  id: number;
-  message: string;
-  tone: "success" | "info" | "error";
-}
-
-export function ToastHost({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
-  return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex flex-col items-center gap-2 px-4" role="status" aria-live="polite">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className="anim-fade-up pointer-events-auto flex max-w-[460px] items-center gap-3 rounded-xl border border-[var(--border)] bg-white py-2.5 pl-3 pr-2 text-[13px] font-semibold text-[var(--text)] shadow-[var(--shadow-pop)]"
-        >
-          <span
-            className="grid h-6 w-6 flex-none place-items-center rounded-full text-white"
-            style={{ background: t.tone === "success" ? "var(--success)" : t.tone === "error" ? "var(--danger)" : "var(--ai-primary)" }}
-          >
-            {t.tone === "success" ? <Check size={14} strokeWidth={3} /> : t.tone === "error" ? <AlertCircle size={14} /> : <Info size={14} />}
-          </span>
-          <span className="flex-1">{t.message}</span>
-          <button type="button" className="icon-btn !h-7 !w-7" aria-label="Dismiss notification" onClick={() => onDismiss(t.id)}>
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 const CHANNEL_ORDER: Channel[] = ["instagram", "whatsapp", "email"];
 

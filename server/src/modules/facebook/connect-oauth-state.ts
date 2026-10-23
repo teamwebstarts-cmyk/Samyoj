@@ -85,6 +85,10 @@ export const FACEBOOK_PAGE_LEADGEN_SCOPES = [
   'leads_retrieval',
   'instagram_basic',
   'instagram_manage_messages',
+  // /me/accounts can be empty when the dialog did not tick a Page. Listing
+  // Pages through the business then needs this scope, or connect stops at
+  // "no Pages" after Graph (#100) Missing Permission on /me/businesses.
+  'business_management',
 ].join(',');
 
 /**

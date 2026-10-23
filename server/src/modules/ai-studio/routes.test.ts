@@ -6,11 +6,22 @@ import {
   cryptoId,
   normalizeStudioPackBody,
   UUID_RE,
+  getStudioCapabilities,
 } from './routes';
 
 // ---------------------------------------------------------------------------
 // POST /ai-studio/generate
 // ---------------------------------------------------------------------------
+
+describe('getStudioCapabilities', () => {
+  it('returns capability flags', () => {
+    const caps = getStudioCapabilities();
+    expect(caps).toEqual({
+      imageGeneration: expect.any(Boolean),
+      referenceImages: expect.any(Boolean),
+    });
+  });
+});
 
 describe('generateSchema', () => {
   const valid = { brief: 'A cool campaign', language: 'en', outputs: ['ig_image'] };

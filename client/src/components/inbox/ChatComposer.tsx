@@ -133,6 +133,8 @@ interface ChatComposerProps {
   attachment?: PendingAttachment | null;
   onRemoveAttachment?: () => void;
   canSendMessages?: boolean;
+  /** Shown on hover when the composer is blocked (Facebook / Instagram window). */
+  blockedReason?: string;
   /** Kept for template/interactive parents; reply composer no longer locks on this. */
   sending: boolean;
   cannedReplies?: CannedReply[];
@@ -190,6 +192,7 @@ export default function ChatComposer({
   attachment,
   onRemoveAttachment,
   canSendMessages = true,
+  blockedReason,
   sending: _sending,
   cannedReplies = [],
   onInteractive,
@@ -264,6 +267,14 @@ export default function ChatComposer({
   const showVoice = Boolean(onAttach && attach.voice && canRecord);
   const isMetaDm = platform === 'facebook' || platform === 'instagram';
   const canSend = canSendMessages && Boolean(value.trim() || attachment);
+  const blockedHint = canSendMessages
+    ? ''
+    : blockedReason ||
+      (platform === 'instagram'
+        ? 'Blocked until they message you again. Instagram has no template to reopen this chat.'
+        : platform === 'facebook'
+          ? 'Blocked until they message your Page again. The 24-hour window is closed.'
+          : 'Sending is blocked until the customer messages again.');
   const isVoiceAttachment =
     attachment?.type === 'AUDIO' &&
     (attachment.file.name.startsWith('voice-note-') || attachment.file.type.startsWith('audio/'));
@@ -840,7 +851,15 @@ export default function ChatComposer({
       </ComposerPortalMenu>
       ) : null}
 
-      <div className="flex items-end gap-1.5 md:block">
+      <div className={`relative flex items-end gap-1.5 md:block ${canSendMessages ? '' : 'cursor-not-allowed'}`}>
+        {!canSendMessages ? (
+          <div
+            className="absolute inset-0 z-30 cursor-not-allowed"
+            role="note"
+            aria-label={blockedHint}
+            {...tipFor(blockedHint)}
+          />
+        ) : null}
         {showAttachMenu ? (
         <button
           ref={attachBtnMobileRef}

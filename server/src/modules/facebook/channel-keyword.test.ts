@@ -53,6 +53,8 @@ describe('matchChannelKeyword', () => {
       publicText: 'on post',
     });
     expect(matchInstagramCommentReplies(rows, 'hello').privateText).toBeNull();
+    expect(matchChannelKeyword(rows, 'IG', 'OFFER please')).toBe('dm');
+    expect(matchChannelKeyword(rows, 'IG', '🔥')).toBe('dm');
   });
 
   it('takes the oldest private text and the oldest public text', () => {

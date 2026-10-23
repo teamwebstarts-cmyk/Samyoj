@@ -664,6 +664,7 @@ export default function TemplateWizardPage() {
                 onChange={setForm}
                 mode={mode}
                 onHeaderPreviewUrl={setHeaderPreviewUrl}
+                headerPreviewUrl={headerPreviewUrl}
                 brandName={organization?.companyName ?? ''}
                 mapFirstBodyVariableToName={mapFirstBodyVariableToName}
               />

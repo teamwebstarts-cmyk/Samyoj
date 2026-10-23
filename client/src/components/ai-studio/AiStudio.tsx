@@ -22,12 +22,14 @@ import { Compose } from "./Compose";
 import { GenerationProgress } from "./Generating";
 import { PackView } from "./PackView";
 import type { PackTab } from "./PackView";
-import { DraftDrawer, ToastHost } from "./Overlays";
-import type { ToastItem } from "./Overlays";
+import { DraftDrawer } from "./Overlays";
+import { toastError, toastInfo, toastSuccess } from "../../utils/toast";
 import { HandoffModal, NewPackModal, RefineModal } from "./Modals";
 import type { HandoffState } from "./Modals";
 import { slideToPngFile, slidesToPngUrls, directSlideImageUrls } from "../../utils/aiStudioPoster";
-import { aiBillingUserMessage, normalizeError } from "../../utils/errors";
+import { aiStudioUserMessage } from "./studioErrors";
+import { fetchBusinessStudioBrief } from "./businessBrief";
+import { fetchSeasonalStudioBrief, isSeasonalExampleId } from "./seasonalPrompts";
 import {
   addHistoryEntry,
   clearStoredHistory,
@@ -41,6 +43,8 @@ import {
   saveWorkspace,
   type HistoryEntry,
 } from "../../utils/aiStudioStore";
+import { acknowledgeStudioJob, cancelStudioJob, getStudioJob, startStudioJob, subscribeStudioJob } from "../../utils/studioGeneration";
+import { clearWork, readWork, writeWork } from "../../utils/workResume";
 import "../../styles/ai-studio.css";
 
 /**
@@ -57,6 +61,15 @@ type Screen = "compose" | "generating" | "review" | "saved";
 type Overlay = null | "drafts" | "refine" | "new";
 
 const DEFAULT_OUTPUTS: OutputId[] = ["ig_carousel"];
+const COMPOSE_RESUME_KEY = "studio-compose";
+
+type ComposeResume = {
+  brief: string;
+  language: Language;
+  outputs: OutputId[];
+  imageQuality: "standard" | "high" | "story";
+  imageCount: 1 | 2 | 4;
+};
 
 const OPENING_TEXT: Record<Channel, (p: Pack) => string> = {
   instagram: (p) => `Opening Instagram Posts with your ${p.carousel ? "carousel" : "image"}...`,
@@ -103,15 +116,23 @@ export default function AiStudio() {
 
   const restoredWorkspace = loadWorkspace();
   const usableWorkspace = !mockEnabled && restoredWorkspace?.pack.sample ? null : restoredWorkspace;
-  const [screen, setScreen] = useState<Screen>(usableWorkspace?.screen ?? "compose");
-  const [brief, setBrief] = useState(usableWorkspace?.pack.brief ?? "");
-  const [language, setLanguage] = useState<Language>(usableWorkspace?.pack.language ?? "English");
+  const composeDraft = readWork<ComposeResume>(COMPOSE_RESUME_KEY);
+  const jobNow = getStudioJob();
+  const [screen, setScreen] = useState<Screen>(jobNow?.status === "running" ? "generating" : usableWorkspace?.screen ?? "compose");
+  const [brief, setBrief] = useState(usableWorkspace?.pack.brief ?? composeDraft?.brief ?? "");
+  const [language, setLanguage] = useState<Language>(usableWorkspace?.pack.language ?? composeDraft?.language ?? "English");
   const [photos, setPhotos] = useState<Photo[]>(usableWorkspace?.pack.photos ?? []);
-  const [outputs, setOutputs] = useState<OutputId[]>(usableWorkspace?.pack.outputs?.length ? usableWorkspace.pack.outputs : DEFAULT_OUTPUTS);
-  const [imageQuality, setImageQuality] = useState<'standard' | 'high' | 'story'>('standard');
-  const [imageCount, setImageCount] = useState<1 | 2 | 4>(1);
+  const [outputs, setOutputs] = useState<OutputId[]>(
+    usableWorkspace?.pack.outputs?.length
+      ? usableWorkspace.pack.outputs
+      : composeDraft?.outputs?.length
+        ? composeDraft.outputs
+        : DEFAULT_OUTPUTS,
+  );
+  const [imageQuality, setImageQuality] = useState<'standard' | 'high' | 'story'>(composeDraft?.imageQuality ?? "standard");
+  const [imageCount, setImageCount] = useState<1 | 2 | 4>(composeDraft?.imageCount ?? 1);
   const [briefError, setBriefError] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(jobNow?.status === "running" ? jobNow.step : 0);
   const [pack, setPack] = useState<Pack | null>(usableWorkspace?.pack ?? null);
   const [tab, setTab] = useState<PackTab>("all");
   const [active, setActiveState] = useState<Record<VisualSet, number>>({ carousel: 0, image: 0 });
@@ -120,26 +141,96 @@ export default function AiStudio() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [handoff, setHandoff] = useState<HandoffState | null>(null);
   const [connections, setConnections] = useState<Record<Channel, boolean>>({ instagram: false, whatsapp: false, email: false });
-  const [busy, setBusy] = useState(false);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-
-  const genToken = useRef({ cancelled: false });
+  const [busy, setBusy] = useState(jobNow?.status === "running" && jobNow.inPlace);
+  const [businessBriefBusy, setBusinessBriefBusy] = useState(false);
+  const [referenceImagesEnabled, setReferenceImagesEnabled] = useState(mockEnabled);
   const handoffTimer = useRef<number | undefined>(undefined);
   const handoffRunningRef = useRef(false);
-  const toastId = useRef(0);
   const seededRef = useRef(false);
 
-  /* ------------------------------ toasts ------------------------------ */
-  const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
-  const toast = useCallback((message: string, tone: ToastItem["tone"] = "success") => {
-    const id = ++toastId.current;
-    setToasts((t) => [...t.slice(-2), { id, message, tone }]);
-    window.setTimeout(() => dismissToast(id), 3200);
-  }, [dismissToast]);
+  const toast = useCallback((message: string, tone: "success" | "info" | "error" = "success") => {
+    if (tone === "error") toastError(message);
+    else if (tone === "info") toastInfo(message);
+    else toastSuccess(message);
+  }, []);
+
+  useEffect(() => {
+    const apply = () => {
+      const current = getStudioJob();
+      if (current?.status === "running") {
+        setStep(current.step);
+        if (current.inPlace) setBusy(true);
+        else setScreen("generating");
+        return;
+      }
+      setBusy(false);
+      if (current?.status === "done" && current.pack) {
+        const next = current.pack;
+        setPack(next);
+        setBrief(next.brief);
+        setLanguage(next.language);
+        setOutputs(next.outputs?.length ? next.outputs : DEFAULT_OUTPUTS);
+        setPhotos(next.photos ?? []);
+        setTab("all");
+        setActiveState({ carousel: 0, image: 0 });
+        setScreen("review");
+        setHistory(loadStoredHistory());
+        toast(current.inPlace ? "Content pack updated" : "Content pack generated");
+        acknowledgeStudioJob();
+        return;
+      }
+      if (current?.status === "error") {
+        if (current.inPlace) toast(current.error || "Generation failed", "error");
+        else {
+          setBriefError(current.error || "Generation failed");
+          setScreen("compose");
+        }
+        acknowledgeStudioJob();
+      }
+    };
+    apply();
+    return subscribeStudioJob(apply);
+  }, [toast]);
+
+  useEffect(() => {
+    if (screen !== "compose") return;
+    const dirty =
+      brief.trim().length > 0 ||
+      language !== "English" ||
+      imageQuality !== "standard" ||
+      imageCount !== 1 ||
+      outputs.join(",") !== DEFAULT_OUTPUTS.join(",");
+    if (!dirty) {
+      clearWork(COMPOSE_RESUME_KEY);
+      return;
+    }
+    // ponytail: reference photos are blob URLs and are not restored after a page switch.
+    writeWork(COMPOSE_RESUME_KEY, { brief, language, outputs, imageQuality, imageCount } satisfies ComposeResume);
+  }, [brief, imageCount, imageQuality, language, outputs, screen]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [screen]);
+
+  useEffect(() => {
+    if (mockEnabled) {
+      setReferenceImagesEnabled(true);
+      return;
+    }
+    void aiStudioApi
+      .capabilities()
+      .then((res) => {
+        const caps = (res.data as { data?: { referenceImages?: boolean } }).data;
+        setReferenceImagesEnabled(caps?.referenceImages === true);
+      })
+      .catch(() => setReferenceImagesEnabled(false));
+  }, [mockEnabled]);
+
+  useEffect(() => {
+    if (!referenceImagesEnabled) {
+      setPhotos((current) => (current.length ? [] : current));
+    }
+  }, [referenceImagesEnabled]);
 
   useEffect(() => {
     if (pack && (screen === "review" || screen === "saved")) saveWorkspace(pack, screen);
@@ -226,8 +317,13 @@ export default function AiStudio() {
       return;
     }
     if (outputs.length === 0) return;
-    const token = { cancelled: false };
-    genToken.current = token;
+    if (!mockEnabled && photos.length > 0 && !referenceImagesEnabled) {
+      setBriefError(
+        'Reference photos are not available on this setup. Remove the image or use the live HTTPS app to include product photos.',
+      );
+      document.getElementById('brief')?.focus();
+      return;
+    }
     setBriefError(null);
     const stay = !!opts?.inPlace;
     if (stay) setBusy(true);
@@ -235,61 +331,72 @@ export default function AiStudio() {
       setStep(0);
       setScreen("generating");
     }
-    try {
-      let result: Pack;
-      if (mockEnabled) {
-        result = await generateStudioPack({ brief: idea, language, outputs, photos }, setStep, token);
-        result.sample = true;
-      } else {
-        const referenceUrls = photos.length ? await uploadReferencePhotos(photos) : [];
-        // Live path: persist references first so the image provider can fetch them.
-        const { data } = await aiStudioApi.generate({
-          brief: idea,
-          language,
-          outputs: outputs as unknown as string[],
-          photoNames: photos.map((photo) => photo.name).filter(Boolean),
-          referenceUrls,
-          imageQuality,
-          imageCount,
+    const captured = {
+      idea,
+      language,
+      outputs: [...outputs],
+      photos: [...photos],
+      imageQuality,
+      imageCount,
+      mockEnabled,
+    };
+    startStudioJob(stay, async (isCancelled, reportStep) => {
+      try {
+        let result: Pack;
+        if (captured.mockEnabled) {
+          const flag = { get cancelled() { return isCancelled(); } } as { cancelled: boolean };
+          result = await generateStudioPack(
+            { brief: captured.idea, language: captured.language, outputs: captured.outputs, photos: captured.photos },
+            reportStep,
+            flag,
+          );
+          result.sample = true;
+        } else {
+          reportStep(1);
+          // Blob URLs stay valid after this page unmounts, so a switch does not abort the upload.
+          const referenceUrls = captured.photos.length ? await uploadReferencePhotos(captured.photos) : [];
+          if (isCancelled()) throw new Error("cancelled");
+          reportStep(2);
+          const { data } = await aiStudioApi.generate({
+            brief: captured.idea,
+            language: captured.language,
+            outputs: captured.outputs as unknown as string[],
+            photoNames: captured.photos.map((photo) => photo.name).filter(Boolean),
+            referenceUrls,
+            imageQuality: captured.imageQuality,
+            imageCount: captured.imageCount,
+          });
+          if (isCancelled()) throw new Error("cancelled");
+          const payload = data.data as { pack?: Pack };
+          if (!payload?.pack) throw new Error("No pack returned");
+          result = payload.pack;
+          reportStep(3);
+        }
+        if (isCancelled()) throw new Error("cancelled");
+        saveWorkspace(result, "review");
+        addHistoryEntry({
+          id: uid(),
+          name: result.name,
+          pack: clonePack(result),
+          savedAt: Date.now(),
+          origin: "generation",
         });
-        const payload = data.data as { pack?: Pack };
-        if (!payload?.pack) throw new Error("No pack returned");
-        result = payload.pack;
+        if (!captured.mockEnabled) {
+          await aiStudioApi.savePack(result as unknown as Record<string, unknown>).catch(() => undefined);
+        }
+        return result;
+      } catch (err) {
+        if (isCancelled() || (err instanceof Error && err.message === "cancelled")) throw new Error("cancelled");
+        throw new Error(aiStudioUserMessage(err));
       }
-      if (token.cancelled) return;
-      setStep(4);
-      setPack(result);
-      setTab("all");
-      setActiveState({ carousel: 0, image: 0 });
-      setScreen("review");
-      logHistory(result, "generation");
-      toast(stay ? "Content pack updated" : "Content pack generated");
-      if (!mockEnabled) {
-        // Persist before handoff so the asset and copy have a server-side owner.
-        await aiStudioApi.savePack(result as unknown as Record<string, unknown>).catch(() => undefined);
-      }
-    } catch (err) {
-      if (token.cancelled || (err instanceof Error && err.message === "cancelled")) return;
-      const n = normalizeError(err);
-      const message =
-        aiBillingUserMessage(n.code, n.message) ||
-        n.message ||
-        "Generation failed. Try again.";
-      if (stay) {
-        toast(message, "error");
-      } else {
-        setBriefError(message);
-        setScreen("compose");
-        document.getElementById("brief")?.focus();
-      }
-    } finally {
-      if (stay) setBusy(false);
-    }
+    });
   };
 
   const cancelGeneration = () => {
-    genToken.current.cancelled = true;
-    setScreen("compose");
+    const inPlace = getStudioJob()?.inPlace === true;
+    cancelStudioJob();
+    setBusy(false);
+    if (!inPlace) setScreen("compose");
   };
 
   /* ------------------------------ pack mutations ------------------------------ */
@@ -404,6 +511,7 @@ export default function AiStudio() {
     setOverlay(null);
     setScreen("compose");
     clearWorkspace();
+    clearWork(COMPOSE_RESUME_KEY);
   }
 
   const requestNew = () => {
@@ -500,13 +608,42 @@ export default function AiStudio() {
   };
 
   /* ------------------------------ examples ------------------------------ */
-  const useExample = (id: string) => {
+  const useBusinessBrief = async () => {
+    setBusinessBriefBusy(true);
+    try {
+      const { brief: idea, reason } = await fetchBusinessStudioBrief();
+      if (!idea) {
+        setBriefError(reason || 'Add business details in Settings first.');
+        toast(reason || 'Add business details in Settings first.', 'error');
+        return;
+      }
+      setBrief(idea);
+      setBriefError(null);
+      window.setTimeout(() => document.getElementById('brief')?.focus(), 0);
+    } finally {
+      setBusinessBriefBusy(false);
+    }
+  };
+
+  const useExample = async (id: string) => {
+    if (isSeasonalExampleId(id)) {
+      const { brief: idea, outputs: outs, reason } = await fetchSeasonalStudioBrief(id);
+      if (!idea) {
+        setBriefError(reason || "Could not load this seasonal prompt.");
+        toast(reason || "Could not load this seasonal prompt.", "error");
+        return;
+      }
+      setBrief(idea);
+      setOutputs(outs);
+      setBriefError(null);
+      window.setTimeout(() => document.getElementById("brief")?.focus(), 0);
+      return;
+    }
     const ex = EXAMPLE_IDEAS.find((e) => e.id === id);
     if (!ex) return;
     setBrief(ex.brief);
     setOutputs(ex.outputs);
     setBriefError(null);
-    toast("Example loaded — tweak it or generate right away", "info");
     window.setTimeout(() => document.getElementById("brief")?.focus(), 0);
   };
 
@@ -548,16 +685,21 @@ export default function AiStudio() {
               onOpenDraft={openDraft}
               onOpenHistory={openHistory}
               onViewAllSessions={() => setOverlay("drafts")}
+              referenceImagesEnabled={referenceImagesEnabled}
+              onBusinessBrief={() => void useBusinessBrief()}
+              businessBriefBusy={businessBriefBusy}
             />
           </>
         )}
         {screen === "generating" && (
-          <GenerationProgress
-            step={step}
-            hasVisuals={outputs.includes("ig_carousel") || outputs.includes("ig_image")}
-            liveImages={!mockEnabled}
-            onCancel={cancelGeneration}
-          />
+          <div className="generation-screen">
+            <GenerationProgress
+              step={step}
+              hasVisuals={outputs.includes("ig_carousel") || outputs.includes("ig_image")}
+              liveImages={!mockEnabled}
+              onCancel={cancelGeneration}
+            />
+          </div>
         )}
         {reviewing && pack && (
           <PackView
@@ -615,7 +757,6 @@ export default function AiStudio() {
         onSaveAndNew={() => pack && saveDraft(pack.name, true)}
       />
       <HandoffModal state={handoff} onClose={closeHandoff} onConnect={connect} />
-      <ToastHost toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -24,7 +24,7 @@ import { LIVE_FLOW_WHERE, isBotPaused } from './live';
 function scopedLiveFlowWhere(whatsappNumberId: string) {
   return { whatsappNumberId, ...LIVE_FLOW_WHERE };
 }
-import { hasRecentFlowStart } from '../automation/frequency';
+import { flowWaitIsStale, hasRecentFlowStart } from '../automation/frequency';
 import { cancelFlowDelayJob, clearFlowWaitState } from './pause-automation';
 import {
   FLOW_LOCK_BUSY,
@@ -102,6 +102,7 @@ function getFlowState(botState: unknown): FlowState | null {
     flowName: state.flowName as string | undefined,
     currentNodeId: state.currentNodeId as string,
     waitingFor: (state.waitingFor as FlowState['waitingFor']) || null,
+    waitingSince: typeof state.waitingSince === 'string' ? state.waitingSince : undefined,
     variables: (state.variables as Record<string, string>) || {},
     attempts: (state.attempts as number) || 0,
     resumeAt: state.resumeAt as string | undefined,
@@ -1225,6 +1226,9 @@ async function runFromNode(
     );
 
     if (result.waitingFor) {
+      if (state.waitingFor !== result.waitingFor || !state.waitingSince) {
+        state.waitingSince = new Date().toISOString();
+      }
       state.waitingFor = result.waitingFor;
       if (result.waitingFor !== 'delay') await saveFlowState(payload.conversationId, state, payload);
       return true;
@@ -1461,6 +1465,23 @@ async function processInboundFlow(payload: InboundFlowPayload): Promise<boolean>
   }
 
   let existingState = getFlowState(conversation.botState);
+
+  if (
+    existingState?.waitingFor &&
+    existingState.waitingFor !== 'delay' &&
+    flowWaitIsStale(existingState.waitingSince)
+  ) {
+    await logAutomationRun({
+      organizationId: payload.organizationId,
+      conversationId: payload.conversationId,
+      flowId: existingState.flowId,
+      triggerType: 'FLOW',
+      action: 'wait_expired',
+      status: 'skipped',
+    });
+    await saveFlowState(payload.conversationId, null, payload);
+    existingState = null;
+  }
 
   let delayInterruptOnInbound: boolean | undefined;
   if (existingState?.waitingFor === 'delay') {

@@ -55,10 +55,8 @@ const toneStyles: Record<
 };
 
 export default function TemplateHero({
-  badge = 'Templates',
-  badgeIcon: BadgeIcon = FileText,
-  title = 'Message templates',
-  description = 'Create and manage approved templates for campaigns and outreach.',
+  title = 'Approved messages for outreach',
+  description = 'Create one, wait for Meta, then use it in a campaign.',
   stats,
 }: TemplateHeroProps) {
   return (
@@ -75,16 +73,12 @@ export default function TemplateHero({
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-sky-700 ring-1 ring-sky-200/70 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
-            <BadgeIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.5} />
-            {badge}
-          </span>
-          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-[#0f172a] dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
+          <h1 className="surface-title text-[#0f172a] dark:text-white">
             {title}
           </h1>
-          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:block sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-normal leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:block sm:text-[13px]">
             {description}
           </p>
         </div>
@@ -108,7 +102,7 @@ export default function TemplateHero({
                     {stat.label}
                   </p>
                   <p
-                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 text-[1rem] font-bold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
                   >
                     {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
                   </p>

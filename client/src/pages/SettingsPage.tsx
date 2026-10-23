@@ -540,8 +540,8 @@ export default function SettingsPage() {
             <SettingsHero
               badge="Settings"
               badgeIcon={Settings2}
-              title="Workspace settings"
-              description="Business profile, connected channels, and business hours."
+              title="Profile, channels, and hours"
+              description="What this workspace uses to send and reply."
               stats={heroStats}
               loading={refreshing}
             />

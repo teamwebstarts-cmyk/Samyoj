@@ -243,7 +243,7 @@ export default function AppTopbar({ companyName, userName, onMenuOpen, onLogout 
 
   return (
     <>
-      <header className="topbar-glass sticky top-0 z-40 shrink-0">
+      <header className="topbar-glass sticky top-0 z-[70] shrink-0">
         <div
           className="topbar-gutter-x flex min-h-[var(--density-topbar-min-h)] items-center gap-3 py-3 lg:min-h-[var(--density-topbar-min-h-lg)] lg:gap-5 lg:py-3.5"
         >

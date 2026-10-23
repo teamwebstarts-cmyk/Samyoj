@@ -21,8 +21,6 @@ interface PageHeroProps {
 }
 
 export default function PageHero({
-  badge,
-  badgeIcon: BadgeIcon,
   title,
   description,
   stats = [],
@@ -59,23 +57,7 @@ export default function PageHero({
         }`}
       >
         <div className="min-w-0 max-w-2xl">
-          <span
-            className={
-              isClean
-                ? 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 max-sm:hidden dark:bg-emerald-950/60 dark:text-emerald-300'
-                : `inline-flex items-center gap-1.5 rounded-full border bg-theme-surface/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-sm ${theme.badge} dark:bg-theme-surface-elevated/90`
-            }
-          >
-            <BadgeIcon className="h-3 w-3" />
-            {badge}
-          </span>
-          <h2
-            className={
-              isClean
-                ? 'mt-0 text-[15px] font-bold tracking-tight text-slate-900 sm:mt-3 sm:text-2xl dark:text-slate-50'
-                : 'mt-2.5 text-lg font-extrabold tracking-tight text-theme-fg sm:mt-3 sm:text-2xl'
-            }
-          >
+          <h2 className={`surface-title ${isClean ? 'text-slate-900 dark:text-slate-50' : 'text-theme-fg'}`}>
             {title}
           </h2>
           <p
@@ -116,7 +98,7 @@ export default function PageHero({
                   className={`tabular-nums ${
                     isClean
                       ? `text-[15px] font-bold sm:text-2xl ${item.tone ?? 'text-slate-900 dark:text-slate-50'}`
-                      : `text-lg font-extrabold sm:text-2xl ${item.tone ?? 'text-theme-fg'}`
+                      : `text-lg font-bold sm:text-xl ${item.tone ?? 'text-theme-fg'}`
                   }`}
                 >
                   {item.value}

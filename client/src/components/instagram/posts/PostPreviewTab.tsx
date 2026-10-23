@@ -323,12 +323,24 @@ export default function PostPreviewTab({
             <div className="igp-detail__head">
               <TypeIcon className="h-3.5 w-3.5 text-[var(--igp-muted)]" />
               <h4>Post Details</h4>
+              {data.permalink ? (
+                <a
+                  href={data.permalink}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="igp-btn igp-btn--outline"
+                  style={{ marginLeft: 'auto', height: 30, padding: '0 10px', fontSize: 12 }}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View on Instagram
+                </a>
+              ) : null}
               {data.isRemote ? (
-                <span className="igp-status igp-status--published igp-detail__status" style={{ marginLeft: 'auto' }}>
+                <span className="igp-status igp-status--published igp-detail__status" style={{ marginLeft: data.permalink ? 0 : 'auto' }}>
                   Live
                 </span>
               ) : editablePost && canEdit ? (
-                <button type="button" className="igp-detail__edit" onClick={onEdit}>
+                <button type="button" className="igp-detail__edit" onClick={onEdit} style={data.permalink ? { marginLeft: 0 } : undefined}>
                   Edit
                 </button>
               ) : null}
@@ -364,22 +376,6 @@ export default function PostPreviewTab({
                         {data.mediaMeta ? <span>{data.mediaMeta}</span> : null}
                       </span>
                     </span>
-                  </span>
-                </div>
-              ) : null}
-              {data.permalink ? (
-                <div className="igp-detail__row">
-                  <span className="igp-detail__label">Link</span>
-                  <span className="igp-detail__value">
-                    <a
-                      href={data.permalink}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1 text-[var(--igp-accent)] hover:underline"
-                    >
-                      View on Instagram
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
                   </span>
                 </div>
               ) : null}

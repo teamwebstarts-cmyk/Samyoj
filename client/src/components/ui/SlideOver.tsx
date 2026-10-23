@@ -17,7 +17,9 @@ interface SlideOverProps {
   multilineSubtitle?: boolean;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'md' | 'lg' | 'xl' | '2xl' | 'wide';
+  /** Keep the header and footer fixed. The page inside owns the only scrollbar. */
+  still?: boolean;
   icon?: LucideIcon;
   accent?: SlideOverAccent;
   step?: { current: number; total: number };
@@ -28,6 +30,7 @@ const widths = {
   lg: 'w-full max-w-lg sm:max-w-[min(100vw,32rem)]',
   xl: 'w-full max-w-xl sm:max-w-[min(100vw,36rem)]',
   '2xl': 'w-full sm:max-w-[min(100vw,46rem)]',
+  wide: 'w-full sm:max-w-[min(100vw,64rem)]',
 };
 
 const EXIT_MS = 220;
@@ -44,6 +47,7 @@ export default function SlideOver({
   accent = 'neutral',
   step,
   multilineSubtitle = false,
+  still = false,
 }: SlideOverProps) {
   const theme = slideOverAccents[accent];
   const panelRef = useRef<HTMLDivElement>(null);
@@ -152,7 +156,7 @@ export default function SlideOver({
           </div>
         </div>
 
-        <div className="modal-panel__body flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-6 sm:py-6">
+        <div className={`modal-panel__body flex-1 px-4 py-4 sm:px-5 sm:py-4 ${still ? 'modal-panel__body--still' : 'overflow-y-auto overscroll-y-contain'}`}>
           {children}
         </div>
 

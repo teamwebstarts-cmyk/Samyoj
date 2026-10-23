@@ -6,7 +6,6 @@ import {
   MessageSquare,
   PhoneCall,
   PlayCircle,
-  Sparkles,
 } from 'lucide-react';
 
 export type AiBotHeroTone = 'total' | 'live' | 'replies' | 'success' | 'voice' | 'duration';
@@ -68,8 +67,6 @@ const toneStyles: Record<
 };
 
 export default function AiBotHero({
-  badge,
-  badgeIcon: BadgeIcon = Sparkles,
   title,
   description,
   stats,
@@ -83,7 +80,7 @@ export default function AiBotHero({
 
   return (
     <section
-      aria-label="AI Agents overview"
+      aria-label="AI assistants overview"
       className="relative overflow-hidden rounded-xl border border-violet-200/70 bg-[linear-gradient(100deg,#faf8ff_0%,#f5f3ff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(139,92,246,0.05)] dark:border-violet-900/50 dark:bg-[linear-gradient(100deg,#120e24_0%,#18132e_45%,#0d0a1a_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
     >
       <div
@@ -95,23 +92,12 @@ export default function AiBotHero({
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
         <div className="min-w-0 max-w-xl">
-          {badge ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-violet-200/80 bg-violet-50/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-violet-800 dark:border-violet-800/60 dark:bg-violet-950/50 dark:text-violet-200 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
-              <BadgeIcon className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" aria-hidden="true" />
-              {badge}
-            </span>
-          ) : null}
-
-          <h1
-            className={`text-[1.05rem] font-extrabold leading-snug tracking-tight text-neutral-900 dark:text-white sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap ${
-              badge ? 'mt-1.5 sm:mt-3' : ''
-            }`}
-          >
+          <h1 className="surface-title text-neutral-900 dark:text-white">
             {title}
           </h1>
-          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-neutral-600 dark:text-neutral-400 sm:mt-1.5 sm:block sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-normal leading-relaxed text-neutral-600 dark:text-neutral-400 sm:mt-1.5 sm:block sm:text-[13px]">
             {description}
           </p>
         </div>
@@ -138,7 +124,7 @@ export default function AiBotHero({
                     {s.label}
                   </p>
                   <p
-                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 text-[1rem] font-bold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
                   >
                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
                   </p>

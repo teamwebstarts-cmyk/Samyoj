@@ -1,8 +1,5 @@
 import { MessageSquarePlus } from 'lucide-react';
-import { Hash, ImagePlus, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import EmptyStateHeroImage from '../ui/EmptyStateHeroImage';
-import MetaChannelSideHub from '../meta/MetaChannelSideHub';
 
 interface ChatPlaceholderProps {
   onNewChat?: () => void;
@@ -11,7 +8,6 @@ interface ChatPlaceholderProps {
 
 /** Right pane when no chat is open — hero illustration + onboarding copy. */
 export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: ChatPlaceholderProps) {
-  const navigate = useNavigate();
   const accent = {
     whatsapp: {
       dot: 'bg-whatsapp-500',
@@ -54,81 +50,6 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
     },
   }[platform];
 
-  const metaHub =
-    platform === 'instagram'
-      ? (
-          <div className="hidden h-full min-h-0 w-full max-w-[22rem] shrink-0 flex-col border-l border-rose-100/80 bg-white/60 p-3 dark:border-rose-950/40 dark:bg-neutral-950/40 md:flex md:max-w-[min(24rem,38%)] xl:max-w-[26rem]">
-            <MetaChannelSideHub
-              className="h-full min-h-0 flex-1 !rounded-xl !shadow-none"
-              heading="Instagram on Samyoj"
-              subheading="DMs are here. Use these for posts, comments and content."
-              options={[
-                {
-                  key: 'posts',
-                  title: 'Posts',
-                  description: 'Create, schedule and publish to your connected account.',
-                  icon: ImagePlus,
-                  accent: 'instagram',
-                  to: '/instagram/posts',
-                },
-                {
-                  key: 'comments',
-                  title: 'Comments',
-                  description: 'Reply, hide and automate comment workflows.',
-                  icon: Hash,
-                  accent: 'instagram',
-                  to: '/instagram/comments',
-                },
-                {
-                  key: 'studio',
-                  title: 'AI Studio',
-                  description: 'Generate visuals and copy for Instagram and WhatsApp.',
-                  icon: Sparkles,
-                  accent: 'instagram',
-                  to: '/ai-studio',
-                },
-              ]}
-            />
-          </div>
-        )
-      : platform === 'facebook'
-        ? (
-            <div className="hidden h-full min-h-0 w-full max-w-[22rem] shrink-0 flex-col border-l border-blue-100/80 bg-white/60 p-3 dark:border-blue-950/40 dark:bg-neutral-950/40 md:flex md:max-w-[min(24rem,38%)]">
-              <MetaChannelSideHub
-                className="h-full min-h-0 flex-1 !rounded-xl !shadow-none"
-                heading="Facebook on Samyoj"
-                subheading="Messenger chats are on the left. More tools:"
-                options={[
-                  {
-                    key: 'ads',
-                    title: 'Ads',
-                    description: 'Review lead ads and campaign tools.',
-                    icon: Sparkles,
-                    accent: 'facebook',
-                    to: '/facebook/ads',
-                  },
-                  {
-                    key: 'posts',
-                    title: 'Instagram Posts',
-                    description: 'Create and schedule Instagram content.',
-                    icon: ImagePlus,
-                    accent: 'instagram',
-                    to: '/instagram/posts',
-                  },
-                  {
-                    key: 'studio',
-                    title: 'AI Studio',
-                    description: 'Generate campaign creative and copy.',
-                    icon: Sparkles,
-                    accent: 'facebook',
-                    to: '/ai-studio',
-                  },
-                ]}
-              />
-            </div>
-          )
-        : null;
-
   const placeholderBg =
     platform === 'instagram'
       ? 'inbox-placeholder-bg inbox-placeholder-bg--instagram'
@@ -138,7 +59,7 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
 
   return (
     <div
-      className={`${placeholderBg} relative flex h-full min-h-0 flex-1 flex-col overflow-hidden md:flex-row`}
+      className={`${placeholderBg} relative flex h-full min-h-0 flex-1 flex-col overflow-hidden`}
       role="status"
       aria-live="polite"
       aria-label="Your inbox is ready"
@@ -200,61 +121,9 @@ export default function ChatPlaceholder({ onNewChat, platform = 'whatsapp' }: Ch
                 + New chat
               </button>
             ) : null}
-            {(platform === 'instagram' || platform === 'facebook') && (
-              <div className="inbox-placeholder-card mt-4 w-full max-w-md border-t border-slate-200/80 pt-4 dark:border-slate-700 md:hidden">
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  More on Samyoj
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {platform === 'instagram' ? (
-                    <>
-                      <button
-                        type="button"
-                        className="rounded-full border border-rose-200 px-3 py-1.5 text-[12px] font-bold text-rose-700"
-                        onClick={() => navigate('/instagram/posts')}
-                      >
-                        Posts
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-rose-200 px-3 py-1.5 text-[12px] font-bold text-rose-700"
-                        onClick={() => navigate('/instagram/comments')}
-                      >
-                        Comments
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-violet-200 px-3 py-1.5 text-[12px] font-bold text-violet-700"
-                        onClick={() => navigate('/ai-studio')}
-                      >
-                        AI Studio
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="rounded-full border border-blue-200 px-3 py-1.5 text-[12px] font-bold text-blue-700"
-                        onClick={() => navigate('/facebook/ads')}
-                      >
-                        Ads
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-rose-200 px-3 py-1.5 text-[12px] font-bold text-rose-700"
-                        onClick={() => navigate('/instagram/posts')}
-                      >
-                        Instagram Posts
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
-      {metaHub}
     </div>
   );
 }

@@ -34,7 +34,7 @@ export default function FlowEmptyState({ onAdd, compact }: FlowEmptyStateProps) 
         </div>
       </div>
 
-      <h2 className="relative mt-8 text-[20px] font-extrabold tracking-tight text-theme-fg sm:text-[22px]">
+      <h2 className="empty-lead relative mt-8 text-theme-fg">
         Start with one step
       </h2>
       <p className="relative mt-2 max-w-sm text-[14px] leading-relaxed text-theme-secondary">

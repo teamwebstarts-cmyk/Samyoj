@@ -6,6 +6,7 @@ import { sendInstagramPrivateReply, replyToInstagramComment } from '../facebook/
 import { findParentPageChannel } from '../facebook/parent-page';
 import { MetaWhatsAppService } from '../whatsapp/meta.service';
 import { matchInstagramCommentReplies } from '../facebook/channel-keyword';
+import { frequencyCapSince } from '../automation/frequency';
 import { instagramCommentRetentionCutoff } from './comment-retention';
 
 const log = createModuleLogger('instagram-comment-ingest');
@@ -97,7 +98,11 @@ export async function ingestInstagramComment(opts: {
   return { commentRowId: row.id, created: true, automationSent };
 }
 
-/** First comment per author on a post may trigger keyword automation; repeats are stored only. */
+/**
+ * Same author on the same post can trigger again after the 24h cap.
+ * A comment that never got a reply does not block the next one.
+ * Account-wide rules use this same cap so a testing account hears the reply again a day later.
+ */
 export async function shouldSkipCommentKeywordAutomation(opts: {
   organizationId: string;
   channelId: string;
@@ -105,6 +110,7 @@ export async function shouldSkipCommentKeywordAutomation(opts: {
   fromId?: string | null;
   fromUsername?: string | null;
   excludeCommentId: string;
+  now?: Date;
 }): Promise<boolean> {
   const mediaId = opts.igMediaId?.trim();
   if (!mediaId) return false;
@@ -116,6 +122,7 @@ export async function shouldSkipCommentKeywordAutomation(opts: {
         : null;
   if (!author) return false;
 
+  const since = frequencyCapSince(opts.now?.getTime());
   const prior = await prisma.instagramComment.findFirst({
     where: {
       organizationId: opts.organizationId,
@@ -123,9 +130,9 @@ export async function shouldSkipCommentKeywordAutomation(opts: {
       igMediaId: mediaId,
       ...author,
       id: { not: opts.excludeCommentId },
+      OR: [{ privateReplySentAt: { gte: since } }, { publicReplySentAt: { gte: since } }],
     },
     select: { id: true },
-    orderBy: { commentedAt: 'asc' },
   });
   return Boolean(prior);
 }
@@ -152,7 +159,7 @@ async function maybeSendCommentKeywordReply(opts: {
     excludeCommentId: opts.commentRowId,
   });
   if (skipDuplicate) {
-    log.info('Instagram comment automation skipped (repeat author on post)', {
+    log.info('Instagram comment automation skipped (same author replied within 24h)', {
       organizationId: opts.organizationId,
       channelId: opts.channelId,
       commentRowId: opts.commentRowId,

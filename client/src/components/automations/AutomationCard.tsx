@@ -5,6 +5,7 @@ import type { Automation } from '../../types';
 
 interface TriggerVisual {
   label: string;
+  tableLabel?: string;
   icon: LucideIcon;
   iconBg: string;
   badge: string;
@@ -69,9 +70,9 @@ export default function AutomationCard({
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span
-              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${meta.badge}`}
+              className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-semibold ring-1 ${meta.badge}`}
             >
-              {meta.label}
+              {meta.tableLabel || meta.label}
             </span>
             {automation.triggerType === 'KEYWORD' && config.keyword && (
               <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-300">

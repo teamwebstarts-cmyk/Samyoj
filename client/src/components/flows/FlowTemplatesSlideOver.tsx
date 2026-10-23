@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, LayoutTemplate, MousePointerClick, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, LayoutTemplate, MousePointerClick, Sparkles, Trash2 } from 'lucide-react';
 import SlideOver, { SlideOverFooter } from '../ui/SlideOver';
+import AppSelect from '../ui/AppSelect';
 import FlowTemplateCard from './FlowTemplateCard';
 import { nodeMeta, triggerMeta } from './flowMeta';
-import type { FlowTemplate } from '../../types';
+import { flowApi } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
+import { toastError, toastSuccess } from '../../utils/toast';
+import type { Flow, FlowTemplate } from '../../types';
 
 interface FlowTemplatesSlideOverProps {
   open: boolean;
@@ -11,6 +16,7 @@ interface FlowTemplatesSlideOverProps {
   templates: FlowTemplate[];
   creating: string | null;
   onSelect: (templateId: string) => void;
+  onDraftsChange?: () => void;
 }
 
 export default function FlowTemplatesSlideOver({
@@ -19,14 +25,18 @@ export default function FlowTemplatesSlideOver({
   templates,
   creating,
   onSelect,
+  onDraftsChange,
 }: FlowTemplatesSlideOverProps) {
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [triggerFilter, setTriggerFilter] = useState('all');
+  const [drafts, setDrafts] = useState<Flow[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const triggerFilters = useMemo(() => {
     const types = [...new Set(templates.map((t) => t.triggerType))];
     return [
-      { value: 'all', label: 'All' },
+      { value: 'all', label: 'All start types' },
       ...types.map((type) => ({
         value: type,
         label: triggerMeta[type]?.label || type,
@@ -44,6 +54,24 @@ export default function FlowTemplatesSlideOver({
       setTriggerFilter('all');
       return;
     }
+    let cancelled = false;
+    flowApi
+      .list({ status: 'DRAFT', limit: '20' })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = (data.data.flows || []) as Flow[];
+        setDrafts(rows.filter((flow) => flow.status === 'DRAFT'));
+      })
+      .catch(() => {
+        if (!cancelled) setDrafts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     if (filteredTemplates.length === 0) {
       setSelectedId(null);
       return;
@@ -67,15 +95,36 @@ export default function FlowTemplatesSlideOver({
     onSelect(selected.id);
   };
 
+  const continueDraft = (flowId: string) => {
+    onClose();
+    navigate(`/automations/flows/${flowId}`);
+  };
+
+  const deleteDraft = async (flow: Flow) => {
+    if (!confirm(`Delete draft “${flow.name}”?`)) return;
+    setDeletingId(flow.id);
+    try {
+      await flowApi.delete(flow.id);
+      setDrafts((current) => current.filter((row) => row.id !== flow.id));
+      onDraftsChange?.();
+      toastSuccess('Draft deleted');
+    } catch (err: unknown) {
+      toastError(getErrorMessage(err, 'Could not delete this draft'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <SlideOver
       open={open}
       onClose={onClose}
-      size="2xl"
+      size="wide"
+      still
       icon={LayoutTemplate}
       accent="violet"
       title="Start from a template"
-      subtitle="Pick a ready-made flow, then customize when it starts and the steps"
+      subtitle="Continue a draft, or pick a ready-made conversation flow"
       footer={
         <SlideOverFooter
           onCancel={onClose}
@@ -85,29 +134,65 @@ export default function FlowTemplatesSlideOver({
         />
       }
     >
-      <form id="slideover-form" onSubmit={handleSubmit} className="space-y-4">
-        {templates.length > 1 && triggerFilters.length > 2 && (
-          <div className="space-y-2">
-            <p className="text-[12px] font-semibold text-neutral-600">Filter by start type</p>
-            <div className="flex flex-wrap gap-2">
-              {triggerFilters.map((filter) => {
-                const isActive = triggerFilter === filter.value;
+      <form id="slideover-form" onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col gap-3">
+        {drafts.length > 0 && (
+          <section className="shrink-0 rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[13px] font-bold text-neutral-900">Your drafts</p>
+              <p className="text-[11px] font-medium text-neutral-500">Continue or delete</p>
+            </div>
+            <ul className="flow-template-scroll mt-2 max-h-[7.5rem] space-y-1 overflow-y-auto">
+              {drafts.map((flow) => {
+                const trigger = triggerMeta[flow.triggerType];
                 return (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    onClick={() => setTriggerFilter(filter.value)}
-                    className={`rounded-full px-3 py-1.5 text-[12px] font-bold transition active:scale-[0.98] ${
-                      isActive
-                        ? 'bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]'
-                        : 'border border-neutral-200/80 bg-white text-neutral-600 hover:border-violet-200 hover:text-violet-700'
-                    }`}
+                  <li
+                    key={flow.id}
+                    className="flex items-center gap-2 rounded-lg border border-amber-100 bg-white px-2.5 py-1.5"
                   >
-                    {filter.label}
-                  </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold text-neutral-900">{flow.name}</p>
+                      <p className="truncate text-[11px] text-neutral-500">
+                        {trigger?.label || flow.triggerType}
+                        {flow.nodes?.length ? ` · ${flow.nodes.length} steps` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => continueDraft(flow.id)}
+                      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-violet-600 px-2.5 text-[12px] font-semibold text-white hover:bg-violet-700"
+                    >
+                      Continue
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${flow.name}`}
+                      disabled={deletingId === flow.id}
+                      onClick={() => void deleteDraft(flow)}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
+          </section>
+        )}
+
+        {templates.length > 1 && triggerFilters.length > 2 && (
+          <div className="flex shrink-0 items-center justify-between gap-3">
+            <p className="text-[13px] font-bold text-neutral-900">
+              {filteredTemplates.length} template{filteredTemplates.length === 1 ? '' : 's'}
+            </p>
+            <AppSelect
+              ariaLabel="Filter by start type"
+              size="compact"
+              className="w-[11.5rem]"
+              value={triggerFilter}
+              options={triggerFilters}
+              onChange={(event) => setTriggerFilter(event.target.value)}
+            />
           </div>
         )}
 
@@ -131,19 +216,14 @@ export default function FlowTemplatesSlideOver({
             </button>
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start">
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[13px] font-extrabold text-neutral-900">
+          <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <section className="flex min-h-0 flex-col">
+              {!(templates.length > 1 && triggerFilters.length > 2) && (
+                <p className="mb-2 shrink-0 text-[13px] font-bold text-neutral-900">
                   {filteredTemplates.length} template{filteredTemplates.length === 1 ? '' : 's'}
                 </p>
-                <p className="hidden items-center gap-1 text-[11px] font-medium text-neutral-400 sm:flex">
-                  <MousePointerClick className="h-3.5 w-3.5" />
-                  Click to preview
-                </p>
-              </div>
-
-              <div className="grid auto-rows-fr gap-2 sm:grid-cols-2 lg:grid-cols-1">
+              )}
+              <div className="flow-template-scroll min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
                 {filteredTemplates.map((template) => (
                   <FlowTemplateCard
                     key={template.id}
@@ -157,25 +237,25 @@ export default function FlowTemplatesSlideOver({
               </div>
             </section>
 
-            <section className="lg:sticky lg:top-0">
+            <section className="hidden min-h-0 lg:block">
               {selected ? (
-                <div className="space-y-4 rounded-2xl border border-violet-100 bg-gradient-to-b from-violet-50/60 to-white p-4">
-                  <div className="flex items-start gap-3">
+                <div className="flex h-full min-h-0 flex-col rounded-2xl border border-violet-100 bg-gradient-to-b from-violet-50/60 to-white p-4">
+                  <div className="flex shrink-0 items-start gap-3">
                     {SelectedTriggerIcon && (
                       <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTrigger?.gradient || 'from-violet-600 to-indigo-700'} text-white shadow-[0_4px_14px_rgba(99,102,241,0.25)]`}
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTrigger?.gradient || 'from-violet-600 to-indigo-700'} text-white`}
                       >
                         <SelectedTriggerIcon className="h-4 w-4" strokeWidth={2.25} />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-extrabold text-neutral-900">{selected.name}</p>
-                      <p className="mt-1 text-[13px] leading-relaxed text-neutral-600">
+                      <p className="text-[15px] font-bold text-neutral-900">{selected.name}</p>
+                      <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-neutral-600">
                         {selected.description}
                       </p>
                       {selectedTrigger && (
                         <span
-                          className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${selectedTrigger.accent}`}
+                          className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${selectedTrigger.accent}`}
                         >
                           {selectedTrigger.label}
                         </span>
@@ -183,68 +263,46 @@ export default function FlowTemplatesSlideOver({
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-violet-100/80 bg-white/80 px-3 py-2.5">
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-violet-800">
-                      <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
-                      Opens as a draft — review and publish when ready
-                    </div>
-                  </div>
+                  <p className="mt-3 shrink-0 text-[12px] font-medium text-violet-800">
+                    <Sparkles className="mr-1 inline h-3.5 w-3.5" strokeWidth={2.25} />
+                    Opens as a draft — review and publish when ready
+                  </p>
 
-                  <div>
-                    <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-neutral-500">
-                      {selected.nodes.length} steps included
-                    </p>
-                    <div className="max-h-[min(42vh,320px)] space-y-1.5 overflow-y-auto pr-1">
-                      {selected.nodes.map((node, index) => {
-                        const meta = nodeMeta[node.type];
-                        const Icon = meta.icon;
-                        const isLast = index === selected.nodes.length - 1;
-
-                        return (
-                          <div key={node.id} className="flex gap-2.5">
-                            <div className="flex flex-col items-center">
-                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
-                                {index + 1}
-                              </span>
-                              {!isLast && <span className="mt-1 w-px flex-1 bg-violet-200/80" />}
-                            </div>
-                            <div className="mb-2 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-neutral-200/70 bg-white px-3 py-2">
-                              <div
-                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${meta.gradient} text-white`}
-                              >
-                                <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-[13px] font-semibold text-neutral-900">
-                                  {meta.label}
-                                </p>
-                                <p className="truncate text-[11px] text-neutral-500">
-                                  {node.text || node.prompt || meta.description}
-                                </p>
-                              </div>
-                            </div>
+                  <p className="mb-2 mt-3 shrink-0 text-[12px] font-bold text-neutral-500">
+                    {selected.nodes.length} steps included
+                  </p>
+                  <div className="flow-steps-scroll min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+                    {selected.nodes.map((node, index) => {
+                      const meta = nodeMeta[node.type];
+                      const Icon = meta.icon;
+                      return (
+                        <div
+                          key={node.id}
+                          className="flex items-center gap-2.5 rounded-lg border border-neutral-200/70 bg-white px-2.5 py-1.5"
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                            {index + 1}
+                          </span>
+                          <div
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br ${meta.gradient} text-white`}
+                          >
+                            <Icon className="h-3 w-3" strokeWidth={2.25} />
                           </div>
-                        );
-                      })}
-                    </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[12px] font-semibold text-neutral-900">{meta.label}</p>
+                            <p className="truncate text-[11px] text-neutral-500">
+                              {node.text || node.prompt || meta.description}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={isCreating}
-                    className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold disabled:opacity-50 lg:hidden"
-                  >
-                    {isCreating ? 'Creating...' : 'Create & edit flow'}
-                    {!isCreating && <ArrowRight className="h-4 w-4" />}
-                  </button>
                 </div>
               ) : (
-                <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/50 px-6 py-10 text-center">
+                <div className="flex h-full min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/50 px-6 text-center">
                   <MousePointerClick className="h-8 w-8 text-neutral-300" strokeWidth={1.75} />
                   <p className="mt-3 text-[14px] font-bold text-neutral-700">Select a template</p>
-                  <p className="mt-1 max-w-[240px] text-[13px] leading-relaxed text-neutral-500">
-                    Choose one on the left to preview its steps before creating.
-                  </p>
                 </div>
               )}
             </section>

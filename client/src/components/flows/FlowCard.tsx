@@ -1,6 +1,6 @@
 import { Copy, GitBranch, Hash, Layers, PauseCircle, PlayCircle, Pencil, Trash2 } from 'lucide-react';
 import AppButton from '../ui/AppButton';
-import { triggerMeta } from './flowMeta';
+import { triggerMeta, triggerTableLabel } from './flowMeta';
 import {
   flowAudienceBadgeClass,
   flowAudienceLabel,
@@ -51,11 +51,11 @@ export default function FlowCard({ flow, onOpen, onToggle, onDuplicate, onDelete
 
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <span
-              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+              className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-semibold ring-1 ${
                 trigger?.accent || 'bg-theme-subtle text-theme-secondary ring-theme-border'
               }`}
             >
-              {trigger?.label || flow.triggerType}
+              {triggerTableLabel(flow.triggerType, trigger?.label)}
             </span>
             {flow.triggerType === 'KEYWORD' && keyword && (
               <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-300">

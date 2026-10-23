@@ -31,29 +31,29 @@ export function GenerationProgress({
 
   const visibleStep = Math.min(Math.max(step, animatedStep), labels.length - 1);
   const details = [
-    "Analyzing your idea, brand context and selected channels…",
-    hasVisuals ? "Generating engaging images and slide designs…" : "Structuring templates for the channels you picked…",
-    "Crafting captions, templates and email content…",
-    "Finalizing and organizing everything for you…",
+    "Reading your brief and channels…",
+    hasVisuals ? "Creating images and slides…" : "Shaping channel templates…",
+    "Writing captions and copy…",
+    "Almost ready…",
   ];
   const progress = Math.round(((visibleStep + 0.65) / labels.length) * 100);
   return (
-    <div className="anim-fade-in mx-auto flex max-w-[560px] flex-col items-center px-2 pb-8 pt-2 text-center">
+    <div className="anim-fade-in mx-auto flex w-full max-w-[520px] flex-col items-center px-2 py-2 text-center">
       <CreativeHub3d />
 
-      <h2 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#15112e] sm:text-[32px]">
-        Creating your <span className="bg-[linear-gradient(90deg,#7b46ea,#a06bff)] bg-clip-text text-transparent">content pack</span>...
+      <h2 className="text-[22px] font-extrabold tracking-[-0.03em] text-[#15112e] sm:text-[26px]">
+        Creating your <span className="bg-[linear-gradient(90deg,#7b46ea,#a06bff)] bg-clip-text text-transparent">content pack</span>
       </h2>
-      <p className="mt-2 max-w-[420px] text-[14px] leading-relaxed text-[#6b628f]">
-        This may take a few moments. We&apos;re generating visuals and channel-ready copy for you.
+      <p className="mt-1.5 max-w-[360px] text-[13px] leading-snug text-[#6b628f]">
+        Usually under a minute. You can stay here or come back later.
       </p>
 
-      <ol className="mt-7 w-full max-w-[440px] text-left" aria-label="Generation progress" aria-valuenow={progress}>
+      <ol className="mt-4 w-full max-w-[400px] text-left" aria-label="Generation progress" aria-valuenow={progress}>
         {labels.map((label, i) => {
           const done = i < visibleStep;
           const current = i === visibleStep;
           return (
-            <li key={label} className="relative flex gap-3 pb-5 last:pb-0" aria-current={current ? "step" : undefined}>
+            <li key={label} className="relative flex gap-2.5 pb-3.5 last:pb-0" aria-current={current ? "step" : undefined}>
               {i < labels.length - 1 && (
                 <span className={`absolute left-[11px] top-7 h-[calc(100%-22px)] w-[2px] ${done ? "bg-[#7b46ea]" : "bg-[#e4dcf5]"}`} aria-hidden="true" />
               )}
@@ -65,8 +65,10 @@ export function GenerationProgress({
                 {done ? <Check size={13} strokeWidth={3.5} /> : current ? <span className="anim-pulse h-2.5 w-2.5 rounded-full bg-[#7b46ea]" /> : null}
               </span>
               <span className="min-w-0">
-                <span className={`block text-[14.5px] ${current || done ? "font-extrabold text-[#15112e]" : "font-bold text-[#9a93b3]"}`}>{label}</span>
-                <span className={`mt-0.5 block text-[12.5px] leading-snug ${current ? "text-[#6b628f]" : "text-[#a39cb8]"}`}>{details[i]}</span>
+                <span className={`block text-[13.5px] ${current || done ? "font-extrabold text-[#15112e]" : "font-bold text-[#9a93b3]"}`}>{label}</span>
+                {current ? (
+                  <span className="mt-0.5 block text-[11.5px] leading-snug text-[#6b628f]">{details[i]}</span>
+                ) : null}
               </span>
               <span className="sr-only">{done ? " — done" : current ? " — in progress" : " — waiting"}</span>
             </li>
@@ -74,14 +76,14 @@ export function GenerationProgress({
         })}
       </ol>
 
-      <div className="mt-2 flex w-full max-w-[440px] items-start gap-2 rounded-2xl border border-[#efe6c8] bg-[#fffaf0] px-3.5 py-3 text-left">
-        <Lightbulb size={16} className="mt-0.5 flex-none text-[#e0a100]" />
-        <p className="text-[12.5px] leading-snug text-[#6d6450]">
-          <strong className="font-extrabold text-[#3d3420]">Tip:</strong> You can leave this page. We&apos;ll keep generating your content.
+      <div className="mt-2 flex w-full max-w-[400px] items-start gap-2 rounded-xl border border-[#efe6c8] bg-[#fffaf0] px-3 py-2 text-left">
+        <Lightbulb size={15} className="mt-0.5 flex-none text-[#e0a100]" />
+        <p className="text-[11.5px] leading-snug text-[#6d6450]">
+          <strong className="font-extrabold text-[#3d3420]">Tip:</strong> Safe to leave — we keep working in the background.
         </p>
       </div>
 
-      <button type="button" className="btn btn-sm mt-4" onClick={onCancel}>
+      <button type="button" className="btn btn-sm mt-3" onClick={onCancel}>
         Cancel and edit brief
       </button>
     </div>

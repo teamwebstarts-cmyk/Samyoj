@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
-import { AlertCircle, ArrowRight, Check, CheckCircle2, ChevronDown, Flame, Globe, ImagePlus, Lightbulb, Megaphone, Plus, Sparkles, Store, X } from "lucide-react";
+import { AlertCircle, ArrowRight, Check, CheckCircle2, ChevronDown, Flame, Gift, Globe, ImagePlus, Lightbulb, Megaphone, PartyPopper, Plus, Sparkles, Store, X } from "lucide-react";
+import { getComposeStarterIds, SEASONAL_PROMPTS } from "./seasonalPrompts";
 import type { Language, OutputId, Photo } from "./data/types";
 import type { Draft } from "./data/types";
 import type { HistoryEntry } from "../../utils/aiStudioStore";
@@ -25,17 +26,17 @@ function HeroIllustration() {
 
 function Hero() {
   return (
-    <section className="hero-bg hero-banner relative overflow-hidden rounded-[18px] border border-white/10 px-4 py-5 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:rounded-[24px] sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+    <section className="hero-bg hero-banner relative overflow-hidden rounded-[18px] border border-white/10 px-4 py-4 shadow-[0_24px_60px_rgba(20,18,55,0.18)] sm:rounded-[22px] sm:px-5 sm:py-5 lg:px-7 lg:py-6">
       <div className="hero-banner__copy">
-        <span className="mb-3 inline-flex items-center gap-2 rounded-md border border-[#6d3df2]/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6d3df2] backdrop-blur">
+        <span className="mb-2 inline-flex items-center gap-2 rounded-md border border-[#6d3df2]/15 bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#6d3df2] backdrop-blur">
           <Sparkles size={12} /> AI creative studio
         </span>
-        <h2 className="text-[22px] font-extrabold leading-[1.12] tracking-tight text-[#241b3b] sm:text-[28px] lg:text-[32px] xl:text-[34px] 2xl:text-[38px]">
+        <h2 className="text-[20px] font-extrabold leading-[1.15] tracking-tight text-[#241b3b] sm:text-[24px] lg:text-[28px]">
           Describe your idea,
           <br />
           we'll <span className="gradient-text">create the content.</span>
         </h2>
-        <p className="mt-3 max-w-[36rem] text-[13px] leading-relaxed text-[#685f7d] sm:text-[15px]">
+        <p className="mt-2 max-w-[32rem] text-[12.5px] leading-relaxed text-[#685f7d] sm:text-[14px]">
           Share your product, offer, or campaign idea. Get polished visuals and ready-to-use copy for Instagram, WhatsApp, and Email — all from one brief.
         </p>
       </div>
@@ -168,6 +169,14 @@ function loadable(url: string) {
   });
 }
 
+function friendlyPhotoName(name: string): string {
+  const base = name.split(/[/\\]/).pop() || name;
+  if (/^[0-9a-f-]{20,}\.(jpe?g|png|webp)$/i.test(base) || /^IMG[_-]?\d+/i.test(base)) {
+    return 'Reference photo';
+  }
+  return base.length > 28 ? `${base.slice(0, 24)}…` : base;
+}
+
 export function PhotoUploader({
   photos,
   onChange,
@@ -175,6 +184,7 @@ export function PhotoUploader({
   compact = false,
   dropFiles,
   onDropHandled,
+  enabled = true,
 }: {
   photos: Photo[];
   onChange: (p: Photo[]) => void;
@@ -182,7 +192,9 @@ export function PhotoUploader({
   compact?: boolean;
   dropFiles?: FileList | null;
   onDropHandled?: () => void;
+  enabled?: boolean;
 }) {
+  if (!enabled) return null;
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
 
@@ -242,10 +254,10 @@ export function PhotoUploader({
         <input ref={inputRef} id="photo-input" type="file" accept="image/png,image/jpeg,image/webp" multiple className="peer sr-only" onChange={(e) => e.target.files && void addFiles(e.target.files)} />
         {photos.map((p) => (
           <div key={p.id} className={`anim-fade-in group relative flex-none ${compact ? "h-8 w-8" : "h-[56px] w-[56px]"}`}>
-            <img src={p.url} alt={`Uploaded photo: ${p.name}`} className="h-full w-full rounded-xl border border-[var(--border)] object-cover" />
+            <img src={p.url} alt={friendlyPhotoName(p.name)} className="h-full w-full rounded-xl border border-[var(--border)] object-cover" />
             <button
               type="button"
-              aria-label={`Remove photo ${p.name}`}
+              aria-label={`Remove ${friendlyPhotoName(p.name)}`}
               onClick={() => remove(p.id)}
               className={`absolute -right-1.5 -top-1.5 grid place-items-center rounded-full border border-[var(--border-strong)] bg-white text-[var(--text-muted)] shadow-sm transition-colors hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] ${compact ? "h-4 w-4" : "h-5 w-5"}`}
             >
@@ -352,9 +364,9 @@ function ImageQualitySelect({ value, onChange }: { value: ComposeProps["imageQua
 /* ------------------------------ Examples ------------------------------ */
 
 const EXAMPLE_POSTERS: Record<string, { kicker: string; line: string; gradient: string; ink: string; icon: typeof Flame }> = {
-  festival: {
+  flash: {
     kicker: "This weekend",
-    line: "20% off",
+    line: "15% off",
     gradient: "linear-gradient(145deg, #5a1020 0%, #9a2a18 55%, #e7b15a 140%)",
     ink: "#fff6e8",
     icon: Flame,
@@ -382,21 +394,72 @@ const EXAMPLE_POSTERS: Record<string, { kicker: string; line: string; gradient: 
   },
 };
 
+const SEASON_ICONS: Record<string, typeof Gift> = {
+  "season-dussehra": Flame,
+  "season-diwali": Sparkles,
+  "season-christmas": Gift,
+  "season-new-year": PartyPopper,
+};
+
+type StarterCard = {
+  id: string;
+  title: string;
+  desc: string;
+  kicker: string;
+  line: string;
+  gradient: string;
+  ink: string;
+  icon: typeof Flame;
+};
+
+function starterCards(): StarterCard[] {
+  const bySeason = new Map(SEASONAL_PROMPTS.map((c) => [c.id, c]));
+  const byExample = new Map(EXAMPLE_IDEAS.map((e) => [e.id, e]));
+  return getComposeStarterIds().flatMap((id) => {
+    const season = bySeason.get(id);
+    if (season) {
+      return [{
+        id: season.id,
+        title: season.title,
+        desc: season.desc,
+        kicker: season.kicker,
+        line: season.line,
+        gradient: season.gradient,
+        ink: season.ink,
+        icon: SEASON_ICONS[season.id] ?? Megaphone,
+      }];
+    }
+    const ex = byExample.get(id);
+    const poster = EXAMPLE_POSTERS[id];
+    if (!ex || !poster) return [];
+    return [{
+      id: ex.id,
+      title: ex.title,
+      desc: ex.desc,
+      kicker: poster.kicker,
+      line: poster.line,
+      gradient: poster.gradient,
+      ink: poster.ink,
+      icon: poster.icon,
+    }];
+  });
+}
+
 function Examples({ onUse }: { onUse: (id: string) => void }) {
+  const cards = starterCards();
   return (
     <section className="card p-5" aria-labelledby="examples-title">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h3 id="examples-title" className="text-[14px] font-extrabold">
-            Need a starting prompt?
-          </h3>
-          <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">Pick one. The brief and channels fill in, then you can edit before generating.</p>
-        </div>
+      <div className="mb-3">
+        <h3 id="examples-title" className="text-[14px] font-extrabold">
+          Need a starting prompt?
+        </h3>
+        <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
+          Four offer types — festival, flash sale, launch, and tips. Seasonal ones use your business profile.
+        </p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {EXAMPLE_IDEAS.map((ex) => {
-          const poster = EXAMPLE_POSTERS[ex.id];
-          const Icon = poster?.icon ?? Megaphone;
+        {cards.map((ex) => {
+          const Icon = ex.icon;
           return (
             <button
               key={ex.id}
@@ -404,14 +467,14 @@ function Examples({ onUse }: { onUse: (id: string) => void }) {
               onClick={() => onUse(ex.id)}
               className="group overflow-hidden rounded-2xl border border-[#e6defb] bg-white text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--ai-primary-ring)] hover:shadow-[0_12px_28px_rgba(109,61,242,0.12)]"
             >
-              <span className="relative block h-[92px] overflow-hidden" style={{ background: poster?.gradient }} aria-hidden="true">
+              <span className="relative block h-[92px] overflow-hidden" style={{ background: ex.gradient }} aria-hidden="true">
                 <span className="pointer-events-none absolute -left-6 top-0 h-full w-10 -skew-x-12 bg-white/25 transition-transform duration-500 group-hover:translate-x-[220px]" />
-                <span className="absolute left-3 top-3 grid h-8 w-8 place-items-center rounded-xl bg-white/85 shadow-sm" style={{ color: poster?.ink }}>
+                <span className="absolute left-3 top-3 grid h-8 w-8 place-items-center rounded-xl bg-white/85 shadow-sm" style={{ color: ex.ink }}>
                   <Icon size={16} />
                 </span>
-                <span className="absolute bottom-3 left-3 right-3" style={{ color: poster?.ink }}>
-                  <span className="block text-[10px] font-bold uppercase tracking-[0.12em] opacity-80">{poster?.kicker}</span>
-                  <span className="block text-[16px] font-extrabold leading-tight">{poster?.line}</span>
+                <span className="absolute bottom-3 left-3 right-3" style={{ color: ex.ink }}>
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.12em] opacity-80">{ex.kicker}</span>
+                  <span className="block text-[16px] font-extrabold leading-tight">{ex.line}</span>
                 </span>
               </span>
               <span className="flex items-start gap-2 p-3">
@@ -525,6 +588,9 @@ export interface ComposeProps {
   onOpenDraft: (draft: Draft) => void;
   onOpenHistory: (entry: HistoryEntry) => void;
   onViewAllSessions: () => void;
+  referenceImagesEnabled: boolean;
+  onBusinessBrief: () => void;
+  businessBriefBusy?: boolean;
 }
 
 export function Compose(p: ComposeProps) {
@@ -550,9 +616,19 @@ export function Compose(p: ComposeProps) {
             <label htmlFor="brief" className="text-[14px] font-extrabold">
               Your idea or brief
             </label>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-bold text-[var(--ai-primary)] transition-colors hover:bg-[var(--ai-primary-soft)]" onClick={() => p.onExample("festival")}>
-              <Lightbulb size={14} /> Try example
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <button
+                type="button"
+                disabled={p.businessBriefBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-bold text-[var(--ai-primary)] transition-colors hover:bg-[var(--ai-primary-soft)] disabled:opacity-50"
+                onClick={p.onBusinessBrief}
+              >
+                <Store size={14} /> Ideas from my business
+              </button>
+              <button type="button" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-bold text-[var(--ai-primary)] transition-colors hover:bg-[var(--ai-primary-soft)]" onClick={() => p.onExample("flash")}>
+                <Lightbulb size={14} /> Try example
+              </button>
+            </div>
           </div>
           <div
             className={`relative rounded-xl border bg-white transition-all duration-150 ${
@@ -583,7 +659,7 @@ export function Compose(p: ComposeProps) {
               id="brief"
               ref={taRef}
               className="min-h-[108px] w-full resize-y border-0 bg-transparent px-3 pb-2 pt-3 text-[13px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--text-soft)]"
-              placeholder="Describe your product, offer or content idea..."
+              placeholder="Example: Weekend sale on facials — 20% off for returning customers. Warm, festive tone."
               maxLength={MAX_BRIEF}
               value={p.brief}
               aria-invalid={!!p.error}
@@ -599,6 +675,7 @@ export function Compose(p: ComposeProps) {
                 onChange={p.setPhotos}
                 onError={setPhotoError}
                 compact
+                enabled={p.referenceImagesEnabled}
                 dropFiles={dropFiles}
                 onDropHandled={() => setDropFiles(null)}
               />

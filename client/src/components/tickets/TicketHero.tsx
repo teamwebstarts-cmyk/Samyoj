@@ -62,10 +62,8 @@ const toneStyles: Record<
 };
 
 export default function TicketHero({
-  badge = 'Tickets',
-  badgeIcon: BadgeIcon = Ticket,
-  title = 'Customer Tickets',
-  description = 'Follow up on WhatsApp chats that need a reply, track SLAs, and resolve issues from one place.',
+  title = 'Chats that still need a reply',
+  description = 'Open one, follow up, and mark it resolved when you are done.',
   stats,
 }: TicketHeroProps) {
   // Use the same emerald gradient as the inbox Create-ticket rail
@@ -83,16 +81,12 @@ export default function TicketHero({
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-emerald-700 ring-1 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800/50 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
-            <BadgeIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.5} />
-            {badge}
-          </span>
-          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-[#0f172a] dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
+          <h1 className="surface-title text-[#0f172a] dark:text-white">
             {title}
           </h1>
-          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:block sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-normal leading-relaxed text-[#64748b] dark:text-slate-300 sm:mt-1.5 sm:block sm:text-[13px]">
             {description}
           </p>
         </div>
@@ -117,7 +111,7 @@ export default function TicketHero({
                     {stat.label}
                   </p>
                   <p
-                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 text-[1rem] font-bold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
                   >
                     {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
                   </p>

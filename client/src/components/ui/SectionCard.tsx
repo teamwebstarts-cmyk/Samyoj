@@ -27,7 +27,7 @@ export default function SectionCard({
         >
           <div>
             {title && (
-              <h2 className="text-base font-extrabold tracking-tight text-theme-fg">{title}</h2>
+              <h2 className="surface-title text-theme-fg">{title}</h2>
             )}
             {subtitle && (
               <p className="mt-0.5 text-[12px] font-medium text-theme-secondary">{subtitle}</p>

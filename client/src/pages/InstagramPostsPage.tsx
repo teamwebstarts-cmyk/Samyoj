@@ -10,6 +10,7 @@ import { automationApi, contentStudioApi, instagramApi } from '../services/api';
 import { getInstagramMockLibrary, getInstagramMockPosts, isMetaMockId, mergeById } from '../utils/metaMockData';
 import { getErrorMessage } from '../utils/errors';
 import { toastError, toastSuccess } from '../utils/toast';
+import { clearWork, readWork, writeWork } from '../utils/workResume';
 import { resolvePublicMediaUrl } from '../utils/publicMediaUrl';
 import {
   absolutizePostMediaBody,
@@ -43,6 +44,38 @@ import './instagram-comments.css';
 import './instagram-posts.css';
 
 type StudioAsset = { id: string; publicUrl: string | null; prompt: string | null };
+
+const IG_RESUME_KEY = 'ig-post';
+
+type IgResume = {
+  selectedId: string | 'new';
+  mediaType: MediaType;
+  caption: string;
+  imageUrl: string;
+  videoUrl: string;
+  mediaItems: MediaItem[];
+  scheduleLocal: string;
+  feedRatio: FeedRatioId;
+  panelTab: PanelTab;
+};
+
+function igResumeDirty(saved: IgResume): boolean {
+  return Boolean(
+    saved.caption.trim() ||
+      saved.imageUrl ||
+      saved.videoUrl ||
+      saved.mediaItems.length ||
+      saved.scheduleLocal ||
+      saved.mediaType !== 'IMAGE' ||
+      saved.selectedId !== 'new',
+  );
+}
+
+function readIgResume(): IgResume | null {
+  const saved = readWork<IgResume>(IG_RESUME_KEY);
+  if (!saved?.selectedId || !igResumeDirty(saved)) return null;
+  return saved;
+}
 
 /** Newest activity first: published date, else schedule, else last edit. */
 function postRecency(post: PostRow): number {
@@ -116,17 +149,18 @@ export default function InstagramPostsPage() {
 
   const [filter, setFilter] = useState<PostFilterId>('all');
   const [feedTab, setFeedTab] = useState<PostFeedTab>('posts');
-  const [feedRatio, setFeedRatio] = useState<FeedRatioId>('1:1');
-
-  const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
-  const [panelTab, setPanelTab] = useState<PanelTab>('create');
-  const [mediaType, setMediaType] = useState<MediaType>('IMAGE');
-  const [caption, setCaption] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [igInitial] = useState(() => readIgResume());
+  const savedComposerSnap = useRef<string | null>(null);
+  const [feedRatio, setFeedRatio] = useState<FeedRatioId>(igInitial?.feedRatio ?? '1:1');
+  const [selectedId, setSelectedId] = useState<string | 'new' | null>(igInitial?.selectedId ?? null);
+  const [panelTab, setPanelTab] = useState<PanelTab>(igInitial?.panelTab ?? 'create');
+  const [mediaType, setMediaType] = useState<MediaType>(igInitial?.mediaType ?? 'IMAGE');
+  const [caption, setCaption] = useState(igInitial?.caption ?? '');
+  const [imageUrl, setImageUrl] = useState(igInitial?.imageUrl ?? '');
+  const [videoUrl, setVideoUrl] = useState(igInitial?.videoUrl ?? '');
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>(igInitial?.mediaItems ?? []);
   const [mediaMeta, setMediaMeta] = useState<{ name: string; meta: string | null } | null>(null);
-  const [scheduleLocal, setScheduleLocal] = useState('');
+  const [scheduleLocal, setScheduleLocal] = useState(igInitial?.scheduleLocal ?? '');
   const [scheduleError, setScheduleError] = useState<ScheduleError>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -140,6 +174,29 @@ export default function InstagramPostsPage() {
   const [autoId, setAutoId] = useState<string | null>(null);
   const automationLoadSeq = useRef(0);
   const automationEditedRef = useRef(false);
+
+  useEffect(() => {
+    if (!selectedId) {
+      clearWork(IG_RESUME_KEY);
+      return;
+    }
+    const snapshot: IgResume = {
+      selectedId,
+      mediaType,
+      caption,
+      imageUrl,
+      videoUrl,
+      mediaItems,
+      scheduleLocal,
+      feedRatio,
+      panelTab,
+    };
+    if (!igResumeDirty(snapshot) || JSON.stringify(snapshot) === savedComposerSnap.current) {
+      clearWork(IG_RESUME_KEY);
+      return;
+    }
+    writeWork(IG_RESUME_KEY, snapshot);
+  }, [caption, feedRatio, imageUrl, mediaItems, mediaType, panelTab, scheduleLocal, selectedId, videoUrl]);
 
   /* ---------------- data ---------------- */
 
@@ -707,6 +764,18 @@ export default function InstagramPostsPage() {
         toastSuccess(mode === 'schedule' ? 'Post scheduled' : 'Post saved as draft');
       }
       setSelectedId(created.id);
+      savedComposerSnap.current = JSON.stringify({
+        selectedId: created.id,
+        mediaType,
+        caption,
+        imageUrl,
+        videoUrl,
+        mediaItems,
+        scheduleLocal,
+        feedRatio,
+        panelTab,
+      } satisfies IgResume);
+      clearWork(IG_RESUME_KEY);
       if (autoKeyword.trim() && (autoPublic.trim() || autoDm.trim())) {
         await savePostAutomation({ postId: created.id, igMediaId: liveIgMediaId });
       }
@@ -795,13 +864,18 @@ export default function InstagramPostsPage() {
       status: selectedId === 'new' ? null : selected?.status ?? null,
       scheduledAt: selectedId === 'new' ? (scheduleLocal ? new Date(scheduleLocal).toISOString() : null) : selected?.scheduledAt ?? null,
       publishedAt: selected?.publishedAt ?? null,
+      permalink:
+        selected?.permalink ||
+        (selected?.igMediaId
+          ? library.find((row) => row.igMediaId === selected.igMediaId)?.permalink ?? null
+          : null),
       mediaName: mediaMeta?.name ?? null,
       mediaMeta: mediaMeta?.meta ?? null,
       feedRatio,
       likes: selectedLiveStats?.likes,
       comments: selectedLiveStats?.comments,
     };
-  }, [remoteItem, mediaType, previewUrl, caption, selectedId, selected, scheduleLocal, mediaMeta, feedRatio, selectedLiveStats]);
+  }, [remoteItem, mediaType, previewUrl, caption, selectedId, selected, scheduleLocal, mediaMeta, feedRatio, selectedLiveStats, library]);
 
   const gridItems = useMemo(() => {
     const active = { id: 'current', url: previewData.previewUrl, active: true };

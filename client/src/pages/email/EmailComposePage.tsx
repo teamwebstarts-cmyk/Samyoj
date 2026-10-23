@@ -598,10 +598,10 @@ export default function EmailComposePage() {
         )}
         <div className="ema-compose-head flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-[19px] font-extrabold tracking-[-0.02em] text-[var(--ema-ink)]">
-              Email
+            <h1 className="surface-title text-[var(--ema-ink)]">
+              Sent from this mailbox
             </h1>
-            <p className="mt-0.5 text-[12px] font-semibold text-[var(--ema-muted)]">
+            <p className="mt-0.5 text-[12px] font-normal text-[var(--ema-muted)]">
               Sent mail on the left. Open one to read it, or start a new email.
             </p>
           </div>

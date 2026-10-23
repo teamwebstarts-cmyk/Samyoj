@@ -1,4 +1,4 @@
-export const AUTH_LOGO_SRC = '/brand/samyoj-new-logo.png';
+export const AUTH_LOGO_SRC = '/brand/samyoj-logo.png';
 
 /** Auth pages — full wordmark image, sized to the old lockup (~229×46). */
 export default function AuthBrand({ compact = false }: { compact?: boolean }) {

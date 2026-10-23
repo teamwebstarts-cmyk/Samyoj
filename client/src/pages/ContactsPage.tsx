@@ -576,30 +576,45 @@ export default function ContactsPage() {
   }
 
   return (
-    <PageShell className={selectedIds.length > 0 ? 'pb-28' : undefined}>
-      <div className="min-w-0 space-y-2 sm:space-y-4 lg:space-y-5">
-        <ContactHero
-          badge={viewTab === 'pipeline' ? 'Pipeline' : 'Audience'}
-          badgeIcon={viewTab === 'pipeline' ? Target : Users}
-          title={viewTab === 'pipeline' ? 'Sales pipeline' : 'Your contacts'}
-          description={
-            viewTab === 'pipeline'
-              ? 'Track prospects from first contact through to won or lost.'
-              : 'Manage customers, tags, and groups for campaigns.'
+    <PageShell
+      list={viewTab === 'all'}
+      className={selectedIds.length > 0 ? 'pb-28' : undefined}
+    >
+      <div
+        className={
+          viewTab === 'all'
+            ? 'list-page-stack'
+            : 'min-w-0 space-y-2 sm:space-y-4 lg:space-y-5'
+        }
+      >
+        <div
+          className={
+            viewTab === 'all' ? 'shrink-0 space-y-2 sm:space-y-4 lg:space-y-5' : 'contents'
           }
-          stats={heroStats}
-        />
+        >
+          <ContactHero
+            badge={viewTab === 'pipeline' ? 'Pipeline' : 'Audience'}
+            badgeIcon={viewTab === 'pipeline' ? Target : Users}
+            title={viewTab === 'pipeline' ? 'From first message to won or lost' : 'Customers, tags, and groups'}
+            description={
+              viewTab === 'pipeline'
+                ? 'Move a lead when the conversation changes.'
+                : 'Use this list for campaigns and inbox follow-up.'
+            }
+            stats={heroStats}
+          />
 
-        <SegmentedControl
-          embedded
-          value={viewTab}
-          onChange={setViewTab}
-          options={[
-            { value: 'all', label: 'All contacts', shortLabel: 'All', icon: Users },
-            { value: 'pipeline', label: 'Leads', shortLabel: 'Leads', icon: Target },
-          ]}
-          ariaLabel="Contact views"
-        />
+          <SegmentedControl
+            embedded
+            value={viewTab}
+            onChange={setViewTab}
+            options={[
+              { value: 'all', label: 'All contacts', shortLabel: 'All', icon: Users },
+              { value: 'pipeline', label: 'Leads', shortLabel: 'Leads', icon: Target },
+            ]}
+            ariaLabel="Contact views"
+          />
+        </div>
 
         {viewTab === 'pipeline' ? (
           <ContactPipelineTab
@@ -609,7 +624,7 @@ export default function ContactsPage() {
             onBrowseContacts={() => setViewTab('all')}
           />
         ) : (
-          <div className="inbox-shell min-w-0 overflow-hidden">
+          <div className="inbox-shell list-shell-body min-w-0 overflow-hidden">
             <ListToolbar
               embedded
               stackFilters
@@ -660,12 +675,14 @@ export default function ContactsPage() {
             )}
 
             {loading && contacts.length === 0 ? (
-              <ListLayoutSkeleton
-                label="Loading contacts"
-                tableHeaders={['Contact', 'Tags', 'Source', 'Updated', 'Actions']}
-              />
+              <div className="list-shell-scroll">
+                <ListLayoutSkeleton
+                  label="Loading contacts"
+                  tableHeaders={['Contact', 'Tags', 'Source', 'Updated', 'Actions']}
+                />
+              </div>
             ) : contacts.length === 0 ? (
-              <div className="p-4 sm:p-6">
+              <div className="list-shell-scroll p-4 sm:p-6">
                 {hasActiveFilters ? (
                   <EmptyState
                     icon={Users}
@@ -696,11 +713,8 @@ export default function ContactsPage() {
                             <Users className="h-5 w-5" strokeWidth={2.1} />
                           </span>
                           <div>
-                            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-sky-700 dark:text-sky-300">
-                              Audience
-                            </p>
-                            <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                              Ready to connect
+                            <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                              Ready to message
                             </p>
                           </div>
                         </div>
@@ -717,7 +731,7 @@ export default function ContactsPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+                        <h3 className="empty-lead text-slate-900 dark:text-white">
                           Add your first contact
                         </h3>
                         <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
@@ -751,10 +765,10 @@ export default function ContactsPage() {
                               </span>
                               <span className="min-w-0">
                                 <span className="flex items-center gap-1.5">
-                                  <span className="text-[9px] font-extrabold tabular-nums text-sky-600 dark:text-sky-300">
+                                  <span className="text-[11px] font-medium tabular-nums text-sky-600 dark:text-sky-300">
                                     0{index + 1}
                                   </span>
-                                  <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                                  <span className="truncate text-[12px] font-medium text-slate-700 dark:text-slate-200">
                                     {label}
                                   </span>
                                 </span>
@@ -794,11 +808,12 @@ export default function ContactsPage() {
               </div>
             ) : (
               <>
-                <ResponsiveDataView
-                  items={contacts}
-                  cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
-                  tableClassName=""
-                  renderCard={(contact) => (
+                <div className="list-shell-scroll">
+                  <ResponsiveDataView
+                    items={contacts}
+                    cardClassName="divide-y divide-neutral-200 dark:divide-neutral-800 lg:hidden"
+                    tableClassName=""
+                    renderCard={(contact) => (
                       <ContactCard
                         key={contact.id}
                         contact={contact}
@@ -830,7 +845,8 @@ export default function ContactsPage() {
                       />
                     )}
                   />
-                <div className="border-t border-theme-border">
+                </div>
+                <footer className="list-shell-footer shrink-0 border-t border-theme-border">
                   <Pagination
                     page={page}
                     pageSize={DEFAULT_PAGE_SIZE}
@@ -840,7 +856,7 @@ export default function ContactsPage() {
                     itemLabel="contacts"
                     className="!border-t-0"
                   />
-                </div>
+                </footer>
               </>
             )}
           </div>

@@ -31,14 +31,20 @@ function getToastPosition(): ToastOptions['position'] {
 
 function toastContainerStyle(): CSSProperties {
   return {
-    top: 20,
+    top: 12,
     zIndex: 10050,
   };
 }
 
+/** One toast at a time — a new one replaces whatever is on screen. */
+function replaceThen<T>(show: () => T): T {
+  toast.dismiss();
+  return show();
+}
+
 export function toastSuccess(message: string, options?: Partial<ToastOptions>) {
   const dark = isDark();
-  return toast.success(message, {
+  return replaceThen(() => toast.success(message, {
     ...sharedOptions,
     position: getToastPosition(),
     ...options,
@@ -53,7 +59,7 @@ export function toastSuccess(message: string, options?: Partial<ToastOptions>) {
       primary: '#059669',
       secondary: dark ? '#064e3b' : '#ecfdf5',
     },
-  });
+  }));
 }
 
 /** Meta refused a feature. Wraps so the reason is readable, unlike the one-line error toast. */
@@ -69,7 +75,7 @@ export function toastMetaBlock(message: string) {
 
 export function toastError(message: string, options?: Partial<ToastOptions>) {
   const dark = isDark();
-  return toast.error(sanitizeUserErrorMessage(message), {
+  return replaceThen(() => toast.error(sanitizeUserErrorMessage(message), {
     ...sharedOptions,
     position: getToastPosition(),
     duration: 4500,
@@ -85,12 +91,12 @@ export function toastError(message: string, options?: Partial<ToastOptions>) {
       primary: '#dc2626',
       secondary: dark ? '#450a0a' : '#fef2f2',
     },
-  });
+  }));
 }
 
 export function toastInfo(message: string) {
   const dark = isDark();
-  return toast(message, {
+  return replaceThen(() => toast(message, {
     ...sharedOptions,
     position: getToastPosition(),
     style: {
@@ -100,12 +106,12 @@ export function toastInfo(message: string) {
       border: dark ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid rgba(186, 230, 253, 0.9)',
     },
     icon: 'ℹ️',
-  });
+  }));
 }
 
 export function toastWarning(message: string) {
   const dark = isDark();
-  return toast(sanitizeUserErrorMessage(message), {
+  return replaceThen(() => toast(sanitizeUserErrorMessage(message), {
     ...sharedOptions,
     position: getToastPosition(),
     duration: 4500,
@@ -116,7 +122,7 @@ export function toastWarning(message: string) {
       border: dark ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(253, 230, 138, 0.9)',
     },
     icon: '⚠️',
-  });
+  }));
 }
 
 /**
@@ -134,7 +140,7 @@ export function toastCountUp(target: number, prefix: string, suffix: string) {
     return toastInfo(`${prefix ? prefix + ' ' : ''}${fullText}`);
   }
   let rafId = 0;
-  const toastId = toast(
+  const toastId = replaceThen(() => toast(
     (t: { visible: boolean }) => {
       if (!t.visible) return <span>{`0 ${suffix}`}</span>;
       const start = performance.now();
@@ -161,7 +167,7 @@ export function toastCountUp(target: number, prefix: string, suffix: string) {
       style: baseStyle(),
       duration: 3500,
     }
-  );
+  ));
   return () => {
     cancelAnimationFrame(rafId);
     toast.dismiss(toastId);
@@ -195,7 +201,7 @@ export function toastInbox(
   const iconKind = options?.icon ?? 'bot';
   const Icon = iconKind === 'star' ? Star : Bot;
 
-  return toast.custom(
+  return replaceThen(() => toast.custom(
     (t) => (
       <div
         role="status"
@@ -232,7 +238,7 @@ export function toastInbox(
       duration: options?.duration ?? 2500,
       position: getToastPosition(),
     }
-  );
+  ));
 }
 
 export function AppToaster() {

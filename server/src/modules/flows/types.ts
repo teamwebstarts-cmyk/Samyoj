@@ -138,6 +138,8 @@ export interface FlowState {
   flowName?: string;
   currentNodeId: string;
   waitingFor: 'button' | 'text' | 'delay' | 'media' | 'wa_flow' | null;
+  /** When this wait started. Missing means a legacy wait that a later message may replace. */
+  waitingSince?: string;
   variables: Record<string, string>;
   attempts: number;
   resumeAt?: string;

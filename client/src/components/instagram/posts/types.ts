@@ -21,6 +21,7 @@ export type PostRow = {
   scheduledAt: string | null;
   publishedAt: string | null;
   igMediaId: string | null;
+  permalink?: string | null;
   lastError: string | null;
   createdAt?: string;
   updatedAt?: string;

@@ -2879,6 +2879,25 @@
       0 4px 14px rgba(37, 211, 102, 0.32);
   }
 
+  .data-table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .data-table-scroll::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
+  }
+
+  .data-table-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .data-table-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.45);
+    border-radius: 999px;
+  }
+
   .data-table tbody tr {
     border-bottom: 1px solid var(--color-border);
     transition: background-color 0.15s ease;
@@ -3022,14 +3041,29 @@
       0 12px 32px var(--color-accent-glow-strong);
   }
 
+  /* Chrome (topbar) names the page. In-page titles stay one step quieter — 600, not 800. */
   .text-display {
-    @apply font-extrabold tracking-tight text-theme-fg;
-    font-size: clamp(1.5rem, 1.422rem + 0.078vw, 1.75rem);
+    @apply font-semibold tracking-tight text-theme-fg;
+    font-size: clamp(1.25rem, 1.2rem + 0.1vw, 1.375rem);
   }
 
   .text-title {
-    @apply font-extrabold tracking-tight text-theme-fg;
-    font-size: clamp(1.25rem, 1.172rem + 0.078vw, 1.5rem);
+    @apply font-semibold tracking-tight text-theme-fg;
+    font-size: clamp(1.0625rem, 1.02rem + 0.08vw, 1.125rem);
+  }
+
+  .surface-title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+  }
+
+  .empty-lead {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
   }
 
   .text-body {
@@ -4054,14 +4088,23 @@
     border-radius: 1.25rem;
     border: 1px solid var(--color-border);
     background: var(--color-surface);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.6) inset,
-      0 1px 2px rgba(15, 23, 42, 0.04),
-      0 16px 48px rgba(15, 23, 42, 0.08);
+    box-shadow: none;
     overflow: hidden;
   }
 
   .dark .inbox-shell {
+    box-shadow: none;
+  }
+
+  /* Chat and calls shells keep a lift. List and table cards stay flat. */
+  .inbox-shell.h-full {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 16px 48px rgba(15, 23, 42, 0.08);
+  }
+
+  .dark .inbox-shell.h-full {
     box-shadow:
       0 0 0 1px rgba(255, 255, 255, 0.04) inset,
       0 1px 2px rgba(0, 0, 0, 0.2),
@@ -4403,6 +4446,37 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  .modal-panel__body--still {
+    overflow: hidden;
+  }
+
+  .flow-template-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+  }
+
+  .flow-template-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .flow-template-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .flow-template-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.55);
+    border-radius: 999px;
+  }
+
+  .flow-steps-scroll {
+    scrollbar-width: none;
+  }
+
+  .flow-steps-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 
   .modal-panel__footer {

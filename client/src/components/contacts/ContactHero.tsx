@@ -67,8 +67,6 @@ const toneStyles: Record<
 };
 
 export default function ContactHero({
-  badge = 'Audience',
-  badgeIcon: BadgeIcon = Users,
   title,
   description,
   stats,
@@ -94,17 +92,12 @@ export default function ContactHero({
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-col gap-2.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
+      <div className="relative flex flex-col gap-2.5 sm:gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
         <div className="min-w-0 max-w-xl">
-          <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/80 bg-sky-50/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/50 dark:text-sky-200 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.12em]">
-            <BadgeIcon className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" aria-hidden="true" />
-            {badge}
-          </span>
-
-          <h1 className="mt-1.5 text-[1.05rem] font-extrabold leading-snug tracking-tight text-neutral-900 dark:text-white sm:mt-3 sm:text-[1.5rem] md:text-[1.65rem] xl:whitespace-nowrap">
+          <h1 className="surface-title text-neutral-900 dark:text-white">
             {title}
           </h1>
-          <p className="mt-0.5 hidden max-w-md text-[12px] font-medium leading-relaxed text-neutral-600 dark:text-neutral-400 sm:mt-1.5 sm:block sm:text-[13px]">
+          <p className="mt-0.5 hidden max-w-md text-[12px] font-normal leading-relaxed text-neutral-600 dark:text-neutral-400 sm:mt-1.5 sm:block sm:text-[13px]">
             {description}
           </p>
         </div>
@@ -131,7 +124,7 @@ export default function ContactHero({
                     {s.label}
                   </p>
                   <p
-                    className={`mt-0.5 text-[1rem] font-extrabold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
+                    className={`mt-0.5 text-[1rem] font-bold leading-none tracking-tight tabular-nums sm:text-[1.35rem] ${config.valueClass}`}
                   >
                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
                   </p>

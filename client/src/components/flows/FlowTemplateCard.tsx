@@ -61,13 +61,13 @@ export default function FlowTemplateCard({
       onClick={onSelect}
       disabled={loading}
       aria-pressed={selected}
-      className={`group relative flex h-full w-full flex-col rounded-2xl border text-left transition active:scale-[0.98] disabled:opacity-60 ${
+      className={`group relative flex w-full flex-col rounded-xl border text-left transition active:scale-[0.98] disabled:opacity-60 ${
         selected
           ? `border-violet-300 ${accent.selectedBg} ring-2 ${accent.selectedRing}`
           : compact
             ? 'border-theme-border bg-theme-surface hover:border-violet-500/25 hover:bg-violet-500/[0.03]'
-            : 'dashboard-card border-violet-500/10 hover:border-violet-500/25 hover:shadow-md'
-      } ${compact ? 'p-3.5' : 'p-4 sm:p-5'}`}
+            : 'dashboard-card h-full rounded-2xl border-violet-500/10 hover:border-violet-500/25 hover:shadow-md'
+      } ${compact ? 'p-2.5' : 'p-4 sm:p-5'}`}
     >
       {selected && (
         <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm">
@@ -77,7 +77,9 @@ export default function FlowTemplateCard({
 
       <div className="flex flex-1 items-start gap-3">
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${accent.gradient} text-white ${accent.iconShadow} transition group-hover:scale-105`}
+          className={`flex shrink-0 items-center justify-center bg-gradient-to-br ${accent.gradient} text-white ${accent.iconShadow} transition group-hover:scale-105 ${
+            compact ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-xl'
+          }`}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -87,8 +89,8 @@ export default function FlowTemplateCard({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col pr-5">
-          <p className="truncate text-[14px] font-extrabold text-theme-fg">{template.name}</p>
-          <p className="mt-1 line-clamp-2 flex-1 text-[12px] font-medium leading-relaxed text-theme-secondary">
+          <p className={`truncate font-extrabold text-theme-fg ${compact ? 'text-[13px]' : 'text-[14px]'}`}>{template.name}</p>
+          <p className={`font-medium text-theme-secondary ${compact ? 'mt-0.5 line-clamp-1 text-[11px] leading-snug' : 'mt-1 line-clamp-2 flex-1 text-[12px] leading-relaxed'}`}>
             {template.description}
           </p>
 
@@ -98,7 +100,7 @@ export default function FlowTemplateCard({
             </p>
           )}
 
-          <div className="mt-auto flex flex-wrap items-center gap-2 pt-2.5">
+          <div className={`mt-auto flex flex-wrap items-center gap-2 ${compact ? 'pt-1.5' : 'pt-2.5'}`}>
             <span
               className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${
                 trigger?.accent || 'bg-theme-subtle text-theme-secondary ring-theme-border'

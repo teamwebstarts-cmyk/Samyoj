@@ -54,11 +54,6 @@ export default function EmailConnectScreen({ connectionStatus = 'disconnected' }
 
   return (
     <div className="ema-gate">
-      <header className="ema-gate__head">
-        <h1>Gmail</h1>
-        <p>Connect and manage your Gmail mailbox for sending emails.</p>
-      </header>
-
       <ConnectionPane
         connectionStatus={connectionStatus}
         connecting={connecting}

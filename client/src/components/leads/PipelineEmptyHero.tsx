@@ -51,10 +51,7 @@ export default function PipelineEmptyHero({ onCreateLead, onBrowseContacts }: Pi
               <Kanban className="h-5 w-5" strokeWidth={2.1} />
             </span>
             <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">
-                Pipeline
-              </p>
-              <p className="mt-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+              <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
                 Track sales stages
               </p>
             </div>
@@ -72,7 +69,7 @@ export default function PipelineEmptyHero({ onCreateLead, onBrowseContacts }: Pi
         </div>
 
         <div className="min-w-0">
-          <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+          <h3 className="empty-lead text-slate-900 dark:text-white">
             Start your sales pipeline
           </h3>
           <p className="mt-1.5 max-w-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12px]">
@@ -90,10 +87,10 @@ export default function PipelineEmptyHero({ onCreateLead, onBrowseContacts }: Pi
                 </span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5">
-                    <span className="text-[9px] font-extrabold tabular-nums text-amber-600 dark:text-amber-300">
+                    <span className="text-[11px] font-medium tabular-nums text-amber-600 dark:text-amber-300">
                       0{index + 1}
                     </span>
-                    <span className="truncate text-[10.5px] font-bold text-slate-700 dark:text-slate-200">
+                    <span className="truncate text-[12px] font-medium text-slate-700 dark:text-slate-200">
                       {label}
                     </span>
                   </span>

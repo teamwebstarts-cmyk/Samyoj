@@ -8,12 +8,8 @@ import {
   EyeOff,
   Inbox,
   Instagram,
-  Link2,
-  UserRound,
   Loader2,
   MessageSquare,
-  Timer,
-  Info,
   RefreshCw,
   Search,
   SendHorizontal,
@@ -184,21 +180,12 @@ function IgMediaThumb({
 const COMMENT_PAGE_SIZE = 25;
 
 const DEFAULT_RETENTION_DAYS = 2;
-const IG_RETENTION_TIP_STORAGE_KEY = 'samyoj_ig_comments_retention_tip_v1';
-
-function readRetentionTipDismissed(): boolean {
-  try {
-    return localStorage.getItem(IG_RETENTION_TIP_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
 
 const FACTS = [
-  { title: 'Who can open this', line: 'Anyone signed in to this organization.', icon: UserRound, tint: 'bg-sky-50 text-sky-600' },
-  { title: 'Hide & reply use', line: 'The Facebook Page linked to Instagram.', icon: Link2, tint: 'bg-indigo-50 text-indigo-500' },
-  { title: 'Private reply', line: 'One DM per comment within 7 days. More messages → Instagram Inbox.', icon: MessageSquare, tint: 'bg-violet-50 text-violet-500' },
-  { title: 'Storage', line: `Comments stay in Samyoj for ${DEFAULT_RETENTION_DAYS} days, then are removed automatically.`, icon: Timer, tint: 'bg-amber-50 text-amber-600' },
+  { title: 'Who can open this', line: 'Anyone signed in to this organization.' },
+  { title: 'Hide and reply', line: 'Uses the Facebook Page linked to this Instagram account.' },
+  { title: 'Private reply', line: 'One DM per comment within 7 days. More messages go to Instagram Inbox.' },
+  { title: 'Storage', line: `Comments stay in Samyoj for ${DEFAULT_RETENTION_DAYS} days, then are removed automatically.` },
 ] as const;
 
 function inboxHref(comment: CommentRow): string {
@@ -232,7 +219,6 @@ export default function InstagramCommentsPage() {
   const [focusReply, setFocusReply] = useState(0);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS);
-  const [retentionTipOpen, setRetentionTipOpen] = useState(() => !readRetentionTipDismissed());
   const [mockCommentPatch, setMockCommentPatch] = useState<Record<string, Partial<CommentRow>>>({});
   const [, setTick] = useState(0);
   const { canConnect, busy, startInstagramConnect } = useMetaChannelConnect();
@@ -495,15 +481,6 @@ export default function InstagramCommentsPage() {
     { id: 'hidden', label: 'Hidden' },
   ];
 
-  const dismissRetentionTip = useCallback(() => {
-    setRetentionTipOpen(false);
-    try {
-      localStorage.setItem(IG_RETENTION_TIP_STORAGE_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const handle = accountName ? `@${accountName.replace(/^@/, '')}` : null;
   const showCommentsSkeleton = loading && source.length === 0;
   const showList = visible.length > 0 && !showCommentsSkeleton;
@@ -539,9 +516,6 @@ export default function InstagramCommentsPage() {
                 </div>
               </div>
               <div className="igc-header-actions grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end">
-                {connected && !retentionTipOpen ? (
-                  <CommentsRetentionInfo days={retentionDays} />
-                ) : null}
                 {connected ? (
                   <button
                     type="button"
@@ -564,44 +538,27 @@ export default function InstagramCommentsPage() {
             </header>
             <MetaMockNotice />
 
-            {connected && retentionTipOpen ? (
-              <CommentsRetentionInfograph days={retentionDays} onDismiss={dismissRetentionTip} />
-            ) : null}
-
-            <details className="igc-card igc-disclosure mt-4">
+            <details className="igc-card igc-disclosure mt-3">
               <summary className="igc-disclosure-trigger">
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <span className="igc-disclosure-mark" aria-hidden>
-                    <CircleHelp className="h-4 w-4" strokeWidth={1.75} />
-                  </span>
-                  <span className="text-[14px] font-bold text-[var(--igc-ink)]">How comments work</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <CircleHelp className="h-3.5 w-3.5 shrink-0 text-[var(--igc-muted)]" strokeWidth={1.75} />
+                  <span className="text-[13px] font-medium text-[var(--igc-ink)]">How comments work</span>
                 </span>
                 <ChevronDown className="igc-disclosure-chevron h-4 w-4 shrink-0 text-[var(--igc-muted)]" strokeWidth={2} />
               </summary>
-              <div className="igc-disclosure-body px-4 py-3.5 sm:px-5">
-                <div className="grid gap-3 md:grid-cols-3 md:gap-0">
-                  {FACTS.map((fact, index) => {
-                    const Icon = fact.icon;
-                    return (
-                      <div
-                        key={fact.title}
-                        className={`flex gap-3 md:px-4 ${index > 0 ? 'md:border-l md:border-[var(--igc-line)]' : 'md:pl-0'}`}
-                      >
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${fact.tint}`}>
-                          <Icon className="h-4 w-4" strokeWidth={1.75} />
-                        </span>
-                        <div>
-                          <p className="text-[13px] font-bold text-[var(--igc-ink)]">{fact.title}</p>
-                          <p className="mt-0.5 text-[12px] leading-snug text-[var(--igc-muted)]">
-                            {fact.title === 'Storage'
-                              ? `Comments stay in Samyoj for ${retentionDays} days, then are removed automatically.`
-                              : fact.line}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="igc-disclosure-body px-4 py-3 sm:px-4">
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {FACTS.map((fact) => (
+                    <li key={fact.title} className="min-w-0">
+                      <p className="text-[13px] font-medium text-[var(--igc-ink)]">{fact.title}</p>
+                      <p className="mt-0.5 text-[12px] leading-snug text-[var(--igc-muted)]">
+                        {fact.title === 'Storage'
+                          ? `Comments stay in Samyoj for ${retentionDays} days, then are removed automatically.`
+                          : fact.line}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </details>
 
@@ -785,88 +742,6 @@ export default function InstagramCommentsPage() {
   );
 }
 
-function CommentsRetentionTitle({ days }: { days: number }) {
-  return (
-    <div className="igc-retention-corner__head">
-      <Timer className="h-4 w-4 shrink-0 text-[#B45309]" strokeWidth={2} />
-      <span className="text-[12px] font-extrabold leading-tight text-[var(--igc-ink)]">
-        {days}-day comment storage
-      </span>
-    </div>
-  );
-}
-
-function CommentsRetentionBody({ days, compact }: { days: number; compact?: boolean }) {
-  return (
-    <>
-      <div className="igc-retention-flow" aria-hidden>
-        <div className="igc-retention-step">
-          <span className="igc-retention-dot igc-retention-dot--live" />
-          <span className="igc-retention-label">Arrives</span>
-        </div>
-        <span className="igc-retention-bar" />
-        <div className="igc-retention-step">
-          <span className="igc-retention-dot" />
-          <span className="igc-retention-label">Day {days}</span>
-        </div>
-        <span className="igc-retention-bar igc-retention-bar--fade" />
-        <div className="igc-retention-step">
-          <span className="igc-retention-dot igc-retention-dot--purge" />
-          <span className="igc-retention-label">Auto-delete</span>
-        </div>
-      </div>
-      <p className={`igc-retention-corner__copy ${compact ? 'text-[10.5px]' : ''}`}>
-        After {days} days, comment rows are removed from Samyoj. Instagram on the post is unchanged. Keyword automation
-        runs once per person per post.
-      </p>
-    </>
-  );
-}
-
-function CommentsRetentionInfograph({ days, onDismiss }: { days: number; onDismiss: () => void }) {
-  return (
-    <aside className="igc-retention-corner" aria-label={`Comments are stored for ${days} days`}>
-      <div className="igc-retention-corner__toolbar">
-        <CommentsRetentionTitle days={days} />
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="igc-retention-corner__close"
-          aria-label="Dismiss comment storage info"
-        >
-          <X className="h-3.5 w-3.5" strokeWidth={2.25} />
-        </button>
-      </div>
-      <CommentsRetentionBody days={days} />
-    </aside>
-  );
-}
-
-function CommentsRetentionInfo({ days }: { days: number }) {
-  return (
-    <div className="igc-retention-info group relative col-span-2 sm:col-span-1">
-      <button
-        type="button"
-        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-200/90 bg-amber-50/80 px-2.5 text-[12px] font-semibold text-amber-900 transition hover:bg-amber-50 sm:w-auto sm:px-3 sm:text-[12.5px]"
-        aria-describedby="igc-retention-info-popover"
-      >
-        <Info className="h-3.5 w-3.5 shrink-0 text-amber-700" strokeWidth={2} />
-        <span className="truncate">Storage ({days}d)</span>
-      </button>
-      <div
-        id="igc-retention-info-popover"
-        role="tooltip"
-        className="igc-retention-info-popover pointer-events-none invisible absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(280px,calc(100vw-2rem))] opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100"
-      >
-        <div className="igc-retention-info-panel">
-          <CommentsRetentionTitle days={days} />
-          <CommentsRetentionBody days={days} compact />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function EmptyState({
   connected,
   canConnect,
@@ -882,16 +757,12 @@ function EmptyState({
     <>
       <section className="igc-card mt-3 px-4 py-10 text-center sm:px-8">
         <div className="igc-empty-mark" aria-hidden>
-          <span className="igc-spark igc-spark--a" />
-          <span className="igc-spark igc-spark--b" />
-          <span className="igc-spark igc-spark--c" />
-          <span className="igc-spark igc-spark--d" />
           <span className="igc-empty-glow" />
           <span className="igc-empty-bubble">
-            <span className="text-[22px] font-bold leading-none">–</span>
+            <MessageSquare className="h-6 w-6" strokeWidth={1.75} />
           </span>
         </div>
-        <h3 className="mt-4 text-[22px] font-extrabold tracking-[-0.03em] text-[var(--igc-ink)]">
+        <h3 className="empty-lead mt-4 text-[var(--igc-ink)]">
           {connected ? 'No comments yet' : 'Connect Instagram'}
         </h3>
         <p className="mx-auto mt-1.5 max-w-md text-[13.5px] text-[var(--igc-muted)]">
@@ -904,25 +775,11 @@ function EmptyState({
             type="button"
             disabled={!canConnect || connecting}
             onClick={onConnect}
-            className="mt-4 inline-flex h-10 items-center rounded-xl bg-[var(--igc-green)] px-4 text-[13px] font-bold text-white disabled:opacity-50"
+            className="mt-4 inline-flex h-10 items-center rounded-xl bg-[var(--igc-green)] px-4 text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {connecting ? 'Connecting…' : canConnect ? 'Connect Instagram' : 'Ask an admin'}
           </button>
         )}
-        <div className="mx-auto mt-8 grid max-w-3xl gap-4 text-left sm:grid-cols-3">
-          <div>
-            <p className="text-[13px] font-bold text-[var(--igc-ink)]">New comments appear automatically</p>
-            <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">They show up here as soon as they arrive.</p>
-          </div>
-          <div>
-            <p className="text-[13px] font-bold text-[var(--igc-ink)]">Private replies go to their DMs</p>
-            <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">One reply lands in their Instagram DMs.</p>
-          </div>
-          <div>
-            <p className="text-[13px] font-bold text-[var(--igc-ink)]">The reply window stays open for 7 days</p>
-            <p className="mt-1 text-[12px] leading-snug text-[var(--igc-muted)]">After that, this reply closes.</p>
-          </div>
-        </div>
       </section>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">

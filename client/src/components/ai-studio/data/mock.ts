@@ -48,11 +48,11 @@ export const LANGUAGES: Language[] = ["English", "Hindi", "Hinglish"];
 
 export const EXAMPLE_IDEAS = [
   {
-    id: "festival",
-    title: "Diwali offer",
-    desc: "Festive sale poster, WhatsApp template, and email.",
+    id: "flash",
+    title: "Weekend flash sale",
+    desc: "Quick poster, WhatsApp ping, and short email.",
     brief:
-      "Diwali weekend offer for our Jaipur skincare store. 20% off the glow serum, valid Saturday and Sunday only. Warm gold and maroon, one diya, premium bottle as the hero. Create one Instagram poster, a WhatsApp template, and a short offer email. Keep the wording in Hinglish.",
+      "48-hour flash sale this weekend only: 15% off our bestsellers. Create one Instagram poster, a WhatsApp template with the dates and code FLASH15, and a short email. Urgent but friendly tone, one hero product, clean layout.",
     outputs: ["ig_image", "whatsapp", "email"] as OutputId[],
     tone: "festive" as const,
   },

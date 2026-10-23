@@ -13,6 +13,7 @@ import {
   countTemplateVars,
 } from '../../../utils/templateUtils';
 import { HEADER_MEDIA_SIZE_HINT, headerMediaAccept } from '../../../utils/headerMedia';
+import { resolvePublicMediaUrl } from '../../../utils/publicMediaUrl';
 import { messagingConsent } from '../../../utils/plainLanguage';
 import {
   sampleForVariable,
@@ -126,6 +127,7 @@ interface TemplateWizardCreateStepProps {
   onChange: (form: TemplateFormState) => void;
   mode: 'create' | 'resubmit';
   onHeaderPreviewUrl?: (url: string | null) => void;
+  headerPreviewUrl?: string | null;
   brandName?: string;
   mapFirstBodyVariableToName?: boolean;
 }
@@ -144,6 +146,7 @@ export default function TemplateWizardCreateStep({
   onChange,
   mode,
   onHeaderPreviewUrl,
+  headerPreviewUrl = null,
   brandName = '',
   mapFirstBodyVariableToName = true,
 }: TemplateWizardCreateStepProps) {
@@ -383,6 +386,13 @@ export default function TemplateWizardCreateStep({
               <p className="text-[12px] font-semibold text-slate-900 dark:text-white">
                 Sample {form.headerFormat.toLowerCase()} for WhatsApp review
               </p>
+              {form.headerFormat === 'IMAGE' && headerPreviewUrl ? (
+                <img
+                  src={resolvePublicMediaUrl(headerPreviewUrl)}
+                  alt="Header image selected for this template"
+                  className="mt-2.5 h-36 w-full rounded-lg object-cover"
+                />
+              ) : null}
               <input
                 ref={fileRef}
                 type="file"
@@ -474,7 +484,7 @@ export default function TemplateWizardCreateStep({
             placeholder="Hi {{1}}, your order {{2}} is ready."
             value={form.body}
             onChange={(e) => setForm({ body: e.target.value })}
-            rows={4}
+            rows={10}
             required
             maxLength={1024}
             className="!mt-0"

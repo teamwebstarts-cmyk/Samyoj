@@ -29,8 +29,8 @@
   --ema-line-strong: #d5dcec;
   --ema-ink: #16203a;
   --ema-muted: #64748b;
-  --ema-shadow: 0 1px 2px rgba(22, 32, 58, 0.04), 0 10px 28px -16px rgba(22, 32, 58, 0.16);
-  --ema-panel-shadow: 0 2px 4px rgba(22, 32, 58, 0.04), 0 24px 48px -24px rgba(30, 58, 138, 0.18);
+  --ema-shadow: none;
+  --ema-panel-shadow: none;
   --ema-hero-bg: linear-gradient(120deg, #e1e9fc 0%, #eae7fb 52%, #f3ebf8 100%);
 }
 
@@ -52,8 +52,8 @@
   --ema-red-soft: rgba(220, 38, 38, 0.16);
   --ema-violet-soft: rgba(139, 92, 246, 0.16);
   --ema-page: transparent;
-  --ema-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -16px rgba(0, 0, 0, 0.5);
-  --ema-panel-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.6);
+  --ema-shadow: none;
+  --ema-panel-shadow: none;
   --ema-hero-bg: linear-gradient(120deg, rgba(26, 115, 232, 0.14) 0%, rgba(139, 92, 246, 0.12) 55%, rgba(253, 32, 88, 0.1) 100%);
 }
 
@@ -2245,11 +2245,11 @@
   background: #fb7185;
 }
 .ema-gate__pitch h2 {
-  margin-top: 12px;
-  font-size: clamp(24px, 4cqi, 30px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  margin-top: 10px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
   text-wrap: balance;
   color: #1e293b;
 }
@@ -2271,7 +2271,7 @@
   background: var(--ema-primary);
   padding: 0 16px 0 8px;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: #fff;
   white-space: nowrap;
   box-shadow: 0 10px 18px -10px rgba(234, 67, 53, 0.8);
@@ -2360,8 +2360,8 @@
   box-shadow: var(--ema-shadow);
 }
 .ema-gate__aside h3 {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--ema-ink);
 }
 .ema-gate__aside ul {
@@ -2411,7 +2411,7 @@
 .ema-gate__limits strong {
   display: block;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ema-ink);
 }
 .ema-gate__limits ul {

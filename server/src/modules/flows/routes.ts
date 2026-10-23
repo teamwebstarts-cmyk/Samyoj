@@ -187,9 +187,10 @@ router.get('/templates', ...memberGuard, asyncHandler(async (_req, res) => {
 router.get('/', ...memberGuard, asyncHandler(async (req, res) => {
   const orgId = req.user!.organizationId!;
   const numberId = req.activeWhatsappNumberId!;
-  const { search, enabled, page = '1', limit = '10' } = req.query;
+  const { search, enabled, status, page = '1', limit = '10' } = req.query;
   const where: Prisma.FlowWhereInput = { organizationId: orgId, ...flowsForNumberFilter(numberId) };
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
+    if (status === 'DRAFT' || status === 'PUBLISHED') where.status = status;
     if (enabled === 'true') {
       where.enabled = true;
       where.status = 'PUBLISHED';
