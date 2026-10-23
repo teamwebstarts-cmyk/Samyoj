@@ -51,6 +51,7 @@ import {
   type LibraryTemplateWriteInput,
 } from '../templates/catalog-store';
 import { listPlatformAudit, listPlatformErrors } from './errors';
+import { libraryTemplateAiDraftRoute } from './ai-draft';
 import { listOutreachQueues, sendOrgOutreach } from './outreach';
 import {
   createPlatformOperator,
@@ -707,6 +708,15 @@ router.get(
   asyncHandler(async (_req: Request, res: Response) => {
     sendSuccess(res, { templates: await listAdminLibraryTemplates() });
   })
+);
+
+// AI draft for the library-template editor ("Generate with AI") — global platform
+// Sarvam key, no org context. Registered before '/library-templates' so 'ai-draft'
+// is not shadowed by the POST collection route.
+router.post(
+  '/library-templates/ai-draft',
+  requirePlatformPermission('organization.write'),
+  libraryTemplateAiDraftRoute
 );
 
 router.post(

@@ -15,7 +15,7 @@ import {
 import { Button, Input, Notice, Select } from '../components/ui';
 import { TemplatePreviewBlock } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
-import { platformRequest, ApiError } from '../api';
+import { platformRequest, ApiError, aiApi } from '../api';
 import {
   EMPTY_DRAFT,
   USE_MOCK_CATALOG,
@@ -276,6 +276,7 @@ function AiAssistBar({
 }) {
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
 
   // Escape closes the replace-confirm dialog.
@@ -290,14 +291,42 @@ function AiAssistBar({
 
   const run = () => {
     setBusy(true);
-    // ponytail: mock latency; swap for POST /platform/ai/template-draft + zod parse
-    // once the platform-level AI config question is settled.
-    window.setTimeout(() => {
-      onApply(generateMockAiDraft(prompt));
-      setPrompt('');
-      setConfirming(false);
-      setBusy(false);
-    }, 700);
+    setError('');
+    // Real AI first (POST /platform/library-templates/ai-draft, global platform key).
+    aiApi.generateTemplateDraft(prompt)
+      .then(({ draft }) => {
+        onApply({
+          title: draft.title,
+          slug: draft.slug,
+          category: draft.category,
+          body: draft.body,
+          bodyHi: draft.bodyHi,
+          footer: draft.footer,
+          footerHi: draft.footerHi,
+          buttons: draft.buttons.map((b) => ({
+            type: b.type as TemplateButtonType,
+            text: b.text,
+            url: b.url || '',
+            phone_number: b.phone_number || '',
+            example: b.example || '',
+          })),
+          variables: draft.variables,
+        });
+        setPrompt('');
+        setConfirming(false);
+      })
+      .catch((err: unknown) => {
+        // Mock mode (design work, no dev AI key) falls back to the offline generator;
+        // real mode surfaces the error honestly.
+        if (USE_MOCK_CATALOG) {
+          onApply(generateMockAiDraft(prompt));
+          setPrompt('');
+          setConfirming(false);
+        } else {
+          setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Generation failed');
+        }
+      })
+      .finally(() => setBusy(false));
   };
 
   const click = () => {
@@ -336,6 +365,7 @@ function AiAssistBar({
           </Button>
         </div>
       </div>
+      {error ? <p className="mt-2 text-[11px] font-medium text-rose-600">{error}</p> : null}
 
       {confirming
         ? createPortal(
@@ -603,19 +633,6 @@ export function TemplateEditorPage() {
         customKey: '',
       })),
       bodyExamples: s.variables.map((v) => sampleForVariable(v.description, v.index, v.suggestedSource)),
-    }));
-  };
-
-  // Client autoFillTemplateSamples: fill only empties, sample from description/source.
-  const autoFillSamples = () => {
-    setDraft((prev) => ({
-      ...prev,
-      bodyExamples: Array.from({ length: variableCount }, (_, i) =>
-        prev.bodyExamples[i]?.trim() ? prev.bodyExamples[i] : sampleForVariable(metaForIndex(prev.variableMeta, 'body', i + 1)?.description || '', i + 1, metaForIndex(prev.variableMeta, 'body', i + 1)?.suggestedSource)
-      ),
-      headerExamples: Array.from({ length: headerCount }, (_, i) =>
-        prev.headerExamples[i]?.trim() ? prev.headerExamples[i] : sampleForVariable(metaForIndex(prev.variableMeta, 'header', i + 1)?.description || '', i + 1, metaForIndex(prev.variableMeta, 'header', i + 1)?.suggestedSource)
-      ),
     }));
   };
 
@@ -897,19 +914,7 @@ export function TemplateEditorPage() {
                           label="About variables"
                         />
                       </div>
-                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">
-                        Map each {'{{n}}'} to a contact field so Inbox and Campaigns fill it automatically.
-                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={autoFillSamples}
-                      disabled={!canWrite}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] font-bold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Wand2 className="h-3.5 w-3.5" />
-                      Auto-fill samples
-                    </button>
                   </div>
 
                   <div className="space-y-3">
