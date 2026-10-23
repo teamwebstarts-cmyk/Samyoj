@@ -64,7 +64,7 @@ function RowActions({
   setMenuOpen: (open: boolean) => void;
   canWrite: boolean;
 }) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null); // portal root ONLY — never share with inline nodes
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -79,8 +79,8 @@ function RowActions({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    // Hidden/mid-layout elements report a zero-size rect — measuring those
-    // would portal the menu off-screen (left: -176). Bail; the rAF effect re-measures.
+    // Hidden elements report a zero-size rect — measuring those would portal the
+    // menu off-screen (left: -176). Bail; the scroll/resize effect re-measures.
     if (!r.width && !r.height) return;
     const MENU_W = 176;
     const menuH = 120; // approximate: 3 items; only used for the flip decision
@@ -91,28 +91,24 @@ function RowActions({
     });
   };
 
+  // Measured synchronously in the toggle handler — no rAF wait — so backgrounded
+  // tabs and fast double-clicks still get a positioned menu on the first commit.
   useEffect(() => {
-    if (!menuOpen) {
-      setPos(null);
-      return;
-    }
-    // Measure after two frames: the portal content mounts this tick, so the
-    // trigger's rect mid-commit can be stale (0-size → menu portals off-screen).
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => measure());
-    });
+    if (!menuOpen) return;
     const onScrollOrResize = () => measure();
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
     return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- measures on open; trigger is stable per row
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trigger is stable per row
   }, [menuOpen]);
+
+  const toggleMenu = () => {
+    if (!menuOpen) measure();
+    setMenuOpen(!menuOpen);
+  };
 
   const copySlug = () => {
     void navigator.clipboard?.writeText(row.slug).catch(() => {});
@@ -120,12 +116,18 @@ function RowActions({
     window.setTimeout(() => setCopied(false), 1500);
   };
 
+  // Outside-close. Only the instance whose portal is actually rendered (pos set)
+  // may close the menu: the page renders RowActions twice per row (card + table,
+  // one hidden via CSS), and both share the same open state. The hidden twin has
+  // pos === null → no portal → menuRef.current === null → its guard fails, so its
+  // listener would close the shared menu on every mousedown, even on menu items
+  // ("menu flashes and closes before the click lands").
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen || !pos) return;
     const onDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node;
       if (menuRef.current?.contains(target)) return;
-      if (triggerRef.current?.contains(target)) return; // trigger handles its own toggle
+      if (triggerRef.current?.contains(target)) return; // trigger toggles itself
       setMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
@@ -163,7 +165,7 @@ function RowActions({
       <Button variant="secondary" size="sm" onClick={stop(onEdit)} aria-label={`Edit ${row.title}`}>
         <Pencil className="h-3.5 w-3.5" /> Edit
       </Button>
-      <div className="relative" ref={menuRef}>
+      <div className="relative">
         <span ref={triggerRef} className="inline-flex">
           <Button
             variant="secondary"
@@ -172,7 +174,7 @@ function RowActions({
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label={`More actions for ${row.title}`}
-            onClick={stop(() => setMenuOpen(!menuOpen))}
+            onClick={stop(toggleMenu)}
           >
             <MoreVertical className="h-3.5 w-3.5" />
           </Button>
