@@ -92,7 +92,6 @@ function VariableRow({
   meta,
   sample,
   canWrite,
-  descriptionRef,
   onPatchMeta,
   onPatchSample,
 }: {
@@ -101,7 +100,6 @@ function VariableRow({
   meta?: VariableMeta;
   sample: string;
   canWrite: boolean;
-  descriptionRef?: (el: HTMLInputElement | null) => void;
   onPatchMeta: (patch: Partial<VariableMeta>) => void;
   onPatchSample: (value: string) => void;
 }) {
@@ -114,7 +112,6 @@ function VariableRow({
           {`{{${index}}}`}
         </span>
         <input
-          ref={descriptionRef}
           type="text"
           value={meta?.description || ''}
           onChange={(event) => onPatchMeta({ description: event.target.value })}
@@ -255,23 +252,18 @@ export function TemplateEditorPage() {
   const variableCount = useMemo(() => templateVariableCount(draft.body, draft.bodyHi), [draft.body, draft.bodyHi]);
   const headerCount = useMemo(() => templateVariableCount(draft.header, ''), [draft.header]);
 
-  // Chip roster: {{n}} present in the body, labeled from Connect-variables descriptions.
-  // No auto-inference: an added variable starts as Untitled and is named via its description input (user's flow).
-  const bodyVariables = useMemo(
-    () => bodyVariableIndexes(draft.body).map((index) => ({ index, description: metaForIndex(draft.variableMeta, 'body', index)?.description || '' })),
-    [draft.body, draft.variableMeta]
-  );
-  const descriptionRefs = useRef<Record<number, HTMLInputElement | null>>({});
-  const focusVariableRow = (index: number) => {
-    const el = descriptionRefs.current[index];
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.focus();
-  };
+  // Chip roster: every {{n}} used across both language bodies (a var added in the
+  // Hindi body still shows a chip on the English editor), labeled from Connect descriptions.
+  const bodyVariables = useMemo(() => {
+    const indexes = new Set<number>([...bodyVariableIndexes(draft.body), ...bodyVariableIndexes(draft.bodyHi)]);
+    return [...indexes]
+      .sort((a, b) => a - b)
+      .map((index) => ({ index, description: metaForIndex(draft.variableMeta, 'body', index)?.description || '' }));
+  }, [draft.body, draft.bodyHi, draft.variableMeta]);
 
-  // Cursor-aware {{n}} insertion, like the client insertVariable.
-  const insertVariable = () => {
-    const index = variableCount + 1;
+  // Cursor-aware token insertion into the active body (client insertVariable mechanics).
+  // insertNewVariable appends the next unused index; insertToken re-inserts an existing one (reuse allowed).
+  const insertToken = (index: number) => {
     const token = `{{${index}}}`;
     const el = bodyRef.current;
     if (el) {
@@ -287,6 +279,8 @@ export function TemplateEditorPage() {
     }
     setActiveBody(`${activeBody}${activeBody && !activeBody.endsWith(' ') ? ' ' : ''}${token}`);
   };
+
+  const insertVariable = () => insertToken(variableCount + 1);
 
   // Client autoFillTemplateSamples: fill only empties, sample from description/source.
   const autoFillSamples = () => {
@@ -557,10 +551,11 @@ export function TemplateEditorPage() {
                     <button
                       key={item.index}
                       type="button"
-                      onClick={() => focusVariableRow(item.index)}
-                      title="Click to rename this variable in Connect variables"
+                      onClick={() => insertToken(item.index)}
+                      title={`Insert {{${item.index}}} at the cursor — rename it in Connect variables below`}
                       className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
+                      <Plus className="h-2.5 w-2.5" />
                       {item.description.trim() ? item.description : `Untitled ({{${item.index}}})`}
                     </button>
                   ))
@@ -653,7 +648,6 @@ export function TemplateEditorPage() {
                             meta={metaForIndex(draft.variableMeta, 'body', index)}
                             sample={draft.bodyExamples[index - 1] || ''}
                             canWrite={canWrite}
-                            descriptionRef={(el) => { descriptionRefs.current[index] = el; }}
                             onPatchMeta={(patch) =>
                               setDraft((prev) => {
                                 let nextMeta = patchMeta(prev.variableMeta, 'body', index, patch);
