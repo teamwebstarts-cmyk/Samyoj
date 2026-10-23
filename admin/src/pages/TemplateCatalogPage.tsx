@@ -36,6 +36,7 @@ import {
   ResponsiveDataView,
   Select,
   StatusBadge,
+  clickableRowProps,
 } from '../components/ui';
 import { formatAgo } from '../lib/format';
 import { useOperator } from '../context/OperatorContext';
@@ -596,12 +597,14 @@ export function TemplateCatalogPage() {
                     <th>Language</th>
                     <th>Status</th>
                     <th>Updated</th>
-                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((row) => (
-                    <tr key={row.id} {...(canWrite ? { 'data-clickable': 'true', onClick: () => openEdit(row) } : {})}>
+                    <tr
+                      key={row.id}
+                      {...clickableRowProps(() => openEdit(row))}
+                    >
                       <td>
                         <div className="flex items-center gap-3">
                           <TemplateAvatar row={row} />
@@ -622,18 +625,6 @@ export function TemplateCatalogPage() {
                         />
                       </td>
                       <td className="text-xs text-slate-600">{formatAgo(row.updatedAt)}</td>
-                      <td className="text-right">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openEdit(row);
-                          }}
-                        >
-                          {canWrite ? 'Edit' : 'View'}
-                        </Button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
