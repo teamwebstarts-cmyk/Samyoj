@@ -305,7 +305,6 @@ function AiAssistBar({
           <Wand2 className="h-3.5 w-3.5" />
         </span>
         <p className="text-[13px] font-bold text-slate-900">Generate with AI</p>
-        <span className="text-[11px] font-medium text-slate-500">Describe it — we fill the form</span>
       </div>
       <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-violet-50/60 to-fuchsia-50/50 p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
