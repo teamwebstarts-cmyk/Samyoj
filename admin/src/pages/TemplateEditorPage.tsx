@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Smartphone, Trash2 } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
+import { WhatsAppPreview } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
 import { platformRequest, ApiError } from '../api';
 import {
@@ -19,34 +20,6 @@ import {
   type LibraryRow,
 } from '../lib/library-catalog';
 
-/** Live WhatsApp chat bubble fed by the current draft. */
-function PreviewBubble({ draft }: { draft: Draft }) {
-  const hindi = draft.language === 'hi_IN';
-  const body = ((hindi ? draft.bodyHi : draft.body) || '').replace(/\{\{(\d+)\}\}/g, (_m, index: string) => {
-    const sample = draft.bodyExamples[Number.parseInt(index, 10) - 1];
-    return sample || `{{${index}}}`;
-  });
-  return (
-    <div className="min-h-40 space-y-2 rounded-lg bg-[#efeae2] p-3">
-      {body ? (
-        <div className="max-w-[85%] rounded-xl rounded-tl-sm bg-white px-3 py-2 shadow-sm">
-          <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-slate-800">{body}</p>
-          {draft.footer ? <p className="mt-1.5 text-[11px] text-slate-400">{draft.footer}</p> : null}
-        </div>
-      ) : (
-        <div className="max-w-[85%] rounded-xl rounded-tl-sm bg-white/70 px-3 py-2.5 text-[13px] italic text-slate-400 shadow-sm">
-          Your message will appear here…
-        </div>
-      )}
-      {draft.buttonText && draft.buttonUrl ? (
-        <div className="max-w-[85%] rounded-lg bg-white px-3 py-2 text-center text-[12px] font-semibold text-sky-700 shadow-sm">
-          {draft.buttonText} ↗
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function TemplateEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -56,7 +29,6 @@ export function TemplateEditorPage() {
   const [row, setRow] = useState<LibraryRow | null>(() => (isNew ? null : USE_MOCK_CATALOG ? findMockRow(id) ?? null : null));
   const [missing, setMissing] = useState(false);
   const [draft, setDraft] = useState<Draft>(row ? rowToDraft(row) : EMPTY_DRAFT);
-  const [reason, setReason] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -114,10 +86,12 @@ export function TemplateEditorPage() {
             language: draft.language,
           } as LibraryRow);
         }
-        navigate('/library');
-        return;
-      }
-      const payload = { reason, ...draftPayload(draft) };
+      navigate('/library');
+      return;
+    }
+    // Server audit log requires a ≥8-char reason; the editor no longer asks for one.
+    const reason = `${row ? 'Updated' : 'Created'} library template "${draftPayload(draft).slug || draft.title || 'untitled'}" from platform editor`;
+    const payload = { reason, ...draftPayload(draft) };
       if (row) {
         await platformRequest(`/library-templates/${row.id}`, {
           method: 'PATCH',
@@ -147,7 +121,9 @@ export function TemplateEditorPage() {
       } else {
         await platformRequest(`/library-templates/${row.id}`, {
           method: 'DELETE',
-          body: JSON.stringify({ reason }),
+          body: JSON.stringify({
+            reason: `Deleted library template "${row.slug}" from platform editor`,
+          }),
         });
       }
       navigate('/library');
@@ -167,8 +143,21 @@ export function TemplateEditorPage() {
     );
   }
 
+  const actions = (
+    <>
+      {row ? (
+        <Button variant="danger" onClick={() => void handleDelete()} disabled={saving}>
+          <Trash2 className="h-4 w-4" /> Delete
+        </Button>
+      ) : null}
+      <Button onClick={() => void handleSave()} loading={saving} disabled={saving}>
+        {row ? 'Save changes' : 'Publish to library'}
+      </Button>
+    </>
+  );
+
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-32"> {/* pb-32: keep clear of the floating action bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <button
@@ -190,35 +179,49 @@ export function TemplateEditorPage() {
             </div>
           </div>
         </div>
-        {canWrite ? (
-          <div className="flex shrink-0 items-center gap-2">
-            {row ? (
-              <Button variant="danger" onClick={() => void handleDelete()} disabled={saving || reason.trim().length < 8}>
-                <Trash2 className="h-4 w-4" /> Delete
-              </Button>
-            ) : null}
-            <Button onClick={() => void handleSave()} loading={saving} disabled={saving || reason.trim().length < 8}>
-              {row ? 'Save changes' : 'Publish to library'}
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       {saveError ? <Notice tone="error">{saveError}</Notice> : null}
-      {canWrite ? (
-        <Input
-          label="Reason"
-          hint="Required for the audit log. At least 8 characters."
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        />
-      ) : (
+      {!canWrite ? (
         <Notice>ANALYST can view this catalog. SUPPORT and SUPER_ADMIN can publish changes.</Notice>
-      )}
+      ) : null}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        {/* Left: form column */}
+        {/* Left: form column — order: details → content → variables → buttons */}
         <div className="min-w-0 space-y-4">
+          <section className="dashboard-card p-4 sm:p-5">
+            <h2 className="text-sm font-bold tracking-tight text-slate-900">Template details</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <Input
+                label="Template name"
+                hint="Shown to tenants in the library."
+                value={draft.title}
+                disabled={!canWrite}
+                onChange={(event) => set('title', event.target.value)}
+              />
+              <Input
+                label="Slug"
+                hint="Tenants submit this draft by slug."
+                value={draft.slug}
+                disabled={!canWrite || Boolean(row)}
+                onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
+              />
+              <Select label="Category" value={draft.category} disabled={!canWrite} onChange={(event) => set('category', event.target.value as Draft['category'])}>
+                <option value="UTILITY">Utility</option>
+                <option value="MARKETING">Marketing</option>
+                <option value="AUTHENTICATION">Authentication</option>
+              </Select>
+              <Select label="Language" value={draft.language} disabled={!canWrite || Boolean(row)} onChange={(event) => set('language', event.target.value)}>
+                {LANGUAGES.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+              <Input label="Tags" hint="Comma-separated" value={draft.tags} disabled={!canWrite} onChange={(event) => set('tags', event.target.value)} />
+              <Input label="Short help text" hint="Shown under the template in the tenant library." value={draft.copy} disabled={!canWrite} onChange={(event) => set('copy', event.target.value)} />
+              <Input label="Sort order" value={draft.sortOrder} disabled={!canWrite} onChange={(event) => set('sortOrder', event.target.value)} />
+            </div>
+          </section>
+
           <section className="dashboard-card p-4 sm:p-5">
             <h2 className="text-sm font-bold tracking-tight text-slate-900">Template content</h2>
             <label className="mt-3 block space-y-1 text-[13px]">
@@ -255,39 +258,6 @@ export function TemplateEditorPage() {
           </section>
 
           <section className="dashboard-card p-4 sm:p-5">
-            <h2 className="text-sm font-bold tracking-tight text-slate-900">Template details</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Input
-                label="Template name"
-                hint="Shown to tenants in the library."
-                value={draft.title}
-                disabled={!canWrite}
-                onChange={(event) => set('title', event.target.value)}
-              />
-              <Input
-                label="Slug"
-                hint="Tenants submit this draft by slug."
-                value={draft.slug}
-                disabled={!canWrite || Boolean(row)}
-                onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
-              />
-              <Select label="Category" value={draft.category} disabled={!canWrite} onChange={(event) => set('category', event.target.value as Draft['category'])}>
-                <option value="UTILITY">Utility</option>
-                <option value="MARKETING">Marketing</option>
-                <option value="AUTHENTICATION">Authentication</option>
-              </Select>
-              <Select label="Language" value={draft.language} disabled={!canWrite || Boolean(row)} onChange={(event) => set('language', event.target.value)}>
-                {LANGUAGES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </Select>
-              <Input label="Tags" hint="Comma-separated" value={draft.tags} disabled={!canWrite} onChange={(event) => set('tags', event.target.value)} />
-              <Input label="Short help text" hint="Shown under the template in the tenant library." value={draft.copy} disabled={!canWrite} onChange={(event) => set('copy', event.target.value)} />
-              <Input label="Sort order" value={draft.sortOrder} disabled={!canWrite} onChange={(event) => set('sortOrder', event.target.value)} />
-            </div>
-          </section>
-
-          <section className="dashboard-card p-4 sm:p-5">
             <h2 className="text-sm font-bold tracking-tight text-slate-900">Variables <span className="font-normal text-slate-400">(optional)</span></h2>
             <div className="mt-3 space-y-2">
               {Array.from({ length: variableCount }, (_, index) => index + 1).map((index) => (
@@ -314,15 +284,9 @@ export function TemplateEditorPage() {
           </section>
 
           <section className="dashboard-card p-4 sm:p-5">
-            <h2 className="text-sm font-bold tracking-tight text-slate-900">Buttons <span className="font-normal text-slate-400">(optional)</span></h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Input label="URL button label" value={draft.buttonText} disabled={!canWrite} onChange={(event) => set('buttonText', event.target.value)} />
-              <Input label="URL button https link" value={draft.buttonUrl} disabled={!canWrite} onChange={(event) => set('buttonUrl', event.target.value)} />
-            </div>
-          </section>
-
-          <section className="dashboard-card p-4 sm:p-5">
-            <h2 className="text-sm font-bold tracking-tight text-slate-900">Header & footer</h2>
+            <h2 className="text-sm font-bold tracking-tight text-slate-900">
+              Buttons, header &amp; footer <span className="font-normal text-slate-400">(optional)</span>
+            </h2>
             {draft.mediaFormat ? (
               <div className="mt-3">
                 <Notice tone="warning">
@@ -331,7 +295,9 @@ export function TemplateEditorPage() {
               </div>
             ) : null}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Input label="Header (optional)" value={draft.header} disabled={!canWrite} onChange={(event) => set('header', event.target.value)} />
+              <Input label="URL button label" value={draft.buttonText} disabled={!canWrite} onChange={(event) => set('buttonText', event.target.value)} />
+              <Input label="URL button https link" value={draft.buttonUrl} disabled={!canWrite} onChange={(event) => set('buttonUrl', event.target.value)} />
+              <Input label="Header" value={draft.header} disabled={!canWrite} onChange={(event) => set('header', event.target.value)} />
               <Select
                 label="Header media"
                 value={draft.mediaFormat}
@@ -365,28 +331,23 @@ export function TemplateEditorPage() {
             <h2 className="text-sm font-bold tracking-tight text-slate-900">Whatsapp preview</h2>
           </div>
           <div className="p-4">
-            <div className="overflow-hidden rounded-xl bg-[#efeae2] shadow-sm ring-1 ring-slate-900/10">
-              <div className="flex items-center gap-2.5 bg-[#0b7d6f] px-3 py-2.5 text-white">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
-                  {(draft.title || 'S').slice(0, 1).toUpperCase()}
-                </span>
-                <div className="min-w-0 flex-1 leading-tight">
-                  <p className="flex items-center gap-1 truncate text-[13px] font-semibold">
-                    <span className="truncate">{draft.title || 'Samyoj Business'}</span>
-                    <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-sky-300" aria-hidden />
-                  </p>
-                  <p className="text-[10px] text-white/75">Business Account</p>
-                </div>
-                <span className="text-base leading-none" aria-hidden>⋮</span>
-              </div>
-              <div className="p-3">
-                <PreviewBubble draft={draft} />
-              </div>
-            </div>
+            <WhatsAppPreview draft={draft} />
             <p className="mt-3 text-[11px] leading-relaxed text-slate-500">{HONESTY}</p>
           </div>
         </aside>
       </div>
+
+      {/* Floating action bar — fixed to viewport bottom, content-aligned */}
+      {canWrite ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
+          <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
+            <p className="hidden min-w-0 truncate text-[11px] text-slate-500 sm:block">
+              {row ? `Editing "${row.title}"` : 'New template — nothing is sent to tenants until published.'}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

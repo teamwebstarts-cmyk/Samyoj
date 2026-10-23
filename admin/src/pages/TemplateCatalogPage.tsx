@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Beaker, ChevronRight, Info, Library, Plus, Search } from 'lucide-react';
+import { Beaker, Eye, Info, Library, Pencil, Plus, Search } from 'lucide-react';
 import { platformRequest } from '../api';
 import {
   Button,
+  Drawer,
   EmptyState,
   Input,
   Notice,
@@ -14,6 +15,7 @@ import {
   StatusBadge,
   clickableRowProps,
 } from '../components/ui';
+import { WhatsAppPreview } from '../components/WhatsAppPreview';
 import { formatAgo } from '../lib/format';
 import { useOperator } from '../context/OperatorContext';
 import {
@@ -24,6 +26,7 @@ import {
   iconFor,
   languageLabel,
   listMockRows,
+  rowToDraft,
   type LibraryRow,
 } from '../lib/library-catalog';
 
@@ -38,6 +41,24 @@ function TemplateAvatar({ row }: { row: LibraryRow }) {
     >
       <Icon className="h-5 w-5" strokeWidth={2} />
     </span>
+  );
+}
+
+/** View opens the WhatsApp preview drawer; Edit redirects to the editor page. Buttons stop row-click propagation. */
+function RowActions({ row, onView, onEdit }: { row: LibraryRow; onView: () => void; onEdit: () => void }) {
+  const stop = (fn: () => void) => (event: React.MouseEvent) => {
+    event.stopPropagation();
+    fn();
+  };
+  return (
+    <div className="flex shrink-0 items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+      <Button variant="secondary" size="sm" onClick={stop(onView)} aria-label={`View ${row.title}`}>
+        <Eye className="h-3.5 w-3.5" /> View
+      </Button>
+      <Button variant="secondary" size="sm" onClick={stop(onEdit)} aria-label={`Edit ${row.title}`}>
+        <Pencil className="h-3.5 w-3.5" /> Edit
+      </Button>
+    </div>
   );
 }
 
@@ -99,6 +120,7 @@ export function TemplateCatalogPage() {
 
   const openCreate = () => navigate('/library/new');
   const openEdit = (row: LibraryRow) => navigate(`/library/${row.id}/edit`);
+  const [viewing, setViewing] = useState<LibraryRow | null>(null);
 
   if (error) {
     return (
@@ -237,18 +259,14 @@ export function TemplateCatalogPage() {
             )
           }
           renderCard={(row) => (
-            <button
-              type="button"
-              className="block w-full px-4 py-3 text-left sm:px-5"
-              onClick={() => openEdit(row)}
+            <div
+              {...clickableRowProps(() => openEdit(row))}
+              className="cursor-pointer px-4 py-3 sm:px-5"
             >
               <div className="flex items-start gap-3">
                 <TemplateAvatar row={row} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate font-bold text-slate-900">{row.title}</p>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-                  </div>
+                  <p className="truncate font-bold text-slate-900">{row.title}</p>
                   <p className="mt-0.5 truncate text-xs text-slate-500">{row.copy || row.body}</p>
                 </div>
               </div>
@@ -261,7 +279,10 @@ export function TemplateCatalogPage() {
                 <StatusBadge status="info" label={languageLabel(row.language)} />
                 <span className="ml-auto text-[11px] text-slate-400">{formatAgo(row.updatedAt)}</span>
               </div>
-            </button>
+              <div className="mt-2.5 border-t border-slate-200/80 pt-2.5">
+                <RowActions row={row} onView={() => setViewing(row)} onEdit={() => openEdit(row)} />
+              </div>
+            </div>
           )}
           renderTable={() => (
             <div className="overflow-x-auto">
@@ -273,6 +294,7 @@ export function TemplateCatalogPage() {
                     <th>Language</th>
                     <th>Status</th>
                     <th>Updated</th>
+                    <th className="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -301,6 +323,9 @@ export function TemplateCatalogPage() {
                         />
                       </td>
                       <td className="text-xs text-slate-600">{formatAgo(row.updatedAt)}</td>
+                      <td className="text-right">
+                        <RowActions row={row} onView={() => setViewing(row)} onEdit={() => openEdit(row)} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -315,6 +340,25 @@ export function TemplateCatalogPage() {
           </div>
         )}
       </div>
+
+      <Drawer
+        open={Boolean(viewing)}
+        title={viewing?.title || 'Preview'}
+        subtitle={viewing ? `${languageLabel(viewing.language)} · ${viewing.slug}` : undefined}
+        onClose={() => setViewing(null)}
+      >
+        {viewing ? (
+          <div className="space-y-3">
+            <WhatsAppPreview draft={rowToDraft(viewing)} />
+            <p className="text-[11px] leading-relaxed text-slate-500">{HONESTY}</p>
+            {canWrite ? (
+              <Button className="w-full" onClick={() => { const target = viewing; setViewing(null); openEdit(target); }}>
+                <Pencil className="h-4 w-4" /> Edit this template
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </Drawer>
     </div>
   );
 }
