@@ -13,6 +13,7 @@ import { OutreachPage } from './pages/OutreachPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { BillingConfigPage } from './pages/BillingConfigPage';
 import { TemplateCatalogPage } from './pages/TemplateCatalogPage';
+import { TemplateEditorPage } from './pages/TemplateEditorPage';
 import { Shell } from './components/Shell';
 
 function Protected() {
@@ -50,6 +51,8 @@ export default function App() {
             <Route path="/accounts/:id" element={<AccountDetailPage />} />
             <Route path="/billing" element={<BillingConfigPage />} />
             <Route path="/library" element={<TemplateCatalogPage />} />
+            <Route path="/library/new" element={<TemplateEditorPage key="new" />} />
+            <Route path="/library/:id/edit" element={<TemplateEditorPage key="edit" />} />
             <Route path="/errors" element={<ErrorsPage />} />
             <Route path="/outreach" element={<OutreachPage />} />
             <Route path="/operators" element={<OperatorsPage />} />
