@@ -20,7 +20,6 @@ import { useOperator } from '../context/OperatorContext';
 import {
   CATEGORY_AVATAR,
   HONESTY,
-  LANGUAGES,
   USE_MOCK_CATALOG,
   deleteMockRow,
   draftPayload,
@@ -169,7 +168,6 @@ export function TemplateCatalogPage() {
   const [tab, setTab] = useState<CatalogTab>('all');
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('ALL');
-  const [language, setLanguage] = useState('ALL');
 
   const load = () => {
     if (USE_MOCK_CATALOG) {
@@ -197,8 +195,8 @@ export function TemplateCatalogPage() {
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    // Rows are bilingual (one identity, two surfaces) — the language select below is
-    // a lens that switches content, so it does not filter rows out.
+    // Rows are bilingual (one identity, two surfaces) — there is no language filter;
+    // search matches both bodies.
     return (rows || []).filter((row) => {
       if (tab === 'published' && !row.published) return false;
       if (tab === 'drafts' && row.published) return false;
@@ -208,17 +206,6 @@ export function TemplateCatalogPage() {
       return haystack.includes(term);
     });
   }, [rows, tab, q, category]);
-
-  // Language lens — same behavior as the platform browse on :3000: pick Hindi and every
-  // card shows its Hindi body/footer; empty Hindi falls back to English.
-  const hindiLens = language === 'hi_IN' || language === 'hi';
-  const previewBody = (row: LibraryRow) => (hindiLens ? row.bodyHi || row.body : row.body);
-  const lensDraft = (row: LibraryRow) => {
-    const draft = rowToDraft(row);
-    if (!hindiLens) return draft;
-    return { ...draft, language: 'hi_IN', body: draft.bodyHi || draft.body, footer: draft.footerHi || draft.footer };
-  };
-  const lensLanguageLabel = (row: LibraryRow) => (hindiLens ? 'Hindi' : languageLabel(row.language));
 
   const openCreate = () => navigate('/library/new');
   const openEdit = (row: LibraryRow) => navigate(`/library/${row.id}/edit`);
@@ -360,17 +347,6 @@ export function TemplateCatalogPage() {
             <option value="MARKETING">Marketing</option>
             <option value="AUTHENTICATION">Authentication</option>
           </Select>
-          <Select
-            aria-label="Filter by language"
-            className="sm:w-40"
-            value={language}
-            onChange={(event) => setLanguage(event.target.value)}
-          >
-            <option value="ALL">All languages</option>
-            {LANGUAGES.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </Select>
         </div>
 
         <ResponsiveDataView
@@ -402,7 +378,7 @@ export function TemplateCatalogPage() {
                 <TemplateAvatar row={row} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold text-slate-900">{row.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-slate-500">{row.copy || previewBody(row)}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">{row.copy || row.body}</p>
                 </div>
               </div>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -411,7 +387,6 @@ export function TemplateCatalogPage() {
                   status={row.published ? 'ACTIVE' : 'DISABLED'}
                   label={row.published ? 'Published' : 'Draft'}
                 />
-                <StatusBadge status="info" label={lensLanguageLabel(row)} />
                 <span className="ml-auto text-[11px] text-slate-400">{formatAgo(row.updatedAt)}</span>
               </div>
               <div className="mt-2.5 border-t border-slate-200/80 pt-2.5">
@@ -435,7 +410,6 @@ export function TemplateCatalogPage() {
                   <tr>
                     <th>Name</th>
                     <th>Category</th>
-                    <th>Language</th>
                     <th>Status</th>
                     <th>Updated</th>
                     <th className="text-right">Actions</th>
@@ -449,14 +423,13 @@ export function TemplateCatalogPage() {
                           <TemplateAvatar row={row} />
                           <div className="min-w-0">
                             <p className="font-bold text-slate-900">{row.title}</p>
-                            <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">{row.copy || previewBody(row) || row.slug}</p>
+                            <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">{row.copy || row.body || row.slug}</p>
                           </div>
                         </div>
                       </td>
                       <td>
                         <StatusBadge status={row.category} />
                       </td>
-                      <td className="text-xs font-medium text-slate-700">{lensLanguageLabel(row)}</td>
                       <td>
                         <StatusBadge
                           status={row.published ? 'ACTIVE' : 'DISABLED'}
@@ -494,7 +467,7 @@ export function TemplateCatalogPage() {
       <Drawer
         open={Boolean(viewing)}
         title={viewing?.title || 'Preview'}
-        subtitle={viewing ? `${lensLanguageLabel(viewing)} · ${viewing.slug}` : undefined}
+        subtitle={viewing ? `${languageLabel(viewing.language)} · ${viewing.slug}` : undefined}
         onClose={() => setViewing(null)}
       >
         {viewing ? (
@@ -509,16 +482,16 @@ export function TemplateCatalogPage() {
                   Template Preview
                 </p>
                 <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
-                  {lensLanguageLabel(viewing)}
+                  {languageLabel(viewing.language)}
                 </span>
               </div>
               <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
                 <div className="mx-auto w-full max-w-[280px]">
-                  <WhatsAppPreview draft={lensDraft(viewing)} />
+                  <WhatsAppPreview draft={rowToDraft(viewing)} />
                 </div>
               </div>
             </div>
-            <TemplateDetailsTable draft={lensDraft(viewing)} />
+            <TemplateDetailsTable draft={rowToDraft(viewing)} />
             {canWrite ? (
               <Button className="w-full" onClick={() => { const target = viewing; setViewing(null); openEdit(target); }}>
                 <Pencil className="h-4 w-4" /> Edit this template
