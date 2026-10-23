@@ -316,7 +316,6 @@ function AiAssistBar({
         </span>
         <p className="text-[13px] font-bold text-slate-900">Generate with AI</p>
       </div>
-      <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-violet-50/60 to-fuchsia-50/50 p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="text"
@@ -328,7 +327,7 @@ function AiAssistBar({
           placeholder="Describe the template you want — e.g. Create a Diwali offer message for ecommerce customers…"
           aria-label="Describe the template to generate"
           disabled={!canWrite || busy}
-          className="h-9 min-w-0 flex-1 rounded-lg border border-indigo-200/80 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <div className="flex shrink-0 items-center gap-2">
           <Button onClick={click} disabled={!canWrite || busy || !prompt.trim()}>
@@ -336,7 +335,6 @@ function AiAssistBar({
             {busy ? 'Generating…' : 'Generate'}
           </Button>
         </div>
-      </div>
       </div>
 
       {confirming
