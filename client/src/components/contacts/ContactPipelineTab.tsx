@@ -424,7 +424,7 @@ export default function ContactPipelineTab({
         subtitle={`${selectedIds.length} selected lead(s)`}
         size="md"
         icon={Target}
-        accent="sky"
+        accent="violet"
         footer={
           <SlideOverFooter
             onCancel={() => setBulkStageOpen(false)}
@@ -440,7 +440,7 @@ export default function ContactPipelineTab({
         }
       >
         <div className="space-y-4">
-          <ModalPanel title="Selected leads" accent="sky">
+          <ModalPanel title="Selected leads" accent="violet">
             <p className="text-[12px] text-theme-secondary">
               {selectedLeads.length} lead(s) selected. Pick a new stage below.
             </p>

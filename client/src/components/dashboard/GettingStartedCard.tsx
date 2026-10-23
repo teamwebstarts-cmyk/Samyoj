@@ -32,7 +32,7 @@ export default function GettingStartedCard({
       {/* Card Header: Icon + Title + Progress Badge */}
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
-          <IconWell accent="emerald" size="sm" round>
+          <IconWell accent="violet" size="sm" round>
             <ListChecks className="h-4 w-4 stroke-[2.2]" />
           </IconWell>
           <h2 className="truncate text-[12px] font-extrabold tracking-tight text-neutral-900 sm:text-[12.5px]">

@@ -117,7 +117,7 @@ export default function UpcomingCampaignsCard({
       {/* Title + View all stay on one row (container queries never fired — no @container on this card). */}
       <div className="flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <IconWell accent="emerald" size="sm">
+          <IconWell accent="violet" size="sm">
             <Megaphone className="h-4 w-4 stroke-[2.2]" />
           </IconWell>
           <h2 className="truncate text-[14px] font-bold tracking-tight text-neutral-900 sm:text-[15px]">

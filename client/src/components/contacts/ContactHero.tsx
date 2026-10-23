@@ -81,14 +81,14 @@ export default function ContactHero({
   return (
     <section
       aria-label="Contacts overview"
-      className="relative overflow-hidden rounded-xl border border-sky-200/70 bg-[linear-gradient(100deg,#f0f9ff_0%,#f5fbff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(2,132,199,0.05)] dark:border-sky-900/60 dark:bg-[linear-gradient(100deg,#0b1329_0%,#0f172a_45%,#070d1e_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
+      className="relative overflow-hidden rounded-xl border border-[#ddd4fe] bg-[linear-gradient(100deg,#f4f0ff_0%,#f7f5ff_42%,#ffffff_100%)] p-2.5 shadow-[0_8px_24px_rgba(75,46,235,0.06)] dark:border-violet-900/60 dark:bg-[linear-gradient(100deg,#120f22_0%,#0f172a_45%,#070d1e_100%)] sm:rounded-[22px] sm:p-5 md:p-6"
     >
       <div
-        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-sky-200/30 blur-3xl dark:bg-sky-500/10 max-sm:hidden"
+        className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[#c4b5fd]/30 blur-3xl dark:bg-[#7A3BFF]/10 max-sm:hidden"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-indigo-200/20 blur-3xl dark:bg-indigo-500/10 max-sm:hidden"
+        className="pointer-events-none absolute -right-12 -bottom-14 h-48 w-48 rounded-full bg-[#f0abfc]/20 blur-3xl dark:bg-[#4B2EEB]/10 max-sm:hidden"
         aria-hidden="true"
       />
 

@@ -27,10 +27,10 @@ export const pageHeroAccents: Record<AccentName, PageHeroAccentTheme> = {
     badge: 'border-amber-200/80 text-amber-800 dark:border-amber-500/30 dark:text-amber-300',
   },
   violet: {
-    gridColor: 'rgba(139,92,246,0.05)',
-    blurLeft: 'bg-violet-400/15',
-    blurRight: 'bg-purple-300/15',
-    badge: 'border-violet-200/80 text-violet-800 dark:border-violet-500/30 dark:text-violet-300',
+    gridColor: 'rgba(75,46,235,0.06)',
+    blurLeft: 'bg-[#7A3BFF]/15',
+    blurRight: 'bg-[#4B2EEB]/10',
+    badge: 'border-[#ddd4fe] text-[#3B22C7] dark:border-violet-500/30 dark:text-violet-300',
   },
   sky: {
     gridColor: 'rgba(14,165,233,0.05)',
@@ -63,9 +63,9 @@ export const slideOverAccents: Record<
   SlideOverAccentTheme
 > = {
   violet: {
-    bar: 'from-indigo-500 via-violet-500 to-purple-600',
-    icon: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]',
-    glow: 'bg-violet-400/15',
+    bar: 'from-[#4B2EEB] via-[#6436F5] to-[#7A3BFF]',
+    icon: 'bg-gradient-to-br from-[#4B2EEB] to-[#7A3BFF] text-white shadow-[0_4px_14px_rgba(75,46,235,0.35)]',
+    glow: 'bg-[#7A3BFF]/15',
   },
   emerald: {
     bar: 'from-whatsapp-500 via-emerald-500 to-teal-600',
@@ -100,7 +100,7 @@ export const modalCalloutAccents: Record<AccentName, string> = {
 };
 
 export const modalIconAccents: Record<AccentName, string> = {
-  violet: 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]',
+  violet: 'bg-gradient-to-br from-[#4B2EEB] to-[#7A3BFF] text-white shadow-[0_4px_14px_rgba(75,46,235,0.35)]',
   sky: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(14,165,233,0.3)]',
   emerald:
     'bg-gradient-to-br from-whatsapp-500 to-emerald-600 text-white shadow-[0_4px_14px_rgba(37,211,102,0.35)]',

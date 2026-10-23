@@ -45,7 +45,7 @@ export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
               end={end}
               className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 px-1 transition active:scale-[0.98] ${
                 isActive
-                  ? 'text-whatsapp-600 dark:text-whatsapp-400'
+                ? 'text-[#4B2EEB] dark:text-[#A78BFA]'
                   : 'text-theme-muted hover:text-theme-secondary'
               }`}
             >
@@ -59,7 +59,7 @@ export default function MobileBottomNav({ onMoreOpen }: MobileBottomNavProps) {
           onClick={onMoreOpen}
           className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 px-1 transition active:scale-[0.98] ${
             moreActive
-              ? 'text-whatsapp-600 dark:text-whatsapp-400'
+              ? 'text-[#4B2EEB] dark:text-[#A78BFA]'
               : 'text-theme-muted hover:text-theme-secondary'
           }`}
           aria-label="More navigation options"

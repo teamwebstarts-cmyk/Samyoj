@@ -100,7 +100,7 @@ export default function TicketDetailPanel({
       title={ticket.title}
       subtitle={contactLabel}
       icon={Ticket}
-      accent="emerald"
+      accent="violet"
       footer={
         <div className="flex w-full flex-col gap-2 sm:flex-row">
           <AppButton variant="secondary" size="sm" onClick={onClose} className="sm:flex-1">

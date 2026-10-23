@@ -220,7 +220,7 @@ export default function ContactDetailPanel({
       subtitle={formatContactPhone(current.phone)}
       size="lg"
       icon={User}
-      accent="sky"
+      accent="violet"
       footer={
         <div className="flex w-full flex-wrap items-center gap-2">
           <AppButton variant="secondary" size="sm" onClick={onClose} className="flex-1 sm:flex-none">
@@ -309,7 +309,7 @@ export default function ContactDetailPanel({
             </div>
           </div>
 
-          <ModalPanel title="Quick actions" accent="sky">
+          <ModalPanel title="Quick actions" accent="violet">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <AppButton size="sm" variant="secondary" icon={<Phone size={14} />} onClick={handleCall}>
                 Call

@@ -99,7 +99,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
       subtitle="Upload a CSV or JSON file with your customer list"
       size="lg"
       icon={Upload}
-      accent="sky"
+      accent="violet"
       footer={
         <div className="flex w-full flex-wrap items-center gap-2">
           <AppButton
@@ -127,7 +127,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
       <div className="space-y-5">
         <ModalCallout
           icon={CheckCircle2}
-          accent="sky"
+          accent="violet"
           title="Before you import"
           description={messagingConsent.importNotice}
         />
@@ -137,7 +137,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
           title="Download template"
           subtitle={`Use international format with country code. ${PHONE_HINT}`}
         >
-          <ModalPanel title="CSV template" accent="sky">
+          <ModalPanel title="CSV template" accent="violet">
             <div className="space-y-3">
               <p className="text-[12px] font-medium text-theme-secondary">
                 Columns: <span className="font-semibold text-theme-fg">phone</span>, name, tags (optional)
@@ -245,7 +245,7 @@ export default function ImportContactsModal({ open, onClose, onImport }: ImportC
               <p className="text-[13px] font-bold">File validated successfully</p>
             </div>
 
-            <ModalPanel title="Sample rows" accent="sky">
+            <ModalPanel title="Sample rows" accent="violet">
               <div className="overflow-hidden rounded-2xl border border-theme-border">
                 <table className="min-w-full text-left text-[12px]">
                   <thead className="bg-theme-subtle text-[10px] font-bold uppercase tracking-wide text-theme-muted">

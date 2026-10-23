@@ -1273,7 +1273,7 @@ export default function AiBotPage() {
         }
         size="2xl"
         icon={formChannel === 'CALL' ? PhoneCall : BotMessageSquare}
-        accent="emerald"
+        accent="violet"
         footer={
           editing ? (
             <SlideOverFooter

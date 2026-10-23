@@ -554,7 +554,7 @@ export default function CampaignAudienceSection({
                 icon={Sparkles}
                 title={messagingConsent.allAudienceTitle}
                 description={messagingConsent.allAudienceDetail}
-                accent="emerald"
+                accent="violet"
               />
             )
           )}

@@ -250,7 +250,7 @@ export default function TeamMembersTab({
           title={editing ? 'Edit member' : 'Add member'}
           subtitle={editing ? editing.email : 'Create a teammate account'}
           icon={UserPlus}
-          accent="emerald"
+          accent="violet"
           footer={
             <SlideOverFooter
               onCancel={closeSlide}

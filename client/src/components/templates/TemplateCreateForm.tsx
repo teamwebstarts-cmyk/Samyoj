@@ -287,7 +287,7 @@ export default function TemplateCreateForm({
       )}
 
       {form.headerExamples.length > 0 && (
-        <ModalPanel title="Header variable samples" accent="sky">
+        <ModalPanel title="Header variable samples" accent="violet">
           <div className="grid gap-3 sm:grid-cols-2">
             {form.headerExamples.map((val, i) => (
               <AppInput

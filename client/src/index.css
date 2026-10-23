@@ -267,12 +267,12 @@
     background-image: var(--gradient-platform-subtle);
   }
 
-  /* Glassmorphism app sidebar — soft mint edge to match dashboard */
+  /* Default rail is brand violet. Channel pages override via data-sidebar-accent. */
   .sidebar-glass {
     position: relative;
-    border-right: 1px solid rgba(209, 250, 229, 0.75);
+    border-right: 1px solid rgba(226, 212, 254, 0.9);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 255, 251, 0.88) 100%);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(245, 243, 255, 0.9) 100%);
     backdrop-filter: blur(28px) saturate(1.2);
     -webkit-backdrop-filter: blur(28px) saturate(1.2);
     box-shadow:
@@ -286,7 +286,7 @@
     position: absolute;
     inset: 0 0 auto 0;
     height: 1px;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(209, 250, 229, 0.4));
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(226, 212, 254, 0.55));
     pointer-events: none;
     z-index: 1;
   }
@@ -299,8 +299,8 @@
     bottom: 0;
     width: 3px;
     background: linear-gradient(180deg,
-        rgba(37, 211, 102, 0.22) 0%,
-        rgba(16, 185, 129, 0.08) 40%,
+        rgba(75, 46, 235, 0.28) 0%,
+        rgba(122, 59, 255, 0.08) 40%,
         transparent 100%);
     pointer-events: none;
     z-index: 1;
@@ -317,6 +317,24 @@
   }
 
   .dark .sidebar-glass::after {
+    background: linear-gradient(180deg,
+        rgba(122, 59, 255, 0.35) 0%,
+        transparent 70%);
+  }
+
+  .sidebar-glass[data-sidebar-accent='whatsapp'] {
+    border-right-color: rgba(209, 250, 229, 0.75);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 255, 251, 0.88) 100%);
+  }
+
+  .sidebar-glass[data-sidebar-accent='whatsapp']::after {
+    background: linear-gradient(180deg,
+        rgba(37, 211, 102, 0.22) 0%,
+        rgba(16, 185, 129, 0.08) 40%,
+        transparent 100%);
+  }
+
+  .dark .sidebar-glass[data-sidebar-accent='whatsapp']::after {
     background: linear-gradient(180deg,
         rgba(52, 211, 153, 0.25) 0%,
         transparent 70%);
@@ -413,7 +431,7 @@
   }
 
   .sidebar-glass[data-sidebar-accent='studio']::after {
-    background: linear-gradient(180deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.06) 40%, transparent 100%);
+    background: linear-gradient(180deg, rgba(75, 46, 235, 0.28) 0%, rgba(122, 59, 255, 0.08) 40%, transparent 100%);
   }
 
   .sidebar-glass[data-sidebar-accent='facebook'] .sidebar-collapse-btn:hover {
@@ -429,9 +447,9 @@
   }
 
   .sidebar-glass[data-sidebar-accent='studio'] .sidebar-collapse-btn:hover {
-    color: #7c3aed;
-    background: #f5f3ff;
-    border-color: #ddd6fe;
+    color: #4b2eeb;
+    background: #f4f0ff;
+    border-color: #ddd4fe;
   }
 
   .dark .sidebar-nav-item--idle {
@@ -537,21 +555,21 @@
   }
 
   .sidebar-nav-item--active.sidebar-nav-item--accent-studio {
-    color: #5b21b6;
-    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 55%, #ffffff 100%);
-    border: 1px solid #ddd6fe;
+    color: #3b22c7;
+    background: linear-gradient(135deg, #f4f0ff 0%, #ede9fe 55%, #ffffff 100%);
+    border: 1px solid #ddd4fe;
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.8) inset,
-      0 6px 18px rgba(139, 92, 246, 0.12);
+      0 6px 18px rgba(75, 46, 235, 0.12);
   }
 
   .sidebar-nav-item--active.sidebar-nav-item--accent-studio::before {
-    background: linear-gradient(180deg, #a78bfa, #7c3aed);
+    background: linear-gradient(180deg, #7a3bff, #4b2eeb);
   }
 
   .sidebar-nav-item--active.sidebar-nav-item--accent-studio .sidebar-nav-icon {
-    background: linear-gradient(145deg, #8b5cf6 0%, #6d28d9 100%);
-    box-shadow: 0 4px 12px rgba(109, 40, 217, 0.28);
+    background: linear-gradient(145deg, #7a3bff 0%, #4b2eeb 100%);
+    box-shadow: 0 4px 12px rgba(75, 46, 235, 0.28);
     color: #fff;
   }
 
@@ -2776,7 +2794,7 @@
     background: var(--color-surface-elevated);
     box-shadow:
       var(--shadow-panel),
-      0 0 0 1px rgba(37, 211, 102, 0.04);
+      0 0 0 1px rgba(75, 46, 235, 0.05);
     backdrop-filter: blur(20px) saturate(1.15);
     -webkit-backdrop-filter: blur(20px) saturate(1.15);
   }
@@ -2787,7 +2805,7 @@
     inset: 0;
     border-radius: inherit;
     background: linear-gradient(145deg,
-        rgba(37, 211, 102, 0.06) 0%,
+        rgba(75, 46, 235, 0.07) 0%,
         transparent 42%,
         transparent 100%);
     pointer-events: none;
@@ -2801,24 +2819,24 @@
   }
 
   .auth-orb--primary {
-    background: rgba(37, 211, 102, 0.14);
+    background: rgba(75, 46, 235, 0.14);
   }
 
   .auth-orb--secondary {
-    background: rgba(18, 140, 126, 0.1);
+    background: rgba(122, 59, 255, 0.1);
   }
 
   .dark .auth-orb--primary {
-    background: rgba(37, 211, 102, 0.1);
+    background: rgba(75, 46, 235, 0.16);
   }
 
   .dark .auth-orb--secondary {
-    background: rgba(18, 140, 126, 0.08);
+    background: rgba(122, 59, 255, 0.1);
   }
 
   .auth-btn-primary {
-    background: #732bfd;
-    box-shadow: 0 1px 2px rgb(115 43 253 / 0.22);
+    background: linear-gradient(135deg, #4b2eeb 0%, #7a3bff 100%);
+    box-shadow: 0 1px 2px rgb(75 46 235 / 0.22);
     transition:
       transform 0.15s ease,
       background-color 0.15s ease,
@@ -2826,8 +2844,8 @@
   }
 
   .auth-btn-primary:hover:not(:disabled) {
-    background: #5f22d4;
-    box-shadow: 0 1px 2px rgb(95 34 212 / 0.26);
+    background: linear-gradient(135deg, #3b22c7 0%, #4b2eeb 100%);
+    box-shadow: 0 1px 2px rgb(59 34 199 / 0.28);
   }
 
   .auth-btn-primary:active:not(:disabled) {
@@ -2837,16 +2855,16 @@
   .auth-btn-primary:focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 4px rgb(115 43 253 / 0.28),
-      0 4px 16px rgb(115 43 253 / 0.32);
+      0 0 0 4px rgb(75 46 235 / 0.28),
+      0 4px 16px rgb(75 46 235 / 0.32);
   }
 
   .btn-primary {
     @apply inline-flex items-center justify-center font-semibold text-white antialiased;
-    background: linear-gradient(135deg, #128c7e 0%, #075e54 100%);
+    background: linear-gradient(135deg, #4b2eeb 0%, #7a3bff 100%);
     box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.08),
-      0 4px 14px rgba(37, 211, 102, 0.32);
+      0 4px 14px rgba(75, 46, 235, 0.32);
     transition:
       transform 0.15s ease,
       box-shadow 0.2s ease,
@@ -2861,7 +2879,7 @@
     filter: brightness(1.06);
     box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.08),
-      0 6px 18px rgba(37, 211, 102, 0.4);
+      0 6px 18px rgba(75, 46, 235, 0.4);
   }
 
   .btn-primary:active:not(:disabled) {
@@ -2875,8 +2893,8 @@
   .btn-primary:focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 4px rgba(37, 211, 102, 0.22),
-      0 4px 14px rgba(37, 211, 102, 0.32);
+      0 0 0 4px rgba(75, 46, 235, 0.22),
+      0 4px 14px rgba(75, 46, 235, 0.32);
   }
 
   .data-table-scroll {
@@ -2998,7 +3016,7 @@
   }
 
   .contact-checkbox {
-    accent-color: #128C7E;
+    accent-color: #4b2eeb;
     cursor: pointer;
   }
 
@@ -3033,7 +3051,7 @@
   }
 
   .dashboard-hero {
-    border: 1px solid rgba(37, 211, 102, 0.25);
+    border: 1px solid rgba(75, 46, 235, 0.22);
     background: var(--gradient-hero);
     box-shadow:
       0 0 0 1px rgba(255, 255, 255, 0.04) inset,

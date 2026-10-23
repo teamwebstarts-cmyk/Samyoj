@@ -183,7 +183,7 @@ export default function TeamInvitesTab({ departments, canManage, onChanged }: Te
           title="Send team invite"
           subtitle="They get a secure join link by email, choose their own password, and land in the role you pick. Links expire after 7 days."
           icon={UserPlus}
-          accent="sky"
+          accent="violet"
           size="lg"
           multilineSubtitle
           footer={
@@ -195,7 +195,7 @@ export default function TeamInvitesTab({ departments, canManage, onChanged }: Te
           }
         >
           <form id="slideover-form" onSubmit={handleInvite} className="flex min-h-[min(58vh,26rem)] flex-col">
-            <ModalPanel accent="sky" bodyClassName="flex flex-1 flex-col p-5 sm:p-6">
+            <ModalPanel accent="violet" bodyClassName="flex flex-1 flex-col p-5 sm:p-6">
               <div className="space-y-5">
                 <AppInput
                   id="invite-email"

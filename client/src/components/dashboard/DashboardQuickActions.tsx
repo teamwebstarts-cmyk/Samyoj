@@ -210,7 +210,7 @@ export default function DashboardQuickActions({
   return (
     <section className="dashboard-card flex h-full flex-col rounded-2xl border border-neutral-100/90 bg-white p-[var(--card-pad)] shadow-xs sm:rounded-2xl">
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <IconWell accent="emerald" size="sm">
+        <IconWell accent="violet" size="sm">
           <Scan className="h-3.5 w-3.5 stroke-[2.2]" />
         </IconWell>
         <h2 className="truncate text-[12px] font-bold tracking-tight text-neutral-900 sm:text-[12.5px]">

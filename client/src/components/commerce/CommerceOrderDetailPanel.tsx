@@ -86,7 +86,7 @@ export default function CommerceOrderDetailPanel({
         title={customer}
         subtitle={`${formatOrderDateLong(order.createdAt)} · ${order.referenceId}`}
         icon={ShoppingBag}
-        accent="emerald"
+        accent="violet"
         footer={
           <div className="flex w-full flex-col gap-2 sm:flex-row">
             <AppButton variant="secondary" size="sm" onClick={onClose} className="sm:flex-1">
@@ -130,7 +130,7 @@ export default function CommerceOrderDetailPanel({
               </div>
             </div>
 
-            <ModalPanel accent="emerald">
+            <ModalPanel accent="violet">
               <p className="text-[11px] font-bold uppercase tracking-wide text-theme-muted">Order total</p>
               <p className="mt-1 text-2xl font-extrabold tabular-nums text-theme-fg">
                 {formatOrderMoney(order.totalCents, order.currency)}

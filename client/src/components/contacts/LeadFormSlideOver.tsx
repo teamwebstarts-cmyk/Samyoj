@@ -122,7 +122,7 @@ export default function LeadFormSlideOver({
       }
       size="md"
       icon={Target}
-      accent="sky"
+      accent="violet"
       footer={
         <SlideOverFooter
           formId="lead-slideover-form"

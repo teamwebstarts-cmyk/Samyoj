@@ -378,7 +378,7 @@ function SectionTitle({
             : accent === 'email'
               ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-[#f28b82] before:to-[#c5221f]'
               : accent === 'studio'
-                ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-violet-400 before:to-violet-700'
+                ? 'before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-[#7A3BFF] before:to-[#4B2EEB]'
                 : '';
 
   return (
@@ -550,12 +550,12 @@ export default function Sidebar({
               );
             }
 
-            const sectionAccent: SidebarChannelAccent =
-              section.label === 'AI Studio'
-                ? 'studio'
-                : section.label
-                  ? 'neutral'
-                  : channelAccent;
+            const productSection =
+              section.label === 'AI Studio' ||
+              section.label === 'Contacts' ||
+              section.label === 'Support' ||
+              section.label === 'Account';
+            const sectionAccent: SidebarChannelAccent = productSection ? 'studio' : section.label ? 'neutral' : channelAccent;
             const sectionClass =
               section.label === 'AI Studio' ? 'sidebar-section sidebar-section--studio' : 'sidebar-section';
 
@@ -565,7 +565,7 @@ export default function Sidebar({
                   <SectionTitle
                     label={section.label}
                     collapsed={collapsed}
-                    accent={section.label === 'AI Studio' ? 'studio' : section.accent}
+                    accent={productSection ? 'studio' : section.accent}
                   />
                 ) : null}
                 <div className="flex flex-col gap-1">

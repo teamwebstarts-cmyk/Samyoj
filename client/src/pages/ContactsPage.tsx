@@ -923,7 +923,7 @@ export default function ContactsPage() {
             : 'Enter a phone number to save a contact'
         }
         icon={UserCheck}
-        accent="sky"
+        accent="violet"
         footer={
           <SlideOverFooter
             onCancel={closeSlide}

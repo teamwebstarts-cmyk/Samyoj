@@ -15,7 +15,7 @@ const ACCENTS: Record<IconWellAccent, string> = {
   sky:
     'bg-gradient-to-br from-sky-50 via-sky-50/80 to-sky-100/60 text-sky-700 border border-sky-200/60 shadow-[0_2px_8px_rgba(14,165,233,0.1)] dark:from-sky-950/40 dark:to-sky-900/30 dark:border-sky-800/50 dark:text-sky-300',
   violet:
-    'bg-gradient-to-br from-violet-50 via-violet-50/80 to-violet-100/60 text-violet-700 border border-violet-200/60 shadow-[0_2px_8px_rgba(139,92,246,0.1)] dark:from-violet-950/40 dark:to-violet-900/30 dark:border-violet-800/50 dark:text-violet-300',
+    'bg-gradient-to-br from-[#f4f0ff] via-[#f4f0ff] to-[#ede9fe] text-[#3B22C7] border border-[#ddd4fe] shadow-[0_2px_8px_rgba(75,46,235,0.12)] dark:from-violet-950/40 dark:to-violet-900/30 dark:border-violet-800/50 dark:text-violet-300',
   amber:
     'bg-gradient-to-br from-amber-50 via-amber-50/80 to-amber-100/60 text-amber-700 border border-amber-200/60 shadow-[0_2px_8px_rgba(245,158,11,0.1)] dark:from-amber-950/40 dark:to-amber-900/30 dark:border-amber-800/50 dark:text-amber-300',
   rose:
