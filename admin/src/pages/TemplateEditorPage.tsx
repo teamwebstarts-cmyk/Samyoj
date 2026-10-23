@@ -185,7 +185,7 @@ const HINDI_FOOTERS: Record<string, string> = {
 };
 const toHindiFooter = (english: string) => HINDI_FOOTERS[english] ?? '';
 
-/** What the AI bar returns for a prompt. Shape matches what the real LLM endpoint will return. */
+/** What the AI endpoint returns for a prompt (validated server-side before it gets here). */
 type AiDraftSuggestion = {
   title: string;
   slug: string;
@@ -198,73 +198,7 @@ type AiDraftSuggestion = {
   variables: Array<{ index: number; description: string; suggestedSource: string }>;
 };
 
-/**
- * Mock generator standing in for `POST /platform/ai/template-draft`. Deliberately
- * keyword-based and bilingual — the response shape (and the populate logic in the
- * editor) is exactly what the real LLM endpoint will return, so switching over is
- * a swap of this function for a fetch + zod parse.
- * ponytail: keyword heuristics, not AI — replaced once platform-level AI config is settled.
- */
-export function generateMockAiDraft(prompt: string): AiDraftSuggestion {
-  const p = prompt.toLowerCase();
-
-  // "code" is deliberately NOT an auth trigger — it's ambiguous with discount codes.
-  const category: Draft['category'] = /\b(otp|verify|verification|login|one[- ]time|auth)\b/.test(p)
-    ? 'AUTHENTICATION'
-    : /\b(offer|sale|discount|diwali|festive|promotional|launch|deal|blast)\b/.test(p)
-      ? 'MARKETING'
-      : 'UTILITY';
-
-  // Variable roster from prompt keywords, re-indexed 1..n in order of appearance.
-  const variables: AiDraftSuggestion['variables'] = [];
-  const pushVar = (description: string, suggestedSource: string) => {
-    if (!variables.some((v) => v.description === description)) {
-      variables.push({ index: variables.length + 1, description, suggestedSource });
-    }
-  };
-  if (category === 'AUTHENTICATION') {
-    pushVar('Code', 'custom');
-  } else {
-    if (/\b(customer|user|name|personal|hi|you)\b/.test(p)) pushVar('Customer name', 'contact.name');
-    if (/\border\b/.test(p)) pushVar('Order number', 'contact.custom');
-    if (/\b(code|coupon|promo)\b/.test(p) || category === 'MARKETING') pushVar('Code', 'custom');
-    if (variables.length === 0) pushVar('Customer name', 'contact.name');
-  }
-  const tok = (description: string) => `{{${variables.find((v) => v.description === description)?.index ?? 1}}}`;
-
-  const english =
-    category === 'AUTHENTICATION'
-      ? `${tok('Code')} is your verification code. It expires in 10 minutes. Do not share it with anyone.`
-      : category === 'MARKETING'
-        ? `Hi ${tok('Customer name')}! Our biggest festive sale is live — enjoy 20% off with code ${tok('Code')}. Hurry, the offer ends soon!`
-        : `Hi ${tok('Customer name')}, your order ${tok('Order number')} status has been updated. Reply here if you need any help.`;
-  const hindi =
-    category === 'AUTHENTICATION'
-      ? `${tok('Code')} आपका वेरिफिकेशन कोड है। यह 10 मिनट में समाप्त हो जाएगा। इसे किसी के साथ साझा न करें।`
-      : category === 'MARKETING'
-        ? `नमस्ते ${tok('Customer name')}! हमारी सबसे बड़ी त्योहार सेल लाइव है — कोड ${tok('Code')} से 20% छूट पाएं। जल्दी करें, ऑफ़र जल्द खत्म होगा!`
-        : `नमस्ते ${tok('Customer name')}, आपका ऑर्डर ${tok('Order number')} अपडेट हो गया है। किसी सहायता के लिए यहाँ उत्तर दें।`;
-
-  const title =
-    category === 'AUTHENTICATION' ? 'Login OTP code' : category === 'MARKETING' ? 'Festive offer blast' : 'Order status update';
-
-  return {
-    title,
-    slug: title.toLowerCase().replace(/\s+/g, '_'),
-    category,
-    body: english,
-    bodyHi: hindi,
-    footer: category === 'MARKETING' ? 'Reply STOP to unsubscribe' : '',
-    footerHi: category === 'MARKETING' ? toHindiFooter('Reply STOP to unsubscribe') : '',
-    buttons:
-      category === 'MARKETING'
-        ? [{ type: 'URL', text: 'Shop now', url: 'https://example.com/shop', phone_number: '', example: '' }]
-        : [],
-    variables,
-  };
-}
-
-/** AI assist bar — prompt + Generate, mock-populates the draft until the real endpoint lands. */
+/** AI assist bar — prompt + Generate; calls POST /platform/library-templates/ai-draft. */
 function AiAssistBar({
   canWrite,
   hasContent,
@@ -316,15 +250,7 @@ function AiAssistBar({
         setConfirming(false);
       })
       .catch((err: unknown) => {
-        // Mock mode (design work, no dev AI key) falls back to the offline generator;
-        // real mode surfaces the error honestly.
-        if (USE_MOCK_CATALOG) {
-          onApply(generateMockAiDraft(prompt));
-          setPrompt('');
-          setConfirming(false);
-        } else {
-          setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Generation failed');
-        }
+        setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Generation failed');
       })
       .finally(() => setBusy(false));
   };
