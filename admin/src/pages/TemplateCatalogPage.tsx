@@ -45,6 +45,9 @@ function TemplateAvatar({ row }: { row: LibraryRow }) {
   );
 }
 
+/** Newest activity first — missing timestamps (mock rows) sort last, stably. */
+const updatedAtMs = (row: LibraryRow) => (row.updatedAt ? Date.parse(row.updatedAt) || 0 : 0);
+
 /** View opens the WhatsApp preview drawer; Edit redirects to the editor page; ⋮ menu holds the rest. */
 function RowActions({
   row,
@@ -196,15 +199,17 @@ export function TemplateCatalogPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     // Rows are bilingual (one identity, two surfaces) — there is no language filter;
-    // search matches both bodies.
-    return (rows || []).filter((row) => {
-      if (tab === 'published' && !row.published) return false;
-      if (tab === 'drafts' && row.published) return false;
-      if (category !== 'ALL' && row.category !== category) return false;
-      if (!term) return true;
-      const haystack = `${row.title} ${row.slug} ${row.copy || ''} ${(row.tags || []).join(' ')} ${row.body} ${row.bodyHi}`.toLowerCase();
-      return haystack.includes(term);
-    });
+    // search matches both bodies. Newest activity first.
+    return (rows || [])
+      .filter((row) => {
+        if (tab === 'published' && !row.published) return false;
+        if (tab === 'drafts' && row.published) return false;
+        if (category !== 'ALL' && row.category !== category) return false;
+        if (!term) return true;
+        const haystack = `${row.title} ${row.slug} ${row.copy || ''} ${(row.tags || []).join(' ')} ${row.body} ${row.bodyHi}`.toLowerCase();
+        return haystack.includes(term);
+      })
+      .sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
   }, [rows, tab, q, category]);
 
   const openCreate = () => navigate('/library/new');
