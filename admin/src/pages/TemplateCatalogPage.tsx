@@ -542,6 +542,7 @@ export function TemplateCatalogPage() {
 
         <ResponsiveDataView
           tableFrom="lg"
+          cardsClassName=""
           items={filtered}
           emptyState={
             rows.length === 0 ? (
@@ -565,25 +566,27 @@ export function TemplateCatalogPage() {
           renderCard={(row) => (
             <button
               type="button"
-              className="dashboard-card w-full p-4 text-left transition-all group hover:border-indigo-500/40 hover:shadow-md"
+              className="block w-full border-b border-slate-200/70 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-indigo-50/40 focus-visible:bg-indigo-50/40 focus:outline-none sm:px-5"
               onClick={() => openEdit(row)}
             >
               <div className="flex items-start gap-3">
                 <TemplateAvatar row={row} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-slate-900 group-hover:text-indigo-800">{row.title}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate font-bold text-slate-900">{row.title}</p>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+                  </div>
                   <p className="mt-0.5 truncate text-xs text-slate-500">{row.copy || row.body}</p>
                 </div>
-                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <StatusBadge status={row.category} />
                 <StatusBadge
                   status={row.published ? 'ACTIVE' : 'DISABLED'}
                   label={row.published ? 'Published' : 'Draft'}
                 />
                 <StatusBadge status="info" label={languageLabel(row.language)} />
-                <span className="ml-auto text-[11px] text-slate-400">Updated {formatAgo(row.updatedAt)}</span>
+                <span className="ml-auto text-[11px] text-slate-400">{formatAgo(row.updatedAt)}</span>
               </div>
             </button>
           )}
