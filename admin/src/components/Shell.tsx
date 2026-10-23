@@ -90,10 +90,7 @@ export function Shell() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div
-      className={`min-h-screen md:grid ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}
-      style={{ '--rail-width': collapsed ? '4.25rem' : '14.5rem' } as React.CSSProperties}
-    >
+    <div className={`min-h-screen md:grid ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
       <a href="#main" className="skip-to-content">
         Skip to content
       </a>

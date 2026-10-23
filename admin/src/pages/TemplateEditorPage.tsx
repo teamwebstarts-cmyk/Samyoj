@@ -1212,11 +1212,10 @@ export function TemplateEditorPage() {
         </aside>
       </div>
 
-      {/* Floating action bar — fixed to viewport bottom, aligned with <main>'s column
-          (sidebar-aware via .rail-offset-bar), not the viewport. */}
+      {/* Floating action bar — fixed to viewport bottom, content-aligned */}
       {canWrite ? (
-        <div className="rail-offset-bar fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
-          <div className="mx-auto flex w-full max-w-[61.5rem] items-center justify-between gap-3 px-4 py-3 md:px-8">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
+          <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
             <div className="flex shrink-0 items-center gap-2">{actions}</div>
             <div className="flex shrink-0 items-center gap-2">
               <Button variant="secondary" size="md" onClick={() => navigate('/library')}>
