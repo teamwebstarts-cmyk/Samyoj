@@ -272,3 +272,63 @@ export function TemplateDetailsTable({ draft }: { draft: Draft }) {
     </div>
   );
 }
+
+/**
+ * The exact editor-aside preview block: "Template Preview" header card with
+ * language pill, EN/हिन्दी lens, phone surface, then the details table.
+ * Shared by the editor aside and the catalog View drawer so both render
+ * the same block. One identity, two surfaces — toggle only changes the lens.
+ */
+export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft; templateLanguage?: string }) {
+  const base = templateLanguage && templateLanguage !== draft.language ? { ...draft, language: templateLanguage } : draft;
+  const [lang, setLang] = useState<'en' | 'hi'>(base.language === 'hi_IN' ? 'hi' : 'en');
+  // Re-sync when a different row is previewed (drawer reuses one mounted instance).
+  const effective = lang === 'hi'
+    ? { ...base, language: 'hi_IN', body: base.bodyHi || base.body, footer: base.footerHi || base.footer }
+    : { ...base, language: base.language === 'hi_IN' ? 'en_US' : base.language, body: base.body || base.bodyHi, footer: base.footer || base.footerHi };
+  return (
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <p className="flex min-w-0 items-center gap-2 text-[13px] font-bold leading-5 text-slate-900">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-[#25D366]" aria-hidden>
+              <path d="M12 2a10 10 0 0 0-8.66 15.02L2 22l5.12-1.34A10 10 0 1 0 12 2Zm5.4 14.02c-.23.64-1.35 1.23-1.86 1.27-.5.05-.97.23-3.27-.68-2.77-1.09-4.53-3.9-4.66-4.08-.14-.18-1.12-1.48-1.12-2.82 0-1.34.7-2 .95-2.27.25-.28.55-.35.73-.35h.52c.17 0 .4-.06.62.48.23.55.77 1.9.84 2.04.07.14.11.3.02.48-.09.19-.5.75-.68.96-.13.15-.22.24-.1.48.12.23.55.9 1.18 1.46.81.72 1.49.95 1.7 1.05.21.1.34.08.46-.05.14-.14.55-.64.7-.86.14-.23.28-.19.48-.11.19.07 1.23.58 1.44.69.21.1.35.15.4.24.05.09.05.53-.18 1.17Z" />
+            </svg>
+            Template Preview
+          </p>
+          <span
+            className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
+            title={lang === 'hi' ? 'Hindi' : languageLabel(base.language)}
+          >
+            {lang === 'hi' ? 'Hindi' : languageLabel(base.language)}
+          </span>
+        </div>
+        {/* EN/HI lens — same behavior as the platform browse filter: one identity, two surfaces */}
+        <div className="flex items-center justify-center gap-1 border-b border-slate-100 bg-slate-50/60 px-4 py-2" role="group" aria-label="Preview language">
+          {(['en', 'hi'] as const).map((option) => {
+            const active = lang === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setLang(option)}
+                className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                  active ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {option === 'en' ? 'English' : 'हिन्दी'}
+              </button>
+            );
+          })}
+        </div>
+        <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
+          <div className="mx-auto w-full max-w-[280px]">
+            <WhatsAppPreview draft={effective} />
+          </div>
+        </div>
+      </div>
+      <TemplateDetailsTable draft={base} />
+    </div>
+  );
+}
