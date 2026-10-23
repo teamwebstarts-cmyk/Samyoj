@@ -180,6 +180,8 @@ export function isTemplateWizardRoute(pathname: string): boolean {
   return (
     pathname === '/templates/new' ||
     pathname === '/templates/library' ||
+    pathname === '/templates/library/edit' ||
+    pathname === '/templates/library/submitted' ||
     /^\/templates\/[^/]+\/resubmit$/.test(pathname)
   );
 }
@@ -187,6 +189,8 @@ export function isTemplateWizardRoute(pathname: string): boolean {
 export function getTemplateWizardTopbarLabel(pathname: string): string {
   if (pathname === '/templates/new') return 'New template';
   if (pathname === '/templates/library') return 'Library';
+  if (pathname === '/templates/library/edit') return 'Edit library template';
+  if (pathname === '/templates/library/submitted') return 'Library template';
   if (/^\/templates\/[^/]+\/resubmit$/.test(pathname)) return 'Edit template';
   return 'Template';
 }
