@@ -135,7 +135,7 @@ export function ErrorsPage() {
                 {metaInfo && (
                   <div className="rounded-lg bg-slate-50 border border-slate-100 p-2.5 text-xs space-y-1">
                     <p className="font-semibold text-slate-700">{metaInfo.category}: <span className="font-normal text-slate-600">{metaInfo.description}</span></p>
-                    <p className="text-emerald-700 font-medium">Fix: {metaInfo.advice}</p>
+                    <p className="text-indigo-700 font-medium">Fix: {metaInfo.advice}</p>
                   </div>
                 )}
               </div>
@@ -175,7 +175,7 @@ export function ErrorsPage() {
                     <td className="font-mono text-xs font-semibold text-slate-900">{formatCount(row.count)}</td>
                     <td className="text-xs text-slate-500">{formatWhen(row.lastAt)}</td>
                     <td className="text-right">
-                      <span className="text-xs font-semibold text-emerald-700">Triage →</span>
+                      <span className="text-xs font-semibold text-indigo-700">Triage →</span>
                     </td>
                   </tr>
                 ))}

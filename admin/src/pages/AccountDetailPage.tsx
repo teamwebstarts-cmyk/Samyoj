@@ -210,13 +210,13 @@ export function AccountDetailPage() {
         <button
           type="button"
           onClick={() => navigate('/accounts')}
-          className="inline-flex items-center gap-1 text-slate-600 hover:text-emerald-700 transition-colors"
+          className="inline-flex items-center gap-1 text-slate-600 hover:text-indigo-700 transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Accounts
         </button>
       </div>
 
-      <div className="dashboard-card p-6 bg-gradient-to-br from-white via-slate-50/50 to-emerald-50/20">
+      <div className="dashboard-card p-6 bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/20">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
@@ -268,7 +268,7 @@ export function AccountDetailPage() {
             aria-selected={tab === item}
             className={`whitespace-nowrap px-4 py-2 text-xs font-bold transition-all border-b-2 ${
               tab === item
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50/50 rounded-t-lg'
+                ? 'border-indigo-600 text-indigo-800 bg-indigo-50/50 rounded-t-lg'
                 : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
             }`}
             onClick={() => openTab(item)}
@@ -375,7 +375,7 @@ export function AccountDetailPage() {
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-full bg-emerald-600 rounded-full"
+                      className="h-full bg-indigo-600 rounded-full"
                       style={{ width: `${Math.max(4, (row.count / maxProduct) * 100)}%` }}
                     />
                   </div>
@@ -722,7 +722,7 @@ export function AccountDetailPage() {
               type="checkbox"
               checked={flagEnabled}
               onChange={(e) => setFlagEnabled(e.target.checked)}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
             />
             Enable this feature flag for organization
           </label>

@@ -139,12 +139,12 @@ export function AccountsPage() {
           renderCard={(row) => (
             <button
               type="button"
-              className="dashboard-card w-full p-4 text-left hover:border-emerald-500/40 hover:shadow-md transition-all group"
+              className="dashboard-card w-full p-4 text-left hover:border-indigo-500/40 hover:shadow-md transition-all group"
               onClick={() => navigate(`/accounts/${row.id}`)}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">{row.title}</p>
+                  <p className="font-bold text-slate-900 group-hover:text-indigo-800 transition-colors">{row.title}</p>
                   <p className="text-xs text-slate-500">{row.subtitle}</p>
                 </div>
                 <StageBadge stage={row.stage} />
@@ -205,7 +205,7 @@ export function AccountsPage() {
                         <FlagPills flags={row.flags} />
                       </td>
                       <td className="text-right">
-                        <span className="text-xs font-semibold text-emerald-700">Open →</span>
+                        <span className="text-xs font-semibold text-indigo-700">Open →</span>
                       </td>
                     </tr>
                   ))}

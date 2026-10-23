@@ -84,8 +84,8 @@ export function OverviewPage() {
         title="Platform Overview"
         purpose="Live ecosystem telemetry, onboarding funnel metrics, and account health triage."
         eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-            <Activity className="h-3 w-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
+            <Activity className="h-3 w-3 text-indigo-600" />
             Live Ops Feed
           </span>
         }
@@ -102,21 +102,21 @@ export function OverviewPage() {
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{formatCount(data.orgCount)}</p>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="font-medium text-emerald-600">{formatCount(liveCount)} live</span>
+            <span className="font-medium text-indigo-600">{formatCount(liveCount)} live</span>
             <span>· across all tiers</span>
           </div>
         </div>
 
-        <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-emerald-50/40">
+        <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-indigo-50/40">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Connected Numbers</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100/80 text-emerald-800">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100/80 text-indigo-800">
               <Activity className="h-4 w-4" />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-950">{formatCount(connectedCount)}</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-indigo-950">{formatCount(connectedCount)}</p>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="font-medium text-emerald-600">Active WABA</span>
+            <span className="font-medium text-indigo-600">Active WABA</span>
             <span>in production</span>
           </div>
         </div>
@@ -190,12 +190,12 @@ export function OverviewPage() {
                 <li key={row.organizationId}>
                   <button
                     type="button"
-                    className="flex w-full flex-col gap-2 p-4 text-left hover:bg-emerald-50/40 transition-colors sm:flex-row sm:items-center sm:justify-between group"
+                    className="flex w-full flex-col gap-2 p-4 text-left hover:bg-indigo-50/40 transition-colors sm:flex-row sm:items-center sm:justify-between group"
                     onClick={() => navigate(`/accounts/${row.organizationId}`)}
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">{row.companyName}</p>
+                        <p className="font-bold text-slate-900 group-hover:text-indigo-800 transition-colors">{row.companyName}</p>
                         <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                           {STAGE_LABELS[row.stage]}
                         </span>
@@ -206,7 +206,7 @@ export function OverviewPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       <FlagPills flags={row.flags} />
-                      <span className="inline-flex items-center text-xs font-semibold text-emerald-700 group-hover:translate-x-0.5 transition-transform">
+                      <span className="inline-flex items-center text-xs font-semibold text-indigo-700 group-hover:translate-x-0.5 transition-transform">
                         Inspect <ArrowRight className="h-3 w-3 ml-1" />
                       </span>
                     </div>
@@ -226,7 +226,7 @@ export function OverviewPage() {
             action={
               <button
                 type="button"
-                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                className="text-xs font-semibold text-indigo-700 hover:text-indigo-800"
                 onClick={() => navigate('/errors')}
               >
                 Inspect All →
@@ -242,7 +242,7 @@ export function OverviewPage() {
                     <button
                       key={row.code}
                       type="button"
-                      className="flex flex-col items-start rounded-xl border border-slate-200/90 bg-white p-2.5 text-left hover:border-emerald-500/40 hover:bg-emerald-50/30 transition-all shadow-2xs"
+                      className="flex flex-col items-start rounded-xl border border-slate-200/90 bg-white p-2.5 text-left hover:border-indigo-500/40 hover:bg-indigo-50/30 transition-all shadow-2xs"
                       onClick={() => navigate('/errors')}
                     >
                       <span className="font-mono text-xs font-bold text-slate-900">{row.code}</span>
@@ -272,7 +272,7 @@ export function OverviewPage() {
                     <li key={row.organizationId}>
                       <button
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-2.5 text-left text-xs hover:border-emerald-500/40 hover:bg-emerald-50/30 transition-all shadow-2xs"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-2.5 text-left text-xs hover:border-indigo-500/40 hover:bg-indigo-50/30 transition-all shadow-2xs"
                         onClick={() => navigate(`/accounts/${row.organizationId}?tab=ai`)}
                       >
                         <div className="min-w-0">

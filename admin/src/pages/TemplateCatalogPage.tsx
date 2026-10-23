@@ -234,8 +234,8 @@ export function TemplateCatalogPage() {
         title="Template library"
         purpose="Publish WhatsApp drafts that tenants pick in Template Library, then submit to their own number."
         eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-            <Library className="h-3 w-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
+            <Library className="h-3 w-3 text-indigo-600" />
             Platform catalog
           </span>
         }

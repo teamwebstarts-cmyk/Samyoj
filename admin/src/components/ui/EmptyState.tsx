@@ -19,7 +19,7 @@ export function EmptyState({
       className="dashboard-card border-dashed border-slate-300/80 bg-slate-50/50 px-6 py-10 text-center"
       role="status"
     >
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-600/20">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-600/20">
         <Icon className="h-6 w-6" strokeWidth={2} />
       </div>
       <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">{title}</h3>
@@ -30,7 +30,7 @@ export function EmptyState({
           <ol className="space-y-1.5 text-left text-xs text-slate-600">
             {steps.map((step, index) => (
               <li key={step} className="flex items-start gap-2">
-                <span className="font-mono text-[10px] font-bold text-emerald-700 mt-0.5">{index + 1}.</span>
+                <span className="font-mono text-[10px] font-bold text-indigo-700 mt-0.5">{index + 1}.</span>
                 <span>{step}</span>
               </li>
             ))}

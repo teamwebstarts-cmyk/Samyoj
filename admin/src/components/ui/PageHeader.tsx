@@ -61,8 +61,8 @@ export function PageLoading({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-sm text-slate-500" role="status">
       <div className="relative flex h-8 w-8 items-center justify-center">
-        <span className="absolute h-8 w-8 animate-ping rounded-full bg-emerald-400/30" />
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600" />
+        <span className="absolute h-8 w-8 animate-ping rounded-full bg-indigo-400/30" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
       </div>
       <p className="font-medium text-slate-600">{label}</p>
     </div>

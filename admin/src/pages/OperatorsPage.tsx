@@ -88,8 +88,8 @@ export function OperatorsPage() {
         title="Staff & Access Control"
         purpose="Manage platform operator identities, Role-Based Access Control (RBAC), and active login sessions."
         eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-            <Shield className="h-3 w-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
+            <Shield className="h-3 w-3 text-indigo-600" />
             Security Administration
           </span>
         }
@@ -338,7 +338,7 @@ export function OperatorsPage() {
               name="disabled"
               type="checkbox"
               defaultChecked={editing?.disabled}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
             />
             Disable account login (Suspends access without deleting audit history)
           </label>

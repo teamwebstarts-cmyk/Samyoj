@@ -152,7 +152,7 @@ export function Shell() {
 
             <div className="flex items-center gap-3 shrink-0">
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 font-medium text-emerald-800">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200/60 px-2.5 py-0.5 font-medium text-indigo-800">
                   <span className="h-1.5 w-1.5 rounded-full bg-success-500 animate-pulse" />
                   Live Platform
                 </span>

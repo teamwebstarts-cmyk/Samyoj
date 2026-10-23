@@ -9,8 +9,8 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // Brand accent ramp (base #4B2EEB, hover #3B22C7) — replaces emerald usages
-        emerald: {
+        // Brand accent ramp (base #4B2EEB, hover #3B22C7) — semantic name, matches JSX usage
+        indigo: {
           50: '#EEF2FF',
           100: '#EEF2FF',
           200: '#C7D2FE',

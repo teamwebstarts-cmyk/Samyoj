@@ -49,7 +49,7 @@ interface BillingSkuDef {
 
 const TIER_THEMES: Record<PlanTier, { bg: string; border: string; badge: string; accent: string }> = {
   launch: { bg: 'from-slate-50 to-slate-100', border: 'border-slate-300', badge: 'bg-slate-200 text-slate-800', accent: 'text-slate-700' },
-  starter: { bg: 'from-emerald-50/50 to-purple-50/30', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-800', accent: 'text-emerald-700' },
+  starter: { bg: 'from-indigo-50/50 to-purple-50/30', border: 'border-indigo-200', badge: 'bg-indigo-100 text-indigo-800', accent: 'text-indigo-700' },
   growth: { bg: 'from-purple-50/50 to-indigo-50/30', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-800', accent: 'text-purple-700' },
   pro: { bg: 'from-sky-50/50 to-blue-50/30', border: 'border-sky-200', badge: 'bg-sky-100 text-sky-800', accent: 'text-sky-700' },
   enterprise: { bg: 'from-amber-50/50 to-orange-50/30', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-800', accent: 'text-amber-800' },
@@ -238,7 +238,7 @@ export function BillingConfigPage() {
       )}
 
       {savedSuccess && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800 flex items-center gap-2.5 shadow-sm">
+        <div className="rounded-xl bg-indigo-50 border border-indigo-200 p-4 text-xs font-semibold text-indigo-800 flex items-center gap-2.5 shadow-sm">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>Configuration saved and hot-reloaded across the live backend instances!</span>
         </div>
@@ -249,7 +249,7 @@ export function BillingConfigPage() {
         <button
           className={`flex items-center gap-2 pb-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'tiers'
-              ? 'border-emerald-600 text-emerald-800'
+              ? 'border-indigo-600 text-indigo-800'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
           onClick={() => setActiveTab('tiers')}
@@ -260,7 +260,7 @@ export function BillingConfigPage() {
         <button
           className={`flex items-center gap-2 pb-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'skus'
-              ? 'border-emerald-600 text-emerald-800'
+              ? 'border-indigo-600 text-indigo-800'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
           onClick={() => setActiveTab('skus')}
@@ -286,7 +286,7 @@ export function BillingConfigPage() {
                   onClick={() => setSelectedTier(tierKey as PlanTier)}
                   className={`flex w-full items-center justify-between rounded-xl p-3 text-left transition-all ${
                     isSelected
-                      ? 'bg-white shadow-md ring-2 ring-emerald-600/80 font-bold text-slate-900'
+                      ? 'bg-white shadow-md ring-2 ring-indigo-600/80 font-bold text-slate-900'
                       : 'hover:bg-slate-100/70 text-slate-600'
                   }`}
                 >
@@ -294,7 +294,7 @@ export function BillingConfigPage() {
                     <p className="text-sm">{t.name || tierKey}</p>
                     <p className="text-[11px] font-mono text-slate-400 capitalize">{tierKey}</p>
                   </div>
-                  {isSelected && <span className="h-2 w-2 rounded-full bg-emerald-600" />}
+                  {isSelected && <span className="h-2 w-2 rounded-full bg-indigo-600" />}
                 </button>
               );
             })}
@@ -359,7 +359,7 @@ export function BillingConfigPage() {
                         type="checkbox"
                         checked={currentTier.callingIncluded}
                         onChange={(e) => updateTier(selectedTier, 'callingIncluded', e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       Voice Calling Module Included
                     </label>
@@ -368,7 +368,7 @@ export function BillingConfigPage() {
                         type="checkbox"
                         checked={currentTier.analyticsAdvanced}
                         onChange={(e) => updateTier(selectedTier, 'analyticsAdvanced', e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       Advanced Analytics & Attribution
                     </label>
@@ -436,20 +436,20 @@ export function BillingConfigPage() {
                   <p className="font-semibold text-slate-900">Includes:</p>
                   <ul className="space-y-1.5">
                     <li className="flex items-center gap-2">
-                      <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
                       <span>{currentTier.waNumbers} WhatsApp numbers</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
                       <span>{currentTier.seats} team seats</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
                       <span>{currentTier.contacts === 'unlimited' ? 'Unlimited' : Number(currentTier.contacts).toLocaleString()} contacts</span>
                     </li>
                     {currentTier.features.slice(0, 4).map((f, i) => (
                       <li key={i} className="flex items-center gap-2">
-                        <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
                         <span className="truncate">{f}</span>
                       </li>
                     ))}
@@ -570,7 +570,7 @@ export function BillingConfigPage() {
                       type="checkbox"
                       checked={sku.upiAutopayAllowed}
                       onChange={(e) => updateSku(index, 'upiAutopayAllowed', e.target.checked)}
-                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     UPI Autopay eligible in catalog (not wired to checkout)
                   </label>
@@ -579,7 +579,7 @@ export function BillingConfigPage() {
                       type="checkbox"
                       checked={sku.isMostPopular || false}
                       onChange={(e) => updateSku(index, 'isMostPopular', e.target.checked)}
-                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     Mark as "Most Popular" Plan
                   </label>
@@ -594,7 +594,7 @@ export function BillingConfigPage() {
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 shadow-xl md:pl-[15.5rem]">
         <div className="content-shell flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            <ShieldCheck className="h-4 w-4 text-indigo-600" />
             <span>Updates deploy globally in real-time to all connected customer workspaces.</span>
           </div>
           <div className="flex items-center gap-3">
