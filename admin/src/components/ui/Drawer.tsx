@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export function Drawer({
@@ -34,7 +35,10 @@ export function Drawer({
 
   if (!open) return null;
 
-  return (
+  // Portal to <body>: keeps the drawer above app chrome (header/sidebar z-layers)
+  // and makes `fixed inset-0` cover the real viewport even if an ancestor gains a
+  // transform/filter/container-type that would turn it into the containing block.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-end bg-slate-950/40 backdrop-blur-xs md:items-stretch">
       <button type="button" className="absolute inset-0 cursor-default" aria-label="Close" onClick={onClose} />
       <div
@@ -43,7 +47,7 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby="drawer-title"
         tabIndex={-1}
-        className="relative z-10 flex h-[90vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl outline-none ring-1 ring-slate-900/10 md:h-full md:max-w-md md:rounded-l-2xl md:rounded-r-none transition-transform duration-200 ease-out"
+        className="relative z-10 flex w-full flex-col rounded-t-2xl bg-white shadow-2xl outline-none ring-1 ring-slate-900/10 h-[90vh] md:h-full md:max-w-md md:rounded-l-2xl md:rounded-r-none transition-transform duration-200 ease-out"
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200/80 bg-slate-50/70 px-5 py-4">
           <div className="min-w-0">
@@ -68,6 +72,7 @@ export function Drawer({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
