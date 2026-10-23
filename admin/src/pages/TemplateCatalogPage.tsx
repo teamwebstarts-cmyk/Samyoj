@@ -1,5 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Library, Plus, Trash2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  CreditCard,
+  FileText,
+  Gift,
+  KeyRound,
+  Library,
+  MapPin,
+  MessageSquare,
+  Package,
+  Plus,
+  Search,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  Store,
+  Trash2,
+  Truck,
+  UserRound,
+} from 'lucide-react';
 import { ApiError, platformRequest } from '../api';
 import {
   Button,
@@ -9,10 +31,11 @@ import {
   Notice,
   PageHeader,
   PageLoading,
-  SectionCard,
+  ResponsiveDataView,
   Select,
   StatusBadge,
 } from '../components/ui';
+import { formatAgo } from '../lib/format';
 import { useOperator } from '../context/OperatorContext';
 
 type LibraryRow = {
@@ -33,6 +56,7 @@ type LibraryRow = {
   copy: string;
   published: boolean;
   sortOrder: number;
+  updatedAt?: string | null;
 };
 
 type Draft = {
@@ -77,6 +101,60 @@ const EMPTY_DRAFT: Draft = {
 
 const HONESTY =
   'These drafts live in Samyoj and show in the customer Template Library when published. Submitting still sends the copy to Meta for that org’s WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on a customer number.';
+
+/** Same icon keys the customer-facing CatalogLibraryCard maps (client/src/components/templates/library). */
+const ICON_MAP: Record<string, LucideIcon> = {
+  package: Package,
+  truck: Truck,
+  pin: MapPin,
+  calendar: Calendar,
+  card: CreditCard,
+  user: UserRound,
+  shield: ShieldCheck,
+  key: KeyRound,
+  store: Store,
+  sparkles: Sparkles,
+  cart: ShoppingCart,
+  gift: Gift,
+  check: CheckCircle2,
+  message: MessageSquare,
+};
+
+/** Same category gradients as the customer template cards (templateUi.tsx). */
+const CATEGORY_AVATAR: Record<string, string> = {
+  UTILITY: 'bg-gradient-to-br from-sky-500 to-blue-600',
+  MARKETING: 'bg-gradient-to-br from-rose-500 to-pink-600',
+  AUTHENTICATION: 'bg-gradient-to-br from-violet-600 to-indigo-700',
+};
+
+function iconFor(row: LibraryRow): LucideIcon {
+  if (row.icon && ICON_MAP[row.icon]) return ICON_MAP[row.icon];
+  if (row.category === 'AUTHENTICATION') return KeyRound;
+  if (row.category === 'MARKETING') return Sparkles;
+  return FileText;
+}
+
+function TemplateAvatar({ row }: { row: LibraryRow }) {
+  const Icon = iconFor(row);
+  return (
+    <span
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${
+        CATEGORY_AVATAR[row.category] ?? 'bg-gradient-to-br from-slate-500 to-slate-600'
+      }`}
+      aria-hidden
+    >
+      <Icon className="h-5 w-5" strokeWidth={2} />
+    </span>
+  );
+}
+
+type CatalogTab = 'all' | 'published' | 'drafts';
+
+const TABS: Array<{ id: CatalogTab; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'published', label: 'Published' },
+  { id: 'drafts', label: 'Drafts' },
+];
 
 function rowToDraft(row: LibraryRow): Draft {
   const urlButton = (row.buttons || []).find((button) => button.type === 'URL');
@@ -147,6 +225,9 @@ export function TemplateCatalogPage() {
   const [reason, setReason] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<CatalogTab>('all');
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('ALL');
 
   const load = () => {
     platformRequest<{ templates: LibraryRow[] }>('/library-templates')
@@ -158,7 +239,26 @@ export function TemplateCatalogPage() {
     load();
   }, []);
 
-  const publishedCount = useMemo(() => (rows || []).filter((row) => row.published).length, [rows]);
+  const counts = useMemo(() => {
+    const all = rows || [];
+    return {
+      all: all.length,
+      published: all.filter((row) => row.published).length,
+      drafts: all.filter((row) => !row.published).length,
+    };
+  }, [rows]);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (rows || []).filter((row) => {
+      if (tab === 'published' && !row.published) return false;
+      if (tab === 'drafts' && row.published) return false;
+      if (category !== 'ALL' && row.category !== category) return false;
+      if (!term) return true;
+      const haystack = `${row.title} ${row.slug} ${row.copy || ''} ${(row.tags || []).join(' ')} ${row.body}`.toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [rows, tab, q, category]);
 
   const openCreate = () => {
     setEditing(null);
@@ -231,7 +331,7 @@ export function TemplateCatalogPage() {
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
-        title="Template library"
+        title="Templates"
         purpose="Publish WhatsApp drafts that tenants pick in Template Library, then submit to their own number."
         eyebrow={
           <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
@@ -250,56 +350,169 @@ export function TemplateCatalogPage() {
 
       <Notice tone="warning">{HONESTY}</Notice>
 
-      <SectionCard
-        title="Published drafts"
-        purpose={`${publishedCount} live in the customer library. Unpublish to hide without deleting.`}
-      >
-        {rows.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              icon={Library}
-              title="No library templates yet"
-              description="Add a draft here and publish it. Tenants will see it in Template Library."
+      <div className="dashboard-card overflow-hidden">
+        {/* Status tabs */}
+        <div className="overflow-x-auto border-b border-slate-200/80 bg-slate-50/60 px-2 sm:px-3" role="tablist" aria-label="Filter templates by status">
+          <div className="flex min-w-max items-center gap-1">
+            {TABS.map(({ id, label }) => {
+              const selected = tab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setTab(id)}
+                  className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors ${
+                    selected
+                      ? 'border-indigo-600 text-indigo-700'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {label}
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                      selected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200/80 text-slate-500'
+                    }`}
+                  >
+                    {counts[id]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search + category filter */}
+        <div className="flex flex-col gap-3 border-b border-slate-200/80 px-4 py-3 sm:flex-row sm:items-center">
+          <div className="flex-1 sm:max-w-sm">
+            <Input
+              icon={Search}
+              placeholder="Search templates…"
+              aria-label="Search templates"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
             />
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Slug</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <p className="font-bold text-slate-900">{row.title}</p>
-                      <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">{row.copy || row.body}</p>
-                    </td>
-                    <td className="font-mono text-xs text-slate-500">{row.slug}</td>
-                    <td>
-                      <StatusBadge status={row.category} />
-                    </td>
-                    <td>
-                      <StatusBadge status={row.published ? 'ACTIVE' : 'DISABLED'} />
-                    </td>
-                    <td className="text-right">
-                      <Button variant="secondary" size="sm" onClick={() => openEdit(row)}>
-                        {canWrite ? 'Edit' : 'View'}
-                      </Button>
-                    </td>
+          <Select
+            aria-label="Filter by category"
+            className="sm:w-44"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+          >
+            <option value="ALL">All categories</option>
+            <option value="UTILITY">Utility</option>
+            <option value="MARKETING">Marketing</option>
+            <option value="AUTHENTICATION">Authentication</option>
+          </Select>
+        </div>
+
+        <ResponsiveDataView
+          tableFrom="lg"
+          items={filtered}
+          emptyState={
+            rows.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  icon={Library}
+                  title="No library templates yet"
+                  description="Add a draft here and publish it. Tenants will see it in Template Library."
+                />
+              </div>
+            ) : (
+              <div className="p-6">
+                <EmptyState
+                  icon={Search}
+                  title="No templates found"
+                  description="No templates match your current search, status, or category filter."
+                />
+              </div>
+            )
+          }
+          renderCard={(row) => (
+            <button
+              type="button"
+              className="dashboard-card w-full p-4 text-left transition-all group hover:border-indigo-500/40 hover:shadow-md"
+              onClick={() => openEdit(row)}
+            >
+              <div className="flex items-start gap-3">
+                <TemplateAvatar row={row} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-slate-900 group-hover:text-indigo-800">{row.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">{row.copy || row.body}</p>
+                </div>
+                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                <StatusBadge status={row.category} />
+                <StatusBadge
+                  status={row.published ? 'ACTIVE' : 'DISABLED'}
+                  label={row.published ? 'Published' : 'Draft'}
+                />
+                <span className="ml-auto text-[11px] text-slate-400">Updated {formatAgo(row.updatedAt)}</span>
+              </div>
+            </button>
+          )}
+          renderTable={() => (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((row) => (
+                    <tr key={row.id} {...(canWrite ? { 'data-clickable': 'true', onClick: () => openEdit(row) } : {})}>
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <TemplateAvatar row={row} />
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900">{row.title}</p>
+                            <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">{row.copy || row.slug}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <StatusBadge status={row.category} />
+                      </td>
+                      <td>
+                        <StatusBadge
+                          status={row.published ? 'ACTIVE' : 'DISABLED'}
+                          label={row.published ? 'Published' : 'Draft'}
+                        />
+                      </td>
+                      <td className="text-xs text-slate-600">{formatAgo(row.updatedAt)}</td>
+                      <td className="text-right">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(row);
+                          }}
+                        >
+                          {canWrite ? 'Edit' : 'View'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        />
+
+        {filtered.length > 0 && (
+          <div className="border-t border-slate-200/80 bg-slate-50/60 px-4 py-2.5 text-[11px] font-medium text-slate-500">
+            Showing {filtered.length} of {rows.length} templates
           </div>
         )}
-      </SectionCard>
+      </div>
 
       <Drawer
         open={open}
