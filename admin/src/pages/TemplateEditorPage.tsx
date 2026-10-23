@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   FileText,
@@ -278,6 +279,16 @@ function AiAssistBar({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
+  // Escape closes the replace-confirm dialog.
+  useEffect(() => {
+    if (!confirming) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConfirming(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirming]);
+
   const run = () => {
     setBusy(true);
     // ponytail: mock latency; swap for POST /platform/ai/template-draft + zod parse
@@ -321,27 +332,6 @@ function AiAssistBar({
           className="h-9 min-w-0 flex-1 rounded-lg border border-indigo-200/80 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <div className="flex shrink-0 items-center gap-2">
-          {confirming ? (
-            <>
-              <span className="hidden text-[11px] font-semibold text-slate-600 xl:inline">Replace current content?</span>
-              <button
-                type="button"
-                onClick={run}
-                disabled={busy}
-                className="rounded-md bg-slate-900 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-700 disabled:opacity-60"
-              >
-                Replace
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                disabled={busy}
-                className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-              >
-                Keep mine
-              </button>
-            </>
-          ) : null}
           <Button onClick={click} disabled={!canWrite || busy || !prompt.trim()}>
             <Wand2 className="h-3.5 w-3.5" />
             {busy ? 'Generating…' : 'Generate'}
@@ -349,6 +339,54 @@ function AiAssistBar({
         </div>
       </div>
       </div>
+
+      {confirming
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
+              <button type="button" className="absolute inset-0 cursor-default" aria-label="Close" onClick={() => setConfirming(false)} />
+              <div
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="ai-replace-title"
+                tabIndex={-1}
+                className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl outline-none ring-1 ring-slate-900/10"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm" aria-hidden>
+                    <Wand2 className="h-4.5 w-4.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 id="ai-replace-title" className="text-[15px] font-bold tracking-tight text-slate-900">
+                      Replace current content?
+                    </h2>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-slate-500">
+                      Generating will overwrite the template name, category, body, footer, and buttons with the AI suggestion.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    disabled={busy}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    Keep mine
+                  </button>
+                  <button
+                    type="button"
+                    onClick={run}
+                    disabled={busy}
+                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {busy ? 'Generating…' : 'Yes, replace'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }
