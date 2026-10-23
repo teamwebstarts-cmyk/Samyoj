@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  BadgeCheck,
-  ChevronDown,
   FileText,
   Image as ImageIcon,
   Info,
@@ -15,7 +13,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
-import { WhatsAppPreview } from '../components/WhatsAppPreview';
+import { TemplateDetailsTable, WhatsAppPreview } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
 import { platformRequest, ApiError } from '../api';
 import {
@@ -175,66 +173,6 @@ function VariableRow({
           disabled={!canWrite}
           className={`mt-2 h-8 w-full rounded-md border border-slate-200 bg-white px-2 font-mono text-[11px] disabled:cursor-not-allowed disabled:opacity-60`}
         />
-      ) : null}
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
-      <span className="shrink-0 text-[11.5px] font-semibold text-slate-500">{label}</span>
-      <span className="min-w-0 text-right text-[11.5px] font-semibold text-slate-800">{children}</span>
-    </div>
-  );
-}
-
-/** Collapsible details table under the phone — mirrors client TemplateDetailsCard. */
-function TemplateDetailsTable({ draft }: { draft: Draft }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div className="mt-3 overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50/80"
-      >
-        <span className="text-[13px] font-bold leading-5 text-slate-900">Template details</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
-      </button>
-      {open ? (
-        <div className="px-4 py-1.5">
-          <DetailRow label="Name">
-            <span className="truncate font-mono text-[11px]" title={draft.slug || undefined}>
-              {draft.slug || 'untitled'}
-            </span>
-          </DetailRow>
-          <DetailRow label="Category">
-            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200/70">
-              {draft.category === 'MARKETING' ? 'Marketing' : draft.category === 'AUTHENTICATION' ? 'Authentication' : 'Utility'}
-            </span>
-          </DetailRow>
-          <DetailRow label="Language">{languageLabel(draft.language)}</DetailRow>
-          <DetailRow label="Buttons">
-            {draft.buttons.length
-              ? draft.buttons.map((button) => button.text).join(', ')
-              : 'None'}
-          </DetailRow>
-          <DetailRow label="Variables">
-            {templateVariableCount(draft.body, draft.bodyHi)
-              ? `${templateVariableCount(draft.body, draft.bodyHi)} variable${
-                  templateVariableCount(draft.body, draft.bodyHi) === 1 ? '' : 's'
-                } ${Array.from({ length: templateVariableCount(draft.body, draft.bodyHi) }, (_, i) => `{{${i + 1}}}`).join(' ')}`
-              : 'None'}
-          </DetailRow>
-          <DetailRow label="Status">
-            <span className="inline-flex items-center gap-1 text-emerald-600">
-              <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-              {draft.published ? 'Published in library' : 'Draft'}
-            </span>
-          </DetailRow>
-        </div>
       ) : null}
     </div>
   );
@@ -941,24 +879,6 @@ export function TemplateEditorPage() {
                 )}
               </div>
             </div>
-          </section>
-
-          <section className="dashboard-card p-4 sm:p-5">
-            <h2 className="text-sm font-bold tracking-tight text-slate-900">Template details</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Input label="Tags" hint="Comma-separated" value={draft.tags} disabled={!canWrite} onChange={(event) => set('tags', event.target.value)} />
-              <Input label="Short help text" hint="Shown under the template in the tenant library." value={draft.copy} disabled={!canWrite} onChange={(event) => set('copy', event.target.value)} />
-              <Input label="Sort order" value={draft.sortOrder} disabled={!canWrite} onChange={(event) => set('sortOrder', event.target.value)} />
-            </div>
-            <label className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-[13px] font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                checked={draft.published}
-                disabled={!canWrite}
-                onChange={(event) => set('published', event.target.checked)}
-              />
-              Published in customer library
-            </label>
           </section>
         </div>
 
