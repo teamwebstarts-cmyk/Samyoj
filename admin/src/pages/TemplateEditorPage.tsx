@@ -18,7 +18,6 @@ import { useOperator } from '../context/OperatorContext';
 import { platformRequest, ApiError } from '../api';
 import {
   EMPTY_DRAFT,
-  LANGUAGES,
   USE_MOCK_CATALOG,
   VARIABLE_SOURCE_OPTIONS,
   deleteMockRow,
@@ -179,6 +178,13 @@ function VariableRow({
   );
 }
 
+const HINDI_FOOTERS: Record<string, string> = {
+  'Reply STOP to unsubscribe': 'संदेश बंद करने के लिए STOP भेजें',
+  'Reply STOP to stop messages': 'संदेश रोकने के लिए STOP भेजें',
+  'Not interested? Reply STOP': 'रुचि नहीं है? STOP भेजें',
+};
+const toHindiFooter = (english: string) => HINDI_FOOTERS[english] ?? '';
+
 export function TemplateEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -190,6 +196,7 @@ export function TemplateEditorPage() {
   const [draft, setDraft] = useState<Draft>(row ? rowToDraft(row) : EMPTY_DRAFT);
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [previewLang, setPreviewLang] = useState<'en' | 'hi'>('en');
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -222,11 +229,11 @@ export function TemplateEditorPage() {
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((prev) => ({ ...prev, [key]: value }));
 
-  const hindi = draft.language === 'hi_IN';
-  const activeBody = hindi ? draft.bodyHi : draft.body;
-  const setActiveBody = (value: string) => set(hindi ? 'bodyHi' : 'body', value);
-  const activeFooter = hindi ? draft.footerHi : draft.footer;
-  const setActiveFooter = (value: string) => set(hindi ? 'footerHi' : 'footer', value);
+  // Both languages are always edited in one pass — no primary/fallback swap.
+  const bodyText: string = draft.body;
+  const setBodyText = (value: string) => set('body', value);
+  const footerText: string = draft.footer;
+  const setFooterText = (value: string) => set('footer', value);
 
   // Header type: derive from the draft on load, but track clicks in local
   // state so picking TEXT before typing anything still shows the input
@@ -261,15 +268,22 @@ export function TemplateEditorPage() {
       .map((index) => ({ index, description: metaForIndex(draft.variableMeta, 'body', index)?.description || '' }));
   }, [draft.body, draft.bodyHi, draft.variableMeta]);
 
-  // Cursor-aware token insertion into the active body (client insertVariable mechanics).
+  // Hindi preview lens: swap the bilingual surfaces into the primary slots and flag
+  // the draft as hi_IN so WhatsAppPreview renders the Hindi body/footer.
+  const hiPreviewDraft = useMemo(
+    () => ({ ...draft, language: 'hi_IN', body: draft.bodyHi || draft.body, footer: draft.footerHi || draft.footer }),
+    [draft],
+  );
+
+  // Cursor-aware token insertion into the English body (client insertVariable mechanics).
   // insertNewVariable appends the next unused index; insertToken re-inserts an existing one (reuse allowed).
   const insertToken = (index: number) => {
     const token = `{{${index}}}`;
     const el = bodyRef.current;
     if (el) {
-      const start = el.selectionStart ?? activeBody.length;
-      const end = el.selectionEnd ?? activeBody.length;
-      setActiveBody(activeBody.slice(0, start) + token + activeBody.slice(end));
+      const start = el.selectionStart ?? bodyText.length;
+      const end = el.selectionEnd ?? bodyText.length;
+      setBodyText(bodyText.slice(0, start) + token + bodyText.slice(end));
       requestAnimationFrame(() => {
         el.focus();
         const pos = start + token.length;
@@ -277,7 +291,7 @@ export function TemplateEditorPage() {
       });
       return;
     }
-    setActiveBody(`${activeBody}${activeBody && !activeBody.endsWith(' ') ? ' ' : ''}${token}`);
+    setBodyText(`${bodyText}${bodyText && !bodyText.endsWith(' ') ? ' ' : ''}${token}`);
   };
 
   const insertVariable = () => insertToken(variableCount + 1);
@@ -295,7 +309,7 @@ export function TemplateEditorPage() {
     }));
   };
 
-  // Footer presets — same options as the client create step (page-level admin has no brand presets).
+  // Footer presets apply to both languages at once — same options as the client create step.
   const FOOTER_PRESETS: Array<{ value: string; label: string }> = [
     { value: '__none__', label: 'No footer' },
     { value: 'Reply STOP to unsubscribe', label: 'Reply STOP to unsubscribe' },
@@ -303,18 +317,20 @@ export function TemplateEditorPage() {
     { value: 'Not interested? Reply STOP', label: 'Not interested? Reply STOP' },
     { value: '__custom__', label: 'Write your own…' },
   ];
-  const footerChoice = !activeFooter.trim()
+  const footerChoice = !footerText.trim()
     ? '__none__'
-    : FOOTER_PRESETS.some((p) => p.value === activeFooter)
-      ? activeFooter
+    : FOOTER_PRESETS.some((p) => p.value === footerText)
+      ? footerText
       : '__custom__';
   const onFooterChoice = (next: string) => {
     if (next === '__none__') {
-      setActiveFooter('');
+      setFooterText('');
+      set('footerHi', '');
       return;
     }
-    if (next === '__custom__') return; // keep the current text; the input below edits it
-    setActiveFooter(next);
+    if (next === '__custom__') return; // keep the current text; the inputs below edit it
+    setFooterText(next);
+    set('footerHi', toHindiFooter(next));
   };
 
   const handleSave = async () => {
@@ -452,11 +468,9 @@ export function TemplateEditorPage() {
                 <option value="MARKETING">Marketing</option>
                 <option value="AUTHENTICATION">Authentication</option>
               </Select>
-              <Select label="Language" value={draft.language} disabled={!canWrite || Boolean(row)} onChange={(event) => set('language', event.target.value)}>
-                {LANGUAGES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </Select>
+              {/* No Language select: every catalog row carries both languages and is
+                  edited in one pass — the EN/HI toggle in the preview shows each surface. */}
+              <div aria-hidden className="hidden sm:block" />
             </div>
 
             {/* Header type tiles */}
@@ -519,11 +533,11 @@ export function TemplateEditorPage() {
               </div>
             ) : null}
 
-            {/* Body */}
+            {/* Body — English and Hindi edited in one pass (both required by the catalog) */}
             <div className="mt-4">
               <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
-                  {hindi ? 'Body text (Hindi)' : 'Body text'} <span className="text-rose-500">*</span>
+                  Body text (English) <span className="text-rose-500">*</span>
                   <span title="Use the chips below to insert {{n}} fields. Fill a sample for each so Meta can review a realistic message." className="inline-flex">
                     <Info className="h-3.5 w-3.5 cursor-help text-slate-400" aria-label="Body info" />
                   </span>
@@ -538,7 +552,7 @@ export function TemplateEditorPage() {
                     <Plus className="h-3 w-3" />
                     Add variable
                   </button>
-                  <span className="text-[10px] font-medium text-slate-400">{activeBody.length}/1024</span>
+                  <span className="text-[10px] font-medium text-slate-400">{bodyText.length}/1024</span>
                 </div>
               </div>
               <div className="mb-2 flex flex-wrap gap-1.5">
@@ -563,24 +577,25 @@ export function TemplateEditorPage() {
               </div>
               <textarea
                 ref={bodyRef}
-                aria-label="Body text"
+                aria-label="Body text (English)"
                 placeholder="Hi {{1}}, your order {{2}} is ready."
-                value={activeBody}
+                value={bodyText}
                 maxLength={1024}
                 disabled={!canWrite}
-                onChange={(event) => setActiveBody(event.target.value)}
+                onChange={(event) => setBodyText(event.target.value)}
                 className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
               />
               <label className="mt-4 block space-y-1 text-[13px]">
                 <span className="font-semibold text-slate-700">
-                  {hindi ? 'English body (fallback)' : 'Hindi body (optional)'}
+                  Body text (Hindi) <span className="text-rose-500">*</span>
                 </span>
                 <textarea
+                  aria-label="Body text (Hindi)"
                   className="min-h-20 w-full rounded-lg border bg-white px-3 py-2 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
-                  value={hindi ? draft.body : draft.bodyHi}
+                  value={draft.bodyHi}
                   maxLength={1024}
                   disabled={!canWrite}
-                  onChange={(event) => set(hindi ? 'body' : 'bodyHi', event.target.value)}
+                  onChange={(event) => set('bodyHi', event.target.value)}
                 />
               </label>
 
@@ -702,30 +717,41 @@ export function TemplateEditorPage() {
                 ) : null}
               </div>
               {footerChoice !== '__none__' ? (
-                <div className="space-y-1">
-                  <span className="text-[13px] font-semibold text-slate-700">
-                    {footerChoice === '__custom__' ? 'Your footer text' : 'Footer text'}
-                  </span>
-                  <input
-                    type="text"
-                    value={activeFooter}
-                    maxLength={60}
-                    placeholder="Reply STOP to stop messages"
-                    aria-label={footerChoice === '__custom__' ? 'Your footer text' : 'Footer text'}
-                    disabled={!canWrite}
-                    onChange={(event) => setActiveFooter(event.target.value)}
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
-                  />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <span className="text-[13px] font-semibold text-slate-700">
+                      Footer text (English)
+                    </span>
+                    <input
+                      type="text"
+                      value={footerText}
+                      maxLength={60}
+                      placeholder="Reply STOP to stop messages"
+                      aria-label="Footer text (English)"
+                      disabled={!canWrite}
+                      onChange={(event) => setFooterText(event.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <p className="text-right text-[10px] text-slate-400">{footerText.length}/60</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[13px] font-semibold text-slate-700">
+                      Footer text (Hindi)
+                    </span>
+                    <input
+                      type="text"
+                      value={draft.footerHi}
+                      maxLength={60}
+                      placeholder="संदेश रोकने के लिए STOP भेजें"
+                      aria-label="Footer text (Hindi)"
+                      disabled={!canWrite}
+                      onChange={(event) => set('footerHi', event.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <p className="text-right text-[10px] text-slate-400">{(draft.footerHi || '').length}/60</p>
+                  </div>
                 </div>
               ) : null}
-              <p className="text-right text-[10px] text-slate-400">{activeFooter.length}/60</p>
-              <Input
-                label={hindi ? 'English footer' : 'Hindi footer'}
-                value={hindi ? draft.footer : draft.footerHi}
-                maxLength={60}
-                disabled={!canWrite}
-                onChange={(event) => set(hindi ? 'footer' : 'footerHi', event.target.value)}
-              />
             </div>
 
             {/* Buttons — client TemplateButtonEditor (wizard variant) */}
@@ -904,14 +930,33 @@ export function TemplateEditorPage() {
               </p>
               <span
                 className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
-                title={languageLabel(draft.language)}
+                title={previewLang === 'hi' ? 'Hindi' : languageLabel(draft.language)}
               >
-                {languageLabel(draft.language)}
+                {previewLang === 'hi' ? 'Hindi' : languageLabel(draft.language)}
               </span>
+            </div>
+            {/* EN/HI lens — same behavior as the platform browse filter: one identity, two surfaces */}
+            <div className="flex items-center justify-center gap-1 border-b border-slate-100 bg-slate-50/60 px-4 py-2" role="group" aria-label="Preview language">
+              {(['en', 'hi'] as const).map((lang) => {
+                const active = previewLang === lang;
+                return (
+                  <button
+                    key={lang}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setPreviewLang(lang)}
+                    className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                      active ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {lang === 'en' ? 'English' : 'हिन्दी'}
+                  </button>
+                );
+              })}
             </div>
             <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
               <div className="mx-auto w-full max-w-[280px]">
-                <WhatsAppPreview draft={draft} />
+                <WhatsAppPreview draft={previewLang === 'hi' ? hiPreviewDraft : draft} />
               </div>
             </div>
           </div>
