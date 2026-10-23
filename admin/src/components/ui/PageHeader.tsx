@@ -6,18 +6,24 @@ export function PageHeader({
   meta,
   action,
   eyebrow,
+  titleExtra,
 }: {
   title: string;
   purpose: string;
   meta?: ReactNode;
   action?: ReactNode;
   eyebrow?: ReactNode;
+  /** Small inline node (e.g. an info tip) rendered right of the h1, inside the heading row. */
+  titleExtra?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         {eyebrow && <div className="mb-1">{eyebrow}</div>}
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+          {titleExtra}
+        </div>
         <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-600">{purpose}</p>
         {meta ? <div className="mt-2.5">{meta}</div> : null}
       </div>

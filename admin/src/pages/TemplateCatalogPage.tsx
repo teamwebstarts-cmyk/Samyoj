@@ -7,6 +7,7 @@ import {
   CreditCard,
   FileText,
   Gift,
+  Info,
   KeyRound,
   Library,
   MapPin,
@@ -333,10 +334,19 @@ export function TemplateCatalogPage() {
       <PageHeader
         title="Templates"
         purpose="Publish WhatsApp drafts that tenants pick in Template Library, then submit to their own number."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
-            <Library className="h-3 w-3 text-indigo-600" />
-            Platform catalog
+        titleExtra={
+          <span
+            className="group relative inline-flex shrink-0 cursor-help rounded-full outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+            tabIndex={0}
+            role="note"
+            aria-label="How the platform catalog works"
+          >
+            <Info className="h-[18px] w-[18px] text-slate-400 transition-colors group-hover:text-indigo-600 group-focus-visible:text-indigo-600" aria-hidden />
+            <span
+              className="pointer-events-none invisible absolute left-1/2 top-7 z-30 w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-left text-[13px] font-normal leading-relaxed text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
+            >
+              {HONESTY}
+            </span>
           </span>
         }
         action={
@@ -347,8 +357,6 @@ export function TemplateCatalogPage() {
           ) : undefined
         }
       />
-
-      <Notice tone="warning">{HONESTY}</Notice>
 
       <div className="dashboard-card overflow-hidden">
         {/* Status tabs */}
