@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Beaker, Check, Copy, CopyPlus, Eye, Info, Library, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { platformRequest } from '../api';
@@ -69,11 +70,54 @@ function RowActions({
   canWrite: boolean;
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const stop = (fn: () => void) => (event: React.MouseEvent) => {
     event.stopPropagation();
     fn();
   };
+
+  // Fixed position from the trigger, flipped up near the viewport bottom, so the
+  // menu escapes the table card's overflow-hidden/overflow-x-auto clipping.
+  const measure = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    // Hidden/mid-layout elements report a zero-size rect — measuring those
+    // would portal the menu off-screen (left: -176). Bail; the rAF effect re-measures.
+    if (!r.width && !r.height) return;
+    const MENU_W = 176;
+    const menuH = 120; // approximate: 3 items; only used for the flip decision
+    const openUp = r.bottom + menuH > window.innerHeight - 8 && r.top - menuH > 8;
+    setPos({
+      top: Math.max(8, Math.min(openUp ? r.top - menuH - 4 : r.bottom + 4, window.innerHeight - menuH - 8)),
+      left: Math.max(8, Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8)),
+    });
+  };
+
+  useEffect(() => {
+    if (!menuOpen) {
+      setPos(null);
+      return;
+    }
+    // Measure after two frames: the portal content mounts this tick, so the
+    // trigger's rect mid-commit can be stale (0-size → menu portals off-screen).
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => measure());
+    });
+    const onScrollOrResize = () => measure();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- measures on open; trigger is stable per row
+  }, [menuOpen]);
 
   const copySlug = () => {
     void navigator.clipboard?.writeText(row.slug).catch(() => {});
@@ -84,7 +128,10 @@ function RowActions({
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (event: MouseEvent | TouchEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false);
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return; // trigger handles its own toggle
+      setMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false);
@@ -122,34 +169,41 @@ function RowActions({
         <Pencil className="h-3.5 w-3.5" /> Edit
       </Button>
       <div className="relative" ref={menuRef}>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="w-8 px-0"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          aria-label={`More actions for ${row.title}`}
-          onClick={stop(() => setMenuOpen(!menuOpen))}
-        >
-          <MoreVertical className="h-3.5 w-3.5" />
-        </Button>
-        {menuOpen ? (
-          <div
-            role="menu"
-            aria-label={`Actions for ${row.title}`}
-            className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg"
+        <span ref={triggerRef} className="inline-flex">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-8 px-0"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={`More actions for ${row.title}`}
+            onClick={stop(() => setMenuOpen(!menuOpen))}
           >
-            {menuItem('Duplicate', <CopyPlus className="h-3.5 w-3.5" />, onDuplicate)}
-            {menuItem('Copy slug', copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />, copySlug)}
-            {canWrite ? (
-              <>
-                <div className="my-1 border-t border-slate-100" />
-                {menuItem('Delete', <Trash2 className="h-3.5 w-3.5" />, onDelete, 'danger')}
-              </>
-            ) : null}
-          </div>
-        ) : null}
+            <MoreVertical className="h-3.5 w-3.5" />
+          </Button>
+        </span>
       </div>
+      {menuOpen && pos
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label={`Actions for ${row.title}`}
+              className="fixed z-50 w-44 rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              {menuItem('Duplicate', <CopyPlus className="h-3.5 w-3.5" />, onDuplicate)}
+              {menuItem('Copy slug', copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />, copySlug)}
+              {canWrite ? (
+                <>
+                  <div className="my-1 border-t border-slate-100" />
+                  {menuItem('Delete', <Trash2 className="h-3.5 w-3.5" />, onDelete, 'danger')}
+                </>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
