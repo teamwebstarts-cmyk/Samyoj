@@ -448,11 +448,6 @@ export function TemplateEditorPage() {
                 ))}
               </Select>
             </div>
-            {draft.category !== 'UTILITY' ? (
-              <p className="mt-3 inline-flex rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700">
-                {draft.category} template
-              </p>
-            ) : null}
 
             {/* Header type tiles */}
             <div className="mt-4">
