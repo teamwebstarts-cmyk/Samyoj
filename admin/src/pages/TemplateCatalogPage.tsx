@@ -51,7 +51,7 @@ function RowActions({ row, onView, onEdit }: { row: LibraryRow; onView: () => vo
     fn();
   };
   return (
-    <div className="flex shrink-0 items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+    <div className="flex shrink-0 items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
       <Button variant="secondary" size="sm" onClick={stop(onView)} aria-label={`View ${row.title}`}>
         <Eye className="h-3.5 w-3.5" /> View
       </Button>
