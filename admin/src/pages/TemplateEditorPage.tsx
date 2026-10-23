@@ -678,15 +678,6 @@ export function TemplateEditorPage() {
     );
   }
 
-  const actions = (
-    <>
-      {row ? (
-        <Button variant="danger" onClick={() => void handleDelete()} disabled={saving}>
-          <Trash2 className="h-4 w-4" /> Delete
-        </Button>
-      ) : null}
-    </>
-  );
   const saveAction = (
     <Button onClick={() => void handleSave()} loading={saving} disabled={saving}>
       {row ? 'Save changes' : 'Publish to library'}
@@ -1166,8 +1157,54 @@ export function TemplateEditorPage() {
       {canWrite ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
           <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
-            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+            <div className="flex min-w-0 items-center gap-2">
+              {/* Draft / Published visibility toggle — drives draft.published on save */}
+              <div
+                role="radiogroup"
+                aria-label="Library visibility"
+                className="flex shrink-0 rounded-lg border border-slate-200 bg-slate-100/80 p-0.5"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!draft.published}
+                  disabled={!canWrite || saving}
+                  onClick={() => set('published', false)}
+                  className={`rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-all ${
+                    !draft.published
+                      ? 'bg-white text-amber-700 shadow-sm ring-1 ring-amber-200'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Draft
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={draft.published}
+                  disabled={!canWrite || saving}
+                  onClick={() => set('published', true)}
+                  className={`rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-all ${
+                    draft.published
+                      ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Published
+                </button>
+              </div>
+              <p className="hidden min-w-0 truncate text-[11px] text-slate-500 lg:block">
+                {draft.published
+                  ? 'Visible to tenants in their Template Library.'
+                  : 'Hidden from tenants — only platform sees it.'}
+              </p>
+            </div>
             <div className="flex shrink-0 items-center gap-2">
+              {row ? (
+                <Button variant="danger" size="md" onClick={() => void handleDelete()} disabled={saving}>
+                  <Trash2 className="h-4 w-4" /> Delete
+                </Button>
+              ) : null}
               <Button variant="secondary" size="md" onClick={() => navigate('/library')}>
                 Back
               </Button>
