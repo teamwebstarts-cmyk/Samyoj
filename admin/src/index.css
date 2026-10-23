@@ -130,6 +130,20 @@ select:focus-visible {
   margin-right: auto;
 }
 
+/* Fixed bottom action bars that must align with <main>'s column, not the viewport:
+   offset by the sidebar rail width (set as --rail-width on the Shell root) and cap at
+   the main column's content width. */
+.rail-offset-bar {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (min-width: 768px) {
+  .rail-offset-bar {
+    padding-left: var(--rail-width, 14.5rem);
+  }
+}
+
 /* Buttons */
 .btn-primary {
   display: inline-flex;
