@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Beaker, Eye, Info, Library, Pencil, Plus, Search } from 'lucide-react';
+import { Beaker, Check, Copy, CopyPlus, Eye, Info, Library, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { platformRequest } from '../api';
 import {
   Button,
@@ -23,10 +23,13 @@ import {
   HONESTY,
   LANGUAGES,
   USE_MOCK_CATALOG,
+  deleteMockRow,
+  draftPayload,
   iconFor,
   languageLabel,
   listMockRows,
   rowToDraft,
+  upsertMockRow,
   type LibraryRow,
 } from '../lib/library-catalog';
 
@@ -44,12 +47,71 @@ function TemplateAvatar({ row }: { row: LibraryRow }) {
   );
 }
 
-/** View opens the WhatsApp preview drawer; Edit redirects to the editor page. Buttons stop row-click propagation. */
-function RowActions({ row, onView, onEdit }: { row: LibraryRow; onView: () => void; onEdit: () => void }) {
+/** View opens the WhatsApp preview drawer; Edit redirects to the editor page; ⋮ menu holds the rest. */
+function RowActions({
+  row,
+  onView,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  menuOpen,
+  setMenuOpen,
+  canWrite,
+}: {
+  row: LibraryRow;
+  onView: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  menuOpen: boolean;
+  setMenuOpen: (open: boolean) => void;
+  canWrite: boolean;
+}) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [copied, setCopied] = useState(false);
   const stop = (fn: () => void) => (event: React.MouseEvent) => {
     event.stopPropagation();
     fn();
   };
+
+  const copySlug = () => {
+    void navigator.clipboard?.writeText(row.slug).catch(() => {});
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (event: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen, setMenuOpen]);
+
+  const menuItem = (label: string, icon: React.ReactNode, onClick: () => void, tone: 'default' | 'danger' = 'default') => (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={stop(onClick)}
+      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors ${
+        tone === 'danger'
+          ? 'text-rose-700 hover:bg-rose-50'
+          : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-900'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+
   return (
     <div className="flex shrink-0 items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
       <Button variant="secondary" size="sm" onClick={stop(onView)} aria-label={`View ${row.title}`}>
@@ -58,6 +120,35 @@ function RowActions({ row, onView, onEdit }: { row: LibraryRow; onView: () => vo
       <Button variant="secondary" size="sm" onClick={stop(onEdit)} aria-label={`Edit ${row.title}`}>
         <Pencil className="h-3.5 w-3.5" /> Edit
       </Button>
+      <div className="relative" ref={menuRef}>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-8 px-0"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label={`More actions for ${row.title}`}
+          onClick={stop(() => setMenuOpen(!menuOpen))}
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </Button>
+        {menuOpen ? (
+          <div
+            role="menu"
+            aria-label={`Actions for ${row.title}`}
+            className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg"
+          >
+            {menuItem('Duplicate', <CopyPlus className="h-3.5 w-3.5" />, onDuplicate)}
+            {menuItem('Copy slug', copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />, copySlug)}
+            {canWrite ? (
+              <>
+                <div className="my-1 border-t border-slate-100" />
+                {menuItem('Delete', <Trash2 className="h-3.5 w-3.5" />, onDelete, 'danger')}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -121,6 +212,42 @@ export function TemplateCatalogPage() {
   const openCreate = () => navigate('/library/new');
   const openEdit = (row: LibraryRow) => navigate(`/library/${row.id}/edit`);
   const [viewing, setViewing] = useState<LibraryRow | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const closeMenu = () => setOpenMenuId(null);
+
+  const duplicateRow = (row: LibraryRow) => {
+    closeMenu();
+    if (USE_MOCK_CATALOG) {
+      const payload = draftPayload(rowToDraft(row));
+      upsertMockRow({
+        ...payload,
+        id: `mock-${Date.now()}`,
+        slug: `${row.slug}_copy`,
+        title: `${row.title} (copy)`,
+        published: false,
+        updatedAt: new Date().toISOString(),
+      } as LibraryRow);
+      setRows(listMockRows());
+      return;
+    }
+    // Real API: no clone endpoint yet — open the editor prefilled as a new draft (SAMYOJ-11 Graph clone).
+    navigate('/library/new', { state: { cloneFrom: row.id } });
+  };
+
+  const deleteRow = async (row: LibraryRow) => {
+    closeMenu();
+    if (USE_MOCK_CATALOG) {
+      deleteMockRow(row.id);
+      setRows(listMockRows());
+      return;
+    }
+    await platformRequest(`/library-templates/${row.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason: `Deleted library template "${row.slug}" from platform catalog` }),
+    });
+    load();
+  };
 
   if (error) {
     return (
@@ -280,7 +407,16 @@ export function TemplateCatalogPage() {
                 <span className="ml-auto text-[11px] text-slate-400">{formatAgo(row.updatedAt)}</span>
               </div>
               <div className="mt-2.5 border-t border-slate-200/80 pt-2.5">
-                <RowActions row={row} onView={() => setViewing(row)} onEdit={() => openEdit(row)} />
+                <RowActions
+                  row={row}
+                  onView={() => setViewing(row)}
+                  onEdit={() => openEdit(row)}
+                  onDuplicate={() => duplicateRow(row)}
+                  onDelete={() => void deleteRow(row)}
+                  menuOpen={openMenuId === row.id}
+                  canWrite={canWrite}
+                  setMenuOpen={(open) => (open ? setOpenMenuId(row.id) : closeMenu())}
+                />
               </div>
             </div>
           )}
@@ -324,7 +460,16 @@ export function TemplateCatalogPage() {
                       </td>
                       <td className="text-xs text-slate-600">{formatAgo(row.updatedAt)}</td>
                       <td className="text-right">
-                        <RowActions row={row} onView={() => setViewing(row)} onEdit={() => openEdit(row)} />
+                        <RowActions
+                          row={row}
+                          onView={() => setViewing(row)}
+                          onEdit={() => openEdit(row)}
+                          onDuplicate={() => duplicateRow(row)}
+                          onDelete={() => void deleteRow(row)}
+                          menuOpen={openMenuId === row.id}
+                  canWrite={canWrite}
+                          setMenuOpen={(open) => (open ? setOpenMenuId(row.id) : closeMenu())}
+                        />
                       </td>
                     </tr>
                   ))}
