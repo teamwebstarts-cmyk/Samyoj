@@ -188,6 +188,8 @@ const toHindiFooter = (english: string) => HINDI_FOOTERS[english] ?? '';
  * Shared chips roster for one body textarea (client wizard pattern): "Add variable"
  * appends the next unused {{n}}, and every chip inserts that token at the cursor.
  * Rendered once per language above its textarea; both share the Connect-variables roster.
+ * Only the English roster creates variables (onAddVariable) — Hindi consumes the same
+ * list so both bodies always have identical variable counts.
  */
 function BodyChipsRoster({
   lang,
@@ -202,7 +204,7 @@ function BodyChipsRoster({
   canWrite: boolean;
   charCount: number;
   onInsert: (index: number) => void;
-  onAddVariable: () => void;
+  onAddVariable?: () => void;
 }) {
   return (
     <div className="mb-1.5">
@@ -214,22 +216,26 @@ function BodyChipsRoster({
           </span>
         </span>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onAddVariable}
-            disabled={!canWrite}
-            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Plus className="h-3 w-3" />
-            Add variable
-          </button>
+          {onAddVariable ? (
+            <button
+              type="button"
+              onClick={onAddVariable}
+              disabled={!canWrite}
+              className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Plus className="h-3 w-3" />
+              Add variable
+            </button>
+          ) : null}
           <span className="text-[10px] font-medium text-slate-400">{charCount}/1024</span>
         </div>
       </div>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         {items.length === 0 ? (
           <span className="text-[10.5px] font-medium text-slate-400">
-            No variables yet — “Add variable” inserts {'{{n}}'} and lists it here.
+            {onAddVariable
+              ? <>No variables yet — “Add variable” inserts {'{{n}}'} and lists it here.</>
+              : 'No variables yet — add them in the English body; the same list appears here.'}
           </span>
         ) : (
           items.map((item) => (
@@ -625,7 +631,6 @@ export function TemplateEditorPage() {
                   canWrite={canWrite}
                   charCount={(draft.bodyHi || '').length}
                   onInsert={(index) => insertToken(index, 'hi')}
-                  onAddVariable={() => insertVariable('hi')}
                 />
                 <textarea
                   ref={bodyHiRef}
