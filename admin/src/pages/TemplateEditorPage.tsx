@@ -20,7 +20,6 @@ import { useOperator } from '../context/OperatorContext';
 import { platformRequest, ApiError } from '../api';
 import {
   EMPTY_DRAFT,
-  HONESTY,
   LANGUAGES,
   USE_MOCK_CATALOG,
   VARIABLE_SOURCE_OPTIONS,
@@ -235,11 +234,6 @@ function TemplateDetailsTable({ draft }: { draft: Draft }) {
               {draft.published ? 'Published in library' : 'Draft'}
             </span>
           </DetailRow>
-          <div className="pb-2 pt-1.5">
-            <p className="rounded-lg bg-sky-50 px-2.5 py-2 text-[11px] leading-relaxed text-sky-900 ring-1 ring-sky-200/70">
-              {HONESTY}
-            </p>
-          </div>
         </div>
       ) : null}
     </div>
