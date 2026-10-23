@@ -119,6 +119,9 @@ interface ChatThreadProps {
   }) => void;
   onCancelTemplate: () => void;
   onOpenTemplateMode: () => void;
+  /** Limit the template picker to utility templates. */
+  utilityTemplatesOnly?: boolean;
+  onOpenUtilityTemplate?: () => void;
 }
 
 export default function ChatThread({
@@ -186,6 +189,8 @@ export default function ChatThread({
   onSendTemplate,
   onCancelTemplate,
   onOpenTemplateMode,
+  utilityTemplatesOnly = false,
+  onOpenUtilityTemplate,
 }: ChatThreadProps) {
   const navigate = useNavigate();
   const tipFor = useGlassTipProps();
@@ -755,6 +760,7 @@ export default function ChatThread({
                       <MessageBubble
                         message={msg}
                         recipientName={conversation.contact.name}
+                        onOpenUtilityTemplate={onOpenUtilityTemplate}
                         grouping={{
                           first,
                           last: !nextMsg || nextMsg.direction !== msg.direction,
@@ -853,6 +859,7 @@ export default function ChatThread({
                 sending={sending}
                 canSendMessages={canSendMessages}
                 onCancel={onCancelTemplate}
+                onlyCategory={utilityTemplatesOnly ? 'UTILITY' : undefined}
                 windowClosed={!windowOpen}
                 contactName={conversation.contact?.name}
                 contactPhone={conversation.contact?.phone}

@@ -40,6 +40,8 @@ interface TemplateComposerProps {
   onCancel: () => void;
   /** Show a compact 24h-window hint inside the form body (not a duplicate page title). */
   windowClosed?: boolean;
+  /** After a marketing hold, only utility templates can be sent to this person. */
+  onlyCategory?: 'UTILITY';
   contactName?: string | null;
   contactPhone?: string | null;
   contactEmail?: string | null;
@@ -59,6 +61,7 @@ export default function TemplateComposer({
   canSendMessages = true,
   onCancel,
   windowClosed,
+  onlyCategory,
   contactName,
   contactPhone,
   contactEmail,
@@ -123,10 +126,24 @@ export default function TemplateComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once; cache handles revisits
   }, []);
 
-  const selected = useMemo(
-    () => templates.find((t) => t.name === templateName),
-    [templates, templateName],
+  const visibleTemplates = useMemo(
+    () =>
+      onlyCategory
+        ? templates.filter((template) => (template.category || '').toUpperCase() === onlyCategory)
+        : templates,
+    [onlyCategory, templates],
   );
+
+  const selected = useMemo(
+    () => visibleTemplates.find((t) => t.name === templateName),
+    [visibleTemplates, templateName],
+  );
+
+  useEffect(() => {
+    if (!onlyCategory || !visibleTemplates.length) return;
+    if (visibleTemplates.some((template) => template.name === templateName)) return;
+    setTemplateName(visibleTemplates[0].name);
+  }, [onlyCategory, templateName, visibleTemplates]);
 
   useEffect(() => {
     if (!selected) {
@@ -269,6 +286,28 @@ export default function TemplateComposer({
     );
   }
 
+  if (onlyCategory === 'UTILITY' && templates.length > 0 && visibleTemplates.length === 0) {
+    return (
+      <div className="bg-theme-surface px-4 py-4">
+        <p className="text-[13px] font-bold text-theme-fg">No utility template yet</p>
+        <p className="mt-1 text-[12px] text-theme-secondary">
+          WhatsApp held the marketing message for this person. Create an approved utility template, then send that.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            to="/templates/new"
+            className="inline-flex min-h-9 items-center rounded-xl bg-emerald-600 px-3 text-[12px] font-bold text-white hover:bg-emerald-700"
+          >
+            Create template
+          </Link>
+          <AppButton type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </AppButton>
+        </div>
+      </div>
+    );
+  }
+
   if (!templates.length) {
     return (
       <div className="bg-theme-surface px-4 py-4">
@@ -323,8 +362,13 @@ export default function TemplateComposer({
                 Templates can be sent anytime — useful for proactive updates even while the chat window is open.
               </p>
             )}
+            {onlyCategory === 'UTILITY' ? (
+              <p className="rounded-lg bg-rose-50/90 px-2.5 py-1.5 text-[11px] font-medium text-rose-950 ring-1 ring-rose-200/70 dark:bg-rose-950/40 dark:text-rose-100 dark:ring-rose-800/45">
+                Marketing was held for this person. These are the approved utility templates you can send instead.
+              </p>
+            ) : null}
             <TemplatePicker
-              templates={templates}
+              templates={visibleTemplates}
               value={templateName}
               onChange={handleTemplateChange}
             />

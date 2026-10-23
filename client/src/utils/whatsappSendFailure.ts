@@ -9,7 +9,8 @@ export type WhatsAppSendFailureAction =
   | 'meta_account'
   | 'template'
   | 'window'
-  | 'payment';
+  | 'payment'
+  | 'utility';
 
 export interface WhatsAppSendFailureExplanation {
   code?: number;
@@ -136,12 +137,16 @@ const BY_CODE: Record<number, Omit<WhatsAppSendFailureExplanation, 'code'>> = {
     action: 'retry',
   },
   131049: {
-    title: 'WhatsApp held this message back',
-    body: 'Meta did not deliver this marketing message to this person, to limit how often businesses message people who have not been replying. The template and the other recipients are fine. Sending it again right away will not get through.',
-    notice: 'WhatsApp held this one back to limit marketing to people who are not engaging. The template itself is fine.',
-    footnote: 'Retry stays off. A later reply from this person, or a utility template, is what opens the door again.',
+    title: 'Marketing message held back',
+    body: 'WhatsApp did not deliver this marketing template to this person, because they have not been engaging with marketing messages. The template is approved. The other recipients are fine.',
+    notice: 'Marketing was held for this person. Send a utility template instead of resending this one.',
+    steps: [
+      'Do not resend this same marketing template. WhatsApp will hold it again.',
+      'Send an approved utility template to this person.',
+    ],
+    footnote: 'A utility template can go through when a marketing one is held.',
     retryHelps: false,
-    action: 'template',
+    action: 'utility',
   },
   131000: {
     title: 'WhatsApp profile is not ready',
@@ -257,10 +262,22 @@ export function explainWhatsAppSendFailureFromMessage(message: {
     rawMessage: meta?.metaErrorHint || meta?.error || meta?.metaErrorTitle,
     errors: meta?.errors,
   });
+  if (explained.retryHelps === false) return explained;
   if (typeof meta?.retryHelps === 'boolean') {
     return { ...explained, retryHelps: meta.retryHelps };
   }
   return explained;
+}
+
+/** Meta code 131049: marketing frequency hold for one recipient. */
+export function isMarketingEngagementHold(message?: string | null): boolean {
+  if (!message?.trim()) return false;
+  return (
+    explainWhatsAppSendFailure({
+      code: parseWhatsAppMetaCode(message),
+      rawMessage: message,
+    }).code === 131049
+  );
 }
 
 export function sendFailureActionLink(

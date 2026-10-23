@@ -50,6 +50,20 @@ describe('explainWhatsAppSendFailure', () => {
     expect(showsKnownProviderFailure('SENT', { metaCode: 133010 })).toBe(false);
   });
 
+  it('explains a marketing hold and ignores a stored retry flag', () => {
+    const explained = explainWhatsAppSendFailureFromMessage({
+      type: 'TEMPLATE',
+      metadata: {
+        error: 'This message was not delivered to maintain healthy ecosystem engagement.',
+        retryHelps: true,
+      },
+    });
+    expect(explained.code).toBe(131049);
+    expect(explained.action).toBe('utility');
+    expect(explained.retryHelps).toBe(false);
+    expect(explained.steps?.join(' ').toLowerCase()).toMatch(/utility template/);
+  });
+
   it('reads stored message metadata including Graph errors[]', () => {
     const explained = explainWhatsAppSendFailureFromMessage({
       type: 'TEMPLATE',

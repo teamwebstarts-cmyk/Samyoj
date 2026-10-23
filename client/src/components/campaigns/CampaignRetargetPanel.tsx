@@ -4,8 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCheck,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   MessageCircle,
   MessageSquare,
@@ -19,8 +17,8 @@ import AppButton from '../ui/AppButton';
 import { campaignApi, contactApi } from '../../services/api';
 import { toastError, toastSuccess } from '../../utils/toast';
 import { formatRecipientError } from '../../utils/plainLanguage';
+import { isMarketingEngagementHold } from '../../utils/whatsappSendFailure';
 import { getAvatarGradient, getInitials } from '../inbox/inboxUtils';
-import { useHorizontalWheelScroll } from '../../hooks/useHorizontalWheelScroll';
 import type { Campaign, CampaignAnalytics } from '../../types';
 import CampaignAnalyticsPanel from './CampaignAnalyticsPanel';
 
@@ -83,101 +81,41 @@ function CampaignTabRail({
   counts: CohortCounts | null;
   onTabChange: (next: RetargetTab) => void;
 }) {
-  const scrollerRef = useHorizontalWheelScroll<HTMLDivElement>();
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const measure = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 6);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
-  };
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    measure();
-    el.addEventListener('scroll', measure, { passive: true });
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => {
-      el.removeEventListener('scroll', measure);
-      observer.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    const active = el?.querySelector<HTMLElement>(`[data-campaign-tab="${tab}"]`);
-    active?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-    measure();
-  }, [tab]);
-
-  const nudge = (direction: -1 | 1) => {
-    scrollerRef.current?.scrollBy({ left: direction * 168, behavior: 'smooth' });
-  };
-
   return (
-    <div className="sticky top-0 z-20 -mx-4 border-b border-slate-100 bg-[var(--color-surface)]/95 px-4 py-2 backdrop-blur-sm sm:-mx-6 sm:px-6 dark:border-slate-800">
-      <div className="relative">
-        {canScrollLeft && (
-          <button
-            type="button"
-            aria-label="Scroll tabs left"
-            onClick={() => nudge(-1)}
-            className="absolute left-0 top-1/2 z-10 flex h-9 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-white/95 text-slate-600 shadow-sm ring-1 ring-slate-200 dark:bg-slate-950/95 dark:text-slate-300 dark:ring-slate-700"
-          >
-            <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        )}
-        <div
-          ref={scrollerRef}
-          role="tablist"
-          aria-label="Campaign retarget sections"
-          className={`flex min-w-0 gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth py-0.5 touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
-            canScrollLeft ? 'pl-9' : ''
-          } ${canScrollRight ? 'pr-9' : ''}`}
-        >
-          {TABS.map((item) => {
-            const Icon = item.icon;
-            const count = item.countKey && counts ? counts[item.countKey] : null;
-            const selected = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                data-campaign-tab={item.id}
-                aria-selected={selected}
-                onClick={() => onTabChange(item.id)}
-                className={`inline-flex h-11 min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold touch-manipulation transition focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
-                  selected
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
-                {item.label}
-                {typeof count === 'number' ? (
-                  <span className={`tabular-nums ${selected ? 'text-white/80' : 'text-slate-400'}`}>
-                    {count.toLocaleString()}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-        {canScrollRight && (
-          <button
-            type="button"
-            aria-label="Scroll tabs right"
-            onClick={() => nudge(1)}
-            className="absolute right-0 top-1/2 z-10 flex h-9 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-white/95 text-slate-600 shadow-sm ring-1 ring-slate-200 dark:bg-slate-950/95 dark:text-slate-300 dark:ring-slate-700"
-          >
-            <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        )}
+    <div
+      className="sticky top-0 z-20 -mx-1 border-b border-slate-100 bg-[var(--color-surface)]/95 py-2 backdrop-blur-sm dark:border-slate-800"
+      role="tablist"
+      aria-label="Campaign retarget sections"
+    >
+      <div className="flex min-w-0 flex-wrap gap-1.5">
+        {TABS.map((item) => {
+          const Icon = item.icon;
+          const count = item.countKey && counts ? counts[item.countKey] : null;
+          const selected = tab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              data-campaign-tab={item.id}
+              aria-selected={selected}
+              onClick={() => onTabChange(item.id)}
+              className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold touch-manipulation transition focus:outline-none focus:ring-2 focus:ring-emerald-500/30 sm:px-3 sm:text-[12px] ${
+                selected
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
+              <span className="whitespace-nowrap">{item.label}</span>
+              {typeof count === 'number' ? (
+                <span className={`tabular-nums ${selected ? 'text-white/80' : 'text-slate-400'}`}>
+                  {count.toLocaleString()}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -268,7 +206,12 @@ export default function CampaignRetargetPanel({
       const params = new URLSearchParams();
       params.set('fromCampaign', campaignId);
       params.set('cohort', kind);
-      params.set('name', `${campaignName} · follow-up`);
+      if (kind === 'failed') {
+        params.set('category', 'UTILITY');
+        params.set('name', `${campaignName} · utility`);
+      } else {
+        params.set('name', `${campaignName} · follow-up`);
+      }
       navigate(`/campaigns/new?${params.toString()}`);
     } catch {
       toastError('Could not start a follow-up from this list.');
@@ -347,6 +290,12 @@ export default function CampaignRetargetPanel({
       ]
     : [];
 
+  const failedWithReason = rows.filter((row) => row.errorMessage);
+  const failedAreMarketingHolds =
+    tab === 'failed' &&
+    failedWithReason.length > 0 &&
+    failedWithReason.every((row) => isMarketingEngagementHold(row.errorMessage));
+
   return (
     <div className="min-w-0 space-y-4">
       <CampaignTabRail tab={tab} counts={counts} onTabChange={setTab} />
@@ -420,8 +369,8 @@ export default function CampaignRetargetPanel({
                         <span className="block text-[12px] font-bold text-slate-800 dark:text-slate-100">
                           {item.label}
                         </span>
-                        <span className="block text-[11px] font-medium text-slate-400">
-                          {item.value.toLocaleString()} people · open list
+                        <span className="block text-[11px] font-medium leading-snug text-slate-400">
+                          {item.value.toLocaleString()} people
                         </span>
                       </span>
                     </button>
@@ -446,7 +395,7 @@ export default function CampaignRetargetPanel({
               {loading ? 'Loading…' : `${total.toLocaleString()} contacts in this list`}
             </p>
             <div className="mt-2.5 flex flex-col gap-2">
-              {tab === 'failed' && onRetryFailed && (
+              {tab === 'failed' && onRetryFailed && !failedAreMarketingHolds && (
                 <AppButton
                   size="sm"
                   variant="secondary"
@@ -471,9 +420,11 @@ export default function CampaignRetargetPanel({
                 >
                   {startingFollowUp
                     ? 'Preparing…'
-                    : tab === 'window'
-                      ? 'Send template'
-                      : 'Broadcast to these'}
+                    : tab === 'failed'
+                      ? 'Send utility to these'
+                      : tab === 'window'
+                        ? 'Send template'
+                        : 'Broadcast to these'}
                 </AppButton>
               )}
               <form
@@ -509,7 +460,7 @@ export default function CampaignRetargetPanel({
             {tab === 'failed' && (
               <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-red-700 dark:text-red-300">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Check the error, then retry the same template or drop the number from your audience.
+                Read the reason on each person. A marketing hold will not clear if you resend the same template. Send a utility template to those people.
               </p>
             )}
           </div>
@@ -521,7 +472,8 @@ export default function CampaignRetargetPanel({
                   type="button"
                   className="flex min-h-[48px] w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20"
                   onClick={() => {
-                    if (row.conversationId) navigate(`/inbox?conversation=${row.conversationId}`);
+                    const utility = isMarketingEngagementHold(row.errorMessage) ? '&utility=1' : '';
+                    if (row.conversationId) navigate(`/inbox?conversation=${row.conversationId}${utility}`);
                     else navigate(`/inbox?new=true&phone=${encodeURIComponent(row.phone)}`);
                   }}
                 >

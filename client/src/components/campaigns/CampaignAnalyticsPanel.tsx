@@ -1,6 +1,7 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import type { CampaignAnalytics } from '../../types';
 import { formatRecipientError } from '../../utils/plainLanguage';
+import { isMarketingEngagementHold } from '../../utils/whatsappSendFailure';
 
 interface CampaignAnalyticsPanelProps {
   analytics: CampaignAnalytics | null;
@@ -36,6 +37,8 @@ export default function CampaignAnalyticsPanel({
   if (!analytics) return null;
 
   const { campaign, topErrors, byStatus } = analytics;
+  const marketingHoldsOnly =
+    topErrors.length > 0 && topErrors.every((err) => isMarketingEngagementHold(err.message));
 
   if (section === 'overview') {
     if (campaign.failedCount > 0) {
@@ -67,10 +70,12 @@ export default function CampaignAnalyticsPanel({
             {campaign.failedCount.toLocaleString()} failed
           </p>
           <p className="mt-0.5 text-[12px] font-medium text-red-800/85 dark:text-red-200/80">
-            Fix the issue below, then retry.
+            {marketingHoldsOnly
+              ? 'WhatsApp held the marketing template for these people. Send a utility template from the Failed tab.'
+              : 'Read the reason below. Retry only when the reason is something you can fix.'}
           </p>
         </div>
-        {campaign.failedCount > 0 && onRetryFailed && (
+        {campaign.failedCount > 0 && onRetryFailed && !marketingHoldsOnly && (
           <button
             type="button"
             onClick={onRetryFailed}

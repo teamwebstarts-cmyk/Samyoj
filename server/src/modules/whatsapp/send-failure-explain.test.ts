@@ -53,7 +53,9 @@ describe('explainWhatsAppSendFailure', () => {
     });
     expect(explained.code).toBe(131049);
     expect(explained.retryHelps).toBe(false);
+    expect(explained.action).toBe('utility');
     expect(explained.body.toLowerCase()).toMatch(/other recipients are fine/);
+    expect(explained.steps?.join(' ').toLowerCase()).toMatch(/utility template/);
   });
 
   it('explains 24h window and template param mismatch', () => {

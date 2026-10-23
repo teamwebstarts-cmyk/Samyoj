@@ -20,12 +20,15 @@ export default function CampaignDetailHeader({ campaign }: CampaignDetailHeaderP
             label={meta.label}
             className="normal-case tracking-normal"
           />
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100/90 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
-            <LayoutTemplate className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-            {campaign.templateName}
+          <span
+            className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-slate-100/90 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"
+            title={campaign.templateName}
+          >
+            <LayoutTemplate className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span className="truncate">{campaign.templateName}</span>
           </span>
         </div>
-        <h2 className="mt-3 text-[1.15rem] font-extrabold leading-snug tracking-tight text-slate-900 dark:text-white">
+        <h2 className="mt-3 break-words text-[1.15rem] font-extrabold leading-snug tracking-tight text-slate-900 dark:text-white">
           {campaign.name}
         </h2>
         <p className="mt-1 text-[12px] font-medium text-slate-500 dark:text-slate-400">

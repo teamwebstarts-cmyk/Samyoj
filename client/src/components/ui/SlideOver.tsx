@@ -156,12 +156,12 @@ export default function SlideOver({
           </div>
         </div>
 
-        <div className={`modal-panel__body flex-1 px-4 py-4 sm:px-5 sm:py-4 ${still ? 'modal-panel__body--still' : 'overflow-y-auto overscroll-y-contain'}`}>
+        <div className={`modal-panel__body flex-1 min-w-0 px-4 py-4 sm:px-5 sm:py-4 ${still ? 'modal-panel__body--still' : 'overflow-y-auto overscroll-y-contain'}`}>
           {children}
         </div>
 
         {footer && (
-          <div className="modal-panel__footer sticky bottom-0 border-t border-theme-border bg-theme-surface/95 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:px-6">
+          <div className="modal-panel__footer sticky bottom-0 min-w-0 border-t border-theme-border bg-theme-surface/95 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:px-6">
             {footer}
           </div>
         )}

@@ -97,6 +97,8 @@ interface MessageBubbleProps {
   animateEnter?: boolean;
   /** Conversation contact, used to correct older template bubbles that stored a sample name. */
   recipientName?: string | null;
+  /** Open the composer on utility templates after a marketing hold. */
+  onOpenUtilityTemplate?: () => void;
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -395,6 +397,7 @@ export default function MessageBubble({
   isActiveMatch,
   animateEnter = false,
   recipientName,
+  onOpenUtilityTemplate,
 }: MessageBubbleProps) {
   const tipFor = useGlassTipProps();
   const [localViewer, setLocalViewer] = useState<MediaViewerItem | null>(null);
@@ -1035,6 +1038,7 @@ export default function MessageBubble({
               retrying={retrying}
               explanation={sendFailure}
               onRetry={canRetryFailed ? () => onRetry?.(message) : undefined}
+              onOpenUtility={onOpenUtilityTemplate}
             />
             <AmbiguousStatusRow show={isAmbiguous && !knownFailure} />
             </div>
@@ -1101,6 +1105,7 @@ export default function MessageBubble({
             retrying={retrying}
             explanation={sendFailure}
             onRetry={canRetryFailed ? () => onRetry?.(message) : undefined}
+            onOpenUtility={onOpenUtilityTemplate}
           />
           <AmbiguousStatusRow show={isAmbiguous && !knownFailure} />
         </div>
@@ -1124,11 +1129,13 @@ function FailedRetryRow({
   show,
   retrying,
   onRetry,
+  onOpenUtility,
   explanation,
 }: {
   show: boolean;
   retrying?: boolean;
   onRetry?: () => void;
+  onOpenUtility?: () => void;
   explanation: ReturnType<typeof explainWhatsAppSendFailureFromMessage> | null;
 }) {
   if (!show || !explanation) return null;
@@ -1198,6 +1205,15 @@ function FailedRetryRow({
                     {actionLink.label}
                   </Link>
                 )
+              ) : null}
+              {explanation.action === 'utility' && onOpenUtility ? (
+                <button
+                  type="button"
+                  onClick={onOpenUtility}
+                  className="inline-flex items-center rounded-lg bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/60 focus-visible:ring-offset-1 dark:bg-rose-500 dark:hover:bg-rose-400"
+                >
+                  Send utility template
+                </button>
               ) : null}
               {onRetry ? (
                 <button

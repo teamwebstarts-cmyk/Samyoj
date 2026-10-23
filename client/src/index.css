@@ -4375,6 +4375,8 @@
     position: relative;
     z-index: 1;
     display: flex;
+    width: 100%;
+    min-width: 0;
     height: 100%;
     max-height: 100dvh;
     flex-direction: column;
@@ -4444,6 +4446,8 @@
   .modal-panel__body {
     flex: 1;
     min-height: 0;
+    min-width: 0;
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
   }

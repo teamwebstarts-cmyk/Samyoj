@@ -395,7 +395,13 @@ export default function CampaignWizardPage() {
     if (id || prefilledTemplateName || !templates.length || form.templateName) return;
     const utility = templates.find((template) => (template.category || '').toUpperCase() === 'UTILITY');
     const auth = templates.find((template) => (template.category || '').toUpperCase() === 'AUTHENTICATION');
-    const firstTemplate = fromCampaign ? utility || auth || templates[0] : templates[0];
+    const requireUtility = searchParams.get('category') === 'UTILITY';
+    const firstTemplate = requireUtility
+      ? utility
+      : fromCampaign
+        ? utility || auth || templates[0]
+        : templates[0];
+    if (!firstTemplate) return;
     setForm((previous) => ({
       ...previous,
       templateName: firstTemplate.name,
@@ -635,14 +641,29 @@ export default function CampaignWizardPage() {
         <CampaignMessageStep
           form={form}
           setForm={setForm}
-          templates={templates}
+          templates={
+            searchParams.get('category') === 'UTILITY'
+              ? templates.filter((template) => (template.category || '').toUpperCase() === 'UTILITY')
+              : templates
+          }
           templatesLoading={templatesLoading}
           templatesLoadError={templatesLoadError}
           onRetryTemplates={loadTemplates}
-          selectedTemplate={selectedTemplate}
+          selectedTemplate={
+            searchParams.get('category') === 'UTILITY' &&
+            (selectedTemplate?.category || '').toUpperCase() !== 'UTILITY'
+              ? undefined
+              : selectedTemplate
+          }
           whatsappNumbers={whatsappNumbers}
         />
+        {searchParams.get('category') === 'UTILITY' && (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
+            These people were held on a marketing template. This send only offers approved utility templates.
+          </p>
+        )}
         {searchParams.get('fromCampaign') &&
+          searchParams.get('category') !== 'UTILITY' &&
           (selectedTemplate?.category || '').toUpperCase() === 'MARKETING' && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
               Follow-ups default to Utility. Marketing templates can hurt your quality rating.

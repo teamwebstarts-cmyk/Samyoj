@@ -1163,89 +1163,90 @@ export default function CampaignsPage() {
         accent="violet"
         footer={
           viewOnly ? (
-            <div className="flex w-full flex-col gap-2.5">
-              <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                {canManageCampaigns && editing && canRescheduleCampaign(editing.status) && (
-                  <AppButton
-                    size="sm"
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    icon={<CalendarClock size={14} />}
-                    onClick={() => setRescheduleTarget(editing)}
-                  >
-                    Reschedule
-                  </AppButton>
-                )}
-                {canManageCampaigns && editing && canEditCampaign(editing.status) && (
-                  <>
-                    <AppButton size="sm" className="w-full sm:w-auto" icon={<Play size={14} />} onClick={() => handleSend(editing.id)}>
-                      Send now
-                    </AppButton>
-                    <AppButton
-                      size="sm"
-                      variant="secondary"
-                      className="w-full sm:w-auto"
-                      onClick={() => {
-                        if (!editing) return;
-                        const campaign = editing;
-                        closeSlide();
-                        openEdit(campaign);
-                      }}
-                    >
-                      Edit campaign
-                    </AppButton>
-                  </>
-                )}
-                {canManageCampaigns && editing?.status === 'RUNNING' && (
-                  <AppButton
-                    size="sm"
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    icon={<Pause size={14} />}
-                    onClick={() => editing && handleAction(() => campaignApi.pause(editing.id), 'Campaign paused')}
-                  >
-                    Pause
-                  </AppButton>
-                )}
-                {canManageCampaigns && editing?.status === 'PAUSED' && (
-                  <AppButton
-                    size="sm"
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    icon={<Play size={14} />}
-                    onClick={() => editing && handleAction(() => campaignApi.resume(editing.id), 'Campaign resumed')}
-                  >
-                    Resume
-                  </AppButton>
-                )}
-              </div>
-              <div className="flex flex-col gap-2 border-t border-theme-border pt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                {editing && (
-                  <CampaignActionsMenu>
-                    {canManageCampaigns && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
-                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}>
-                        <Square size={14} /> Cancel campaign
-                      </button>
-                    )}
-                    {canManageCampaigns && editing.failedCount > 0 && (
-                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Failed campaign messages queued for retry', 'Could not retry failed messages. Refresh and try again.')}>
-                        <RefreshCw size={14} /> Retry failed sends
-                      </button>
-                    )}
-                    {canManageCampaigns && (
-                      <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={handleDuplicate}>
-                        <Copy size={14} /> Duplicate campaign
-                      </button>
-                    )}
-                    <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleExport(editing.id, editing.name)}>
-                      <Download size={14} /> Export results
-                    </button>
-                  </CampaignActionsMenu>
-                )}
-                <AppButton size="sm" variant="secondary" className="w-full sm:w-auto" onClick={closeSlide}>
-                  Close
+            <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-2">
+              {canManageCampaigns && editing && canRescheduleCampaign(editing.status) && (
+                <AppButton
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0"
+                  icon={<CalendarClock size={14} />}
+                  onClick={() => setRescheduleTarget(editing)}
+                >
+                  Reschedule
                 </AppButton>
-              </div>
+              )}
+              {canManageCampaigns && editing && canEditCampaign(editing.status) && (
+                <>
+                  <AppButton
+                    size="sm"
+                    className="shrink-0"
+                    icon={<Play size={14} />}
+                    onClick={() => handleSend(editing.id)}
+                  >
+                    Send now
+                  </AppButton>
+                  <AppButton
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => {
+                      if (!editing) return;
+                      const campaign = editing;
+                      closeSlide();
+                      openEdit(campaign);
+                    }}
+                  >
+                    Edit campaign
+                  </AppButton>
+                </>
+              )}
+              {canManageCampaigns && editing?.status === 'RUNNING' && (
+                <AppButton
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0"
+                  icon={<Pause size={14} />}
+                  onClick={() => editing && handleAction(() => campaignApi.pause(editing.id), 'Campaign paused')}
+                >
+                  Pause
+                </AppButton>
+              )}
+              {canManageCampaigns && editing?.status === 'PAUSED' && (
+                <AppButton
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0"
+                  icon={<Play size={14} />}
+                  onClick={() => editing && handleAction(() => campaignApi.resume(editing.id), 'Campaign resumed')}
+                >
+                  Resume
+                </AppButton>
+              )}
+              {editing && (
+                <CampaignActionsMenu>
+                  {canManageCampaigns && ['RUNNING', 'PAUSED', 'SCHEDULED'].includes(editing.status) && (
+                    <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.cancel(editing.id), 'Campaign cancelled')}>
+                      <Square size={14} /> Cancel campaign
+                    </button>
+                  )}
+                  {canManageCampaigns && editing.failedCount > 0 && (
+                    <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleAction(() => campaignApi.retryFailed(editing.id), 'Failed campaign messages queued for retry', 'Could not retry failed messages. Refresh and try again.')}>
+                      <RefreshCw size={14} /> Retry failed sends
+                    </button>
+                  )}
+                  {canManageCampaigns && (
+                    <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={handleDuplicate}>
+                      <Copy size={14} /> Duplicate campaign
+                    </button>
+                  )}
+                  <button type="button" role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-theme-secondary hover:bg-theme-subtle hover:text-theme-fg" onClick={() => handleExport(editing.id, editing.name)}>
+                    <Download size={14} /> Export results
+                  </button>
+                </CampaignActionsMenu>
+              )}
+              <AppButton size="sm" variant="secondary" className="shrink-0" onClick={closeSlide}>
+                Close
+              </AppButton>
             </div>
           ) : (
             <SlideOverFooter

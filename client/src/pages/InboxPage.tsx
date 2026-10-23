@@ -137,6 +137,7 @@ export default function InboxPage() {
   const [aiBotsLoading, setAiBotsLoading] = useState(true);
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
   const [templateMode, setTemplateMode] = useState(false);
+  const [utilityTemplatesOnly, setUtilityTemplatesOnly] = useState(false);
   const [interactiveOpen, setInteractiveOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -145,18 +146,26 @@ export default function InboxPage() {
 
   useEffect(() => {
     const conversationId = searchParams.get('conversation');
-    if (!conversationId) return;
-    if (selected?.id === conversationId) {
+    const openUtility = searchParams.get('utility') === '1';
+    if (!conversationId && !(openUtility && selected)) return;
+    if (selected && (!conversationId || selected.id === conversationId)) {
+      if (openUtility) {
+        setInteractiveOpen(false);
+        setUtilityTemplatesOnly(true);
+        setTemplateMode(true);
+      }
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
           next.delete('conversation');
+          next.delete('utility');
           return next;
         },
         { replace: true }
       );
-      return;
+      if (!conversationId || selected.id === conversationId) return;
     }
+    if (!conversationId) return;
     let cancelled = false;
     void inboxApi
       .get(conversationId)
@@ -994,8 +1003,20 @@ export default function InboxPage() {
                     const ok = await handleSendTemplate(payload);
                     if (ok) setTemplateMode(false);
                   }}
-                  onCancelTemplate={() => setTemplateMode(false)}
-                  onOpenTemplateMode={() => setTemplateMode(true)}
+                  utilityTemplatesOnly={utilityTemplatesOnly}
+                  onOpenUtilityTemplate={() => {
+                    setInteractiveOpen(false);
+                    setUtilityTemplatesOnly(true);
+                    setTemplateMode(true);
+                  }}
+                  onCancelTemplate={() => {
+                    setUtilityTemplatesOnly(false);
+                    setTemplateMode(false);
+                  }}
+                  onOpenTemplateMode={() => {
+                    setUtilityTemplatesOnly(false);
+                    setTemplateMode(true);
+                  }}
                 />
 
                 <InboxDetailsPanel
