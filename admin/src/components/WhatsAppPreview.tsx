@@ -239,6 +239,11 @@ export function TemplateDetailsTable({ draft }: { draft: Draft }) {
       {open ? (
         <div className="px-4 py-1.5">
           <DetailRow label="Name">
+            <span className="truncate" title={draft.title || undefined}>
+              {draft.title || 'Untitled'}
+            </span>
+          </DetailRow>
+          <DetailRow label="Slug">
             <span className="truncate font-mono text-[11px]" title={draft.slug || undefined}>
               {draft.slug || 'untitled'}
             </span>
