@@ -403,11 +403,7 @@ select:focus-visible {
   background: var(--table-row-even);
 }
 
-.data-table tbody tr[data-clickable='true'] {
-  cursor: pointer;
-}
-
-.data-table tbody tr[data-clickable='true']:hover {
+.data-table tbody tr:hover {
   background: var(--table-row-hover);
 }
 
@@ -417,7 +413,6 @@ select:focus-visible {
  * breakpoints read as the same component.
  */
 .data-list > * {
-  cursor: pointer;
   border-bottom: 1px solid var(--dust);
   transition: background-color 0.12s ease;
 }
@@ -426,10 +421,8 @@ select:focus-visible {
   background: var(--table-row-even);
 }
 
-.data-list > *:hover,
-.data-list > *:focus-visible {
+.data-list > *:hover {
   background: var(--table-row-hover);
-  outline: none;
 }
 
 .data-list > *:last-child {

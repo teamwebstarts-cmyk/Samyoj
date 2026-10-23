@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Smartphone, Trash2 } from 'lucide-react';
+import { BadgeCheck, BookOpen, Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
 import { WhatsAppPreview } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
@@ -13,12 +13,137 @@ import {
   deleteMockRow,
   draftPayload,
   findMockRow,
+  languageLabel,
   rowToDraft,
   templateVariableCount,
   upsertMockRow,
   type Draft,
   type LibraryRow,
 } from '../lib/library-catalog';
+
+/** Persistent stepper across Catalog → Edit → Publish (mirrors client wizard stages). */
+const STAGES = [
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'edit', label: 'Edit' },
+  { id: 'publish', label: 'Publish' },
+] as const;
+
+function EditorStepper({ onStepChange }: { onStepChange: (step: number) => void }) {
+  // Editor is always stage 1 (Edit); Catalog (0) is behind the user, Publish (2)
+  // happens when the save request lands. Fixed state keeps the header persistent
+  // without fake interactivity.
+  const activeStep = 1;
+  return (
+    <nav aria-label="Template library steps" className="flex shrink-0 items-center justify-end gap-0">
+      <ol className="flex items-center">
+        {STAGES.map((stage, index) => {
+          const completed = index < activeStep;
+          const active = index === activeStep;
+          const reachable = index <= activeStep;
+          return (
+            <li key={stage.id} className="flex items-center">
+              <button
+                type="button"
+                disabled={!reachable || index === activeStep}
+                onClick={() => reachable && onStepChange(index)}
+                className={`flex items-center gap-2 rounded-lg px-1 py-0.5 outline-none transition ${
+                  reachable && index !== activeStep ? 'cursor-pointer hover:bg-indigo-50' : 'cursor-default'
+                }`}
+                aria-current={active ? 'step' : undefined}
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ${
+                    completed
+                      ? 'bg-emerald-500 text-white'
+                      : active
+                        ? 'bg-indigo-600 text-white shadow-[0_2px_8px_rgba(79,70,229,0.35)]'
+                        : 'bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  {completed ? <Check className="h-3.5 w-3.5" strokeWidth={2.75} /> : index + 1}
+                </span>
+                <span
+                  className={`hidden text-[12px] font-semibold sm:inline ${
+                    active ? 'text-indigo-700' : 'text-slate-500'
+                  }`}
+                >
+                  {stage.label}
+                </span>
+              </button>
+              {index < STAGES.length - 1 && (
+                <span
+                  aria-hidden
+                  className={`mx-2 h-px w-6 sm:w-10 ${index < activeStep ? 'bg-emerald-400' : 'bg-slate-200'}`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
+      <span className="shrink-0 text-[11.5px] font-semibold text-slate-500">{label}</span>
+      <span className="min-w-0 text-right text-[11.5px] font-semibold text-slate-800">{children}</span>
+    </div>
+  );
+}
+
+/** Collapsible details table under the phone — mirrors client TemplateDetailsCard. */
+function TemplateDetailsTable({ draft }: { draft: Draft }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="mt-3 overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50/80"
+      >
+        <span className="text-[13px] font-bold leading-5 text-slate-900">Template details</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+      </button>
+      {open ? (
+        <div className="px-4 py-1.5">
+          <DetailRow label="Name">
+            <span className="truncate font-mono text-[11px]" title={draft.slug || undefined}>
+              {draft.slug || 'untitled'}
+            </span>
+          </DetailRow>
+          <DetailRow label="Category">
+            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200/70">
+              {draft.category === 'MARKETING' ? 'Marketing' : draft.category === 'AUTHENTICATION' ? 'Authentication' : 'Utility'}
+            </span>
+          </DetailRow>
+          <DetailRow label="Language">{languageLabel(draft.language)}</DetailRow>
+          <DetailRow label="Buttons">{draft.buttonText && draft.buttonUrl ? draft.buttonText : 'None'}</DetailRow>
+          <DetailRow label="Variables">
+            {templateVariableCount(draft.body, draft.bodyHi)
+              ? `${templateVariableCount(draft.body, draft.bodyHi)} variable${
+                  templateVariableCount(draft.body, draft.bodyHi) === 1 ? '' : 's'
+                } ${Array.from({ length: templateVariableCount(draft.body, draft.bodyHi) }, (_, i) => `{{${i + 1}}}`).join(' ')}`
+              : 'None'}
+          </DetailRow>
+          <DetailRow label="Status">
+            <span className="inline-flex items-center gap-1 text-emerald-600">
+              <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+              {draft.published ? 'Published in library' : 'Draft'}
+            </span>
+          </DetailRow>
+          <div className="pb-2 pt-1.5">
+            <p className="rounded-lg bg-sky-50 px-2.5 py-2 text-[11px] leading-relaxed text-sky-900 ring-1 ring-sky-200/70">
+              {HONESTY}
+            </p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function TemplateEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -157,21 +282,25 @@ export function TemplateEditorPage() {
   );
 
   return (
-    <div className="space-y-6 pb-32"> {/* pb-32: keep clear of the floating action bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm" aria-hidden>
-              <Smartphone className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                {row ? 'Edit Template' : 'Create Template (Manual)'}
-              </h1>
-              <p className="text-[13px] text-slate-600">Write your template content and configure details.</p>
-            </div>
+    <div className="pb-32">
+      {/* Persistent wizard header: icon + title left, stepper right (client wizard pattern) */}
+      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+            <BookOpen className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-[22px]">
+              {row ? 'Edit library template' : 'Create library template'}
+            </h1>
+            <p className="mt-0.5 text-[12px] font-medium leading-snug text-slate-500">
+              {row
+                ? 'Pick up where you left off — name, language, body, and buttons are pre-filled from the catalog.'
+                : 'Name the draft, write the body, and publish it to the tenant library.'}
+            </p>
           </div>
         </div>
+        <EditorStepper onStepChange={() => navigate('/library')} />
       </div>
 
       {saveError ? <Notice tone="error">{saveError}</Notice> : null}
@@ -179,7 +308,7 @@ export function TemplateEditorPage() {
         <Notice>ANALYST can view this catalog. SUPPORT and SUPER_ADMIN can publish changes.</Notice>
       ) : null}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
         {/* Left: form column — order: details → content → variables → buttons */}
         <div className="min-w-0 space-y-4">
           <section className="dashboard-card p-4 sm:p-5">
@@ -318,15 +447,30 @@ export function TemplateEditorPage() {
           </label>
         </div>
 
-        {/* Right: live WhatsApp preview */}
-        <aside className="dashboard-card overflow-hidden lg:sticky lg:top-20">
-          <div className="border-b border-slate-200/80 px-4 py-3">
-            <h2 className="text-sm font-bold tracking-tight text-slate-900">Whatsapp preview</h2>
+        {/* Right: Template Preview panel — WhatsApp surface + details table (client library pattern) */}
+        <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+          <div className="overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+              <p className="flex min-w-0 items-center gap-2 text-[13px] font-bold leading-5 text-slate-900">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-[#25D366]" aria-hidden>
+                  <path d="M12 2a10 10 0 0 0-8.66 15.02L2 22l5.12-1.34A10 10 0 1 0 12 2Zm5.4 14.02c-.23.64-1.35 1.23-1.86 1.27-.5.05-.97.23-3.27-.68-2.77-1.09-4.53-3.9-4.66-4.08-.14-.18-1.12-1.48-1.12-2.82 0-1.34.7-2 .95-2.27.25-.28.55-.35.73-.35h.52c.17 0 .4-.06.62.48.23.55.77 1.9.84 2.04.07.14.11.3.02.48-.09.19-.5.75-.68.96-.13.15-.22.24-.1.48.12.23.55.9 1.18 1.46.81.72 1.49.95 1.7 1.05.21.1.34.08.46-.05.14-.14.55-.64.7-.86.14-.23.28-.19.48-.11.19.07 1.23.58 1.44.69.21.1.35.15.4.24.05.09.05.53-.18 1.17Z" />
+                </svg>
+                Template Preview
+              </p>
+              <span
+                className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
+                title={languageLabel(draft.language)}
+              >
+                {languageLabel(draft.language)}
+              </span>
+            </div>
+            <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
+              <div className="mx-auto w-full max-w-[280px]">
+                <WhatsAppPreview draft={draft} />
+              </div>
+            </div>
           </div>
-          <div className="p-4">
-            <WhatsAppPreview draft={draft} />
-            <p className="mt-3 text-[11px] leading-relaxed text-slate-500">{HONESTY}</p>
-          </div>
+          <TemplateDetailsTable draft={draft} />
         </aside>
       </div>
 
@@ -335,7 +479,7 @@ export function TemplateEditorPage() {
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
           <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
             <Button variant="ghost" size="sm" onClick={() => navigate('/library')}>
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to templates
+              Back
             </Button>
             <div className="flex shrink-0 items-center gap-2">{actions}</div>
           </div>

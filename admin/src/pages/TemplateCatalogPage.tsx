@@ -13,7 +13,6 @@ import {
   ResponsiveDataView,
   Select,
   StatusBadge,
-  clickableRowProps,
 } from '../components/ui';
 import { WhatsAppPreview } from '../components/WhatsAppPreview';
 import { formatAgo } from '../lib/format';
@@ -386,10 +385,7 @@ export function TemplateCatalogPage() {
             )
           }
           renderCard={(row) => (
-            <div
-              {...clickableRowProps(() => openEdit(row))}
-              className="cursor-pointer px-4 py-3 sm:px-5"
-            >
+            <div className="px-4 py-3 sm:px-5">
               <div className="flex items-start gap-3">
                 <TemplateAvatar row={row} />
                 <div className="min-w-0 flex-1">
@@ -435,10 +431,7 @@ export function TemplateCatalogPage() {
                 </thead>
                 <tbody>
                   {filtered.map((row) => (
-                    <tr
-                      key={row.id}
-                      {...clickableRowProps(() => openEdit(row))}
-                    >
+                    <tr key={row.id}>
                       <td>
                         <div className="flex items-center gap-3">
                           <TemplateAvatar row={row} />
