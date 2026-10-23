@@ -234,8 +234,8 @@ export function TemplateCatalogPage() {
       setRows(listMockRows());
       return;
     }
-    // Real API: no clone endpoint yet — open the editor prefilled as a new draft (SAMYOJ-11 Graph clone).
-    navigate('/library/new', { state: { cloneFrom: row.id } });
+    // Real API: no clone endpoint yet — prefilled editor as a new draft (SAMYOJ-11 Graph clone pending).
+    navigate('/library/new', { state: { cloneFrom: row } });
   };
 
   const deleteRow = async (row: LibraryRow) => {

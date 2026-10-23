@@ -17,4 +17,10 @@ describe('tenant CSRF exemptions', () => {
     expect(isTenantCsrfExemptPath('/api/auth/login')).toBe(true);
     expect(isTenantCsrfExemptPath('/api/auth/login-extra')).toBe(false);
   });
+
+  it('exempts the platform console (it enforces its own session-bound CSRF)', () => {
+    expect(isTenantCsrfExemptPath('/api/platform')).toBe(true);
+    expect(isTenantCsrfExemptPath('/api/platform/library-templates/ai-draft')).toBe(true);
+    expect(isTenantCsrfExemptPath('/api/platform-auth-replay')).toBe(false);
+  });
 });

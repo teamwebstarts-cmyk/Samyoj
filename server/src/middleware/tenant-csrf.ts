@@ -19,6 +19,9 @@ const EXEMPT_PREFIXES = [
   '/api/billing/webhook',
   '/api/flows-assets/webhook/',
   '/api/v1/',
+  // Platform console has its own session-bound CSRF (PLATFORM_CSRF_REJECTED).
+  // Tenant cookies from the client app on a shared host must not gate platform writes.
+  '/api/platform',
 ];
 
 /** Path-boundary match so `/api/whatsapp/webhook-replay` is not CSRF-exempt. */

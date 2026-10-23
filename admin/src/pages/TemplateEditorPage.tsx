@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   FileText,
   Image as ImageIcon,
@@ -419,12 +419,33 @@ function BodyChipsRoster({
 export function TemplateEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { allowed } = useOperator();
   const canWrite = allowed('organization.write');
   const isNew = !id || id === 'new';
-  const [row, setRow] = useState<LibraryRow | null>(() => (isNew ? null : USE_MOCK_CATALOG ? findMockRow(id) ?? null : null));
+  // Real-mode duplicate: the catalog passes the cloned row via router state (no GET-by-id endpoint).
+  const cloneSource = isNew
+    ? ((location.state as { cloneFrom?: LibraryRow } | null)?.cloneFrom ?? null)
+    : null;
+  const [row, setRow] = useState<LibraryRow | null>(() =>
+    isNew ? null : USE_MOCK_CATALOG ? findMockRow(id) ?? null : null,
+  );
   const [missing, setMissing] = useState(false);
-  const [draft, setDraft] = useState<Draft>(row ? rowToDraft(row) : EMPTY_DRAFT);
+  const [draft, setDraft] = useState<Draft>(() => {
+    if (cloneSource) {
+      return {
+        ...rowToDraft(cloneSource),
+        slug: `${cloneSource.slug}_copy`,
+        title: `${cloneSource.title} (copy)`,
+        published: false,
+      };
+    }
+    if (!isNew && USE_MOCK_CATALOG) {
+      const existing = findMockRow(id);
+      if (existing) return rowToDraft(existing);
+    }
+    return EMPTY_DRAFT;
+  });
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
