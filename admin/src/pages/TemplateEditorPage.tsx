@@ -20,7 +20,6 @@ import {
   EMPTY_DRAFT,
   USE_MOCK_CATALOG,
   VARIABLE_SOURCE_OPTIONS,
-  deleteMockRow,
   draftPayload,
   emptyTemplateButton,
   findMockRow,
@@ -646,29 +645,6 @@ export function TemplateEditorPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!row) return;
-    setSaveError('');
-    setSaving(true);
-    try {
-      if (USE_MOCK_CATALOG) {
-        deleteMockRow(row.id);
-      } else {
-        await platformRequest(`/library-templates/${row.id}`, {
-          method: 'DELETE',
-          body: JSON.stringify({
-            reason: `Deleted library template "${row.slug}" from platform editor`,
-          }),
-        });
-      }
-      navigate('/library');
-    } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Delete failed');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (missing) {
     return (
       <div className="space-y-4 pb-12">
@@ -1193,18 +1169,8 @@ export function TemplateEditorPage() {
                   Published
                 </button>
               </div>
-              <p className="hidden min-w-0 truncate text-[11px] text-slate-500 lg:block">
-                {draft.published
-                  ? 'Visible to tenants in their Template Library.'
-                  : 'Hidden from tenants — only platform sees it.'}
-              </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {row ? (
-                <Button variant="danger" size="md" onClick={() => void handleDelete()} disabled={saving}>
-                  <Trash2 className="h-4 w-4" /> Delete
-                </Button>
-              ) : null}
               <Button variant="secondary" size="md" onClick={() => navigate('/library')}>
                 Back
               </Button>
