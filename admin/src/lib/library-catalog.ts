@@ -36,7 +36,6 @@ export type LibraryRow = {
   published: boolean;
   sortOrder: number;
   updatedAt?: string | null;
-  /** Mock-only (design work). Real catalog rows are en+hi bilingual; drop with the mock data. */
   language?: string;
 };
 
@@ -135,104 +134,6 @@ export const EMPTY_DRAFT: Draft = {
 
 export const HONESTY =
   'These drafts live in Samyoj and show in the customer Template Library when published. Submitting still sends the copy to Meta for that org’s WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on a customer number.';
-
-/**
- * ponytail: Mock rows for catalog design work — flip to false (or delete the
- * mock store below) once the real catalog data ships.
- */
-export const USE_MOCK_CATALOG = false;
-
-const ago = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
-let mockRows: LibraryRow[] = [
-  {
-    // Newest — surfaces first in the newest-first ordering.
-    id: 'mock-1', slug: 'diwali_greetings', title: 'Diwali Greetings', category: 'MARKETING',
-    tags: ['festival'], icon: 'gift', header: null, mediaFormat: null,
-    body: 'Hi {{1}}, Shine bright this Diwali! Enjoy {{2}} off on everything you love with code {{3}}.',
-    bodyHi: 'नमस्ते {{1}}, इस दिवाली चमकते चमकें! कोड {{3}} से सब कुछ {{2}} छूट पर पाएं।',
-    footer: 'Reply STOP to unsubscribe', footerHi: 'संदेश बंद करने के लिए STOP भेजें',
-    buttons: [
-      { type: 'URL', text: 'Shop now', url: 'https://example.com/shop' },
-    ], bodyExamples: ['Ravi', '20%', 'DIWALI20'],
-    copy: 'Festive wishes + sale blast', published: true, sortOrder: 1, updatedAt: ago(0.2), language: 'en_US',
-  },
-  {
-    // All four button types in one row — tests the multi-button editor + preview rendering.
-    id: 'mock-2', slug: 'festival_offer_blast', title: 'Festival Offer Blast', category: 'MARKETING',
-    tags: ['sale', 'offer'], icon: 'sparkles', header: null, mediaFormat: null,
-    body: 'Hi {{1}}! Our festive sale is live — flat {{2}} off storewide. Code {{3}}, valid till {{4}}.',
-    bodyHi: 'नमस्ते {{1}}! हमारी त्योहार सेल लाइव है — पूरे स्टोर पर {{2}} छूट। कोड {{3}}, {{4}} तक वैध।',
-    footer: 'Reply STOP to stop messages', footerHi: 'संदेश रोकने के लिए STOP भेजें',
-    buttons: [
-      { type: 'QUICK_REPLY', text: 'Offers' },
-      { type: 'URL', text: 'Visit store', url: 'https://example.com' },
-      { type: 'PHONE_NUMBER', text: 'Call us', phone_number: '+919876543210' },
-      { type: 'COPY_CODE', text: 'Copy code', example: 'FEST20' },
-    ], bodyExamples: ['Ravi', '20%', 'FEST20', '5 Nov'],
-    copy: 'Season sale with every CTA type', published: true, sortOrder: 2, updatedAt: ago(1), language: 'en_US',
-  },
-  {
-    // Hindi-led row: English populated too, but Hindi is the richer surface —
-    // tests the EN/HI preview lens and the Hindi textarea path.
-    id: 'mock-3', slug: 'order_status_update', title: 'Order Status Update', category: 'UTILITY',
-    tags: ['orders'], icon: 'truck', header: null, mediaFormat: null,
-    body: 'Hi {{1}}, your order {{2}} has shipped and will arrive by {{3}}.',
-    bodyHi: 'नमस्ते {{1}}, आपका ऑर्डर {{2}} भेज दिया गया है और {{3}} तक पहुंच जाएगा।',
-    footer: 'Team Samyoj', footerHi: 'टीम सैमयोज',
-    buttons: [
-      { type: 'URL', text: 'Track order', url: 'https://example.com/track' },
-    ], bodyExamples: ['Ravi', '10234', '7 Nov'],
-    copy: 'Shipping update with tracking link', published: true, sortOrder: 3, updatedAt: ago(2), language: 'en_US',
-  },
-  {
-    // Payment reminder — three variables, no buttons, tests Connect rows with mixed sources.
-    id: 'mock-4', slug: 'payment_reminder', title: 'Payment Reminder', category: 'UTILITY',
-    tags: ['payments'], icon: 'card', header: null, mediaFormat: null,
-    body: 'Namaste {{1}}, a gentle reminder: your payment of {{2}} is due on {{3}}.',
-    bodyHi: 'नमस्ते {{1}}, एक छोटी सी अनुस्मारक: आपका भुगतान {{2}} {{3}} तक देय है।',
-    footer: 'Payments team', footerHi: 'भुगतान टीम', buttons: [], bodyExamples: ['Ravi', 'Rs 1200', '5 Nov'],
-    copy: 'Due-date payment nudge', published: true, sortOrder: 4, updatedAt: ago(4), language: 'en_US',
-  },
-  {
-    // Draft — exercises the Draft badge, Drafts tab count, and the new draft-by-default flow.
-    id: 'mock-5', slug: 'new_product_launch', title: 'New Product Launch', category: 'MARKETING',
-    tags: ['launch'], icon: 'store', header: null, mediaFormat: null,
-    body: 'The wait is over, {{1}}! Meet the all-new {{2}} — early-bird price for the first 100 customers.',
-    bodyHi: 'इंतज़ार खत्म, {{1}}! पेश है बिल्कुल नया {{2}} — पहले 100 ग्राहकों के लिए स्पेशल कीमत।',
-    footer: 'Shop now', footerHi: 'अभी खरीदें', buttons: [], bodyExamples: ['Ravi', 'Smart Kettle'],
-    copy: 'Launch announcement (draft)', published: false, sortOrder: 5, updatedAt: ago(6), language: 'en_US',
-  },
-  {
-    // Auth OTP — the row that used to trap Add button at 1; now extendable to 10.
-    id: 'mock-6', slug: 'otp_login_code', title: 'OTP Login Code', category: 'AUTHENTICATION',
-    tags: ['otp'], icon: 'key', header: null, mediaFormat: null,
-    body: '{{1}} is your verification code. For your security, do not share this code.',
-    bodyHi: '{{1}} आपका वेरिफिकेशन कोड है। इसे किसी के साथ साझा न करें।',
-    footer: null, footerHi: null, buttons: [], bodyExamples: ['482913'],
-    copy: 'Login OTP code', published: true, sortOrder: 6, updatedAt: ago(8), language: 'en_US',
-  },
-];
-
-export function listMockRows(): LibraryRow[] {
-  return mockRows;
-}
-
-export function findMockRow(id: string): LibraryRow | undefined {
-  return mockRows.find((row) => row.id === id);
-}
-
-export function upsertMockRow(row: LibraryRow): LibraryRow {
-  const next = { ...row, updatedAt: new Date().toISOString() };
-  mockRows = mockRows.some((existing) => existing.id === row.id)
-    ? mockRows.map((existing) => (existing.id === row.id ? next : existing))
-    : [...mockRows, next];
-  return next;
-}
-
-export function deleteMockRow(id: string): void {
-  mockRows = mockRows.filter((row) => row.id !== id);
-}
 
 export function rowToDraft(row: LibraryRow): Draft {
   const buttons: TemplateButtonForm[] = (row.buttons || [])

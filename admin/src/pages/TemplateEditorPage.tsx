@@ -18,16 +18,13 @@ import { useOperator } from '../context/OperatorContext';
 import { platformRequest, ApiError, aiApi } from '../api';
 import {
   EMPTY_DRAFT,
-  USE_MOCK_CATALOG,
   VARIABLE_SOURCE_OPTIONS,
   draftPayload,
   emptyTemplateButton,
-  findMockRow,
   rowToDraft,
   bodyVariableIndexes,
   sampleForVariable,
   templateVariableCount,
-  upsertMockRow,
   type Draft,
   type LibraryRow,
   type TemplateButtonForm,
@@ -426,9 +423,7 @@ export function TemplateEditorPage() {
   const cloneSource = isNew
     ? ((location.state as { cloneFrom?: LibraryRow } | null)?.cloneFrom ?? null)
     : null;
-  const [row, setRow] = useState<LibraryRow | null>(() =>
-    isNew ? null : USE_MOCK_CATALOG ? findMockRow(id) ?? null : null,
-  );
+  const [row, setRow] = useState<LibraryRow | null>(null);
   const [missing, setMissing] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => {
     if (cloneSource) {
@@ -439,24 +434,16 @@ export function TemplateEditorPage() {
         published: false,
       };
     }
-    if (!isNew && USE_MOCK_CATALOG) {
-      const existing = findMockRow(id);
-      if (existing) return rowToDraft(existing);
-    }
     return EMPTY_DRAFT;
   });
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const bodyHiRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (!USE_MOCK_CATALOG || isNew || row) return;
-    setMissing(true);
-  }, [id, isNew, row]);
 
-  // Real API mode: there is no GET-by-id endpoint in this first cut, so reuse the list.
+  // There is no GET-by-id endpoint in this first cut, so reuse the list to find the row.
   useEffect(() => {
-    if (isNew || USE_MOCK_CATALOG || row) return;
+    if (isNew || row) return;
     let alive = true;
     platformRequest<{ templates: LibraryRow[] }>('/library-templates')
       .then((data) => {
@@ -558,7 +545,7 @@ export function TemplateEditorPage() {
 
   const insertVariable = (lang: 'en' | 'hi' = 'en') => insertToken(variableCount + 1, lang);
 
-  // AI assist (mock generator for now): pour the suggestion into the draft. Variables
+  // AI assist: pour the suggestion into the draft. Variables
   // map to body-scope connect rows so chips/Connect examples work identically.
   const applyAiSuggestion = (s: AiDraftSuggestion) => {
     setDraft((prev) => ({
@@ -610,22 +597,9 @@ export function TemplateEditorPage() {
     setSaveError('');
     setSaving(true);
     try {
-      if (USE_MOCK_CATALOG) {
-        if (row) {
-          upsertMockRow({ ...row, ...draftPayload(draft) });
-        } else {
-          upsertMockRow({
-            ...draftPayload(draft),
-            id: `mock-${Date.now()}`,
-            language: draft.language,
-          } as LibraryRow);
-        }
-      navigate('/library');
-      return;
-    }
-    // Server audit log requires a ≥8-char reason; the editor no longer asks for one.
-    const reason = `${row ? 'Updated' : 'Created'} library template "${draftPayload(draft).slug || draft.title || 'untitled'}" from platform editor`;
-    const payload = { reason, ...draftPayload(draft) };
+      // Server audit log requires a ≥8-char reason; the editor no longer asks for one.
+      const reason = `${row ? 'Updated' : 'Created'} library template "${draftPayload(draft).slug || draft.title || 'untitled'}" from platform editor`;
+      const payload = { reason, ...draftPayload(draft) };
       if (row) {
         await platformRequest(`/library-templates/${row.id}`, {
           method: 'PATCH',

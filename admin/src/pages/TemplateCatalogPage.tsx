@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Beaker, Check, Copy, CopyPlus, Eye, Info, Library, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Check, Copy, CopyPlus, Eye, Info, Library, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { platformRequest } from '../api';
 import {
   Button,
@@ -21,14 +21,9 @@ import { useOperator } from '../context/OperatorContext';
 import {
   CATEGORY_AVATAR,
   HONESTY,
-  USE_MOCK_CATALOG,
-  deleteMockRow,
-  draftPayload,
   iconFor,
   languageLabel,
-  listMockRows,
   rowToDraft,
-  upsertMockRow,
   type LibraryRow,
 } from '../lib/library-catalog';
 
@@ -46,7 +41,7 @@ function TemplateAvatar({ row }: { row: LibraryRow }) {
   );
 }
 
-/** Newest activity first — missing timestamps (mock rows) sort last, stably. */
+/** Newest activity first — rows without timestamps sort last, stably. */
 const updatedAtMs = (row: LibraryRow) => (row.updatedAt ? Date.parse(row.updatedAt) || 0 : 0);
 
 /** View opens the WhatsApp preview drawer; Edit redirects to the editor page; ⋮ menu holds the rest. */
@@ -227,10 +222,6 @@ export function TemplateCatalogPage() {
   const [category, setCategory] = useState('ALL');
 
   const load = () => {
-    if (USE_MOCK_CATALOG) {
-      setRows(listMockRows());
-      return;
-    }
     platformRequest<{ templates: LibraryRow[] }>('/library-templates')
       .then((data) => setRows(data.templates || []))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'));
@@ -238,7 +229,7 @@ export function TemplateCatalogPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mock mode loads a constant; real mode loads on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads on mount
   }, []);
 
   const counts = useMemo(() => {
@@ -275,30 +266,12 @@ export function TemplateCatalogPage() {
 
   const duplicateRow = (row: LibraryRow) => {
     closeMenu();
-    if (USE_MOCK_CATALOG) {
-      const payload = draftPayload(rowToDraft(row));
-      upsertMockRow({
-        ...payload,
-        id: `mock-${Date.now()}`,
-        slug: `${row.slug}_copy`,
-        title: `${row.title} (copy)`,
-        published: false,
-        updatedAt: new Date().toISOString(),
-      } as LibraryRow);
-      setRows(listMockRows());
-      return;
-    }
     // Real API: no clone endpoint yet — prefilled editor as a new draft (SAMYOJ-11 Graph clone pending).
     navigate('/library/new', { state: { cloneFrom: row } });
   };
 
   const deleteRow = async (row: LibraryRow) => {
     closeMenu();
-    if (USE_MOCK_CATALOG) {
-      deleteMockRow(row.id);
-      setRows(listMockRows());
-      return;
-    }
     await platformRequest(`/library-templates/${row.id}`, {
       method: 'DELETE',
       body: JSON.stringify({ reason: `Deleted library template "${row.slug}" from platform catalog` }),
@@ -343,13 +316,6 @@ export function TemplateCatalogPage() {
           ) : undefined
         }
       />
-
-      {USE_MOCK_CATALOG && (
-        <div className="flex items-center gap-2 rounded-xl bg-indigo-50/70 px-3.5 py-2 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200/70">
-          <Beaker className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Mock data for design work — rows below are not real and disappear when USE_MOCK_CATALOG is turned off.
-        </div>
-      )}
 
       <div className="dashboard-card overflow-hidden">
         {/* Status tabs */}
