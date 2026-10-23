@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   draftPayload,
   emptyTemplateButton,
+  bodyVariableIndexes,
   rowToDraft,
   sampleForVariable,
   type LibraryRow,
@@ -68,5 +69,11 @@ describe('admin template editor draft model', () => {
     expect(sampleForVariable('', 3, 'contact.phone')).toBe('+919876543210');
     expect(sampleForVariable('Offer code', 2)).toBe('SAVE20');
     expect(sampleForVariable('', 4)).toBe('Sample 4');
+  });
+
+  it('bodyVariableIndexes lists distinct {{n}} present in the body, ascending (chip roster)', () => {
+    expect(bodyVariableIndexes('Hi {{1}}, order {{2}} for {{1}} — ref {{4}}')).toEqual([1, 2, 4]);
+    expect(bodyVariableIndexes('No variables here')).toEqual([]);
+    expect(bodyVariableIndexes('')).toEqual([]);
   });
 });

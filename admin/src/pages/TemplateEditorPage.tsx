@@ -27,6 +27,7 @@ import {
   findMockRow,
   languageLabel,
   rowToDraft,
+  bodyVariableIndexes,
   sampleForVariable,
   templateVariableCount,
   upsertMockRow,
@@ -91,6 +92,7 @@ function VariableRow({
   meta,
   sample,
   canWrite,
+  descriptionRef,
   onPatchMeta,
   onPatchSample,
 }: {
@@ -99,6 +101,7 @@ function VariableRow({
   meta?: VariableMeta;
   sample: string;
   canWrite: boolean;
+  descriptionRef?: (el: HTMLInputElement | null) => void;
   onPatchMeta: (patch: Partial<VariableMeta>) => void;
   onPatchSample: (value: string) => void;
 }) {
@@ -111,6 +114,7 @@ function VariableRow({
           {`{{${index}}}`}
         </span>
         <input
+          ref={descriptionRef}
           type="text"
           value={meta?.description || ''}
           onChange={(event) => onPatchMeta({ description: event.target.value })}
@@ -251,13 +255,25 @@ export function TemplateEditorPage() {
   const variableCount = useMemo(() => templateVariableCount(draft.body, draft.bodyHi), [draft.body, draft.bodyHi]);
   const headerCount = useMemo(() => templateVariableCount(draft.header, ''), [draft.header]);
 
+  // Chip roster: {{n}} present in the body, labeled from Connect-variables descriptions.
+  // No auto-inference: an added variable starts as Untitled and is named via its description input (user's flow).
+  const bodyVariables = useMemo(
+    () => bodyVariableIndexes(draft.body).map((index) => ({ index, description: metaForIndex(draft.variableMeta, 'body', index)?.description || '' })),
+    [draft.body, draft.variableMeta]
+  );
+  const descriptionRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const focusVariableRow = (index: number) => {
+    const el = descriptionRefs.current[index];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus();
+  };
+
   // Cursor-aware {{n}} insertion, like the client insertVariable.
   const insertVariable = () => {
     const index = variableCount + 1;
     const token = `{{${index}}}`;
     const el = bodyRef.current;
-    // First body variable infers as the customer name (client mapFirstBodyVariableToName).
-    if (index === 1) setDraft((prev) => ({ ...prev, variableMeta: patchMeta(prev.variableMeta, 'body', 1, { description: 'Customer name', suggestedSource: 'contact.name' }) }));
     if (el) {
       const start = el.selectionStart ?? activeBody.length;
       const end = el.selectionEnd ?? activeBody.length;
@@ -532,19 +548,23 @@ export function TemplateEditorPage() {
                 </div>
               </div>
               <div className="mb-2 flex flex-wrap gap-1.5">
-                {['Customer name', 'Phone number', 'Email', 'Date / time'].map((label) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={insertVariable}
-                    disabled={!canWrite}
-                    title={`Inserts {{${variableCount + 1}}} at the cursor — tenants map it when sending`}
-                    className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Plus className="h-3 w-3" />
-                    {label}
-                  </button>
-                ))}
+                {bodyVariables.length === 0 ? (
+                  <span className="text-[10.5px] font-medium text-slate-400">
+                    No variables yet — “Add variable” inserts {'{{n}}'} and lists it here.
+                  </span>
+                ) : (
+                  bodyVariables.map((item) => (
+                    <button
+                      key={item.index}
+                      type="button"
+                      onClick={() => focusVariableRow(item.index)}
+                      title="Click to rename this variable in Connect variables"
+                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {item.description.trim() ? item.description : `Untitled ({{${item.index}}})`}
+                    </button>
+                  ))
+                )}
               </div>
               <textarea
                 ref={bodyRef}
@@ -633,6 +653,7 @@ export function TemplateEditorPage() {
                             meta={metaForIndex(draft.variableMeta, 'body', index)}
                             sample={draft.bodyExamples[index - 1] || ''}
                             canWrite={canWrite}
+                            descriptionRef={(el) => { descriptionRefs.current[index] = el; }}
                             onPatchMeta={(patch) =>
                               setDraft((prev) => {
                                 let nextMeta = patchMeta(prev.variableMeta, 'body', index, patch);

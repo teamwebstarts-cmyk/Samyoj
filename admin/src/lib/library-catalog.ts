@@ -344,3 +344,13 @@ export function templateVariableCount(body: string, bodyHi: string): number {
   }
   return max;
 }
+
+/** Distinct {{n}} indexes present in one body text, ascending (chip roster). */
+export function bodyVariableIndexes(text: string): number[] {
+  const set = new Set<number>();
+  for (const match of text.matchAll(/\{\{(\d+)\}\}/g)) {
+    set.add(Number.parseInt(match[1], 10) || 0);
+  }
+  set.delete(0);
+  return [...set].sort((a, b) => a - b);
+}
