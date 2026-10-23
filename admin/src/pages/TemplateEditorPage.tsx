@@ -23,15 +23,19 @@ import {
   HONESTY,
   LANGUAGES,
   USE_MOCK_CATALOG,
+  VARIABLE_SOURCE_OPTIONS,
   deleteMockRow,
   draftPayload,
+  emptyTemplateButton,
   findMockRow,
   languageLabel,
   rowToDraft,
+  sampleForVariable,
   templateVariableCount,
   upsertMockRow,
   type Draft,
   type LibraryRow,
+  type TemplateButtonType,
 } from '../lib/library-catalog';
 
 /** Header-type picker tiles — mirrors client HEADER_TYPE_STYLES (create step). */
@@ -43,8 +47,139 @@ const HEADER_TILES = [
   { value: 'DOCUMENT', label: 'Document', icon: FileText, tile: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white', active: 'border-amber-400 ring-amber-200' },
 ] as const;
 
-/** Same default samples as the client's sampleForVariable fallbacks. */
-const SAMPLE_DEFAULTS = ['Rahul', 'order #10234', 'demo@samyoj.com', '5 Nov, 2 PM'];
+/** Same button types as client TemplateButtonEditor. */
+const BUTTON_TYPE_OPTIONS: Array<{ value: TemplateButtonType; label: string }> = [
+  { value: 'QUICK_REPLY', label: 'Quick reply' },
+  { value: 'URL', label: 'Visit website (URL)' },
+  { value: 'PHONE_NUMBER', label: 'Call phone number' },
+  { value: 'COPY_CODE', label: 'Copy offer code' },
+];
+
+/** Info icon with hover/focus tooltip — inline port of client InfoTip (h-3.5, slate-400). */
+function InfoTip({ text, label }: { text: string; label?: string }) {
+  return (
+    <span title={text} className="inline-flex shrink-0 align-middle">
+      <Info
+        className="h-3.5 w-3.5 cursor-help text-slate-400 transition hover:text-slate-600"
+        strokeWidth={2.25}
+        aria-label={label ?? text}
+      />
+    </span>
+  );
+}
+
+/** Variable meta for {{n}} — preseeds description/source from the body clause, like client syncFormExamples. */
+function metaForIndex(metas: Draft['variableMeta'], scope: 'body' | 'header', index: number) {
+  return metas.find((meta) => meta.scope === scope && meta.index === index);
+}
+
+function patchMeta(
+  metas: Draft['variableMeta'],
+  scope: 'body' | 'header',
+  index: number,
+  patch: Partial<Draft['variableMeta'][number]>,
+): Draft['variableMeta'] {
+  if (metas.some((meta) => meta.scope === scope && meta.index === index)) {
+    return metas.map((meta) => (meta.scope === scope && meta.index === index ? { ...meta, ...patch } : meta));
+  }
+  return [...metas, { scope, index, description: '', suggestedSource: '', customKey: '', ...patch }];
+}
+
+type VariableMeta = Draft['variableMeta'][number];
+
+/** One {{n}} row — exact client TemplateVariableConnect VariableRow markup. */
+function VariableRow({
+  scope,
+  index,
+  meta,
+  sample,
+  canWrite,
+  onPatchMeta,
+  onPatchSample,
+}: {
+  scope: 'body' | 'header';
+  index: number;
+  meta?: VariableMeta;
+  sample: string;
+  canWrite: boolean;
+  onPatchMeta: (patch: Partial<VariableMeta>) => void;
+  onPatchSample: (value: string) => void;
+}) {
+  const inputClass =
+    'h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium disabled:cursor-not-allowed disabled:opacity-60';
+  return (
+    <div className="rounded-lg border border-slate-200/90 bg-white p-2.5">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-emerald-700">
+          {`{{${index}}}`}
+        </span>
+        <input
+          type="text"
+          value={meta?.description || ''}
+          onChange={(event) => onPatchMeta({ description: event.target.value })}
+          placeholder="What this field is"
+          aria-label={`Description for ${scope} {{${index}}}`}
+          disabled={!canWrite}
+          className={`min-w-0 flex-1 ${inputClass}`}
+        />
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="block min-w-0">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Filled from
+          </span>
+          <select
+            value={meta?.suggestedSource || ''}
+            disabled={!canWrite}
+            title="How this variable is filled when sending"
+            onChange={(event) => {
+              const source = event.target.value;
+              onPatchMeta({
+                suggestedSource: source,
+                customKey: source === 'contact.custom' ? meta?.customKey || '' : '',
+              });
+              // Empty sample + a source: prefill from the description (client behavior).
+              if (!sample.trim() && source) {
+                onPatchSample(sampleForVariable(meta?.description || '', index, source));
+              }
+            }}
+            className={inputClass}
+          >
+            {VARIABLE_SOURCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block min-w-0">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Sample for WhatsApp
+          </span>
+          <input
+            type="text"
+            value={sample}
+            onChange={(event) => onPatchSample(event.target.value)}
+            placeholder={index === 1 ? 'Rahul' : 'Example value'}
+            aria-label={`Sample for ${scope} {{${index}}}`}
+            disabled={!canWrite}
+            required
+            className={inputClass}
+          />
+        </label>
+      </div>
+      {meta?.suggestedSource === 'contact.custom' ? (
+        <input
+          type="text"
+          value={meta?.customKey || ''}
+          onChange={(event) => onPatchMeta({ customKey: event.target.value })}
+          placeholder="custom field key, e.g. order_id"
+          aria-label="Custom field key"
+          disabled={!canWrite}
+          className={`mt-2 h-8 w-full rounded-md border border-slate-200 bg-white px-2 font-mono text-[11px] disabled:cursor-not-allowed disabled:opacity-60`}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -82,7 +217,11 @@ function TemplateDetailsTable({ draft }: { draft: Draft }) {
             </span>
           </DetailRow>
           <DetailRow label="Language">{languageLabel(draft.language)}</DetailRow>
-          <DetailRow label="Buttons">{draft.buttonText && draft.buttonUrl ? draft.buttonText : 'None'}</DetailRow>
+          <DetailRow label="Buttons">
+            {draft.buttons.length
+              ? draft.buttons.map((button) => button.text).join(', ')
+              : 'None'}
+          </DetailRow>
           <DetailRow label="Variables">
             {templateVariableCount(draft.body, draft.bodyHi)
               ? `${templateVariableCount(draft.body, draft.bodyHi)} variable${
@@ -178,12 +317,15 @@ export function TemplateEditorPage() {
   };
 
   const variableCount = useMemo(() => templateVariableCount(draft.body, draft.bodyHi), [draft.body, draft.bodyHi]);
+  const headerCount = useMemo(() => templateVariableCount(draft.header, ''), [draft.header]);
 
   // Cursor-aware {{n}} insertion, like the client insertVariable.
   const insertVariable = () => {
     const index = variableCount + 1;
     const token = `{{${index}}}`;
     const el = bodyRef.current;
+    // First body variable infers as the customer name (client mapFirstBodyVariableToName).
+    if (index === 1) setDraft((prev) => ({ ...prev, variableMeta: patchMeta(prev.variableMeta, 'body', 1, { description: 'Customer name', suggestedSource: 'contact.name' }) }));
     if (el) {
       const start = el.selectionStart ?? activeBody.length;
       const end = el.selectionEnd ?? activeBody.length;
@@ -198,10 +340,16 @@ export function TemplateEditorPage() {
     setActiveBody(`${activeBody}${activeBody && !activeBody.endsWith(' ') ? ' ' : ''}${token}`);
   };
 
+  // Client autoFillTemplateSamples: fill only empties, sample from description/source.
   const autoFillSamples = () => {
     setDraft((prev) => ({
       ...prev,
-      bodyExamples: Array.from({ length: variableCount }, (_, i) => SAMPLE_DEFAULTS[i] || `Sample value ${i + 1}`),
+      bodyExamples: Array.from({ length: variableCount }, (_, i) =>
+        prev.bodyExamples[i]?.trim() ? prev.bodyExamples[i] : sampleForVariable(metaForIndex(prev.variableMeta, 'body', i + 1)?.description || '', i + 1, metaForIndex(prev.variableMeta, 'body', i + 1)?.suggestedSource)
+      ),
+      headerExamples: Array.from({ length: headerCount }, (_, i) =>
+        prev.headerExamples[i]?.trim() ? prev.headerExamples[i] : sampleForVariable(metaForIndex(prev.variableMeta, 'header', i + 1)?.description || '', i + 1, metaForIndex(prev.variableMeta, 'header', i + 1)?.suggestedSource)
+      ),
     }));
   };
 
@@ -474,51 +622,97 @@ export function TemplateEditorPage() {
                 />
               </label>
 
-              {/* Variables — client Connect-variables panel (emerald) */}
-              {variableCount > 0 ? (
+              {/* Connect variables — client TemplateVariableConnect (create variant), emerald panel */}
+              {variableCount > 0 || headerCount > 0 ? (
                 <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
                   <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[13px] font-bold text-slate-900">Sample values</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[13px] font-bold text-slate-900">Connect variables</p>
+                        <InfoTip
+                          text="Map each {{n}} to a contact field so Inbox and Campaigns fill it automatically."
+                          label="About variables"
+                        />
+                      </div>
                       <p className="mt-0.5 text-[11px] font-medium text-slate-500">
-                        Meta reviews these to approve the template — tenants fill real values when sending.
+                        Map each {'{{n}}'} to a contact field so Inbox and Campaigns fill it automatically.
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={autoFillSamples}
                       disabled={!canWrite}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] font-bold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Wand2 className="h-3.5 w-3.5" />
                       Auto-fill samples
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    {Array.from({ length: variableCount }, (_, index) => index + 1).map((index) => (
-                      <div key={index} className="rounded-lg border border-slate-200/90 bg-white p-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-emerald-700">
-                            {`{{${index}}}`}
-                          </span>
-                          <input
-                            type="text"
-                            value={draft.bodyExamples[index - 1] || ''}
-                            placeholder={index === 1 ? 'Rahul' : 'Example value'}
-                            aria-label={`Sample for {{${index}}}`}
-                            disabled={!canWrite}
-                            onChange={(event) =>
+
+                  <div className="space-y-3">
+                    {headerCount > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-bold text-slate-600">Header ({headerCount})</p>
+                        {Array.from({ length: headerCount }, (_, i) => i + 1).map((index) => (
+                          <VariableRow
+                            key={`header-${index}`}
+                            scope="header"
+                            index={index}
+                            meta={metaForIndex(draft.variableMeta, 'header', index)}
+                            sample={draft.headerExamples[index - 1] || ''}
+                            canWrite={canWrite}
+                            onPatchMeta={(patch) =>
+                              setDraft((prev) => ({ ...prev, variableMeta: patchMeta(prev.variableMeta, 'header', index, patch) }))
+                            }
+                            onPatchSample={(value) =>
+                              setDraft((prev) => {
+                                const next = [...prev.headerExamples];
+                                next[index - 1] = value;
+                                return { ...prev, headerExamples: next };
+                              })
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    {variableCount > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-bold text-slate-600">Body ({variableCount})</p>
+                        {Array.from({ length: variableCount }, (_, i) => i + 1).map((index) => (
+                          <VariableRow
+                            key={`body-${index}`}
+                            scope="body"
+                            index={index}
+                            meta={metaForIndex(draft.variableMeta, 'body', index)}
+                            sample={draft.bodyExamples[index - 1] || ''}
+                            canWrite={canWrite}
+                            onPatchMeta={(patch) =>
+                              setDraft((prev) => {
+                                let nextMeta = patchMeta(prev.variableMeta, 'body', index, patch);
+                                // Picking a source auto-fills an empty sample (client TemplateVariableConnect).
+                                if (patch.suggestedSource && !(prev.bodyExamples[index - 1] || '').trim()) {
+                                  const nextExamples = [...prev.bodyExamples];
+                                  nextExamples[index - 1] = sampleForVariable(
+                                    metaForIndex(nextMeta, 'body', index)?.description || '',
+                                    index,
+                                    patch.suggestedSource
+                                  );
+                                  return { ...prev, variableMeta: nextMeta, bodyExamples: nextExamples };
+                                }
+                                return { ...prev, variableMeta: nextMeta };
+                              })
+                            }
+                            onPatchSample={(value) =>
                               setDraft((prev) => {
                                 const next = [...prev.bodyExamples];
-                                next[index - 1] = event.target.value;
+                                next[index - 1] = value;
                                 return { ...prev, bodyExamples: next };
                               })
                             }
-                            className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium"
                           />
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -526,29 +720,41 @@ export function TemplateEditorPage() {
 
             {/* Footer — preset select like the client create step */}
             <div className="mt-4 space-y-2">
-              <Select
-                label="Footer"
-                value={footerChoice}
-                disabled={!canWrite}
-                onChange={(event) => onFooterChoice(event.target.value)}
-              >
-                {FOOTER_PRESETS.map((preset) => (
-                  <option key={preset.value} value={preset.value}>{preset.label}</option>
-                ))}
-              </Select>
-              <p className="text-[11px] text-slate-500">
-                {draft.category === 'MARKETING'
-                  ? 'Marketing templates need an opt-out line — the Reply STOP presets satisfy it.'
-                  : 'Optional short line under the message (max 60 characters).'}
-              </p>
-              {footerChoice !== '__none__' ? (
-                <Input
-                  label={footerChoice === '__custom__' ? 'Your footer text' : 'Footer text'}
-                  value={activeFooter}
-                  maxLength={60}
+              <div className="space-y-1">
+                <span className="text-[13px] font-semibold text-slate-700">Footer</span>
+                <select
+                  value={footerChoice}
                   disabled={!canWrite}
-                  onChange={(event) => setActiveFooter(event.target.value)}
-                />
+                  aria-label="Footer"
+                  onChange={(event) => onFooterChoice(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  {FOOTER_PRESETS.map((preset) => (
+                    <option key={preset.value} value={preset.value}>{preset.label}</option>
+                  ))}
+                </select>
+                {draft.category === 'MARKETING' ? (
+                  <p className="text-[11px] text-slate-500">
+                    Marketing templates need an opt-out line — the Reply STOP presets satisfy it.
+                  </p>
+                ) : null}
+              </div>
+              {footerChoice !== '__none__' ? (
+                <div className="space-y-1">
+                  <span className="text-[13px] font-semibold text-slate-700">
+                    {footerChoice === '__custom__' ? 'Your footer text' : 'Footer text'}
+                  </span>
+                  <input
+                    type="text"
+                    value={activeFooter}
+                    maxLength={60}
+                    placeholder="Reply STOP to stop messages"
+                    aria-label={footerChoice === '__custom__' ? 'Your footer text' : 'Footer text'}
+                    disabled={!canWrite}
+                    onChange={(event) => setActiveFooter(event.target.value)}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
               ) : null}
               <p className="text-right text-[10px] text-slate-400">{activeFooter.length}/60</p>
               <Input
@@ -560,15 +766,165 @@ export function TemplateEditorPage() {
               />
             </div>
 
-            {/* Buttons */}
+            {/* Buttons — client TemplateButtonEditor (wizard variant) */}
             <div className="mt-6 border-t border-slate-100 pt-5">
-              <div className="mb-3 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-indigo-600" />
-                <p className="text-[13px] font-bold text-slate-900">Buttons</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input label="URL button label" value={draft.buttonText} disabled={!canWrite} onChange={(event) => set('buttonText', event.target.value)} />
-                <Input label="URL button https link" value={draft.buttonUrl} disabled={!canWrite} onChange={(event) => set('buttonUrl', event.target.value)} />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-indigo-600" />
+                      <p className="text-[13px] font-bold text-slate-900">Buttons</p>
+                    </div>
+                    <p className="text-[11px] font-medium text-slate-500">
+                      Optional · up to {draft.category === 'AUTHENTICATION' ? 1 : 10} (Quick reply, URL, Call, or Copy code)
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setDraft((prev) => ({ ...prev, buttons: [...prev.buttons, emptyTemplateButton('QUICK_REPLY')] }))
+                    }
+                    disabled={!canWrite || draft.buttons.length >= (draft.category === 'AUTHENTICATION' ? 1 : 10)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add button
+                  </Button>
+                </div>
+
+                {draft.buttons.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-4 text-center text-[12px] font-medium text-slate-500">
+                    No buttons yet. Add quick replies or call-to-action links.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {draft.buttons.map((button, index) => (
+                      <div
+                        key={index}
+                        className="rounded-xl border border-slate-200/90 bg-white p-2.5 shadow-sm"
+                      >
+                        <div className="flex items-end gap-2">
+                          <label className="min-w-0 flex-1 space-y-1">
+                            <span className="text-[11px] font-semibold text-slate-500">Type</span>
+                            <select
+                              value={button.type}
+                              disabled={!canWrite}
+                              aria-label={`Button ${index + 1} type`}
+                              onChange={(event) =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  buttons: prev.buttons.map((b, i) =>
+                                    i === index
+                                      ? { ...emptyTemplateButton(event.target.value as TemplateButtonType) }
+                                      : b
+                                  ),
+                                }))
+                              }
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                            >
+                              {BUTTON_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="min-w-0 flex-[1.4] space-y-1">
+                            <span className="text-[11px] font-semibold text-slate-500">Label</span>
+                            <input
+                              type="text"
+                              value={button.text}
+                              placeholder="Button text"
+                              required
+                              maxLength={25}
+                              disabled={!canWrite}
+                              aria-label={`Button ${index + 1} label`}
+                              onChange={(event) =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  buttons: prev.buttons.map((b, i) => (i === index ? { ...b, text: event.target.value } : b)),
+                                }))
+                              }
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDraft((prev) => ({ ...prev, buttons: prev.buttons.filter((_, i) => i !== index) }))
+                            }
+                            className="mb-0.5 shrink-0 rounded-lg p-1.5 text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            aria-label="Remove button"
+                            disabled={!canWrite}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {button.type === 'URL' ? (
+                          <div className="mt-2 space-y-1">
+                            <span className="text-[11px] font-semibold text-slate-500">Website URL</span>
+                            <input
+                              type="text"
+                              value={button.url}
+                              placeholder="https://example.com/"
+                              disabled={!canWrite}
+                              aria-label="Website URL"
+                              onChange={(event) =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  buttons: prev.buttons.map((b, i) => (i === index ? { ...b, url: event.target.value } : b)),
+                                }))
+                              }
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+                        ) : null}
+                        {button.type === 'PHONE_NUMBER' ? (
+                          <div className="mt-2 flex gap-2">
+                            <div className="flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-600">
+                              +91
+                            </div>
+                            <input
+                              type="tel"
+                              placeholder="Phone number"
+                              value={button.phone_number.replace(/^\+91/, '').trim()}
+                              disabled={!canWrite}
+                              aria-label="Phone number"
+                              onChange={(event) => {
+                                const digits = event.target.value.replace(/\D/g, '');
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  buttons: prev.buttons.map((b, i) =>
+                                    i === index ? { ...b, phone_number: digits ? `+91${digits}` : '' } : b
+                                  ),
+                                }));
+                              }}
+                              className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+                        ) : null}
+                        {button.type === 'COPY_CODE' ? (
+                          <div className="mt-2 space-y-1">
+                            <span className="text-[11px] font-semibold text-slate-500">Sample code</span>
+                            <input
+                              type="text"
+                              value={button.example}
+                              placeholder="SALE25"
+                              maxLength={15}
+                              disabled={!canWrite}
+                              aria-label="Sample code"
+                              onChange={(event) =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  buttons: prev.buttons.map((b, i) => (i === index ? { ...b, example: event.target.value } : b)),
+                                }))
+                              }
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </section>

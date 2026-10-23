@@ -40,6 +40,54 @@ export type LibraryRow = {
   language?: string;
 };
 
+/** Same button model as the client wizard (client/src/utils/templateForm.ts). */
+export type TemplateButtonType = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
+const BUTTON_TYPES: readonly TemplateButtonType[] = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE'];
+
+export type TemplateButtonForm = {
+  type: TemplateButtonType;
+  text: string;
+  url: string;
+  phone_number: string;
+  example: string;
+};
+
+export function emptyTemplateButton(type: TemplateButtonType = 'QUICK_REPLY'): TemplateButtonForm {
+  return { type, text: '', url: '', phone_number: '', example: '' };
+}
+
+/** Same source options as client TemplateVariableConnect. */
+export const VARIABLE_SOURCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Type when sending' },
+  { value: 'contact.name', label: 'Customer name' },
+  { value: 'contact.phone', label: 'Phone number' },
+  { value: 'contact.email', label: 'Email' },
+  { value: 'contact.custom', label: 'Contact custom field' },
+  { value: 'custom', label: 'Same value for everyone' },
+];
+
+const AUTO_FILL_SAMPLES: Record<string, string> = {
+  'Customer name': 'Rahul',
+  'Order number': 'ORD12345',
+  'Date or time': '12 Aug 2026',
+  Amount: '₹1,299',
+  'Reference ID': 'REF-8821',
+  'Verification code': '482910',
+  'Offer code': 'SAVE20',
+  'Product name': 'Premium Plan',
+  Location: 'Mumbai',
+};
+
+/** Same fallbacks as client sampleForVariable (first preset / source-aware / positional). */
+export function sampleForVariable(description: string, index: number, source?: string): string {
+  if (AUTO_FILL_SAMPLES[description]) return AUTO_FILL_SAMPLES[description];
+  if (description === 'Customer name' || source === 'contact.name') return 'Rahul';
+  if (source === 'contact.phone') return '+919876543210';
+  if (source === 'contact.email') return 'rahul@example.com';
+  if (source === 'contact.custom') return 'order_id';
+  return `Sample ${index}`;
+}
+
 export type Draft = {
   slug: string;
   title: string;
@@ -53,8 +101,10 @@ export type Draft = {
   bodyHi: string;
   footer: string;
   footerHi: string;
-  buttonText: string;
-  buttonUrl: string;
+  buttons: TemplateButtonForm[];
+  /** Editor-local only — variable descriptions/mapping are not part of the catalog row (client parity). */
+  variableMeta: Array<{ scope: 'body' | 'header'; index: number; description: string; suggestedSource: string; customKey: string }>;
+  headerExamples: string[];
   bodyExamples: string[];
   copy: string;
   published: boolean;
@@ -74,8 +124,9 @@ export const EMPTY_DRAFT: Draft = {
   bodyHi: '',
   footer: '',
   footerHi: '',
-  buttonText: '',
-  buttonUrl: '',
+  buttons: [],
+  variableMeta: [],
+  headerExamples: [],
   bodyExamples: [],
   copy: '',
   published: true,
@@ -166,7 +217,17 @@ export function deleteMockRow(id: string): void {
 }
 
 export function rowToDraft(row: LibraryRow): Draft {
-  const urlButton = (row.buttons || []).find((button) => button.type === 'URL');
+  const buttons: TemplateButtonForm[] = (row.buttons || [])
+    .filter((button): button is typeof button & { type: TemplateButtonType } =>
+      BUTTON_TYPES.includes(button.type as TemplateButtonType)
+    )
+    .map((button) => ({
+      type: button.type,
+      text: button.text || '',
+      url: button.url || '',
+      phone_number: button.phone_number || '',
+      example: button.example || '',
+    }));
   const examples = Array.isArray(row.bodyExamples)
     ? row.bodyExamples.filter((item): item is string => typeof item === 'string')
     : [];
@@ -184,8 +245,9 @@ export function rowToDraft(row: LibraryRow): Draft {
     bodyHi: row.bodyHi,
     footer: row.footer || '',
     footerHi: row.footerHi || '',
-    buttonText: urlButton?.text || '',
-    buttonUrl: urlButton?.url || '',
+    buttons,
+    variableMeta: [],
+    headerExamples: [],
     bodyExamples: examples,
     copy: row.copy || '',
     published: row.published,
@@ -199,10 +261,17 @@ export function draftPayload(draft: Draft) {
     .map((tag) => tag.trim())
     .filter(Boolean);
   const bodyExamples = draft.bodyExamples.map((item) => item.trim()).filter(Boolean);
-  const buttons =
-    draft.buttonText.trim() && draft.buttonUrl.trim()
-      ? [{ type: 'URL' as const, text: draft.buttonText.trim(), url: draft.buttonUrl.trim() }]
-      : [];
+  const buttons: LibraryRow['buttons'] = draft.buttons
+    .filter((button) => button.text.trim())
+    .map((button) => ({
+      type: button.type,
+      text: button.text.trim(),
+      ...(button.type === 'URL' && button.url.trim() ? { url: button.url.trim() } : {}),
+      ...(button.type === 'PHONE_NUMBER' && button.phone_number.trim()
+        ? { phone_number: button.phone_number.trim() }
+        : {}),
+      ...(button.type === 'COPY_CODE' && button.example.trim() ? { example: button.example.trim() } : {}),
+    }));
   return {
     slug: draft.slug.trim(),
     title: draft.title.trim(),
