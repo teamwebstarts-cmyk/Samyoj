@@ -160,13 +160,6 @@ export function TemplateEditorPage() {
     <div className="space-y-6 pb-32"> {/* pb-32: keep clear of the floating action bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <button
-            type="button"
-            onClick={() => navigate('/library')}
-            className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition-colors hover:text-indigo-700"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to templates
-          </button>
           <div className="flex items-center gap-2.5">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm" aria-hidden>
               <Smartphone className="h-5 w-5" />
@@ -341,9 +334,9 @@ export function TemplateEditorPage() {
       {canWrite ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
           <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
-            <p className="hidden min-w-0 truncate text-[11px] text-slate-500 sm:block">
-              {row ? `Editing "${row.title}"` : 'New template — nothing is sent to tenants until published.'}
-            </p>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/library')}>
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to templates
+            </Button>
             <div className="flex shrink-0 items-center gap-2">{actions}</div>
           </div>
         </div>
