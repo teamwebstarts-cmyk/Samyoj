@@ -261,7 +261,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body;
     if (!Buffer.isBuffer(body) || body.length < 32) {
-      throw new AppError('Upload a PDF (max 2 MB)', 400);
+      throw new AppError(400, 'Upload a PDF (max 2 MB)');
     }
     const rawName = String(req.headers['x-file-name'] || 'business.pdf');
     const fileName = rawName.replace(/[^\w.\- ()]+/g, '').slice(0, 120) || 'business.pdf';
@@ -269,7 +269,7 @@ router.post(
     try {
       text = await extractPdfText(body);
     } catch {
-      throw new AppError('Could not read that PDF. Export it as a text PDF and try again.', 400);
+      throw new AppError(400, 'Could not read that PDF. Export it as a text PDF and try again.');
     }
     try {
       const profile = await saveProfileSource(req.user!.organizationId!, {
@@ -279,7 +279,7 @@ router.post(
       });
       sendSuccess(res, { profile, industries: BUSINESS_INDUSTRIES });
     } catch (error) {
-      throw new AppError(error instanceof Error ? error.message : 'Could not save the PDF', 400);
+      throw new AppError(400, error instanceof Error ? error.message : 'Could not save the PDF');
     }
   })
 );
