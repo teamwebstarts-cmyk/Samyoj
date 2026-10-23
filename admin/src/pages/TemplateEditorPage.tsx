@@ -299,7 +299,15 @@ function AiAssistBar({
   };
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-violet-50/60 to-fuchsia-50/50 p-3">
+    <section className="dashboard-card p-4 sm:p-5">
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm" aria-hidden>
+          <Wand2 className="h-3.5 w-3.5" />
+        </span>
+        <p className="text-[13px] font-bold text-slate-900">Generate with AI</p>
+        <span className="text-[11px] font-medium text-slate-500">Describe it — we fill the form</span>
+      </div>
+      <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-violet-50/60 to-fuchsia-50/50 p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="text"
@@ -341,7 +349,8 @@ function AiAssistBar({
           </Button>
         </div>
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
 
