@@ -5,11 +5,14 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
   ScrollText,
   ShieldCheck,
   TriangleAlert,
   Users,
 } from 'lucide-react';
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperator } from '../context/OperatorContext';
 import { visibleNavGroups } from '../lib/routes';
@@ -47,13 +50,19 @@ function NavGroup({
   if (items.length === 0) return null;
   return (
     <div className="flex gap-1 md:flex-col md:gap-1">
-      <p className="hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 md:block">
+      <p className="rail-group-label hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 md:block">
         {label}
       </p>
       {items.map((item) => {
         const Icon = ICONS[item.to] ?? LayoutDashboard;
         return (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'} className="rail-nav-item group">
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            className="rail-nav-item group"
+            title={item.label}
+          >
             {({ isActive }) => (
               <>
                 <span className="rail-nav-icon">
@@ -77,16 +86,18 @@ export function Shell() {
   const { work, staff } = visibleNavGroups(operator.role);
   const currentPath = location.pathname.startsWith('/accounts/') ? '/accounts' : location.pathname;
   const currentTitle = PATH_TITLES[currentPath] || 'Console';
+  /** Icon-only rail (desktop). Mobile bottom bar is untouched. */
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[14.5rem_minmax(0,1fr)]">
+    <div className={`min-h-screen md:grid ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
       <a href="#main" className="skip-to-content">
         Skip to content
       </a>
-      
+
       {/* Sidebar Rail */}
       <aside className="flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 shadow-sm z-20">
-        <div className="hidden min-w-0 px-1 md:block">
+        <div className={collapsed ? 'hidden' : 'hidden min-w-0 px-1 md:block'}>
           <PlatformBrand size="sm" />
           <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200/60 px-2 py-1 text-[10px] text-indigo-700">
             <span className="flex items-center gap-1.5 font-medium">
@@ -97,9 +108,21 @@ export function Shell() {
           </div>
         </div>
 
-        <div className="px-1 md:hidden">
+        <div className={`px-1 ${collapsed ? 'hidden md:block' : 'md:hidden'}`}>
           <PlatformBrand size="sm" collapsed />
         </div>
+
+        {/* Collapse toggler — visible on desktop, top of the rail */}
+        <button
+          type="button"
+          onClick={() => setCollapsed((value) => !value)}
+          aria-pressed={collapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="rail-collapse-toggle hidden md:inline-flex"
+        >
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
 
         <nav className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
           <NavGroup label="Work" items={work} />
@@ -107,7 +130,26 @@ export function Shell() {
         </nav>
 
         {/* Operator Profile Card */}
-        <div className="hidden md:block pt-3 border-t border-slate-200 mt-auto">
+        {collapsed ? (
+          <div className="hidden md:flex flex-col items-center gap-2 border-t border-slate-200 pt-3 mt-auto">
+            <span
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/70"
+              title={`${operator.email} · ${operator.role}`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </span>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              aria-label="Sign out"
+              title="Sign out"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-indigo-200/70 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="hidden md:block pt-3 border-t border-slate-200 mt-auto">
           <div className="rounded-xl bg-indigo-50/70 border border-indigo-200/70 p-2.5">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -134,6 +176,7 @@ export function Shell() {
             </button>
           </div>
         </div>
+        )}
       </aside>
 
       {/* Main Content Area */}

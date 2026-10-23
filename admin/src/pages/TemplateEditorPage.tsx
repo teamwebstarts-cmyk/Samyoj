@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { BadgeCheck, BookOpen, Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { BadgeCheck, ChevronDown, Plus, Smartphone, Trash2 } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
 import { WhatsAppPreview } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
@@ -20,69 +20,6 @@ import {
   type Draft,
   type LibraryRow,
 } from '../lib/library-catalog';
-
-/** Persistent stepper across Catalog → Edit → Publish (mirrors client wizard stages). */
-const STAGES = [
-  { id: 'catalog', label: 'Catalog' },
-  { id: 'edit', label: 'Edit' },
-  { id: 'publish', label: 'Publish' },
-] as const;
-
-function EditorStepper({ onStepChange }: { onStepChange: (step: number) => void }) {
-  // Editor is always stage 1 (Edit); Catalog (0) is behind the user, Publish (2)
-  // happens when the save request lands. Fixed state keeps the header persistent
-  // without fake interactivity.
-  const activeStep = 1;
-  return (
-    <nav aria-label="Template library steps" className="flex shrink-0 items-center justify-end gap-0">
-      <ol className="flex items-center">
-        {STAGES.map((stage, index) => {
-          const completed = index < activeStep;
-          const active = index === activeStep;
-          const reachable = index <= activeStep;
-          return (
-            <li key={stage.id} className="flex items-center">
-              <button
-                type="button"
-                disabled={!reachable || index === activeStep}
-                onClick={() => reachable && onStepChange(index)}
-                className={`flex items-center gap-2 rounded-lg px-1 py-0.5 outline-none transition ${
-                  reachable && index !== activeStep ? 'cursor-pointer hover:bg-indigo-50' : 'cursor-default'
-                }`}
-                aria-current={active ? 'step' : undefined}
-              >
-                <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ${
-                    completed
-                      ? 'bg-emerald-500 text-white'
-                      : active
-                        ? 'bg-indigo-600 text-white shadow-[0_2px_8px_rgba(79,70,229,0.35)]'
-                        : 'bg-slate-100 text-slate-400'
-                  }`}
-                >
-                  {completed ? <Check className="h-3.5 w-3.5" strokeWidth={2.75} /> : index + 1}
-                </span>
-                <span
-                  className={`hidden text-[12px] font-semibold sm:inline ${
-                    active ? 'text-indigo-700' : 'text-slate-500'
-                  }`}
-                >
-                  {stage.label}
-                </span>
-              </button>
-              {index < STAGES.length - 1 && (
-                <span
-                  aria-hidden
-                  className={`mx-2 h-px w-6 sm:w-10 ${index < activeStep ? 'bg-emerald-400' : 'bg-slate-200'}`}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -283,24 +220,21 @@ export function TemplateEditorPage() {
 
   return (
     <div className="pb-32">
-      {/* Persistent wizard header: icon + title left, stepper right (client wizard pattern) */}
-      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
-            <BookOpen className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-[22px]">
-              {row ? 'Edit library template' : 'Create library template'}
-            </h1>
-            <p className="mt-0.5 text-[12px] font-medium leading-snug text-slate-500">
-              {row
-                ? 'Pick up where you left off — name, language, body, and buttons are pre-filled from the catalog.'
-                : 'Name the draft, write the body, and publish it to the tenant library.'}
-            </p>
+      {/* Title header — previous admin style */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm" aria-hidden>
+              <Smartphone className="h-5 w-5" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                {row ? 'Edit Template' : 'Create Template (Manual)'}
+              </h1>
+              <p className="text-[13px] text-slate-600">Write your template content and configure details.</p>
+            </div>
           </div>
         </div>
-        <EditorStepper onStepChange={() => navigate('/library')} />
       </div>
 
       {saveError ? <Notice tone="error">{saveError}</Notice> : null}
