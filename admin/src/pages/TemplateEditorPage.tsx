@@ -755,7 +755,7 @@ export function TemplateEditorPage() {
                       <p className="text-[13px] font-bold text-slate-900">Buttons</p>
                     </div>
                     <p className="text-[11px] font-medium text-slate-500">
-                      Optional · up to {draft.category === 'AUTHENTICATION' ? 1 : 10} (Quick reply, URL, Call, or Copy code)
+                      Optional · up to 10 (Quick reply, URL, Call, or Copy code)
                     </p>
                   </div>
                   <Button
@@ -764,7 +764,7 @@ export function TemplateEditorPage() {
                     onClick={() =>
                       setDraft((prev) => ({ ...prev, buttons: [...prev.buttons, emptyTemplateButton('QUICK_REPLY')] }))
                     }
-                    disabled={!canWrite || draft.buttons.length >= (draft.category === 'AUTHENTICATION' ? 1 : 10)}
+                    disabled={!canWrite || draft.buttons.length >= 10}
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add button
