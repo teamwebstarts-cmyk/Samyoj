@@ -340,16 +340,21 @@ export function TemplateEditorPage() {
 
   // Cursor-aware token insertion into either body (client insertVariable mechanics).
   // insertNewVariable appends the next unused index; insertToken re-inserts an existing one (reuse allowed).
+  // A never-focused textarea reports selectionStart 0 — track the last-focused body so the
+  // first chip click appends at the end. (Blur runs before the chip's click, so never clear
+  // this on blur; selectionStart survives a blur and still marks the user's caret.)
   const textOf = (lang: 'en' | 'hi') => (lang === 'hi' ? draft.bodyHi : draft.body);
   const setTextOf = (lang: 'en' | 'hi', value: string) =>
     lang === 'hi' ? set('bodyHi', value) : set('body', value);
   const refOf = (lang: 'en' | 'hi') => (lang === 'hi' ? bodyHiRef : bodyRef);
+  const focusedBodyRef = useRef<'en' | 'hi' | null>(null);
 
   const insertToken = (index: number, lang: 'en' | 'hi' = 'en') => {
     const token = `{{${index}}}`;
+    const atCursor = focusedBodyRef.current === lang;
     const current = textOf(lang);
     const el = refOf(lang).current;
-    if (el) {
+    if (el && atCursor) {
       const start = el.selectionStart ?? current.length;
       const end = el.selectionEnd ?? current.length;
       setTextOf(lang, current.slice(0, start) + token + current.slice(end));
@@ -360,7 +365,15 @@ export function TemplateEditorPage() {
       });
       return;
     }
-    setTextOf(lang, `${current}${current && !current.endsWith(' ') ? ' ' : ''}${token}`);
+    // No active caret in this textarea — append at the end, then focus there.
+    const appended = `${current}${current && !current.endsWith(' ') ? ' ' : ''}${token}`;
+    setTextOf(lang, appended);
+    if (el) {
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(appended.length, appended.length);
+      });
+    }
   };
 
   const insertVariable = (lang: 'en' | 'hi' = 'en') => insertToken(variableCount + 1, lang);
@@ -620,6 +633,7 @@ export function TemplateEditorPage() {
                 value={bodyText}
                 maxLength={1024}
                 disabled={!canWrite}
+                onFocus={() => (focusedBodyRef.current = 'en')}
                 onChange={(event) => setBodyText(event.target.value)}
                 className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
               />
@@ -639,6 +653,7 @@ export function TemplateEditorPage() {
                   value={draft.bodyHi}
                   maxLength={1024}
                   disabled={!canWrite}
+                  onFocus={() => (focusedBodyRef.current = 'hi')}
                   onChange={(event) => set('bodyHi', event.target.value)}
                   className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 />
