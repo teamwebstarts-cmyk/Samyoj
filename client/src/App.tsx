@@ -113,7 +113,12 @@ export default function App() {
                       <Route path="/campaigns/new" element={<CampaignWizardPage />} />
                       <Route path="/campaigns/:id/edit" element={<CampaignWizardPage />} />
                       <Route path="/templates" element={<TemplatesPage />} />
+                      {/* Library wizard: Browse and Submitted share one component so
+                          form state survives step navigation. Edit renders the real
+                          editor page, pre-filled via router state. */}
                       <Route path="/templates/library" element={<TemplateLibraryPage />} />
+                      <Route path="/templates/library/edit" element={<TemplateWizardPage />} />
+                      <Route path="/templates/library/submitted" element={<TemplateLibraryPage />} />
                       <Route path="/templates/new" element={<TemplateWizardPage />} />
                       <Route path="/templates/:name/resubmit" element={<TemplateWizardPage />} />
                       <Route path="/content-studio" element={<ContentStudioPage />} />

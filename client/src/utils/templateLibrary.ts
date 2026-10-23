@@ -68,7 +68,7 @@ export const LIBRARY_CATEGORIES = [
 
 export const libraryWizardStages = [
   { id: 'browse', label: 'Browse', description: 'Pick a Meta template' },
-  { id: 'review', label: 'Review', description: 'Name, language, buttons' },
+  { id: 'edit', label: 'Edit', description: 'Name, language, buttons' },
   { id: 'submit', label: 'Submit', description: 'Send to Meta for this number' },
 ] as const;
 
