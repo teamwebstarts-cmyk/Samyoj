@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Beaker,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -58,6 +59,8 @@ type LibraryRow = {
   published: boolean;
   sortOrder: number;
   updatedAt?: string | null;
+  /** Mock-only (design work). Real catalog rows are en+hi bilingual; drop with the mock data. */
+  language?: string;
 };
 
 type Draft = {
@@ -103,6 +106,66 @@ const EMPTY_DRAFT: Draft = {
 const HONESTY =
   'These drafts live in Samyoj and show in the customer Template Library when published. Submitting still sends the copy to Meta for that org’s WhatsApp number. Utility and authentication are usually faster. Marketing is slower. Samyoj cannot pre-approve Meta on a customer number.';
 
+/**
+ * ponytail: Mock rows for catalog design work — the dev DB is empty and the API
+ * has no language field yet. Delete MOCK_CATALOG_rows + every MOCK_CATALOG /
+ * USE_MOCK_CATALOG reference once the real data ships.
+ */
+const USE_MOCK_CATALOG = true;
+
+const ago = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+const MOCK_CATALOG_ROWS: LibraryRow[] = [
+  {
+    id: 'mock-1', slug: 'special_sale_offer', title: 'Special Sale Offer', category: 'MARKETING',
+    tags: ['sale'], icon: 'sparkles', header: null, mediaFormat: null,
+    body: 'Hi {{1}}, our biggest sale of the season is live! Flat {{2}} off on everything you love.',
+    bodyHi: '{{1}}, हमारा सबसे बड़ा सेल शुरू! सब कुछ {{2}} छूट पर।',
+    footer: 'Team Samyoj', footerHi: 'टीम सैमयोज', buttons: [], bodyExamples: ['Ravi', '20%'],
+    copy: 'Flat discount for the season sale', published: true, sortOrder: 1, updatedAt: ago(2), language: 'en_US',
+  },
+  {
+    id: 'mock-2', slug: 'diwali_greetings', title: 'Diwali Greetings', category: 'MARKETING',
+    tags: ['festival'], icon: 'gift', header: null, mediaFormat: null,
+    body: 'Shine bright this Diwali! {{1}} wishes you and your family a festival full of light and joy.',
+    bodyHi: 'इस दिवाली आपको और आपके परिवार को ढेर सारी शुभकामनाएँ!',
+    footer: 'Team Samyoj', footerHi: 'टीम सैमयोज', buttons: [], bodyExamples: ['Samyoj'],
+    copy: 'Festive wishes blast', published: true, sortOrder: 2, updatedAt: ago(5), language: 'hi_IN',
+  },
+  {
+    id: 'mock-3', slug: 'order_confirmed', title: 'Order Confirmed', category: 'UTILITY',
+    tags: ['orders'], icon: 'package', header: null, mediaFormat: null,
+    body: 'Hi {{1}}, your order {{2}} is confirmed! We will notify you when it ships.',
+    bodyHi: '{{1}}, आपका ऑर्डर {{2}} कन्फर्म हो गया है!',
+    footer: 'Track your order', footerHi: 'ऑर्डर ट्रैक करें', buttons: [], bodyExamples: ['Ravi', '10234'],
+    copy: 'Order confirmation template', published: true, sortOrder: 3, updatedAt: ago(7), language: 'en_US',
+  },
+  {
+    id: 'mock-4', slug: 'payment_reminder', title: 'Payment Reminder', category: 'UTILITY',
+    tags: ['payments'], icon: 'card', header: null, mediaFormat: null,
+    body: 'Namaste {{1}}, a gentle reminder: your payment of {{2}} is due on {{3}}.',
+    bodyHi: '{{1}}, आपका भुगतान {{2}} {{3}} तक देय है।',
+    footer: 'Payments', footerHi: 'भुगतान', buttons: [], bodyExamples: ['Ravi', 'Rs 1200', '5 Nov'],
+    copy: 'Due-date payment reminder', published: true, sortOrder: 4, updatedAt: ago(14), language: 'en_US',
+  },
+  {
+    id: 'mock-5', slug: 'new_product_launch', title: 'New Product Launch', category: 'MARKETING',
+    tags: ['launch'], icon: 'store', header: null, mediaFormat: null,
+    body: 'The wait is over! Meet our all-new {{1}} — now available at an early-bird price.',
+    bodyHi: 'नया {{1}} अब उपलब्ध है! पहले 100 ग्राहकों के लिए स्पेशल कीमत।',
+    footer: 'Shop now', footerHi: 'अभी खरीदें', buttons: [], bodyExamples: ['Smart Kettle'],
+    copy: 'Launch announcement', published: false, sortOrder: 5, updatedAt: ago(20), language: 'en_US',
+  },
+  {
+    id: 'mock-6', slug: 'otp_login_code', title: 'OTP Login Code', category: 'AUTHENTICATION',
+    tags: ['otp'], icon: 'key', header: null, mediaFormat: null,
+    body: '{{1}} is your verification code. For your security, do not share this code.',
+    bodyHi: '{{1}} आपका वेरिफिकेशन कोड है। इसे किसी के साथ साझा न करें।',
+    footer: null, footerHi: null, buttons: [], bodyExamples: ['482913'],
+    copy: 'Login OTP code', published: true, sortOrder: 6, updatedAt: ago(1), language: 'en_US',
+  },
+];
+
 /** Same icon keys the customer-facing CatalogLibraryCard maps (client/src/components/templates/library). */
 const ICON_MAP: Record<string, LucideIcon> = {
   package: Package,
@@ -127,6 +190,16 @@ const CATEGORY_AVATAR: Record<string, string> = {
   MARKETING: 'bg-gradient-to-br from-rose-500 to-pink-600',
   AUTHENTICATION: 'bg-gradient-to-br from-violet-600 to-indigo-700',
 };
+
+const LANGUAGES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'en_US', label: 'English (US)' },
+  { value: 'hi_IN', label: 'Hindi' },
+];
+
+function languageLabel(code?: string | null): string {
+  if (!code) return 'English (US)';
+  return LANGUAGES.find((option) => option.value === code)?.label ?? code;
+}
 
 function iconFor(row: LibraryRow): LucideIcon {
   if (row.icon && ICON_MAP[row.icon]) return ICON_MAP[row.icon];
@@ -229,8 +302,13 @@ export function TemplateCatalogPage() {
   const [tab, setTab] = useState<CatalogTab>('all');
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('ALL');
+  const [language, setLanguage] = useState('ALL');
 
   const load = () => {
+    if (USE_MOCK_CATALOG) {
+      setRows(MOCK_CATALOG_ROWS);
+      return;
+    }
     platformRequest<{ templates: LibraryRow[] }>('/library-templates')
       .then((data) => setRows(data.templates || []))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'));
@@ -238,6 +316,7 @@ export function TemplateCatalogPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mock mode loads a constant; real mode loads on mount
   }, []);
 
   const counts = useMemo(() => {
@@ -255,11 +334,12 @@ export function TemplateCatalogPage() {
       if (tab === 'published' && !row.published) return false;
       if (tab === 'drafts' && row.published) return false;
       if (category !== 'ALL' && row.category !== category) return false;
+      if (language !== 'ALL' && (row.language || 'en_US') !== language) return false;
       if (!term) return true;
       const haystack = `${row.title} ${row.slug} ${row.copy || ''} ${(row.tags || []).join(' ')} ${row.body}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [rows, tab, q, category]);
+  }, [rows, tab, q, category, language]);
 
   const openCreate = () => {
     setEditing(null);
@@ -281,6 +361,27 @@ export function TemplateCatalogPage() {
     setSaveError('');
     setSaving(true);
     try {
+      if (USE_MOCK_CATALOG) {
+        // ponytail: mock CRUD so the drawer round-trips while designing; removed with USE_MOCK_CATALOG.
+        const payload = draftPayload(draft);
+        setRows((prev) => {
+          const base = prev || [];
+          if (editing) {
+            return base.map((row) => (row.id === editing.id ? { ...row, ...payload, updatedAt: new Date().toISOString() } : row));
+          }
+          return [
+            ...base,
+            {
+              ...payload,
+              id: `mock-${Date.now()}`,
+              updatedAt: new Date().toISOString(),
+              language: 'en_US',
+            } as LibraryRow,
+          ];
+        });
+        setOpen(false);
+        return;
+      }
       const payload = { reason, ...draftPayload(draft) };
       if (editing) {
         await platformRequest(`/library-templates/${editing.id}`, {
@@ -307,6 +408,11 @@ export function TemplateCatalogPage() {
     setSaveError('');
     setSaving(true);
     try {
+      if (USE_MOCK_CATALOG) {
+        setRows((prev) => (prev || []).filter((row) => row.id !== editing.id));
+        setOpen(false);
+        return;
+      }
       await platformRequest(`/library-templates/${editing.id}`, {
         method: 'DELETE',
         body: JSON.stringify({ reason }),
@@ -358,6 +464,13 @@ export function TemplateCatalogPage() {
         }
       />
 
+      {USE_MOCK_CATALOG && (
+        <div className="flex items-center gap-2 rounded-xl bg-indigo-50/70 px-3.5 py-2 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200/70">
+          <Beaker className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Mock data for design work — rows below are not real and disappear when USE_MOCK_CATALOG is turned off.
+        </div>
+      )}
+
       <div className="dashboard-card overflow-hidden">
         {/* Status tabs */}
         <div className="overflow-x-auto border-b border-slate-200/80 bg-slate-50/60 px-2 sm:px-3" role="tablist" aria-label="Filter templates by status">
@@ -391,7 +504,7 @@ export function TemplateCatalogPage() {
           </div>
         </div>
 
-        {/* Search + category filter */}
+        {/* Search + filters */}
         <div className="flex flex-col gap-3 border-b border-slate-200/80 px-4 py-3 sm:flex-row sm:items-center">
           <div className="flex-1 sm:max-w-sm">
             <Input
@@ -412,6 +525,17 @@ export function TemplateCatalogPage() {
             <option value="UTILITY">Utility</option>
             <option value="MARKETING">Marketing</option>
             <option value="AUTHENTICATION">Authentication</option>
+          </Select>
+          <Select
+            aria-label="Filter by language"
+            className="sm:w-40"
+            value={language}
+            onChange={(event) => setLanguage(event.target.value)}
+          >
+            <option value="ALL">All languages</option>
+            {LANGUAGES.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </Select>
         </div>
 
@@ -457,6 +581,7 @@ export function TemplateCatalogPage() {
                   status={row.published ? 'ACTIVE' : 'DISABLED'}
                   label={row.published ? 'Published' : 'Draft'}
                 />
+                <StatusBadge status="info" label={languageLabel(row.language)} />
                 <span className="ml-auto text-[11px] text-slate-400">Updated {formatAgo(row.updatedAt)}</span>
               </div>
             </button>
@@ -468,6 +593,7 @@ export function TemplateCatalogPage() {
                   <tr>
                     <th>Name</th>
                     <th>Category</th>
+                    <th>Language</th>
                     <th>Status</th>
                     <th>Updated</th>
                     <th></th>
@@ -488,6 +614,7 @@ export function TemplateCatalogPage() {
                       <td>
                         <StatusBadge status={row.category} />
                       </td>
+                      <td className="text-xs font-medium text-slate-700">{languageLabel(row.language)}</td>
                       <td>
                         <StatusBadge
                           status={row.published ? 'ACTIVE' : 'DISABLED'}
