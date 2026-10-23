@@ -411,6 +411,31 @@ select:focus-visible {
   background: var(--table-row-hover);
 }
 
+/*
+ * Mobile list rows (ResponsiveDataView cards rendered as a flush list).
+ * Mirrors .data-table zebra striping, separators, and hover 1:1 so both
+ * breakpoints read as the same component.
+ */
+.data-list > * {
+  cursor: pointer;
+  border-bottom: 1px solid var(--dust);
+  transition: background-color 0.12s ease;
+}
+
+.data-list > *:nth-child(even) {
+  background: var(--table-row-even);
+}
+
+.data-list > *:hover,
+.data-list > *:focus-visible {
+  background: var(--table-row-hover);
+  outline: none;
+}
+
+.data-list > *:last-child {
+  border-bottom: 0;
+}
+
 /* Navigation Rail Links (light sidebar) */
 .rail-nav-item {
   display: flex;

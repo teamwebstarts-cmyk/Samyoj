@@ -542,7 +542,7 @@ export function TemplateCatalogPage() {
 
         <ResponsiveDataView
           tableFrom="lg"
-          cardsClassName=""
+          cardsClassName="data-list"
           items={filtered}
           emptyState={
             rows.length === 0 ? (
@@ -566,7 +566,7 @@ export function TemplateCatalogPage() {
           renderCard={(row) => (
             <button
               type="button"
-              className="block w-full border-b border-slate-200/70 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-indigo-50/40 focus-visible:bg-indigo-50/40 focus:outline-none sm:px-5"
+              className="block w-full px-4 py-3 text-left sm:px-5"
               onClick={() => openEdit(row)}
             >
               <div className="flex items-start gap-3">
