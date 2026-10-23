@@ -5,7 +5,7 @@ type Size = 'sm' | 'md' | 'lg';
 
 const variants: Record<Variant, string> = {
   primary: 'btn-primary border-0',
-  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-emerald-500/40 hover:bg-emerald-50/50 hover:text-emerald-900',
+  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-indigo-500/40 hover:bg-indigo-50/50 hover:text-indigo-900',
   outline: 'border border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900',
   ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
   danger: 'border border-rose-200 bg-rose-50 text-rose-800 shadow-sm hover:bg-rose-100 hover:border-rose-300',

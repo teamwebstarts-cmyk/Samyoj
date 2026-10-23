@@ -1,7 +1,7 @@
 type Tone = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'purple';
 
 const toneStyles: Record<Tone, string> = {
-  success: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20 border-emerald-200/60',
+  success: 'bg-success-50 text-success-800 ring-success-600/20 border-success-200/60',
   warning: 'bg-amber-50 text-amber-900 ring-amber-500/20 border-amber-200/60',
   error: 'bg-rose-50 text-rose-800 ring-rose-500/20 border-rose-200/60',
   info: 'bg-sky-50 text-sky-800 ring-sky-500/20 border-sky-200/60',
@@ -10,7 +10,7 @@ const toneStyles: Record<Tone, string> = {
 };
 
 const dotStyles: Record<Tone, string> = {
-  success: 'bg-emerald-500',
+  success: 'bg-success-500',
   warning: 'bg-amber-500',
   error: 'bg-rose-500',
   info: 'bg-sky-500',

@@ -1,13 +1,13 @@
 import { STAGE_LABELS, stageTone, type ActivationStage } from '../../lib/stages';
 
 const toneClass = {
-  success: 'bg-emerald-50 text-emerald-800 border-emerald-200/80 ring-emerald-600/10',
+  success: 'bg-success-50 text-success-800 border-success-200/80 ring-success-600/10',
   warning: 'bg-amber-50 text-amber-900 border-amber-200/80 ring-amber-500/10',
   neutral: 'bg-slate-50 text-slate-700 border-slate-200/80 ring-slate-400/10',
 };
 
 const dotColors = {
-  success: 'bg-emerald-500',
+  success: 'bg-success-500',
   warning: 'bg-amber-500',
   neutral: 'bg-slate-400',
 };

@@ -47,7 +47,7 @@ function NavGroup({
   if (items.length === 0) return null;
   return (
     <div className="flex gap-1 md:flex-col md:gap-1">
-      <p className="hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400/60 md:block">
+      <p className="hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 md:block">
         {label}
       </p>
       {items.map((item) => {
@@ -85,15 +85,15 @@ export function Shell() {
       </a>
       
       {/* Sidebar Rail */}
-      <aside className="flex items-center gap-2 border-b border-emerald-950/40 bg-gradient-to-b from-[#0c1813] via-[#0f211b] to-[#0c1813] px-3 py-3 text-white md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-emerald-900/20 md:px-3 md:py-4 shadow-xl z-20">
+      <aside className="flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 shadow-sm z-20">
         <div className="hidden min-w-0 px-1 md:block">
           <PlatformBrand size="sm" />
-          <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/30 px-2 py-1 text-[10px] text-emerald-300">
+          <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200/60 px-2 py-1 text-[10px] text-indigo-700">
             <span className="flex items-center gap-1.5 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
               Samyoj Ops
             </span>
-            <span className="font-mono text-[9px] text-emerald-400/70">v2.4</span>
+            <span className="font-mono text-[9px] text-indigo-400">v2.4</span>
           </div>
         </div>
 
@@ -107,17 +107,17 @@ export function Shell() {
         </nav>
 
         {/* Operator Profile Card */}
-        <div className="hidden md:block pt-3 border-t border-emerald-900/30 mt-auto">
-          <div className="rounded-xl bg-emerald-950/40 border border-emerald-900/40 p-2.5">
+        <div className="hidden md:block pt-3 border-t border-slate-200 mt-auto">
+          <div className="rounded-xl bg-indigo-50/70 border border-indigo-200/70 p-2.5">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-white/90">{operator.email}</p>
+                <p className="truncate text-xs font-semibold text-indigo-950">{operator.email}</p>
                 <div className="mt-1 flex items-center gap-1.5">
-                  <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-400/30">
+                  <span className="inline-flex items-center rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700 border border-indigo-200">
                     {operator.role}
                   </span>
                   {operator.mfaEnabled && (
-                    <span className="inline-flex items-center text-[9px] text-emerald-400" title="MFA Protected">
+                    <span className="inline-flex items-center text-indigo-500" title="MFA Protected">
                       <ShieldCheck className="h-3 w-3" />
                     </span>
                   )}
@@ -127,7 +127,7 @@ export function Shell() {
             <button
               type="button"
               onClick={() => void logout()}
-              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 py-1.5 text-center text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white border border-indigo-200/70 py-1.5 text-center text-xs font-medium text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors"
             >
               <LogOut className="h-3.5 w-3.5" />
               Sign out
@@ -152,8 +152,8 @@ export function Shell() {
 
             <div className="flex items-center gap-3 shrink-0">
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 font-medium text-emerald-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200/60 px-2.5 py-0.5 font-medium text-indigo-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success-500 animate-pulse" />
                   Live Platform
                 </span>
               </div>

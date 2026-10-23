@@ -132,7 +132,7 @@ export function OutreachPage() {
                         return (
                           <div
                             key={row.id}
-                            className="dashboard-card p-4 bg-white flex flex-col justify-between gap-3 shadow-sm hover:border-emerald-500/40 transition-all"
+                            className="dashboard-card p-4 bg-white flex flex-col justify-between gap-3 shadow-sm hover:border-indigo-500/40 transition-all"
                           >
                             <div>
                               <p className="font-bold text-slate-900">{row.companyName}</p>

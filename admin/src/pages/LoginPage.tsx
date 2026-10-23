@@ -99,23 +99,23 @@ export function LoginPage() {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[minmax(20rem,26rem)_1fr]">
       {/* Left Brand Showcase Column */}
-      <aside className="hidden bg-gradient-to-b from-[#0a1511] via-[#0f211b] to-[#0c1813] p-10 text-white md:flex md:flex-col justify-between shadow-2xl z-10 border-r border-emerald-900/30">
+      <aside className="hidden bg-gradient-to-b from-[#0f172a] via-[#1a1b4b] to-[#1e293b] p-10 text-white md:flex md:flex-col justify-between shadow-2xl z-10 border-r border-indigo-900/30">
         <div>
           <PlatformBrand size="md" />
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-400/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-300">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 border border-indigo-400/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-indigo-300">
+            <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />
             Zero-Trust Platform Ops
           </div>
 
           <h2 className="mt-8 text-2xl font-bold tracking-tight leading-snug text-white/95">
             Mission Control for WhatsApp Cloud & AI
           </h2>
-          <p className="mt-3 text-xs leading-relaxed text-emerald-100/70">
+          <p className="mt-3 text-xs leading-relaxed text-indigo-100/70">
             Live lifecycle tracking, Meta API error telemetry, automated customer nurture playbooks, and dynamic subscription catalog management.
           </p>
 
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/80 mb-3">Onboarding Lifecycle</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300/90 mb-3">Onboarding Lifecycle</p>
             <LifecycleRail decorative compact inverted />
           </div>
         </div>
@@ -172,21 +172,21 @@ export function LoginPage() {
 
           {phase === 'enroll' && (
             <div className="space-y-4 text-xs">
-              <div className="rounded-xl bg-emerald-50/80 border border-emerald-200 p-3.5 space-y-2">
+              <div className="rounded-xl bg-indigo-50/80 border border-indigo-200 p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800">
                     MFA Secret Key
                   </span>
                   <button
                     type="button"
                     onClick={copySecret}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900"
                   >
                     {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                     {copied ? 'Copied' : 'Copy key'}
                   </button>
                 </div>
-                <p className="break-all font-mono text-xs font-bold text-slate-900 select-all bg-white p-2 rounded-lg border border-emerald-200/60">
+                <p className="break-all font-mono text-xs font-bold text-slate-900 select-all bg-white p-2 rounded-lg border border-indigo-200/60">
                   {secret}
                 </p>
               </div>
@@ -205,7 +205,7 @@ export function LoginPage() {
 
               <button
                 type="button"
-                className="text-[11px] font-semibold text-emerald-700 hover:underline"
+                className="text-[11px] font-semibold text-indigo-700 hover:underline"
                 disabled={loading}
                 onClick={() => {
                   setLoading(true);
