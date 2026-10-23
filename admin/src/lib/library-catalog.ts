@@ -129,7 +129,7 @@ export const EMPTY_DRAFT: Draft = {
   headerExamples: [],
   bodyExamples: [],
   copy: '',
-  published: true,
+  published: false,
   sortOrder: '0',
 };
 

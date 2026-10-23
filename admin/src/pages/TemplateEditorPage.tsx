@@ -512,7 +512,7 @@ export function TemplateEditorPage() {
             </span>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                {row ? 'Edit Template' : 'Create Template (Manual)'}
+                {row ? 'Edit Template' : 'Create Template'}
               </h1>
               <p className="text-[13px] text-slate-600">Write your template content and configure details.</p>
             </div>
@@ -533,14 +533,12 @@ export function TemplateEditorPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
                 label="Template name"
-                hint="Shown to tenants in the library."
                 value={draft.title}
                 disabled={!canWrite}
                 onChange={(event) => set('title', event.target.value)}
               />
               <Input
                 label="Slug"
-                hint="Tenants submit this draft by slug."
                 value={draft.slug}
                 disabled={!canWrite || Boolean(row)}
                 onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
