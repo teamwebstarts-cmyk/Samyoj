@@ -7,7 +7,6 @@ import {
   Info,
   Minus,
   Plus,
-  Smartphone,
   Trash2,
   Type,
   Video,
@@ -737,16 +736,11 @@ export function TemplateEditorPage() {
       {/* Title header — previous admin style */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm" aria-hidden>
-              <Smartphone className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                {row ? 'Edit Template' : 'Create Template'}
-              </h1>
-              <p className="text-[13px] text-slate-600">Write your template content and configure details.</p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {row ? 'Edit Template' : 'Create Template'}
+            </h1>
+            <p className="text-[13px] text-slate-600">Write your template content and configure details.</p>
           </div>
         </div>
       </div>
