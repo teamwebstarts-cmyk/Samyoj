@@ -115,7 +115,7 @@ export function LoginPage() {
           </p>
 
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-400/80 mb-3">Onboarding Lifecycle</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300/90 mb-3">Onboarding Lifecycle</p>
             <LifecycleRail decorative compact inverted />
           </div>
         </div>
