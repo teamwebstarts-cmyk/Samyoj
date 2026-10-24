@@ -27,7 +27,7 @@ import {
   Select,
   StatusBadge,
 } from "../components/ui";
-import { TemplatePreviewBlock } from "../components/WhatsAppPreview";
+import { PREVIEW_COLUMN, TemplatePreviewBlock } from "../components/WhatsAppPreview";
 import { formatAgo } from "../lib/format";
 import { useOperator } from "../context/OperatorContext";
 import {
@@ -623,6 +623,7 @@ export function TemplateCatalogPage() {
             : undefined
         }
         onClose={() => setViewing(null)}
+        fit
       >
         {viewing ? (
           <div className="space-y-3">
@@ -630,7 +631,7 @@ export function TemplateCatalogPage() {
             <TemplatePreviewBlock draft={rowToDraft(viewing)} />
             {canWrite ? (
               <Button
-                className="w-full"
+                className={PREVIEW_COLUMN}
                 onClick={() => {
                   const target = viewing;
                   setViewing(null);

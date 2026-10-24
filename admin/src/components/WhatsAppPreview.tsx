@@ -222,11 +222,11 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-/** Collapsible details table under the phone — mirrors client TemplateDetailsCard. */
+/** Collapsible details table under the phone — same 306px column as the preview card. */
 export function TemplateDetailsTable({ draft }: { draft: Draft }) {
   const [open, setOpen] = useState(true);
   return (
-    <div className="mt-3 overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+    <div className={`${PREVIEW_COLUMN} mt-3 overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -286,10 +286,17 @@ export function TemplateDetailsTable({ draft }: { draft: Draft }) {
 
 /**
  * The exact editor-aside preview block: "Template Preview" header card with
- * language pill, EN/हिन्दी lens, phone surface, then the details table.
+ * language pills in the header row, phone surface, then the details table.
  * Shared by the editor aside and the catalog View drawer so both render
  * the same block. One identity, two surfaces — toggle only changes the lens.
  */
+/**
+ * Shared column width the preview card resolves to (280px phone + 12px×2
+ * gradient padding + 2px border). Details table and drawer actions snap to
+ * the same width so everything in the drawer reads as one column.
+ */
+export const PREVIEW_COLUMN = 'mx-auto w-[306px] max-w-full';
+
 export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft; templateLanguage?: string }) {
   const base = templateLanguage && templateLanguage !== draft.language ? { ...draft, language: templateLanguage } : draft;
   const [lang, setLang] = useState<'en' | 'hi'>(base.language === 'hi_IN' ? 'hi' : 'en');
@@ -299,7 +306,7 @@ export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft
     : { ...base, language: base.language === 'hi_IN' ? 'en_US' : base.language, body: base.body || base.bodyHi, footer: base.footer || base.footerHi };
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      <div className={`${PREVIEW_COLUMN} overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]`}>
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <p className="flex min-w-0 items-center gap-2 text-[13px] font-bold leading-5 text-slate-900">
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-[#25D366]" aria-hidden>
@@ -307,7 +314,7 @@ export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft
             </svg>
             Template Preview
           </p>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Preview language">
             {(['en', 'hi'] as const).map((option) => {
               const active = lang === option;
               return (
@@ -327,7 +334,7 @@ export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft
           </div>
         </div>
         <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
-          <div className="mx-auto w-full max-w-[280px]">
+          <div className="w-[280px] max-w-full">
             <WhatsAppPreview draft={effective} />
           </div>
         </div>

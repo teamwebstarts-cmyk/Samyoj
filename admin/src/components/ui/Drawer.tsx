@@ -9,6 +9,7 @@ export function Drawer({
   onClose,
   children,
   footer,
+  fit,
 }: {
   open: boolean;
   title: string;
@@ -16,6 +17,8 @@ export function Drawer({
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Shrink-to-fit width (md+) instead of the fixed max-w-md column. */
+  fit?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +50,9 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby="drawer-title"
         tabIndex={-1}
-        className="relative z-10 flex w-full flex-col rounded-t-2xl bg-white shadow-2xl outline-none ring-1 ring-slate-900/10 h-[90vh] md:h-full md:max-w-md md:rounded-l-2xl md:rounded-r-none transition-transform duration-200 ease-out"
+        className={`relative z-10 flex flex-col rounded-t-2xl bg-white shadow-2xl outline-none ring-1 ring-slate-900/10 h-[90vh] md:h-full md:rounded-l-2xl md:rounded-r-none transition-transform duration-200 ease-out ${
+          fit ? 'w-full md:w-fit md:max-w-full' : 'w-full md:max-w-md'
+        }`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200/80 bg-slate-50/70 px-5 py-4">
           <div className="min-w-0">
