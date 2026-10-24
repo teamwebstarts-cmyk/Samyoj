@@ -686,7 +686,13 @@ const libraryTemplateFields = {
     .string()
     .regex(/^[a-z0-9_]{3,64}$/, 'Slug must be lowercase letters, numbers, and underscores'),
   title: z.string().trim().min(1).max(80),
-  category: z.enum(['UTILITY', 'MARKETING', 'AUTHENTICATION']),
+  // Free-form so the platform console can file templates under custom categories
+  // ("FESTIVE_OFFER"). Tenant + Meta surfaces coerce unknown values to UTILITY.
+  category: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z][A-Za-z0-9 _-]{0,31}$/, 'Category must start with a letter (letters, numbers, spaces, dashes only)')
+    .transform((value) => value.toUpperCase().replace(/\s+/g, '_')),
   tags: z.array(z.string().trim().min(1).max(32)).max(20).default([]),
   icon: z.string().trim().min(1).max(32).default('file'),
   header: z.string().max(60).nullable().optional(),

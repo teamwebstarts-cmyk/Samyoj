@@ -14,9 +14,10 @@ const CATEGORY_TONE: Record<string, { badge: string; tile: string }> = {
   },
 };
 
+/** Badge text — real Meta category names only (never use-case aliases). */
 const TOP_CATEGORY: Record<string, string> = {
   UTILITY: 'Utility',
-  AUTHENTICATION: 'OTP',
+  AUTHENTICATION: 'Authentication',
   MARKETING: 'Marketing',
 };
 

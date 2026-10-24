@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BadgeCheck, Building2, CheckCheck, ChevronDown, ChevronLeft, Copy, ExternalLink, MoreVertical, Phone } from 'lucide-react';
-import { languageLabel, templateVariableCount, type Draft } from '../lib/library-catalog';
+import { languageLabel, templateVariableCount, titleCaseCategory, type Draft } from '../lib/library-catalog';
 
 /**
  * Live WhatsApp chat mock fed by a template draft — mirrors the client's
@@ -250,7 +250,13 @@ export function TemplateDetailsTable({ draft }: { draft: Draft }) {
           </DetailRow>
           <DetailRow label="Category">
             <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200/70">
-              {draft.category === 'MARKETING' ? 'Marketing' : draft.category === 'AUTHENTICATION' ? 'Authentication' : 'Utility'}
+              {draft.category === 'MARKETING'
+                ? 'Marketing'
+                : draft.category === 'AUTHENTICATION'
+                  ? 'Authentication'
+                  : draft.category === 'UTILITY'
+                    ? 'Utility'
+                    : titleCaseCategory(draft.category || 'UTILITY')}
             </span>
           </DetailRow>
           <DetailRow label="Language">{languageLabel(draft.language)}</DetailRow>

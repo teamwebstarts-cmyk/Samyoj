@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, BookOpen, Eye } from 'lucide-react';
+import { ArrowRight, Eye } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import TemplateLibraryBrowseStep from '../components/templates/library/TemplateLibraryBrowseStep';
 import LibraryTemplatePreviewPanel from '../components/templates/library/LibraryTemplatePreviewPanel';
 import { libraryTileClass } from '../components/templates/library/templateLibraryGrid';
 import { tileIconFor } from '../components/templates/library/CatalogLibraryCard';
-import TemplateWizardPageHeader from '../components/templates/wizard/TemplateWizardPageHeader';
 import TemplateWizardPageFooter from '../components/templates/wizard/TemplateWizardPageFooter';
 import {
   createEmptyWizardForm,
@@ -21,9 +20,9 @@ import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { previewParams, syncFormExamples } from '../utils/templateForm';
 import {
+  LIBRARY_CATEGORIES,
   formFromCatalogEntry,
   isSampleLibraryButtonUrl,
-  libraryWizardStages,
   uniqueLibraryTemplateName,
   usableLibraryButtonUrl,
   type CatalogListItem,
@@ -77,7 +76,6 @@ export default function TemplateLibraryPage() {
   // removed; the /submitted route now just lands back on Browse.
   const activeStep = 0;
   const [catalog, setCatalog] = useState<CatalogListItem[]>([]);
-  const [filters, setFilters] = useState<Array<{ id: string; label: string }>>([]);
   const [honesty, setHonesty] = useState(DEFAULT_HONESTY);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -121,7 +119,6 @@ export default function TemplateLibraryPage() {
         if (requestNumberId !== activeNumberIdRef.current) return;
         const payload = data?.data;
         setCatalog(asCatalogItems(payload?.templates));
-        setFilters(Array.isArray(payload?.filters) ? payload.filters : []);
         if (typeof payload?.honesty === 'string' && payload.honesty.trim()) setHonesty(payload.honesty);
         setCatalogError(null);
       })
@@ -223,6 +220,18 @@ export default function TemplateLibraryPage() {
     });
   }, [catalog, debouncedSearch]);
 
+  // Chip list derives from the loaded templates' own categories (Meta pack +
+  // Samyoj catalog), not a hardcoded filter list — chips always match what's
+  // actually on the page.
+  const filters = useMemo(() => {
+    const present = new Set(catalog.map((item) => (item.category || 'UTILITY').toUpperCase()));
+    const derived = LIBRARY_CATEGORIES.filter((category) => present.has(category.value));
+    return [
+      { id: 'all', label: 'All' },
+      ...derived.map((category) => ({ id: category.value, label: category.label })),
+    ];
+  }, [catalog]);
+
   // Chip counts come from the search-scoped list BEFORE category filtering,
   // so switching chips never re-counts the other chips. Boolean per-filter
   // matching (same predicate as the filter itself) avoids double-counting
@@ -235,7 +244,7 @@ export default function TemplateLibraryPage() {
         id === 'all'
           ? searchScopedItems.length
           : searchScopedItems.filter(
-              (item) => item.category === id || (item.tags || []).includes(id),
+              (item) => (item.category || '').toUpperCase() === id || (item.tags || []).includes(id),
             ).length;
     }
     return counts;
@@ -244,7 +253,7 @@ export default function TemplateLibraryPage() {
   const listItems = useMemo(() => {
     if (!filterId || filterId === 'all') return searchScopedItems;
     return searchScopedItems.filter(
-      (item) => item.category === filterId || (item.tags || []).includes(filterId),
+      (item) => (item.category || '').toUpperCase() === filterId || (item.tags || []).includes(filterId),
     );
   }, [searchScopedItems, filterId]);
 
@@ -329,24 +338,12 @@ export default function TemplateLibraryPage() {
       };
     });
 
-  // Stepper reachability: Edit needs a picked template. Submission happens in
-  // the editor's success dialog — there is no third step here anymore.
-  const maxReachableStep = selected ? 1 : 0;
-
   // Hand the picked template's details to the real editor page, exactly the
   // way the old "Customize in editor" flow prefilled /templates/new. The item
   // rides along so the editor's footer chip can match Browse's.
   const editHandoffState = selected
     ? { form: { ...form, name: createName || selected.id }, libraryItem: selected }
     : undefined;
-
-  const goToStep = (step: number) => {
-    if (step === 1 && !selected) return;
-    navigate(
-      step === 0 ? '/templates/library' : '/templates/library/edit',
-      step === 1 ? { state: editHandoffState } : undefined,
-    );
-  };
 
   const handleContinue = () => {
     if (!canManageTemplates) {
@@ -364,8 +361,6 @@ export default function TemplateLibraryPage() {
   };
 
   const { setExtras, clearExtras } = useTopbarExtras();
-
-  const stepTitle = 'Browse template library';
 
   const stepSubtitle = 'Pick a Meta template, then add it to this WhatsApp number';
 
@@ -401,20 +396,6 @@ export default function TemplateLibraryPage() {
 
   return (
     <div className="template-wizard-page">
-      <TemplateWizardPageHeader
-        icon={BookOpen}
-        iconTone="violet"
-        title={stepTitle}
-        subtitle={stepSubtitle}
-        stepper={{
-          activeStep: 0,
-          maxReachableStep,
-          onStepChange: goToStep,
-          stages: libraryWizardStages,
-          ariaLabel: 'Template library steps',
-        }}
-      />
-
       <div className="template-wizard-scroll min-h-0 flex-1 xl:flex xl:flex-col xl:overflow-hidden">
         {templateGateMessage && (
           <EntitlementNotice className="mb-4 shrink-0" message={templateGateMessage} upgradePlan="starter" />

@@ -5,6 +5,7 @@ import {
   bodyVariableIndexes,
   rowToDraft,
   sampleForVariable,
+  titleCaseCategory,
   type LibraryRow,
 } from './library-catalog';
 
@@ -62,6 +63,15 @@ describe('admin template editor draft model', () => {
     const payload = draftPayload(rowToDraft(row));
     expect('variableMeta' in payload).toBe(false);
     expect('headerExamples' in payload).toBe(false);
+  });
+
+  it('preserves custom categories and only falls back on blank values (titleCaseCategory labels)', () => {
+    const custom = rowToDraft({ ...row, category: 'FESTIVE_OFFER' });
+    expect(custom.category).toBe('FESTIVE_OFFER');
+    expect(draftPayload(custom).category).toBe('FESTIVE_OFFER');
+    expect(rowToDraft({ ...row, category: '' }).category).toBe('UTILITY');
+    expect(titleCaseCategory('FESTIVE_OFFER')).toBe('Festive Offer');
+    expect(titleCaseCategory('UTILITY')).toBe('Utility');
   });
 
   it('sampleForVariable mirrors client fallbacks (description map → source → positional)', () => {

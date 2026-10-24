@@ -150,7 +150,8 @@ export async function listAdminLibraryTemplates() {
 export type LibraryTemplateWriteInput = {
   slug: string;
   title: string;
-  category: (typeof CATEGORIES)[number];
+  /** Free-form (platform-only taxonomy). Tenant + Meta reads coerce unknowns to UTILITY. */
+  category: string;
   tags: string[];
   icon: string;
   header?: string | null;

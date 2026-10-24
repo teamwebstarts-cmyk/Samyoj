@@ -1,8 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
-import { Check, Copy, CopyPlus, Eye, Info, Library, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { platformRequest } from '../api';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import {
+  Check,
+  Copy,
+  CopyPlus,
+  Eye,
+  Info,
+  Library,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { platformRequest } from "../api";
 import {
   Button,
   Drawer,
@@ -14,25 +26,27 @@ import {
   ResponsiveDataView,
   Select,
   StatusBadge,
-} from '../components/ui';
-import { TemplatePreviewBlock } from '../components/WhatsAppPreview';
-import { formatAgo } from '../lib/format';
-import { useOperator } from '../context/OperatorContext';
+} from "../components/ui";
+import { TemplatePreviewBlock } from "../components/WhatsAppPreview";
+import { formatAgo } from "../lib/format";
+import { useOperator } from "../context/OperatorContext";
 import {
   CATEGORY_AVATAR,
   HONESTY,
   iconFor,
   languageLabel,
   rowToDraft,
+  titleCaseCategory,
   type LibraryRow,
-} from '../lib/library-catalog';
+} from "../lib/library-catalog";
 
 function TemplateAvatar({ row }: { row: LibraryRow }) {
   const Icon = iconFor(row);
   return (
     <span
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${
-        CATEGORY_AVATAR[row.category] ?? 'bg-gradient-to-br from-slate-500 to-slate-600'
+        CATEGORY_AVATAR[row.category] ??
+        "bg-gradient-to-br from-slate-500 to-slate-600"
       }`}
       aria-hidden
     >
@@ -42,7 +56,8 @@ function TemplateAvatar({ row }: { row: LibraryRow }) {
 }
 
 /** Newest activity first — rows without timestamps sort last, stably. */
-const updatedAtMs = (row: LibraryRow) => (row.updatedAt ? Date.parse(row.updatedAt) || 0 : 0);
+const updatedAtMs = (row: LibraryRow) =>
+  row.updatedAt ? Date.parse(row.updatedAt) || 0 : 0;
 
 /** View opens the WhatsApp preview drawer; Edit redirects to the editor page; ⋮ menu holds the rest. */
 function RowActions({
@@ -84,10 +99,20 @@ function RowActions({
     if (!r.width && !r.height) return;
     const MENU_W = 176;
     const menuH = 120; // approximate: 3 items; only used for the flip decision
-    const openUp = r.bottom + menuH > window.innerHeight - 8 && r.top - menuH > 8;
+    const openUp =
+      r.bottom + menuH > window.innerHeight - 8 && r.top - menuH > 8;
     setPos({
-      top: Math.max(8, Math.min(openUp ? r.top - menuH - 4 : r.bottom + 4, window.innerHeight - menuH - 8)),
-      left: Math.max(8, Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8)),
+      top: Math.max(
+        8,
+        Math.min(
+          openUp ? r.top - menuH - 4 : r.bottom + 4,
+          window.innerHeight - menuH - 8,
+        ),
+      ),
+      left: Math.max(
+        8,
+        Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8),
+      ),
     });
   };
 
@@ -96,11 +121,11 @@ function RowActions({
   useEffect(() => {
     if (!menuOpen) return;
     const onScrollOrResize = () => measure();
-    window.addEventListener('scroll', onScrollOrResize, true);
-    window.addEventListener('resize', onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
     return () => {
-      window.removeEventListener('scroll', onScrollOrResize, true);
-      window.removeEventListener('resize', onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trigger is stable per row
   }, [menuOpen]);
@@ -131,25 +156,30 @@ function RowActions({
       setMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false);
+      if (event.key === "Escape") setMenuOpen(false);
     };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
     };
   }, [menuOpen, setMenuOpen]);
 
-  const menuItem = (label: string, icon: React.ReactNode, onClick: () => void, tone: 'default' | 'danger' = 'default') => (
+  const menuItem = (
+    label: string,
+    icon: React.ReactNode,
+    onClick: () => void,
+    tone: "default" | "danger" = "default",
+  ) => (
     <button
       type="button"
       role="menuitem"
       onClick={stop(onClick)}
       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors ${
-        tone === 'danger'
-          ? 'text-rose-700 hover:bg-rose-50'
-          : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-900'
+        tone === "danger"
+          ? "text-rose-700 hover:bg-rose-50"
+          : "text-slate-700 hover:bg-indigo-50 hover:text-indigo-900"
       }`}
     >
       {icon}
@@ -158,11 +188,24 @@ function RowActions({
   );
 
   return (
-    <div className="flex shrink-0 items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
-      <Button variant="secondary" size="sm" onClick={stop(onView)} aria-label={`View ${row.title}`}>
+    <div
+      className="flex shrink-0 items-center justify-end gap-1.5"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={stop(onView)}
+        aria-label={`View ${row.title}`}
+      >
         <Eye className="h-3.5 w-3.5" /> View
       </Button>
-      <Button variant="secondary" size="sm" onClick={stop(onEdit)} aria-label={`Edit ${row.title}`}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={stop(onEdit)}
+        aria-label={`Edit ${row.title}`}
+      >
         <Pencil className="h-3.5 w-3.5" /> Edit
       </Button>
       <div className="relative">
@@ -189,12 +232,29 @@ function RowActions({
               className="fixed z-50 w-44 rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg"
               style={{ top: pos.top, left: pos.left }}
             >
-              {menuItem('Duplicate', <CopyPlus className="h-3.5 w-3.5" />, onDuplicate)}
-              {menuItem('Copy slug', copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />, copySlug)}
+              {menuItem(
+                "Duplicate",
+                <CopyPlus className="h-3.5 w-3.5" />,
+                onDuplicate,
+              )}
+              {menuItem(
+                "Copy slug",
+                copied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                ),
+                copySlug,
+              )}
               {canWrite ? (
                 <>
                   <div className="my-1 border-t border-slate-100" />
-                  {menuItem('Delete', <Trash2 className="h-3.5 w-3.5" />, onDelete, 'danger')}
+                  {menuItem(
+                    "Delete",
+                    <Trash2 className="h-3.5 w-3.5" />,
+                    onDelete,
+                    "danger",
+                  )}
                 </>
               ) : null}
             </div>,
@@ -205,28 +265,30 @@ function RowActions({
   );
 }
 
-type CatalogTab = 'all' | 'published' | 'drafts';
+type CatalogTab = "all" | "published" | "drafts";
 
 const TABS: Array<{ id: CatalogTab; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'published', label: 'Published' },
-  { id: 'drafts', label: 'Drafts' },
+  { id: "all", label: "All" },
+  { id: "published", label: "Published" },
+  { id: "drafts", label: "Drafts" },
 ];
 
 export function TemplateCatalogPage() {
   const navigate = useNavigate();
   const { allowed } = useOperator();
-  const canWrite = allowed('organization.write');
+  const canWrite = allowed("organization.write");
   const [rows, setRows] = useState<LibraryRow[] | null>(null);
-  const [error, setError] = useState('');
-  const [tab, setTab] = useState<CatalogTab>('all');
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('ALL');
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState<CatalogTab>("all");
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("ALL");
 
   const load = () => {
-    platformRequest<{ templates: LibraryRow[] }>('/library-templates')
+    platformRequest<{ templates: LibraryRow[] }>("/library-templates")
       .then((data) => setRows(data.templates || []))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load"),
+      );
   };
 
   useEffect(() => {
@@ -249,17 +311,28 @@ export function TemplateCatalogPage() {
     // search matches both bodies. Newest activity first.
     return (rows || [])
       .filter((row) => {
-        if (tab === 'published' && !row.published) return false;
-        if (tab === 'drafts' && row.published) return false;
-        if (category !== 'ALL' && row.category !== category) return false;
+        if (tab === "published" && !row.published) return false;
+        if (tab === "drafts" && row.published) return false;
+        if (category !== "ALL" && row.category !== category) return false;
         if (!term) return true;
-        const haystack = `${row.title} ${row.slug} ${row.copy || ''} ${(row.tags || []).join(' ')} ${row.body} ${row.bodyHi}`.toLowerCase();
+        const haystack =
+          `${row.title} ${row.slug} ${row.copy || ""} ${(row.tags || []).join(" ")} ${row.body} ${row.bodyHi}`.toLowerCase();
         return haystack.includes(term);
       })
       .sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
   }, [rows, tab, q, category]);
 
-  const openCreate = () => navigate('/library/new');
+  /** Custom (non-builtin) categories currently in use — filter options follow the data. */
+  const customCategories = useMemo(
+    () =>
+      [...new Set((rows || []).map((row) => row.category))].filter(
+        (value) =>
+          value && !["UTILITY", "MARKETING", "AUTHENTICATION"].includes(value),
+      ),
+    [rows],
+  );
+
+  const openCreate = () => navigate("/library/new");
   const openEdit = (row: LibraryRow) => navigate(`/library/${row.id}/edit`);
   const [viewing, setViewing] = useState<LibraryRow | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -269,23 +342,23 @@ export function TemplateCatalogPage() {
   const duplicateRow = (row: LibraryRow) => {
     closeMenu();
     // Real API: no clone endpoint yet — prefilled editor as a new draft (SAMYOJ-11 Graph clone pending).
-    navigate('/library/new', { state: { cloneFrom: row } });
+    navigate("/library/new", { state: { cloneFrom: row } });
   };
 
   const deleteRow = async (row: LibraryRow) => {
     closeMenu();
     await platformRequest(`/library-templates/${row.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ reason: `Deleted library template "${row.slug}" from platform catalog` }),
+      method: "DELETE",
+      body: JSON.stringify({
+        reason: `Deleted library template "${row.slug}" from platform catalog`,
+      }),
     });
     load();
   };
 
   if (error) {
     return (
-      <Notice tone="error">
-        Could not load the template library. {error}
-      </Notice>
+      <Notice tone="error">Could not load the template library. {error}</Notice>
     );
   }
   if (!rows) return <PageLoading label="Loading Samyoj template library…" />;
@@ -302,10 +375,11 @@ export function TemplateCatalogPage() {
             role="note"
             aria-label="How the platform catalog works"
           >
-            <Info className="h-[18px] w-[18px] text-slate-400 transition-colors group-hover:text-indigo-600 group-focus-visible:text-indigo-600" aria-hidden />
-            <span
-              className="pointer-events-none invisible absolute left-1/2 top-7 z-30 w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-left text-[13px] font-normal leading-relaxed text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
-            >
+            <Info
+              className="h-[18px] w-[18px] text-slate-400 transition-colors group-hover:text-indigo-600 group-focus-visible:text-indigo-600"
+              aria-hidden
+            />
+            <span className="pointer-events-none invisible absolute left-1/2 top-7 z-30 w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-left text-[13px] font-normal leading-relaxed text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100">
               {HONESTY}
             </span>
           </span>
@@ -321,7 +395,11 @@ export function TemplateCatalogPage() {
 
       <div className="dashboard-card overflow-hidden">
         {/* Status tabs */}
-        <div className="overflow-x-auto border-b border-slate-200/80 bg-slate-50/60 px-2 sm:px-3" role="tablist" aria-label="Filter templates by status">
+        <div
+          className="overflow-x-auto border-b border-slate-200/80 bg-slate-50/60 px-2 sm:px-3"
+          role="tablist"
+          aria-label="Filter templates by status"
+        >
           <div className="flex min-w-max items-center gap-1">
             {TABS.map(({ id, label }) => {
               const selected = tab === id;
@@ -334,14 +412,16 @@ export function TemplateCatalogPage() {
                   onClick={() => setTab(id)}
                   className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors ${
                     selected
-                      ? 'border-indigo-600 text-indigo-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                      ? "border-indigo-600 text-indigo-700"
+                      : "border-transparent text-slate-500 hover:text-slate-800"
                   }`}
                 >
                   {label}
                   <span
                     className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                      selected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200/80 text-slate-500'
+                      selected
+                        ? "bg-indigo-100 text-indigo-700"
+                        : "bg-slate-200/80 text-slate-500"
                     }`}
                   >
                     {counts[id]}
@@ -366,13 +446,27 @@ export function TemplateCatalogPage() {
           <Select
             aria-label="Filter by category"
             className="sm:w-44"
-            value={category}
+            value={
+              category === "ALL" || customCategories.includes(category)
+                ? category
+                : category === "UTILITY" ||
+                    category === "MARKETING" ||
+                    category === "AUTHENTICATION"
+                  ? category
+                  : "ALL"
+            }
             onChange={(event) => setCategory(event.target.value)}
           >
             <option value="ALL">All categories</option>
             <option value="UTILITY">Utility</option>
             <option value="MARKETING">Marketing</option>
             <option value="AUTHENTICATION">Authentication</option>
+            {/* Custom categories appear only when at least one row uses them. */}
+            {customCategories.map((value) => (
+              <option key={value} value={value}>
+                {titleCaseCategory(value)}
+              </option>
+            ))}
           </Select>
         </div>
 
@@ -401,21 +495,36 @@ export function TemplateCatalogPage() {
           }
           renderCard={(row) => (
             <div className="px-4 py-3 sm:px-5">
-              <div className="flex items-start gap-3">
-                <TemplateAvatar row={row} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-slate-900">{row.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-slate-500">{row.copy || row.body}</p>
+              {/* Whole card body opens the preview drawer, same as the View button.
+                  Footer actions stay outside so nested buttons remain valid HTML. */}
+              <button
+                type="button"
+                onClick={() => setViewing(row)}
+                aria-label={`View ${row.title}`}
+                className="block w-full cursor-pointer text-left"
+              >
+                <div className="flex items-start gap-3">
+                  <TemplateAvatar row={row} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-slate-900">
+                      {row.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {row.copy || row.body}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                <StatusBadge status={row.category} />
-                <StatusBadge
-                  status={row.published ? 'ACTIVE' : 'DISABLED'}
-                  label={row.published ? 'Published' : 'Draft'}
-                />
-                <span className="ml-auto text-[11px] text-slate-400">{formatAgo(row.updatedAt)}</span>
-              </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={row.category} />
+                  <StatusBadge
+                    status={row.published ? "ACTIVE" : "DISABLED"}
+                    label={row.published ? "Published" : "Draft"}
+                  />
+                  <span className="ml-auto text-[11px] text-slate-400">
+                    {formatAgo(row.updatedAt)}
+                  </span>
+                </div>
+              </button>
               <div className="mt-2.5 border-t border-slate-200/80 pt-2.5">
                 <RowActions
                   row={row}
@@ -425,7 +534,9 @@ export function TemplateCatalogPage() {
                   onDelete={() => void deleteRow(row)}
                   menuOpen={openMenuId === row.id}
                   canWrite={canWrite}
-                  setMenuOpen={(open) => (open ? setOpenMenuId(row.id) : closeMenu())}
+                  setMenuOpen={(open) =>
+                    open ? setOpenMenuId(row.id) : closeMenu()
+                  }
                 />
               </div>
             </div>
@@ -444,13 +555,21 @@ export function TemplateCatalogPage() {
                 </thead>
                 <tbody>
                   {filtered.map((row) => (
-                    <tr key={row.id}>
+                    <tr
+                      key={row.id}
+                      onClick={() => setViewing(row)}
+                      className="cursor-pointer"
+                    >
                       <td>
                         <div className="flex items-center gap-3">
                           <TemplateAvatar row={row} />
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-900">{row.title}</p>
-                            <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">{row.copy || row.body || row.slug}</p>
+                            <p className="font-bold text-slate-900">
+                              {row.title}
+                            </p>
+                            <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">
+                              {row.copy || row.body || row.slug}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -459,11 +578,13 @@ export function TemplateCatalogPage() {
                       </td>
                       <td>
                         <StatusBadge
-                          status={row.published ? 'ACTIVE' : 'DISABLED'}
-                          label={row.published ? 'Published' : 'Draft'}
+                          status={row.published ? "ACTIVE" : "DISABLED"}
+                          label={row.published ? "Published" : "Draft"}
                         />
                       </td>
-                      <td className="text-xs text-slate-600">{formatAgo(row.updatedAt)}</td>
+                      <td className="text-xs text-slate-600">
+                        {formatAgo(row.updatedAt)}
+                      </td>
                       <td className="text-right">
                         <RowActions
                           row={row}
@@ -472,8 +593,10 @@ export function TemplateCatalogPage() {
                           onDuplicate={() => duplicateRow(row)}
                           onDelete={() => void deleteRow(row)}
                           menuOpen={openMenuId === row.id}
-                  canWrite={canWrite}
-                          setMenuOpen={(open) => (open ? setOpenMenuId(row.id) : closeMenu())}
+                          canWrite={canWrite}
+                          setMenuOpen={(open) =>
+                            open ? setOpenMenuId(row.id) : closeMenu()
+                          }
                         />
                       </td>
                     </tr>
@@ -493,8 +616,12 @@ export function TemplateCatalogPage() {
 
       <Drawer
         open={Boolean(viewing)}
-        title={viewing?.title || 'Preview'}
-        subtitle={viewing ? `${languageLabel(viewing.language)} · ${viewing.slug}` : undefined}
+        title={viewing?.title || "Preview"}
+        subtitle={
+          viewing
+            ? `${languageLabel(viewing.language)} · ${viewing.slug}`
+            : undefined
+        }
         onClose={() => setViewing(null)}
       >
         {viewing ? (
@@ -502,7 +629,14 @@ export function TemplateCatalogPage() {
             {/* Same block as the editor aside: header card + EN/HI lens + phone + details table */}
             <TemplatePreviewBlock draft={rowToDraft(viewing)} />
             {canWrite ? (
-              <Button className="w-full" onClick={() => { const target = viewing; setViewing(null); openEdit(target); }}>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  const target = viewing;
+                  setViewing(null);
+                  openEdit(target);
+                }}
+              >
                 <Pencil className="h-4 w-4" /> Edit this template
               </Button>
             ) : null}

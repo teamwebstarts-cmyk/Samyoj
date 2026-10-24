@@ -90,7 +90,8 @@ export function sampleForVariable(description: string, index: number, source?: s
 export type Draft = {
   slug: string;
   title: string;
-  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
+  /** Free-form category (builtin or custom). Custom values stay platform-only. */
+  category: string;
   language: string;
   tags: string;
   icon: string;
@@ -153,8 +154,8 @@ export function rowToDraft(row: LibraryRow): Draft {
   return {
     slug: row.slug,
     title: row.title,
-    category:
-      row.category === 'MARKETING' || row.category === 'AUTHENTICATION' ? row.category : 'UTILITY',
+    // Keep custom categories as-is; only blank/garbage falls back to UTILITY.
+    category: row.category?.trim() ? row.category : 'UTILITY',
     language: row.language || 'en_US',
     tags: (row.tags || []).join(', '),
     icon: row.icon || 'file',
@@ -219,6 +220,15 @@ export const LANGUAGES: ReadonlyArray<{ value: string; label: string }> = [
 export function languageLabel(code?: string | null): string {
   if (!code) return 'English (US)';
   return LANGUAGES.find((option) => option.value === code)?.label ?? code;
+}
+
+/** FESTIVE_OFFER → Festive Offer (custom-category filter/badge labels). */
+export function titleCaseCategory(value: string): string {
+  return value
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 /** Same icon keys the customer-facing CatalogLibraryCard maps (client/src/components/templates/library). */

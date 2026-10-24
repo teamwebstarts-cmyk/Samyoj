@@ -1,12 +1,12 @@
 type Tone = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'purple';
 
 const toneStyles: Record<Tone, string> = {
-  success: 'bg-success-50 text-success-800 ring-success-600/20 border-success-200/60',
-  warning: 'bg-amber-50 text-amber-900 ring-amber-500/20 border-amber-200/60',
-  error: 'bg-rose-50 text-rose-800 ring-rose-500/20 border-rose-200/60',
-  info: 'bg-sky-50 text-sky-800 ring-sky-500/20 border-sky-200/60',
-  purple: 'bg-purple-50 text-purple-800 ring-purple-500/20 border-purple-200/60',
-  neutral: 'bg-slate-100 text-slate-700 ring-slate-400/20 border-slate-200/60',
+  success: 'bg-success-50 text-success-800 ring-success-600/20',
+  warning: 'bg-amber-50 text-amber-900 ring-amber-500/20',
+  error: 'bg-rose-50 text-rose-800 ring-rose-500/20',
+  info: 'bg-sky-50 text-sky-800 ring-sky-200/70',
+  purple: 'bg-purple-50 text-purple-800 ring-purple-500/20',
+  neutral: 'bg-slate-100 text-slate-700 ring-slate-400/20',
 };
 
 const dotStyles: Record<Tone, string> = {
@@ -60,9 +60,9 @@ export function StatusBadge({
   const tone = keyMap[status] ?? keyMap[status.toUpperCase()] ?? 'neutral';
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide border shadow-2xs ${toneStyles[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${toneStyles[tone]}`}
     >
-      {showDot && <span className={`h-1.5 w-1.5 rounded-full ${dotStyles[tone]}`} />}
+      {showDot && <span className={`h-2 w-2 rounded-full ${dotStyles[tone]}`} />}
       <span className="truncate">{label ?? status}</span>
     </span>
   );
