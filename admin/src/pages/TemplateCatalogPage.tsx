@@ -27,10 +27,7 @@ import {
   Select,
   StatusBadge,
 } from "../components/ui";
-import {
-  PREVIEW_COLUMN,
-  TemplatePreviewBlock,
-} from "../components/WhatsAppPreview";
+import { TemplatePreviewBlock } from "../components/WhatsAppPreview";
 import { formatAgo } from "../lib/format";
 import { useOperator } from "../context/OperatorContext";
 import {
@@ -572,12 +569,15 @@ export function TemplateCatalogPage() {
         fit
       >
         {viewing ? (
-          <div className="space-y-3">
+          /* One centering column: card and action button share the same
+             306px axis (PREVIEW_COLUMN), so nothing hugs the left edge
+             while the card centers in the fit-width drawer. */
+          <div className="flex flex-col items-center gap-3">
             {/* Same block as the editor aside: header card + EN/HI lens + phone + details table */}
             <TemplatePreviewBlock draft={rowToDraft(viewing)} />
             {canWrite ? (
               <Button
-                className={PREVIEW_COLUMN}
+                className="w-[306px] max-w-full justify-center"
                 onClick={() => {
                   const target = viewing;
                   setViewing(null);
