@@ -491,7 +491,7 @@ function BodyChipsRoster({
         items.map((item) => (
           <span
             key={`${lang}-${item.index}`}
-            className="group chip inline-flex items-center overflow-hidden rounded-full border border-indigo-200 bg-indigo-50 text-[10px] font-bold text-indigo-700 transition disabled:opacity-60"
+            className="group chip inline-flex items-center overflow-hidden rounded-md border border-indigo-200 bg-indigo-50 text-[10px] font-bold text-indigo-700 transition disabled:opacity-60"
           >
             <button
               type="button"
@@ -510,7 +510,7 @@ function BodyChipsRoster({
                 disabled={!canWrite}
                 aria-label={`Delete ${item.description.trim() || `{{${item.index}}}`} and renumber the rest`}
                 title={`Remove {{${item.index}}} from both bodies and renumber the rest`}
-                className="inline-flex h-full items-center rounded-r-full py-1 pl-1 pr-2 text-indigo-400 transition hover:text-rose-600"
+                className="inline-flex h-full items-center rounded-r-md py-1 pl-1 pr-2 text-indigo-400 transition hover:text-rose-600"
               >
                 <X className="h-3 w-3" strokeWidth={2.5} />
               </button>
