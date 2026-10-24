@@ -269,7 +269,7 @@ function RowActions({
 type CatalogTab = "all" | "published" | "drafts";
 
 const TABS: Array<{ id: CatalogTab; label: string }> = [
-  { id: "all", label: "All" },
+  { id: "all", label: "All statuses" },
   { id: "published", label: "Published" },
   { id: "drafts", label: "Drafts" },
 ];
