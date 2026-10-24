@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Building2,
+  ChevronRight,
   ChevronsLeft,
   CreditCard,
   LayoutDashboard,
@@ -13,7 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperator } from '../context/OperatorContext';
 import { visibleNavGroups } from '../lib/routes';
 import { PlatformBrand } from './PlatformBrand';
@@ -85,7 +86,6 @@ export function Shell() {
 
   const { work, staff } = visibleNavGroups(operator.role);
   const currentPath = location.pathname.startsWith('/accounts/') ? '/accounts' : location.pathname;
-  const currentTitle = PATH_TITLES[currentPath] || 'Console';
   /** Icon-only rail (desktop). Mobile bottom bar is untouched. Persisted like the client sidebar. */
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -107,6 +107,16 @@ export function Shell() {
   /** Mobile-only sheet holding the navs packed out of the bottom bar. */
   const [moreOpen, setMoreOpen] = useState(false);
   const staffActive = staff.some((item) => item.to === currentPath);
+
+  // Breadcrumb trail: nav label (current nav item) → optional detail segment.
+  // Detail segments are path-grepped (entity ids), not hardcoded routes.
+  const allNav = [...work, ...staff];
+  const activeNav = allNav.find((item) => item.to === currentPath);
+  const currentTitle = activeNav?.label || PATH_TITLES[currentPath] || 'Console';
+  const segments = location.pathname.split('/').filter(Boolean);
+  // Detail level: /accounts/:id (and future /x/:id patterns) — anything one level past its nav root.
+  const navRootLength = currentPath === '/' ? 0 : currentPath.split('/').filter(Boolean).length;
+  const detailSegment = segments.length > Math.max(navRootLength, 1) ? segments[segments.length - 1] : null;
 
   // Escape closes the mobile More sheet.
   useEffect(() => {
@@ -295,22 +305,68 @@ export function Shell() {
                 );
               })}
             </nav>
+            {/* Sign out moved here from the parked breadcrumb header (mobile had no other exit). */}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                void logout();
+              }}
+              className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              <LogOut className="h-4 w-4" strokeWidth={2} />
+              Sign out
+            </button>
           </div>
         </div>
       ) : null}
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-col">
+        {/* Breadcrumb header parked 2026-10-24 — felt redundant next to page PageHeaders.
+            Recover by setting HEADER_ENABLED back to true (component is type-checked,
+            not commented out, so it can't rot). Mobile sign-out moved into the More sheet. */}
+        {false &&
+          (() => {
+            // HEADER_ENABLED — flip to true to restore the sticky breadcrumb header.
+            return (
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur-md px-4 py-2.5 md:px-8">
           <div className="content-shell flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Platform</span>
-                  <span className="text-slate-300">/</span>
-                  <span className="text-xs font-semibold text-slate-700">{currentTitle}</span>
-                </div>
-              </div>
+            <div className="flex min-w-0 items-center gap-2.5">
+              {/* Nav icon of the active section — mirrors the rail highlight */}
+              {(() => {
+                const ActiveIcon = ICONS[currentPath] ?? LayoutDashboard;
+                return (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    <ActiveIcon className="h-3.5 w-3.5" strokeWidth={2} />
+                  </span>
+                );
+              })()}
+              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-[13px]">
+                {/* Root is always Overview, skippable when it IS the current page. */}
+                {currentPath !== '/' ? (
+                  <>
+                    <Link
+                      to="/"
+                      className="shrink-0 rounded-md px-1 py-0.5 font-semibold text-slate-500 transition-colors hover:text-indigo-600"
+                    >
+                      Platform
+                    </Link>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
+                  </>
+                ) : null}
+                <span aria-current="page" className={`truncate font-bold ${detailSegment ? 'text-slate-700' : 'text-slate-900'}`}>
+                  {currentTitle}
+                </span>
+                {detailSegment ? (
+                  <>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
+                    <span aria-current="page" className="truncate font-mono text-xs text-slate-900">
+                      {detailSegment}
+                    </span>
+                  </>
+                ) : null}
+              </nav>
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
@@ -332,6 +388,8 @@ export function Shell() {
             </div>
           </div>
         </header>
+            );
+          })()}
 
         <main id="main" className="flex-1 px-4 py-6 md:px-8 md:py-8">
           <div className="content-shell">

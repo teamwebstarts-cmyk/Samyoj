@@ -56,13 +56,15 @@ export async function listTenantTemplateLibrary(opts?: {
     }
   }
 
-  // Samyoj-authored catalog drafts (platform admin) listed after the Meta pack.
+  // Samyoj-authored catalog drafts (platform admin) listed first, newest
+  // update/creation first — the tenant's own templates should be the most
+  // reachable cards. Meta pack (static skeletons, no timestamps) follows.
   // Same row schema, same bilingual clone path — one identity, two surfaces.
   let samyojRows: ReturnType<typeof toTenantDto>[] = [];
   try {
     const rows = await prisma.platformLibraryTemplate.findMany({
       where: { published: true },
-      orderBy: [{ sortOrder: 'asc' }, { title: 'asc' }],
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
     samyojRows = rows.map(toTenantDto);
   } catch {
@@ -71,8 +73,8 @@ export async function listTenantTemplateLibrary(opts?: {
 
   return {
     templates: [
-      ...buildTenantLibraryCards(library, approvedWabaNames),
       ...samyojRows,
+      ...buildTenantLibraryCards(library, approvedWabaNames),
     ],
     filters: samyojRows.some((row) => row.category === 'MARKETING')
       ? [...META_LIBRARY_FILTERS, { id: 'MARKETING', label: 'Marketing' } as const]

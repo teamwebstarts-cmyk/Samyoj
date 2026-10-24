@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
+  Check,
   FileText,
   Image as ImageIcon,
   Info,
@@ -33,11 +34,11 @@ import {
 
 /** Header-type picker tiles — mirrors client HEADER_TYPE_STYLES (create step). */
 const HEADER_TILES = [
-  { value: 'NONE', label: 'None', icon: Minus, tile: 'bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600', active: 'border-slate-400 ring-slate-200' },
-  { value: 'TEXT', label: 'Text', icon: Type, tile: 'bg-gradient-to-br from-sky-400 to-blue-600 text-white', active: 'border-sky-400 ring-sky-200' },
-  { value: 'IMAGE', label: 'Image', icon: ImageIcon, tile: 'bg-gradient-to-br from-emerald-400 to-teal-600 text-white', active: 'border-emerald-400 ring-emerald-200' },
-  { value: 'VIDEO', label: 'Video', icon: Video, tile: 'bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white', active: 'border-violet-400 ring-violet-200' },
-  { value: 'DOCUMENT', label: 'Document', icon: FileText, tile: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white', active: 'border-amber-400 ring-amber-200' },
+  { value: 'NONE', label: 'None', icon: Minus, iconTile: 'bg-gradient-to-br from-slate-400 to-slate-500 text-white', active: 'border-slate-300 bg-slate-50 ring-slate-300/60 text-slate-700' },
+  { value: 'TEXT', label: 'Text', icon: Type, iconTile: 'bg-gradient-to-br from-sky-400 to-blue-600 text-white', active: 'border-sky-300 bg-sky-50 ring-sky-300/60 text-sky-900' },
+  { value: 'IMAGE', label: 'Image', icon: ImageIcon, iconTile: 'bg-gradient-to-br from-emerald-400 to-teal-600 text-white', active: 'border-emerald-300 bg-emerald-50 ring-emerald-300/60 text-emerald-900' },
+  { value: 'VIDEO', label: 'Video', icon: Video, iconTile: 'bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white', active: 'border-violet-300 bg-violet-50 ring-violet-300/60 text-violet-900' },
+  { value: 'DOCUMENT', label: 'Doc', icon: FileText, iconTile: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white', active: 'border-amber-300 bg-amber-50 ring-amber-300/60 text-amber-900' },
 ] as const;
 
 /** Same button types as client TemplateButtonEditor. */
@@ -340,6 +341,14 @@ function AiAssistBar({
   );
 }
 
+/** One-click variable presets (client wizard parity): insert {{n}} pre-mapped. */
+const VARIABLE_PRESET_CHIPS = [
+  { label: 'Customer name', description: 'Customer name', source: 'contact.name' },
+  { label: 'Phone number', description: 'Phone number', source: 'contact.phone' },
+  { label: 'Email', description: 'Email address', source: 'contact.email' },
+  { label: 'Date / time', description: 'Date or time', source: 'custom' },
+] as const;
+
 /**
  * Shared chips roster for one body textarea (client wizard pattern): "Add variable"
  * appends the next unused {{n}}, and every chip inserts that token at the cursor.
@@ -354,6 +363,7 @@ function BodyChipsRoster({
   charCount,
   onInsert,
   onAddVariable,
+  onInsertPreset,
 }: {
   lang: 'en' | 'hi';
   items: Array<{ index: number; description: string }>;
@@ -361,6 +371,7 @@ function BodyChipsRoster({
   charCount: number;
   onInsert: (index: number) => void;
   onAddVariable?: () => void;
+  onInsertPreset?: (chip: { description: string; source: string }) => void;
 }) {
   return (
     <div className="mb-1.5">
@@ -386,6 +397,23 @@ function BodyChipsRoster({
           <span className="text-[10px] font-medium text-slate-400">{charCount}/1024</span>
         </div>
       </div>
+      {onAddVariable ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {VARIABLE_PRESET_CHIPS.map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              disabled={!canWrite}
+              onClick={() => onInsertPreset?.({ description: chip.description, source: chip.source })}
+              title={`Insert {{n}} auto-mapped to ${chip.source} at the cursor`}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Plus className="h-2.5 w-2.5" />
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         {items.length === 0 ? (
           <span className="text-[10.5px] font-medium text-slate-400">
@@ -556,6 +584,23 @@ export function TemplateEditorPage() {
   };
 
   const insertVariable = (lang: 'en' | 'hi' = 'en') => insertToken(variableCount + 1, lang);
+
+  /** Preset chip: insert the next {{n}} AND pre-map its source/sample in one click. */
+  const insertPresetVariable = (chip: { description: string; source: string }) => {
+    const index = variableCount + 1;
+    insertToken(index, 'en');
+    setDraft((prev) => {
+      const variableMeta = patchMeta(prev.variableMeta, 'body', index, {
+        description: chip.description,
+        suggestedSource: chip.source,
+      });
+      const bodyExamples = [...prev.bodyExamples];
+      if (!(bodyExamples[index - 1] || '').trim()) {
+        bodyExamples[index - 1] = sampleForVariable(chip.description, index, chip.source);
+      }
+      return { ...prev, variableMeta, bodyExamples };
+    });
+  };
 
   // AI assist: pour the suggestion into the draft. Variables
   // map to body-scope connect rows so chips/Connect examples work identically.
@@ -734,7 +779,7 @@ export function TemplateEditorPage() {
                   <Info className="h-3.5 w-3.5 cursor-help text-slate-400" aria-label="Header info" />
                 </span>
               </div>
-              <div className="grid grid-cols-5 gap-1" role="radiogroup" aria-label="Header type">
+              <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Header type">
                 {HEADER_TILES.map((tile) => {
                   const active = headerFormat === tile.value;
                   const Icon = tile.icon;
@@ -746,16 +791,27 @@ export function TemplateEditorPage() {
                       aria-checked={active}
                       disabled={!canWrite}
                       onClick={() => setHeaderFormat(tile.value)}
-                      className={`flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1.5 text-center transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`group relative flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl border px-0.5 py-2 text-center transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${
                         active
-                          ? `${tile.active} bg-indigo-50/80 ring-1`
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          ? `${tile.active} ring-2 ring-offset-1`
+                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <span className={`flex h-6 w-6 items-center justify-center rounded-md shadow-sm ${tile.tile}`} aria-hidden>
-                        <Icon className="h-3 w-3 shrink-0" strokeWidth={2.5} />
+                      {active ? (
+                        <span
+                          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-sm"
+                          aria-hidden
+                        >
+                          <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
+                        </span>
+                      ) : null}
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg shadow-sm transition-transform duration-150 group-hover:scale-105 group-disabled:group-hover:scale-100 ${tile.iconTile}`}
+                        aria-hidden
+                      >
+                        <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
                       </span>
-                      <span className="text-[9px] font-bold leading-tight text-slate-700">{tile.label}</span>
+                      <span className="text-[10px] font-bold leading-none">{tile.label}</span>
                     </button>
                   );
                 })}
@@ -796,6 +852,7 @@ export function TemplateEditorPage() {
                 charCount={bodyText.length}
                 onInsert={(index) => insertToken(index, 'en')}
                 onAddVariable={() => insertVariable('en')}
+                onInsertPreset={insertPresetVariable}
               />
               <textarea
                 ref={bodyRef}

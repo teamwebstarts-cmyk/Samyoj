@@ -62,11 +62,14 @@ describe('Samyoj catalog in tenant starters list', () => {
     expect(routes).not.toContain('hideSamyojHostedCatalogDrafts');
   });
 
-  it('merges published admin rows after the Meta pack (source of listTenantTemplateLibrary)', async () => {
+  it('merges Samyoj rows before the Meta pack, newest update first', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync(new URL('./library-tenant.ts', import.meta.url), 'utf8');
     expect(src).toContain('toTenantDto');
-    expect(src.indexOf('buildTenantLibraryCards(library, approvedWabaNames)')).toBeGreaterThan(-1);
+    // Samyoj rows lead the list: spread order + recency orderBy.
+    expect(src.indexOf('...samyojRows,')).toBeGreaterThan(-1);
+    expect(src.indexOf('...samyojRows,')).toBeLessThan(src.indexOf('...buildTenantLibraryCards('));
+    expect(src).toContain('orderBy: [{ updatedAt: \'desc\' }, { createdAt: \'desc\' }]');
     expect(src).toContain('where: { published: true }');
   });
 });

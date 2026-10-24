@@ -66,12 +66,6 @@ export const LIBRARY_CATEGORIES = [
   { value: 'AUTHENTICATION', label: 'Authentication' },
 ] as const;
 
-export const libraryWizardStages = [
-  { id: 'browse', label: 'Browse', description: 'Pick a Meta template' },
-  { id: 'edit', label: 'Edit', description: 'Name, language, buttons' },
-  { id: 'submit', label: 'Submit', description: 'Send to Meta for this number' },
-] as const;
-
 export const LIBRARY_QUICK_PICKS: Array<{
   id: string;
   label: string;

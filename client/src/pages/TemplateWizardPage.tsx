@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
   FileText,
   Save,
   Sparkles,
@@ -45,7 +44,6 @@ import { settingsApi, templateApi, WhatsappNumberScopeError } from '../services/
 import type { MessageTemplate } from '../types';
 import type { TemplateFormState } from '../utils/templateForm';
 import { formFromMessageTemplate, persistTemplateVariableMeta } from '../utils/templateForm';
-import { libraryWizardStages } from '../utils/templateLibrary';
 import { libraryTileClass } from '../components/templates/library/templateLibraryGrid';
 import { tileIconFor } from '../components/templates/library/CatalogLibraryCard';
 import type { CatalogListItem } from '../utils/templateLibrary';
@@ -636,48 +634,20 @@ export default function TemplateWizardPage() {
 
   return (
     <div className="template-wizard-page">
-      <TemplateWizardPageHeader
-        icon={fromLibrary ? BookOpen : FileText}
-        title={
-          fromLibrary
-            ? activeStep === 0
-              ? 'Edit library template'
-              : 'Review library template'
-            : stepTitle
-        }
-        subtitle={
-          fromLibrary
-            ? activeStep === 0
-              ? 'Pick up where you left off — name, language, body, and buttons are pre-filled from the library pick.'
-              : 'Check the live preview, then submit to this WhatsApp number.'
-            : stepSubtitle
-        }
-        stepper={
-          fromLibrary
-            ? {
-                // Editor phase 0 is the wizard's Edit step; its review/submit
-                // phase maps to the wizard's Submit step.
-                activeStep: activeStep === 0 ? 1 : 2,
-                maxReachableStep: activeStep === 0 ? 1 : 2,
-                onStepChange: (step) => {
-                  if (step === 0) {
-                    navigate('/templates/library', {
-                      state: { restoreSelectedId: state.libraryItem?.id },
-                    });
-                  } else if (step === 1 && activeStep > 0) {
-                    goToStep(0);
-                  }
-                },
-                stages: libraryWizardStages,
-                ariaLabel: 'Template library steps',
-              }
-            : {
-                activeStep,
-                maxReachableStep,
-                onStepChange: goToStep,
-              }
-        }
-      />
+      {/* Library flow renders no page header — the footer chip identifies the
+          template and Back navigates to Browse. Non-library wizard keeps its
+          header with the progress stepper. */}
+      {!fromLibrary && (
+        <TemplateWizardPageHeader
+          icon={FileText}
+          title={stepTitle}
+          subtitle={stepSubtitle}
+          stepper={{
+            activeStep,
+            maxReachableStep,
+            onStepChange: goToStep,
+          }}
+        />      )}
 
       <form
         onSubmit={handleSubmit}
