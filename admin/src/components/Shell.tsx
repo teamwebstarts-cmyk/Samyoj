@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
@@ -12,7 +13,7 @@ import {
   TriangleAlert,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperator } from '../context/OperatorContext';
 import { visibleNavGroups } from '../lib/routes';
@@ -88,6 +89,19 @@ export function Shell() {
   const currentTitle = PATH_TITLES[currentPath] || 'Console';
   /** Icon-only rail (desktop). Mobile bottom bar is untouched. */
   const [collapsed, setCollapsed] = useState(false);
+  /** Mobile-only sheet holding the navs packed out of the bottom bar. */
+  const [moreOpen, setMoreOpen] = useState(false);
+  const staffActive = staff.some((item) => item.to === currentPath);
+
+  // Escape closes the mobile More sheet.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [moreOpen]);
 
   return (
     <div className={`min-h-screen md:grid ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
@@ -95,8 +109,8 @@ export function Shell() {
         Skip to content
       </a>
 
-      {/* Sidebar Rail */}
-      <aside className={`flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 shadow-sm z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
+      {/* Sidebar Rail — fixed bottom bar on mobile, side rail on desktop */}
+      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
         <div className="hidden min-w-0 px-1 md:block">
           <div className="flex min-w-0 items-center justify-between gap-1.5">
             <PlatformBrand size="sm" collapsed={collapsed} />
@@ -125,7 +139,24 @@ export function Shell() {
 
         <nav className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
           <NavGroup label="Work" items={work} />
-          <NavGroup label="Staff & Security" items={staff} />
+          {/* Mobile: More tile opens the sheet; the packed group is sheet-only.
+              Desktop: the group renders in normal rail flow. */}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
+            className={`rail-nav-item rail-more-toggle md:hidden ${staffActive ? 'rail-more-active' : ''}`}
+            title="More"
+          >
+            <span className="rail-nav-icon">
+              <MoreVertical className="h-4 w-4" strokeWidth={staffActive ? 2.2 : 1.8} />
+            </span>
+            <span>More</span>
+          </button>
+          <div className="hidden md:contents">
+            <NavGroup label="Staff & Security" items={staff} />
+          </div>
         </nav>
 
         {/* Operator Profile Card */}
@@ -177,6 +208,51 @@ export function Shell() {
         </div>
         )}
       </aside>
+
+      {/* Mobile "More" bottom sheet — packed navs from the bottom bar */}
+      {moreOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end md:hidden" role="presentation">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45 backdrop-blur-[4px]"
+            onClick={() => setMoreOpen(false)}
+            aria-label="Close menu"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="More navigation"
+            className="relative w-full rounded-t-2xl border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(15,23,42,0.18)]"
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" aria-hidden />
+            <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+              Staff &amp; Security
+            </p>
+            <nav className="flex flex-col gap-1">
+              {staff.map((item) => {
+                const Icon = ICONS[item.to] ?? LayoutDashboard;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMoreOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${
+                        isActive
+                          ? 'bg-indigo-50 text-[#3b22c7]'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`
+                    }
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={2} />
+                    {item.label}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+      ) : null}
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-col">

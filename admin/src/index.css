@@ -430,6 +430,36 @@ select:focus-visible {
 }
 
 /* Navigation Rail Links (light sidebar) */
+
+/* Mobile: the rail IS the navbar — pinned to the viewport bottom. */
+.admin-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  border-bottom-width: 0;
+  border-top-width: 1px;
+}
+
+/* "More" tile in the mobile bar packs overflow navs into a bottom sheet. */
+.rail-more-toggle[aria-expanded='false'] .rail-nav-icon {
+  background: rgba(241, 245, 249, 0.9);
+  color: #475569;
+}
+
+.rail-more-toggle.rail-more-active .rail-nav-icon {
+  background: #4b2eeb;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(75, 46, 235, 0.35);
+}
+
+body {
+  /* Reserve space so page content (and its footer) clear the fixed bar. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
 .rail-nav-item {
   display: flex;
   align-items: center;
@@ -452,7 +482,23 @@ select:focus-visible {
   color: #3b22c7;
   background: #eef2ff;
   font-weight: 600;
-  box-shadow: inset 3px 0 0 #4b2eeb;
+}
+
+@media (min-width: 768px) {
+  .admin-bottom-nav {
+    position: sticky;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    border-top-width: 0;
+    border-bottom-width: 1px;
+    padding-bottom: 1rem;
+  }
+
+  /* Desktop rail is sticky in normal flow — no body reservation needed. */
+  body {
+    padding-bottom: 0;
+  }
 }
 
 .rail-nav-icon {
@@ -490,7 +536,7 @@ select:focus-visible {
     text-transform: uppercase;
   }
   .rail-nav-item[aria-current='page'] {
-    box-shadow: inset 0 -2px 0 #4b2eeb;
+    background: #eef2ff;
   }
 }
 
