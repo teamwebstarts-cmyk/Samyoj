@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BadgeCheck, Building2, CheckCheck, ChevronDown, ChevronLeft, Copy, ExternalLink, MoreVertical, Phone } from 'lucide-react';
+import { BadgeCheck, CheckCheck, ChevronDown, ChevronLeft, Copy, ExternalLink, MoreVertical, Phone } from 'lucide-react';
 import { languageLabel, templateVariableCount, titleCaseCategory, type Draft } from '../lib/library-catalog';
 
 /**
@@ -19,95 +19,16 @@ const chat = {
   text: '#111b21',
 };
 
-function initialsFromName(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (!parts.length) return '';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
-}
-
-/** Same formatting as client formatPhoneDisplay (utils/formatPhone.ts). */
-function formatPhoneDisplay(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) {
-    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
-  }
-  if (digits.length === 10) {
-    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  }
-  if (digits.length > 10) {
-    return `+${digits.slice(0, digits.length - 10)} ${digits.slice(-10, -5)} ${digits.slice(-5)}`;
-  }
-  return phone.startsWith('+') ? phone : `+${phone}`;
-}
-
-/** Identity resolution — same fields as client resolveWhatsAppPreviewIdentity. */
-type PreviewIdentity = {
-  title: string;
-  subtitle: string | null;
-  initials: string;
-  showOfficialBadge: boolean;
-  usingFallback: boolean;
-};
-
-const WHATSAPP_BUSINESS_FALLBACK = 'WhatsApp Business';
-
-export function resolvePreviewIdentity(input: {
-  companyName?: string | null;
-  phoneNumber?: string | null;
-  officialBusinessAccount?: boolean | null;
-}): PreviewIdentity {
-  const company = input.companyName?.trim() || '';
-  const usingFallback = !company;
-  const rawPhone = input.phoneNumber?.trim() || '';
-  return {
-    title: company || WHATSAPP_BUSINESS_FALLBACK,
-    subtitle: rawPhone ? formatPhoneDisplay(rawPhone) : null,
-    initials: company ? initialsFromName(company) : '',
-    showOfficialBadge: Boolean(input.officialBusinessAccount),
-    usingFallback,
-  };
-}
-
 /**
- * Chat chrome — exact port of client WhatsAppPreviewHeader:
- * back chevron, initials avatar (Building2 when no company), optional title
- * verified-badge, subtitle phone, kebab. 3000 default: template title as the
- * business name, no fabricated phone/badge.
+ * Chat chrome — port of client WhatsAppPreviewHeader, simplified for the admin
+ * library preview: fixed "Samyoj" business name, back chevron, kebab. No
+ * avatar/badge/phone — those come from per-org identity on the client side.
  */
-function ChatHeader({ draft }: { draft: Draft }) {
-  const resolved = resolvePreviewIdentity({
-    companyName: draft.title.trim() || null,
-    phoneNumber: null,
-    officialBusinessAccount: null,
-  });
-  const avatarSize = 'h-7 w-7 text-[9px]';
-  const titleSize = 'text-[12px]';
-  const subtitleSize = 'text-[9px]';
+function ChatHeader() {
   return (
-    <div
-      className="flex items-center gap-2 bg-[#008069] px-2.5 py-2 text-white"
-      role="group"
-      aria-label={`${resolved.title}${resolved.subtitle ? `, ${resolved.subtitle}` : ''}`}
-    >
+    <div className="flex items-center gap-2 bg-[#008069] px-2.5 py-2 text-white" role="group" aria-label="Samyoj">
       <ChevronLeft className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
-      <div
-        className={`flex shrink-0 items-center justify-center rounded-full bg-white/18 font-extrabold tracking-wide ${avatarSize}`}
-        aria-hidden
-      >
-        {resolved.initials ? resolved.initials : <Building2 className="h-3.5 w-3.5" strokeWidth={2.25} />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className={`flex items-center gap-1 truncate font-semibold leading-tight ${titleSize}`}>
-          <span className="truncate">{resolved.title}</span>
-          {resolved.showOfficialBadge ? (
-            <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-200" aria-label="Official business account" />
-          ) : null}
-        </p>
-        {resolved.subtitle ? (
-          <p className={`truncate font-medium leading-tight text-white/75 ${subtitleSize}`}>{resolved.subtitle}</p>
-        ) : null}
-      </div>
+      <p className="min-w-0 flex-1 truncate text-[12px] font-semibold leading-tight">Samyoj</p>
       <MoreVertical className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
     </div>
   );
@@ -146,8 +67,8 @@ export function WhatsAppPreview({ draft }: { draft: Draft }) {
   const hasMediaHeader = Boolean(draft.mediaFormat);
 
   return (
-    <div className="overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#efeae2] shadow-sm">
-      <ChatHeader draft={draft} />
+    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-[#efeae2] shadow-sm">
+      <ChatHeader />
       {/* Chat wallpaper surface (client .wa-chat-surface-compact) */}
       <div
         className="p-2.5"
@@ -222,11 +143,11 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-/** Collapsible details table under the phone — same 306px column as the preview card. */
+/** Collapsible details section inside the preview card (below the phone surface). */
 export function TemplateDetailsTable({ draft }: { draft: Draft }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
-    <div className={`${PREVIEW_COLUMN} mt-3 overflow-hidden rounded-[0.875rem] border border-slate-200/85 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]`}>
+    <div className="border-t border-slate-100">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -285,18 +206,19 @@ export function TemplateDetailsTable({ draft }: { draft: Draft }) {
 }
 
 /**
- * The exact editor-aside preview block: "Template Preview" header card with
- * language pills in the header row, phone surface, then the details table.
- * Shared by the editor aside and the catalog View drawer so both render
- * the same block. One identity, two surfaces — toggle only changes the lens.
- */
-/**
  * Shared column width the preview card resolves to (280px phone + 12px×2
  * gradient padding + 2px border). Details table and drawer actions snap to
  * the same width so everything in the drawer reads as one column.
  */
 export const PREVIEW_COLUMN = 'mx-auto w-[306px] max-w-full';
 
+/**
+ * The exact editor-aside preview block: "Template Preview" header card with
+ * language pills in the header row, phone surface, then the details table
+ * as an inner section of the same card.
+ * Shared by the editor aside and the catalog View drawer so both render
+ * the same block. One identity, two surfaces — toggle only changes the lens.
+ */
 export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft; templateLanguage?: string }) {
   const base = templateLanguage && templateLanguage !== draft.language ? { ...draft, language: templateLanguage } : draft;
   const [lang, setLang] = useState<'en' | 'hi'>(base.language === 'hi_IN' ? 'hi' : 'en');
@@ -338,8 +260,8 @@ export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft
             <WhatsAppPreview draft={effective} />
           </div>
         </div>
+        <TemplateDetailsTable draft={base} />
       </div>
-      <TemplateDetailsTable draft={base} />
     </div>
   );
 }

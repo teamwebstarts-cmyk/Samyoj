@@ -34,7 +34,6 @@ import {
   CATEGORY_AVATAR,
   HONESTY,
   iconFor,
-  languageLabel,
   rowToDraft,
   titleCaseCategory,
   type LibraryRow,
@@ -617,11 +616,6 @@ export function TemplateCatalogPage() {
       <Drawer
         open={Boolean(viewing)}
         title={viewing?.title || "Preview"}
-        subtitle={
-          viewing
-            ? `${languageLabel(viewing.language)} · ${viewing.slug}`
-            : undefined
-        }
         onClose={() => setViewing(null)}
         fit
       >
