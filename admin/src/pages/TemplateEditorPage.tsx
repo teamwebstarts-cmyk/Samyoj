@@ -1,25 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import {
-  FileText,
-  Image as ImageIcon,
-  Info,
-  Minus,
-  Plus,
-  Trash2,
-  Type,
-  Video,
-  Wand2,
-  X,
-} from 'lucide-react';
+import { Check, FileText, Image as ImageIcon, Info, Minus, Plus, Trash2, Type, Video, Wand2, X } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
-import { TemplatePreviewBlock } from '../components/WhatsAppPreview';
+import { TemplatePreviewBlock, TemplateDetailsTable, WhatsAppPreview, PreviewLanguagePills } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
-import { platformRequest, ApiError, aiApi } from '../api';
+import { platformRequest, ApiError, aiApi, type AiTemplateDraftSuggestion } from '../api';
 import {
   EMPTY_DRAFT,
   VARIABLE_SOURCE_OPTIONS,
+  draftFromAiSuggestion,
   draftPayload,
   emptyTemplateButton,
   humanizeSluggedName,
@@ -29,17 +19,16 @@ import {
   templateVariableCount,
   type Draft,
   type LibraryRow,
-  type TemplateButtonForm,
   type TemplateButtonType,
 } from '../lib/library-catalog';
 
 /** Header-type picker chips — mirrors client HEADER_TYPE_STYLES (create step). */
 const HEADER_TILES = [
-  { value: 'NONE', label: 'None', icon: Minus, tint: 'bg-slate-200/80 text-slate-700', ring: 'ring-slate-400/40' },
-  { value: 'TEXT', label: 'Text', icon: Type, tint: 'bg-sky-100 text-sky-700', ring: 'ring-sky-400/50' },
-  { value: 'IMAGE', label: 'Image', icon: ImageIcon, tint: 'bg-emerald-100 text-emerald-700', ring: 'ring-emerald-400/50' },
-  { value: 'VIDEO', label: 'Video', icon: Video, tint: 'bg-violet-100 text-violet-700', ring: 'ring-violet-400/50' },
-  { value: 'DOCUMENT', label: 'Document', icon: FileText, tint: 'bg-amber-100 text-amber-700', ring: 'ring-amber-400/50' },
+  { value: 'NONE', label: 'None', icon: Minus, tint: 'bg-slate-200/80 text-slate-700' },
+  { value: 'TEXT', label: 'Text', icon: Type, tint: 'bg-sky-100 text-sky-700' },
+  { value: 'IMAGE', label: 'Image', icon: ImageIcon, tint: 'bg-emerald-100 text-emerald-700' },
+  { value: 'VIDEO', label: 'Video', icon: Video, tint: 'bg-violet-100 text-violet-700' },
+  { value: 'DOCUMENT', label: 'Document', icon: FileText, tint: 'bg-amber-100 text-amber-700' },
 ] as const;
 
 /** Same button types as client TemplateButtonEditor. */
@@ -200,84 +189,60 @@ const HINDI_FOOTERS: Record<string, string> = {
 };
 const toHindiFooter = (english: string) => HINDI_FOOTERS[english] ?? '';
 
-/** What the AI endpoint returns for a prompt (validated server-side before it gets here). */
-type AiDraftSuggestion = {
-  title: string;
-  slug: string;
-  category: Draft['category'];
-  body: string;
-  bodyHi: string;
-  footer: string;
-  footerHi: string;
-  buttons: TemplateButtonForm[];
-  variables: Array<{ index: number; description: string; suggestedSource: string }>;
-};
-
-/** AI assist bar — prompt + Generate; calls POST /platform/library-templates/ai-draft. */
+/** AI assist — prompt + Generate → option cards; a selected card previews in the aside. */
 function AiAssistBar({
   canWrite,
-  hasContent,
+  prompt,
+  options,
+  busy,
+  error,
+  selectedIndex,
+  confirmOpen,
+  clarify,
+  clarifyAnswers,
+  onClarifyAnswerChange,
+  selectedTitle,
+  onPromptChange,
+  onGenerate,
+  onSelect,
+  onApplyClick,
   onApply,
+  onDismiss,
+  onCancelConfirm,
 }: {
   canWrite: boolean;
-  hasContent: boolean;
-  onApply: (suggestion: AiDraftSuggestion) => void;
+  prompt: string;
+  options: AiTemplateDraftSuggestion[];
+  busy: boolean;
+  error: string;
+  selectedIndex: number | null;
+  /** Replace-confirm dialog open (only reachable when the form already has content). */
+  confirmOpen: boolean;
+  /** Vague-prompt follow-ups from the model (max 3) + the admin's in-progress answers. */
+  clarify: string[];
+  clarifyAnswers: string[];
+  onClarifyAnswerChange: (index: number, value: string) => void;
+  selectedTitle: string;
+  onPromptChange: (value: string) => void;
+  onGenerate: () => void;
+  /** Select a card → preview it in the aside. */
+  onSelect: (index: number | null) => void;
+  /** First "Use this draft" tap — parent opens the confirm when the form has content. */
+  onApplyClick: () => void;
+  /** Confirmed apply. */
+  onApply: () => void;
+  onDismiss: () => void;
+  onCancelConfirm: () => void;
 }) {
-  const [prompt, setPrompt] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [confirming, setConfirming] = useState(false);
-
   // Escape closes the replace-confirm dialog.
   useEffect(() => {
-    if (!confirming) return;
+    if (!confirmOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setConfirming(false);
+      if (event.key === 'Escape') onCancelConfirm();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [confirming]);
-
-  const run = () => {
-    setBusy(true);
-    setError('');
-    // Real AI first (POST /platform/library-templates/ai-draft, global platform key).
-    aiApi.generateTemplateDraft(prompt)
-      .then(({ draft }) => {
-        onApply({
-          title: draft.title,
-          slug: draft.slug,
-          category: draft.category,
-          body: draft.body,
-          bodyHi: draft.bodyHi,
-          footer: draft.footer,
-          footerHi: draft.footerHi,
-          buttons: draft.buttons.map((b) => ({
-            type: b.type as TemplateButtonType,
-            text: b.text,
-            url: b.url || '',
-            phone_number: b.phone_number || '',
-            example: b.example || '',
-          })),
-          variables: draft.variables,
-        });
-        setPrompt('');
-        setConfirming(false);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Generation failed');
-      })
-      .finally(() => setBusy(false));
-  };
-
-  const click = () => {
-    if (hasContent && !confirming) {
-      setConfirming(true);
-      return;
-    }
-    run();
-  };
-
+  }, [confirmOpen, onCancelConfirm]);
   return (
     <section className="dashboard-card p-4 sm:p-5">
       <div className="mb-2.5 flex items-center gap-2">
@@ -290,9 +255,9 @@ function AiAssistBar({
         <input
           type="text"
           value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
+          onChange={(event) => onPromptChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !busy && prompt.trim()) click();
+            if (event.key === 'Enter' && !busy && prompt.trim()) onGenerate();
           }}
           placeholder="Describe the template you want — e.g. Create a Diwali offer message for ecommerce customers…"
           aria-label="Describe the template to generate"
@@ -300,7 +265,7 @@ function AiAssistBar({
           className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1"
         />
         <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-          <Button onClick={click} disabled={!canWrite || busy || !prompt.trim()} className="max-sm:w-full">
+          <Button onClick={onGenerate} disabled={!canWrite || busy || !prompt.trim()} className="max-sm:w-full">
             <Wand2 className="h-3.5 w-3.5" />
             {busy ? 'Generating…' : 'Generate'}
           </Button>
@@ -308,10 +273,95 @@ function AiAssistBar({
       </div>
       {error ? <p className="mt-2 text-[11px] font-medium text-rose-600">{error}</p> : null}
 
-      {confirming
+      {clarify.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+          <p className="text-[12px] font-bold text-amber-900">
+            Add a little more detail for better drafts
+          </p>
+          <div className="mt-2 space-y-2">
+            {clarify.map((question, index) => (
+              <label key={question} className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-amber-900/90">
+                  {index + 1}. {question}
+                </span>
+                <input
+                  type="text"
+                  value={clarifyAnswers[index] ?? ''}
+                  onChange={(event) => onClarifyAnswerChange(index, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !busy) onGenerate();
+                  }}
+                  placeholder="Your answer (optional)"
+                  aria-label={`Answer: ${question}`}
+                  disabled={!canWrite || busy}
+                  className="h-8 w-full rounded-lg border border-amber-300 bg-white px-2.5 text-[12px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </label>
+            ))}
+          </div>
+          <Button onClick={onGenerate} size="sm" disabled={!canWrite || busy} className="mt-2.5">
+            <Wand2 className="h-3.5 w-3.5" />
+            {busy ? 'Generating…' : 'Generate with answers'}
+          </Button>
+        </div>
+      ) : null}
+
+      {options.length > 0 ? (
+        <div className="mt-3">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+            <Wand2 className="h-3 w-3 text-indigo-500" aria-hidden />
+            {options.length} option{options.length === 1 ? '' : 's'} — click one to preview it in the panel
+          </p>
+          <div className="grid gap-2 md:grid-cols-3">
+            {options.map((option, index) => {
+              const active = selectedIndex === index;
+              return (
+                <button
+                  key={`${option.slug}-${index}`}
+                  type="button"
+                  disabled={!canWrite}
+                  aria-pressed={active}
+                  onClick={() => onSelect(active ? null : index)}
+                  className={`rounded-xl border p-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    active
+                      ? 'border-indigo-300 bg-indigo-50/70 ring-2 ring-indigo-500/30'
+                      : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                      {option.category}
+                    </span>
+                    {active ? <Check className="h-3.5 w-3.5 shrink-0 text-indigo-600" aria-label="Selected" /> : null}
+                  </div>
+                  <p className="mt-1.5 truncate text-[12px] font-bold text-slate-900" title={option.title}>
+                    {option.title}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500" title={option.body}>
+                    {option.body}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {selectedIndex !== null ? (
+            <div className="mt-2.5 flex items-center gap-2">
+              <Button onClick={onApplyClick} size="sm">
+                <Wand2 className="h-3.5 w-3.5" />
+                Use this draft
+              </Button>
+              <Button variant="secondary" size="sm" onClick={onDismiss}>
+                Dismiss
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {confirmOpen
         ? createPortal(
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-xs">
-              <button type="button" className="absolute inset-0 cursor-default" aria-label="Close" onClick={() => setConfirming(false)} />
+              <button type="button" className="absolute inset-0 cursor-default" aria-label="Close" onClick={onCancelConfirm} />
               <div
                 role="alertdialog"
                 aria-modal="true"
@@ -325,29 +375,27 @@ function AiAssistBar({
                   </span>
                   <div className="min-w-0">
                     <h2 id="ai-replace-title" className="text-[15px] font-bold tracking-tight text-slate-900">
-                      Replace current content?
+                      Use this draft?
                     </h2>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-slate-500">
-                      Generating will overwrite the template name, category, body, footer, and buttons with the AI suggestion.
+                      Applying “{selectedTitle}” will overwrite the template name, category, body, footer, and buttons.
                     </p>
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setConfirming(false)}
-                    disabled={busy}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    onClick={onCancelConfirm}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Keep mine
                   </button>
                   <button
                     type="button"
-                    onClick={run}
-                    disabled={busy}
-                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                    onClick={onApply}
+                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-indigo-700"
                   >
-                    {busy ? 'Generating…' : 'Yes, replace'}
+                    Use this draft
                   </button>
                 </div>
               </div>
@@ -721,31 +769,72 @@ export function TemplateEditorPage() {
     });
   };
 
-  // AI assist: pour the suggestion into the draft. Variables
-  // map to body-scope connect rows so chips/Connect examples work identically.
-  const applyAiSuggestion = (s: AiDraftSuggestion) => {
-    setDraft((prev) => ({
-      ...prev,
-      // Name derives from the slug: "order_shipped" → "Order shipped".
-      ...(!row && s.slug
-        ? { slug: s.slug, title: humanizeSluggedName(s.slug) }
-        : { title: s.title }),
-      category: s.category,
-      body: s.body,
-      bodyHi: s.bodyHi,
-      footer: s.footer,
-      footerHi: s.footerHi,
-      buttons: s.buttons,
-      variableMeta: s.variables.map((v) => ({
-        scope: 'body' as const,
-        index: v.index,
-        description: v.description,
-        suggestedSource: v.suggestedSource,
-        customKey: '',
-      })),
-      bodyExamples: s.variables.map((v) => sampleForVariable(v.description, v.index, v.suggestedSource)),
-    }));
+  // AI assist: suggestion options + which one is previewed (selectedIndex) and
+  // whether the replace-confirm is open. Generate no longer touches the form;
+  // "Use this draft" pours it in via draftFromAiSuggestion (same builder the
+  // preview uses, so preview === apply).
+  const [aiOptions, setAiOptions] = useState<AiTemplateDraftSuggestion[]>([]);
+  const [aiSelectedIndex, setAiSelectedIndex] = useState<number | null>(null);
+  const [aiConfirmOpen, setAiConfirmOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiPreviewLang, setAiPreviewLang] = useState<'en' | 'hi'>('en');
+  const [aiPrompt, setAiPrompt] = useState('');
+  // Vague prompt → model asks up to 3 questions; answers feed the next generate.
+  const [aiClarify, setAiClarify] = useState<string[]>([]);
+  const [aiClarifyAnswers, setAiClarifyAnswers] = useState<string[]>([]);
+
+  const runAiGenerate = () => {
+    setAiBusy(true);
+    setAiError('');
+    // Clear last round's clarify Q/A. The `answers` closure below still reads the
+    // pre-clear render value, so outstanding answers ride along with THIS call.
+    setAiClarify([]);
+    setAiClarifyAnswers([]);
+    // Real AI (POST /platform/library-templates/ai-draft, global platform key).
+    // Clarify answers are appended as prompt context ("Q: … A: …" lines).
+    const context = aiClarifyAnswers
+      .map((a, i) => (a.trim() && aiClarify[i] ? `Q: ${aiClarify[i]} A: ${a.trim()}` : ''))
+      .filter(Boolean)
+      .join('. ');
+    const fullPrompt = [aiPrompt.trim(), context].filter(Boolean).join('. ');
+    aiApi
+      .generateTemplateDrafts(fullPrompt)
+      .then((reply) => {
+        if (reply.clarify && reply.clarify.length > 0) {
+          setAiClarify(reply.clarify);
+          setAiClarifyAnswers(reply.clarify.map(() => ''));
+          setAiOptions([]);
+          setAiSelectedIndex(null);
+          return;
+        }
+        setAiOptions(reply.drafts || []);
+        setAiSelectedIndex(null);
+        setAiConfirmOpen(false);
+      })
+      .catch((err: unknown) => {
+        setAiError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Generation failed');
+      })
+      .finally(() => setAiBusy(false));
   };
+
+  // AI assist: pour the picked suggestion into the draft. Variables
+  // map to body-scope connect rows so chips/Connect examples work identically.
+  const applyAiSuggestion = (s: AiTemplateDraftSuggestion | undefined) => {
+    if (!s) return;
+    setDraft((prev) => draftFromAiSuggestion(prev, s, Boolean(row)));
+    setAiOptions([]);
+    setAiSelectedIndex(null);
+    setAiConfirmOpen(false);
+  };
+
+  /** The Draft the currently-previewed AI option produces (for the aside preview). */
+  const aiPreviewDraft = useMemo(
+    () => (aiSelectedIndex !== null && aiOptions[aiSelectedIndex]
+      ? draftFromAiSuggestion(draft, aiOptions[aiSelectedIndex], Boolean(row))
+      : null),
+    [aiSelectedIndex, aiOptions, draft, row],
+  );
 
   // Footer presets apply to both languages at once — same options as the client create step.
   const FOOTER_PRESETS: Array<{ value: string; label: string }> = [
@@ -847,8 +936,39 @@ export function TemplateEditorPage() {
         <div className="min-w-0 space-y-4">
           <AiAssistBar
             canWrite={canWrite}
-            hasContent={Boolean(draft.body.trim() || draft.bodyHi.trim() || draft.title.trim())}
-            onApply={applyAiSuggestion}
+            prompt={aiPrompt}
+            options={aiOptions}
+            busy={aiBusy}
+            error={aiError}
+            selectedIndex={aiSelectedIndex}
+            confirmOpen={aiConfirmOpen}
+            clarify={aiClarify}
+            clarifyAnswers={aiClarifyAnswers}
+            onClarifyAnswerChange={(index, value) =>
+              setAiClarifyAnswers((prev) => prev.map((a, i) => (i === index ? value : a)))
+            }
+            selectedTitle={aiSelectedIndex !== null ? aiOptions[aiSelectedIndex]?.title || '' : ''}
+            onPromptChange={setAiPrompt}
+            onGenerate={runAiGenerate}
+            onSelect={(index) => {
+              setAiSelectedIndex(index);
+              setAiConfirmOpen(false);
+            }}
+            onApplyClick={() => {
+              // Overwriting existing content needs a confirm; an empty form doesn't.
+              if (draft.body.trim() || draft.bodyHi.trim() || draft.title.trim()) {
+                setAiConfirmOpen(true);
+              } else {
+                applyAiSuggestion(aiSelectedIndex !== null ? aiOptions[aiSelectedIndex] : undefined);
+              }
+            }}
+            onApply={() => applyAiSuggestion(aiSelectedIndex !== null ? aiOptions[aiSelectedIndex] : undefined)}
+            onDismiss={() => {
+              setAiOptions([]);
+              setAiSelectedIndex(null);
+              setAiConfirmOpen(false);
+            }}
+            onCancelConfirm={() => setAiConfirmOpen(false)}
           />
           <section className="dashboard-card p-4 sm:p-5">
             {/* Identity fields — name/slug + category, 2 per row. The slug IS the
@@ -889,7 +1009,7 @@ export function TemplateEditorPage() {
                   <Info className="h-3.5 w-3.5 cursor-help text-slate-400" aria-label="Header info" />
                 </span>
               </div>
-              {/* Soft color chips: every type wears its tint; active = solid + ring, inactive = outlined */}
+              {/* Soft squared chips: tint fill marks the active type (no hard border/ring) */}
               <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Header type">
                 {HEADER_TILES.map((tile) => {
                   const active = headerFormat === tile.value;
@@ -902,10 +1022,10 @@ export function TemplateEditorPage() {
                       aria-checked={active}
                       disabled={!canWrite}
                       onClick={() => setHeaderFormat(tile.value)}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[11.5px] font-bold transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl px-3.5 text-[11.5px] font-bold transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
                         active
-                          ? `${tile.tint} border-transparent shadow-sm ring-2 ${tile.ring} ring-offset-1 ring-offset-white`
-                          : 'border-slate-200 bg-white text-slate-500 shadow-2xs hover:border-slate-300 hover:text-slate-800'
+                          ? `${tile.tint} shadow-sm`
+                          : 'bg-slate-100/80 text-slate-500 hover:bg-slate-200/70 hover:text-slate-800'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} aria-hidden />
@@ -1285,9 +1405,31 @@ export function TemplateEditorPage() {
 
         {/* Right: Template Preview panel — same block as the catalog View drawer.
             Card spans the full column: zero outer padding/margin, consistent
-            with every other block on the page. */}
+            with every other block on the page. While an AI option is selected,
+            the aside previews that option instead of the live form. */}
         <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-          <TemplatePreviewBlock draft={draft} fullWidth />
+          {aiPreviewDraft ? (
+            <div className="overflow-hidden rounded-[0.875rem] border border-indigo-200/80 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] ring-1 ring-indigo-500/20">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 bg-indigo-50/60 px-4 py-2.5">
+                <p className="flex min-w-0 items-center gap-1.5 text-[12px] font-bold text-indigo-800">
+                  <Wand2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  Previewing AI option {aiSelectedIndex! + 1} — not applied yet
+                </p>
+                <PreviewLanguagePills
+                  lang={aiPreviewLang}
+                  onChange={setAiPreviewLang}
+                />
+              </div>
+              <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
+                <div className="mx-auto w-[280px] max-w-full">
+                  <WhatsAppPreview draft={aiPreviewLang === 'hi' ? { ...aiPreviewDraft, language: 'hi_IN', body: aiPreviewDraft.bodyHi || aiPreviewDraft.body, footer: aiPreviewDraft.footerHi || aiPreviewDraft.footer } : { ...aiPreviewDraft, language: 'en_US', body: aiPreviewDraft.body || aiPreviewDraft.bodyHi, footer: aiPreviewDraft.footer || aiPreviewDraft.footerHi }} />
+                </div>
+              </div>
+              <TemplateDetailsTable draft={aiPreviewDraft} />
+            </div>
+          ) : (
+            <TemplatePreviewBlock draft={draft} fullWidth />
+          )}
         </aside>
       </div>
 
