@@ -307,31 +307,24 @@ export function TemplatePreviewBlock({ draft, templateLanguage }: { draft: Draft
             </svg>
             Template Preview
           </p>
-          <span
-            className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
-            title={lang === 'hi' ? 'Hindi' : languageLabel(base.language)}
-          >
-            {lang === 'hi' ? 'Hindi' : languageLabel(base.language)}
-          </span>
-        </div>
-        {/* EN/HI lens — same behavior as the platform browse filter: one identity, two surfaces */}
-        <div className="flex items-center justify-center gap-1 border-b border-slate-100 bg-slate-50/60 px-4 py-2" role="group" aria-label="Preview language">
-          {(['en', 'hi'] as const).map((option) => {
-            const active = lang === option;
-            return (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setLang(option)}
-                className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
-                  active ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                {option === 'en' ? 'English' : 'हिन्दी'}
-              </button>
-            );
-          })}
+          <div className="flex shrink-0 items-center gap-1">
+            {(['en', 'hi'] as const).map((option) => {
+              const active = lang === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setLang(option)}
+                  className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                    active ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {option === 'en' ? 'English' : 'हिन्दी'}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
           <div className="mx-auto w-full max-w-[280px]">
