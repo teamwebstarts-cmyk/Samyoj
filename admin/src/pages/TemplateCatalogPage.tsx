@@ -27,7 +27,10 @@ import {
   Select,
   StatusBadge,
 } from "../components/ui";
-import { PREVIEW_COLUMN, TemplatePreviewBlock } from "../components/WhatsAppPreview";
+import {
+  PREVIEW_COLUMN,
+  TemplatePreviewBlock,
+} from "../components/WhatsAppPreview";
 import { formatAgo } from "../lib/format";
 import { useOperator } from "../context/OperatorContext";
 import {
@@ -393,45 +396,7 @@ export function TemplateCatalogPage() {
       />
 
       <div className="dashboard-card overflow-hidden">
-        {/* Status tabs */}
-        <div
-          className="overflow-x-auto border-b border-slate-200/80 bg-slate-50/60 px-2 sm:px-3"
-          role="tablist"
-          aria-label="Filter templates by status"
-        >
-          <div className="flex min-w-max items-center gap-1">
-            {TABS.map(({ id, label }) => {
-              const selected = tab === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setTab(id)}
-                  className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors ${
-                    selected
-                      ? "border-indigo-600 text-indigo-700"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {label}
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                      selected
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "bg-slate-200/80 text-slate-500"
-                    }`}
-                  >
-                    {counts[id]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Search + filters */}
+        {/* Search + filters — status and category are both selects */}
         <div className="flex flex-col gap-3 border-b border-slate-200/80 px-4 py-3 sm:flex-row sm:items-center">
           <div className="flex-1 sm:max-w-sm">
             <Input
@@ -442,6 +407,18 @@ export function TemplateCatalogPage() {
               onChange={(event) => setQ(event.target.value)}
             />
           </div>
+          <Select
+            aria-label="Filter by status"
+            className="sm:w-40"
+            value={tab}
+            onChange={(event) => setTab(event.target.value as CatalogTab)}
+          >
+            {TABS.map(({ id, label }) => (
+              <option key={id} value={id}>
+                {label} ({counts[id]})
+              </option>
+            ))}
+          </Select>
           <Select
             aria-label="Filter by category"
             className="sm:w-44"

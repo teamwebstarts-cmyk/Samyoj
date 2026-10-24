@@ -1,5 +1,6 @@
 export { Button } from './AppButton';
-export { Input, Select } from './AppInput';
+export { Input } from './AppInput';
+export { AppSelect as Select } from './AppSelect';
 export { Drawer } from './Drawer';
 export { EmptyState, Notice } from './EmptyState';
 export { StatusBadge } from './StatusBadge';

@@ -103,7 +103,7 @@ function VariableRow({
   return (
     <div className="rounded-lg border border-slate-200/90 bg-white p-2.5">
       <div className="flex items-center gap-2">
-        <span className="inline-flex shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-emerald-700">
+        <span className="inline-flex shrink-0 rounded-md bg-indigo-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-indigo-700">
           {`{{${index}}}`}
         </span>
         <input
@@ -400,7 +400,7 @@ function BodyChipsRoster({
               type="button"
               onClick={() => onInsert(item.index)}
               title={`Insert {{${item.index}}} at the cursor — rename it in Connect variables below`}
-              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Plus className="h-2.5 w-2.5" />
               {item.description.trim() ? item.description : `Untitled ({{${item.index}}})`}
@@ -440,6 +440,18 @@ export function TemplateEditorPage() {
   const [saving, setSaving] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const bodyHiRef = useRef<HTMLTextAreaElement>(null);
+
+  // Body textareas sit at 3 lines, grow line-by-line while typing, cap at 6
+  // (leading-5 = 20px/line, py-2.5 = 20px padding, +2px borders). Past 6 lines
+  // the textarea scrolls internally instead of extending the panel.
+  useEffect(() => {
+    for (const el of [bodyRef.current, bodyHiRef.current]) {
+      if (!el) continue;
+      el.style.height = 'auto'; // collapse to measure real content height
+      const lines = Math.min(6, Math.max(3, Math.ceil((el.scrollHeight - 20) / 20)));
+      el.style.height = `${lines * 20 + 22}px`;
+    }
+  });
 
   // There is no GET-by-id endpoint in this first cut, so reuse the list to find the row.
   useEffect(() => {
@@ -794,7 +806,7 @@ export function TemplateEditorPage() {
                 disabled={!canWrite}
                 onFocus={() => (focusedBodyRef.current = 'en')}
                 onChange={(event) => setBodyText(event.target.value)}
-                className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                className="min-h-[82px] w-full resize-y rounded-lg border bg-white px-3 py-2.5 text-[13px] leading-5 text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
               />
 
               <div className="mt-4">
@@ -814,13 +826,13 @@ export function TemplateEditorPage() {
                   disabled={!canWrite}
                   onFocus={() => (focusedBodyRef.current = 'hi')}
                   onChange={(event) => set('bodyHi', event.target.value)}
-                  className="min-h-32 w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+                  className="min-h-[82px] w-full resize-y rounded-lg border bg-white px-3 py-2.5 text-[13px] leading-5 text-slate-900 shadow-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
 
-              {/* Connect variables — client TemplateVariableConnect (create variant), emerald panel */}
+              {/* Connect variables — client TemplateVariableConnect (create variant), indigo panel */}
               {variableCount > 0 || headerCount > 0 ? (
-                <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+                <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
                   <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -1164,7 +1176,7 @@ export function TemplateEditorPage() {
                   onClick={() => set('published', true)}
                   className={`rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-all ${
                     draft.published
-                      ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200'
+                      ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-200'
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
