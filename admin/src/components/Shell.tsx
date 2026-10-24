@@ -1,13 +1,12 @@
 import {
   BookOpen,
   Building2,
+  ChevronsLeft,
   CreditCard,
   LayoutDashboard,
   LogOut,
   Mail,
   MoreVertical,
-  PanelLeftClose,
-  PanelLeftOpen,
   ScrollText,
   ShieldCheck,
   TriangleAlert,
@@ -87,8 +86,24 @@ export function Shell() {
   const { work, staff } = visibleNavGroups(operator.role);
   const currentPath = location.pathname.startsWith('/accounts/') ? '/accounts' : location.pathname;
   const currentTitle = PATH_TITLES[currentPath] || 'Console';
-  /** Icon-only rail (desktop). Mobile bottom bar is untouched. */
-  const [collapsed, setCollapsed] = useState(false);
+  /** Icon-only rail (desktop). Mobile bottom bar is untouched. Persisted like the client sidebar. */
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('samyoj-admin-sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed((value) => {
+      try {
+        localStorage.setItem('samyoj-admin-sidebar-collapsed', String(!value));
+      } catch {
+        // ignore storage errors
+      }
+      return !value;
+    });
+  };
   /** Mobile-only sheet holding the navs packed out of the bottom bar. */
   const [moreOpen, setMoreOpen] = useState(false);
   const staffActive = staff.some((item) => item.to === currentPath);
@@ -104,28 +119,58 @@ export function Shell() {
   }, [moreOpen]);
 
   return (
-    <div className={`min-h-screen md:grid ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
+    <div className={`min-h-screen md:grid transition-[grid-template-columns] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
       <a href="#main" className="skip-to-content">
         Skip to content
       </a>
 
       {/* Sidebar Rail — fixed bottom bar on mobile, side rail on desktop */}
-      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
+      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 md:overflow-hidden z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
         <div className="hidden min-w-0 px-1 md:block">
-          <div className="flex min-w-0 items-center justify-between gap-1.5">
-            <PlatformBrand size="sm" collapsed={collapsed} />
-            {/* Collapse toggler — right of the brand; beside the mark when collapsed */}
-            <button
-              type="button"
-              onClick={() => setCollapsed((value) => !value)}
-              aria-pressed={collapsed}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="rail-collapse-toggle"
-            >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            </button>
-          </div>
+          {collapsed ? (
+            <div className="group/logo relative flex h-8 w-full items-center justify-center">
+              <PlatformBrand size="sm" collapsed />
+              {/* Hover-reveal toggle over the logo, like the client sidebar */}
+              <div
+                className={[
+                  'absolute inset-0 z-30 flex items-center justify-center',
+                  'rounded-xl bg-white/85 opacity-0 shadow-sm backdrop-blur-[2px]',
+                  'pointer-events-none transition-all duration-200 ease-out',
+                  'group-hover/logo:pointer-events-auto group-hover/logo:opacity-100',
+                  'group-focus-within/logo:pointer-events-auto group-focus-within/logo:opacity-100',
+                ].join(' ')}
+              >
+                <button
+                  type="button"
+                  onClick={toggleCollapsed}
+                  aria-label="Expand sidebar"
+                  aria-expanded={false}
+                  title="Expand sidebar"
+                  className="rail-collapse-toggle flex h-7 w-7 items-center justify-center rounded-full"
+                >
+                  <ChevronsLeft className="h-3.5 w-3.5 rotate-180" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center justify-between gap-1.5">
+              <PlatformBrand size="sm" />
+              {/* Collapse toggler — right of the brand; rotating chevron like the client sidebar */}
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-expanded={true}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="rail-collapse-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+              >
+                <ChevronsLeft
+                  className="h-4 w-4 transition-transform duration-[250ms] ease-out"
+                  strokeWidth={1.8}
+                />
+              </button>
+            </div>
+          )}
           {!collapsed && (
             <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200/60 px-2 py-1 text-[10px] text-indigo-700">
               <span className="flex items-center gap-1.5 font-medium">

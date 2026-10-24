@@ -550,17 +550,27 @@ body {
   height: 2rem;
   width: 2rem;
   flex-shrink: 0;
-  border-radius: 0.55rem;
+  border-radius: 9999px;
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: #fff;
   color: #64748b;
-  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .rail-collapse-toggle:hover {
-  color: #0f172a;
-  background: rgba(241, 245, 249, 0.9);
-  border-color: #cbd5e1;
+  color: #4338ca;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  transform: scale(1.04);
+}
+
+.rail-collapse-toggle:active {
+  transform: scale(0.98);
 }
 
 @media (min-width: 768px) {
