@@ -236,6 +236,12 @@ export function titleCaseCategory(value: string): string {
     .join(' ');
 }
 
+/** order_shipped_2 → "Order shipped 2" — display name derived from a template slug. */
+export function humanizeSluggedName(value: string): string {
+  const text = titleCaseCategory(value.trim());
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** Same icon keys the customer-facing CatalogLibraryCard maps (client/src/components/templates/library). */
 export const ICON_MAP: Record<string, LucideIcon> = {
   package: Package,

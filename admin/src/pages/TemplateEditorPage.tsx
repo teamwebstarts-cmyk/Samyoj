@@ -22,6 +22,7 @@ import {
   VARIABLE_SOURCE_OPTIONS,
   draftPayload,
   emptyTemplateButton,
+  humanizeSluggedName,
   rowToDraft,
   bodyVariableIndexes,
   sampleForVariable,
@@ -296,10 +297,10 @@ function AiAssistBar({
           placeholder="Describe the template you want — e.g. Create a Diwali offer message for ecommerce customers…"
           aria-label="Describe the template to generate"
           disabled={!canWrite || busy}
-          className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1"
         />
-        <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={click} disabled={!canWrite || busy || !prompt.trim()}>
+        <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+          <Button onClick={click} disabled={!canWrite || busy || !prompt.trim()} className="max-sm:w-full">
             <Wand2 className="h-3.5 w-3.5" />
             {busy ? 'Generating…' : 'Generate'}
           </Button>
@@ -540,6 +541,17 @@ export function TemplateEditorPage() {
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((prev) => ({ ...prev, [key]: value }));
 
+  /** Slug drives the display name: "order_shipped" → "Order Shipped".
+   *  Only mirrors while creating (slug is locked to the slug column on edit). */
+  const setSlug = (value: string) => {
+    const slug = value.toLowerCase().replace(/\s/g, '_');
+    setDraft((prev) => ({
+      ...prev,
+      slug,
+      ...(row ? {} : { title: humanizeSluggedName(slug) }),
+    }));
+  };
+
   // Both languages are always edited in one pass — no primary/fallback swap.
   const bodyText: string = draft.body;
   const setBodyText = (value: string) => set('body', value);
@@ -714,8 +726,10 @@ export function TemplateEditorPage() {
   const applyAiSuggestion = (s: AiDraftSuggestion) => {
     setDraft((prev) => ({
       ...prev,
-      title: s.title,
-      slug: row ? prev.slug : s.slug,
+      // Name derives from the slug: "order_shipped" → "Order shipped".
+      ...(!row && s.slug
+        ? { slug: s.slug, title: humanizeSluggedName(s.slug) }
+        : { title: s.title }),
       category: s.category,
       body: s.body,
       bodyHi: s.bodyHi,
@@ -826,19 +840,17 @@ export function TemplateEditorPage() {
             onApply={applyAiSuggestion}
           />
           <section className="dashboard-card p-4 sm:p-5">
-            {/* Identity fields — name + slug + category + language, 2 per row */}
+            {/* Identity fields — name/slug + category, 2 per row. The slug IS the
+                identity: typing it derives the display name ("order_shipped" →
+                "Order shipped"), so no separate name input. Edit mode keeps the
+                stored name (slug is immutable there). */}
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
-                label="Template name"
-                value={draft.title}
-                disabled={!canWrite}
-                onChange={(event) => set('title', event.target.value)}
-              />
-              <Input
-                label="Slug"
+                label="Name/Slug"
                 value={draft.slug}
                 disabled={!canWrite || Boolean(row)}
-                onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
+                placeholder="order_shipped"
+                onChange={(event) => setSlug(event.target.value)}
               />
               {/* Meta recognizes exactly three categories; platform-only custom
                   taxonomy removed — tenant/Meta surfaces treated custom as Utility anyway. */}
@@ -1267,9 +1279,11 @@ export function TemplateEditorPage() {
         </aside>
       </div>
 
-      {/* Floating action bar — fixed to viewport bottom, content-aligned */}
+      {/* Floating action bar — fixed to viewport bottom, content-aligned.
+          Mobile: lifted above the nav bar (matches the 4.5rem body reservation).
+          Desktop: full-width bar, rail is a sibling column so no inset needed. */}
       {canWrite ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md">
+        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md md:bottom-0">
           <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
             <div className="flex min-w-0 items-center gap-2">
               {/* Draft / Published visibility toggle — drives draft.published on save */}

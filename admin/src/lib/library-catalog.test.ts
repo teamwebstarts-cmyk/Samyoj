@@ -3,6 +3,7 @@ import {
   draftPayload,
   emptyTemplateButton,
   bodyVariableIndexes,
+  humanizeSluggedName,
   normalizeCategory,
   rowToDraft,
   sampleForVariable,
@@ -88,5 +89,13 @@ describe('admin template editor draft model', () => {
     expect(bodyVariableIndexes('Hi {{1}}, order {{2}} for {{1}} — ref {{4}}')).toEqual([1, 2, 4]);
     expect(bodyVariableIndexes('No variables here')).toEqual([]);
     expect(bodyVariableIndexes('')).toEqual([]);
+  });
+
+  it('humanizeSluggedName derives the display name from a slug (Name/Slug field)', () => {
+    expect(humanizeSluggedName('order_shipped')).toBe('Order Shipped');
+    expect(humanizeSluggedName('FESTIVE_OFFER_2')).toBe('Festive Offer 2');
+    expect(humanizeSluggedName('  hello_world ')).toBe('Hello World');
+    expect(humanizeSluggedName('single')).toBe('Single');
+    expect(humanizeSluggedName('')).toBe('');
   });
 });
