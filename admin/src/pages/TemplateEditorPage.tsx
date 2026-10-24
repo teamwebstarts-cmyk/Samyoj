@@ -755,18 +755,29 @@ export function TemplateEditorPage() {
     { value: 'Not interested? Reply STOP', label: 'Not interested? Reply STOP' },
     { value: '__custom__', label: 'Write your own…' },
   ];
-  const footerChoice = !footerText.trim()
-    ? '__none__'
-    : FOOTER_PRESETS.some((p) => p.value === footerText)
-      ? footerText
-      : '__custom__';
+  // "Write your own…" must stick even while the custom text is still empty —
+  // deriving purely from footerText would snap the trigger back to "No footer"
+  // before the user types anything.
+  const [footerCustom, setFooterCustom] = useState(false);
+  const footerChoice = footerCustom
+    ? '__custom__'
+    : !footerText.trim()
+      ? '__none__'
+      : FOOTER_PRESETS.some((p) => p.value === footerText)
+        ? footerText
+        : '__custom__';
   const onFooterChoice = (next: string) => {
     if (next === '__none__') {
+      setFooterCustom(false);
       setFooterText('');
       set('footerHi', '');
       return;
     }
-    if (next === '__custom__') return; // keep the current text; the inputs below edit it
+    if (next === '__custom__') {
+      setFooterCustom(true); // keep the current text; the inputs below edit it
+      return;
+    }
+    setFooterCustom(false);
     setFooterText(next);
     set('footerHi', toHindiFooter(next));
   };
@@ -1054,17 +1065,16 @@ export function TemplateEditorPage() {
             <div className="mt-4 space-y-2">
               <div className="space-y-1">
                 <span className="text-[13px] font-semibold text-slate-700">Footer</span>
-                <select
+                <Select
                   value={footerChoice}
                   disabled={!canWrite}
                   aria-label="Footer"
                   onChange={(event) => onFooterChoice(event.target.value)}
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-900 shadow-sm transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
                 >
                   {FOOTER_PRESETS.map((preset) => (
                     <option key={preset.value} value={preset.value}>{preset.label}</option>
                   ))}
-                </select>
+                </Select>
                 {draft.category === 'MARKETING' ? (
                   <p className="text-[11px] text-slate-500">
                     Marketing templates need an opt-out line — the Reply STOP presets satisfy it.
