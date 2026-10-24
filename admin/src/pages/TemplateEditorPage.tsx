@@ -479,7 +479,7 @@ function BodyChipsRoster({
                 disabled={!canWrite}
                 onClick={() => onInsertPreset?.({ description: chip.description, source: chip.source })}
                 title={`Insert next {{n}} auto-mapped to ${chip.source} at the cursor`}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Plus className="h-2.5 w-2.5" />
                 {chip.label}
