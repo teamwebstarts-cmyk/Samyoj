@@ -403,15 +403,63 @@ select:focus-visible {
   background: var(--table-row-even);
 }
 
-.data-table tbody tr[data-clickable='true'] {
-  cursor: pointer;
-}
-
-.data-table tbody tr[data-clickable='true']:hover {
+.data-table tbody tr:hover {
   background: var(--table-row-hover);
 }
 
+/*
+ * Mobile list rows (ResponsiveDataView cards rendered as a flush list).
+ * Mirrors .data-table zebra striping, separators, and hover 1:1 so both
+ * breakpoints read as the same component.
+ */
+.data-list > * {
+  border-bottom: 1px solid var(--dust);
+  transition: background-color 0.12s ease;
+}
+
+.data-list > *:nth-child(even) {
+  background: var(--table-row-even);
+}
+
+.data-list > *:hover {
+  background: var(--table-row-hover);
+}
+
+.data-list > *:last-child {
+  border-bottom: 0;
+}
+
 /* Navigation Rail Links (light sidebar) */
+
+/* Mobile: the rail IS the navbar — pinned to the viewport bottom. */
+.admin-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  border-bottom-width: 0;
+  border-top-width: 1px;
+}
+
+/* "More" tile in the mobile bar packs overflow navs into a bottom sheet. */
+.rail-more-toggle[aria-expanded='false'] .rail-nav-icon {
+  background: rgba(241, 245, 249, 0.9);
+  color: #475569;
+}
+
+.rail-more-toggle.rail-more-active .rail-nav-icon {
+  background: #4b2eeb;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(75, 46, 235, 0.35);
+}
+
+body {
+  /* Reserve space so page content (and its footer) clear the fixed bar. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
 .rail-nav-item {
   display: flex;
   align-items: center;
@@ -434,7 +482,23 @@ select:focus-visible {
   color: #3b22c7;
   background: #eef2ff;
   font-weight: 600;
-  box-shadow: inset 3px 0 0 #4b2eeb;
+}
+
+@media (min-width: 768px) {
+  .admin-bottom-nav {
+    position: sticky;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    border-top-width: 0;
+    border-bottom-width: 1px;
+    padding-bottom: 1rem;
+  }
+
+  /* Desktop rail is sticky in normal flow — no body reservation needed. */
+  body {
+    padding-bottom: 0;
+  }
 }
 
 .rail-nav-icon {
@@ -472,6 +536,76 @@ select:focus-visible {
     text-transform: uppercase;
   }
   .rail-nav-item[aria-current='page'] {
-    box-shadow: inset 0 -2px 0 #4b2eeb;
+    background: #eef2ff;
+  }
+}
+
+/* Collapsed icon-only rail (desktop) */
+.rail-collapse-toggle {
+  display: inline-flex;
+  position: relative;
+  z-index: 30;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #fff;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+
+.rail-collapse-toggle:hover {
+  color: #0f172a;
+  background: rgba(241, 245, 249, 0.9);
+  border-color: #cbd5e1;
+}
+
+@media (min-width: 768px) {
+  .rail-collapsed {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .rail-collapsed .rail-group-label {
+    display: none;
+  }
+
+  .rail-collapsed nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .rail-collapsed nav > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  /* Icon mode: strip the pill, the inset bar, and the hover wash off the
+     item — active/hover state lives on the icon tile alone. */
+  .rail-collapsed .rail-nav-item {
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .rail-collapsed .rail-nav-item:hover {
+    background: transparent;
+  }
+
+  .rail-collapsed .rail-nav-item[aria-current='page'] {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .rail-collapsed .rail-nav-item > span:last-child {
+    display: none;
   }
 }

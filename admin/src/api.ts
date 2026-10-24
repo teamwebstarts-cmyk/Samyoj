@@ -57,3 +57,30 @@ export async function platformRequest<T>(path: string, init: RequestInit = {}): 
 export async function refreshPlatformCsrf(): Promise<void> {
   await platformRequest<{ csrfToken: string }>('/auth/csrf');
 }
+
+/** One AI-suggested library-template draft (bilingual, shared variable roster). */
+export type AiTemplateDraftSuggestion = {
+  title: string;
+  slug: string;
+  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
+  body: string;
+  bodyHi: string;
+  footer: string;
+  footerHi: string;
+  buttons: Array<{ type: string; text: string; url?: string; phone_number?: string; example?: string }>;
+  variables: Array<{ index: number; description: string; suggestedSource: string }>;
+};
+
+/**
+ * Platform AI services — mirrors the tenant aiStudioApi boiler (client/src/services/api.ts)
+ * but for the operator console: same platformRequest transport, org-independent.
+ * POST /platform/library-templates/ai-draft → { draft: AiTemplateDraftSuggestion }
+ */
+export const aiApi = {
+  generateTemplateDraft: (prompt: string) =>
+    platformRequest<{ draft: AiTemplateDraftSuggestion }>('/library-templates/ai-draft', {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    }),
+};
+

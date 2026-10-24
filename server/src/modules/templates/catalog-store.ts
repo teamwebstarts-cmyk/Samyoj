@@ -78,13 +78,6 @@ export async function seedPlatformLibraryIfEmpty(): Promise<{ seeded: number }> 
   return { seeded: 0 };
 }
 
-/** Hide Samyoj-authored drafts from tenants. Never deletes Meta WABA templates. */
-export async function hideSamyojHostedCatalogDrafts() {
-  await prisma.platformLibraryTemplate.updateMany({
-    data: { published: false },
-  });
-}
-
 export function unusableTemplateButtonUrl(raw: string): string | null {
   let parsed: URL;
   try {
@@ -115,7 +108,7 @@ export function unusableTemplateButtonUrl(raw: string): string | null {
 }
 
 export async function getPublishedLibraryTemplate(slug: string) {
-  await hideSamyojHostedCatalogDrafts();
+  // published flag is the single source of truth — no force-unpublish here.
   const row = await prisma.platformLibraryTemplate.findFirst({
     where: { slug, published: true },
   });

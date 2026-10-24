@@ -21,8 +21,9 @@ describe('admin in-release honesty', () => {
   });
 
   it('does not claim Meta pre-approval for the platform template library', () => {
-    const page = readFileSync(join(__dirname, '../pages/TemplateCatalogPage.tsx'), 'utf8');
-    expect(page).toContain('cannot pre-approve');
-    expect(page).not.toMatch(/already approved on Meta|skip Meta review/i);
+    // Copy is shared by the catalog tooltip and the editor preview (library-catalog.ts).
+    const shared = readFileSync(join(__dirname, 'library-catalog.ts'), 'utf8');
+    expect(shared).toContain('cannot pre-approve');
+    expect(shared).not.toMatch(/already approved on Meta|skip Meta review/i);
   });
 });

@@ -21,7 +21,6 @@ import { getTemplateVariableMeta, saveTemplateVariableMeta } from './variable-me
 import {
   buildCatalogSubmitPayload,
   getPublishedLibraryTemplate,
-  hideSamyojHostedCatalogDrafts,
   unusableTemplateButtonUrl,
 } from './catalog-store';
 import { listTenantTemplateLibrary } from './library-tenant';
@@ -181,7 +180,9 @@ router.get(
   authenticate,
   requireOrg,
   asyncHandler(async (req: Request, res: Response) => {
-    await hideSamyojHostedCatalogDrafts();
+    // Admin catalog rows with published=true are listed after the Meta pack
+    // (listTenantTemplateLibrary). No force-unpublish: the admin's published
+    // flag is the single source of truth.
     sendSuccess(
       res,
       await listTenantTemplateLibrary({
