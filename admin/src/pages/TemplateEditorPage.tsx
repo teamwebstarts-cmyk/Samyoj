@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Check, FileText, Image as ImageIcon, Info, Minus, Plus, Trash2, Type, Video, Wand2, X } from 'lucide-react';
+import { Ban, Check, FileText, Image as ImageIcon, Info, Plus, Trash2, Type, Video, Wand2, X } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
 import { TemplatePreviewBlock, TemplateDetailsTable, WhatsAppPreview, PreviewLanguagePills } from '../components/WhatsAppPreview';
 import { useOperator } from '../context/OperatorContext';
@@ -24,7 +24,7 @@ import {
 
 /** Header-type picker chips — mirrors client HEADER_TYPE_STYLES (create step). */
 const HEADER_TILES = [
-  { value: 'NONE', label: 'None', icon: Minus, tint: 'bg-slate-200/80 text-slate-700' },
+  { value: 'NONE', label: 'None', icon: Ban, tint: 'bg-slate-200/80 text-slate-700' },
   { value: 'TEXT', label: 'Text', icon: Type, tint: 'bg-sky-100 text-sky-700' },
   { value: 'IMAGE', label: 'Image', icon: ImageIcon, tint: 'bg-emerald-100 text-emerald-700' },
   { value: 'VIDEO', label: 'Video', icon: Video, tint: 'bg-violet-100 text-violet-700' },
