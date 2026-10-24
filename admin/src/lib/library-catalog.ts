@@ -242,6 +242,63 @@ export function humanizeSluggedName(value: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/**
+ * The Draft an AI suggestion produces when applied — single source of truth for
+ * both the option preview and the actual "Use this draft" apply, so the preview
+ * can never differ from what Use puts in the form. Mirrors the old
+ * applyAiSuggestion: on a new (unsaved) row the slug drives the display name
+ * ("order_shipped" → "Order shipped"); on an existing row the stored name stays
+ * and only the title updates. Header/media are left untouched.
+ */
+export function draftFromAiSuggestion(
+  prev: Draft,
+  s: {
+    title: string;
+    slug: string;
+    category: Draft['category'];
+    body: string;
+    bodyHi: string;
+    footer: string;
+    footerHi: string;
+    buttons: Array<{
+      type: TemplateButtonType;
+      text: string;
+      url?: string;
+      phone_number?: string;
+      example?: string;
+    }>;
+    variables: Array<{ index: number; description: string; suggestedSource: string }>;
+  },
+  isEditing: boolean,
+): Draft {
+  return {
+    ...prev,
+    ...(!isEditing && s.slug
+      ? { slug: s.slug, title: humanizeSluggedName(s.slug) }
+      : { title: s.title }),
+    category: s.category,
+    body: s.body,
+    bodyHi: s.bodyHi,
+    footer: s.footer,
+    footerHi: s.footerHi,
+    buttons: s.buttons.map((b) => ({
+      type: b.type,
+      text: b.text,
+      url: b.url || '',
+      phone_number: b.phone_number || '',
+      example: b.example || '',
+    })),
+    variableMeta: s.variables.map((v) => ({
+      scope: 'body' as const,
+      index: v.index,
+      description: v.description,
+      suggestedSource: v.suggestedSource,
+      customKey: '',
+    })),
+    bodyExamples: s.variables.map((v) => sampleForVariable(v.description, v.index, v.suggestedSource)),
+  };
+}
+
 /** Same icon keys the customer-facing CatalogLibraryCard maps (client/src/components/templates/library). */
 export const ICON_MAP: Record<string, LucideIcon> = {
   package: Package,

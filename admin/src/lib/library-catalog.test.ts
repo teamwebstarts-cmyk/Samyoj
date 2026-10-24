@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  draftFromAiSuggestion,
   draftPayload,
+  EMPTY_DRAFT,
   emptyTemplateButton,
   bodyVariableIndexes,
   humanizeSluggedName,
@@ -97,5 +99,52 @@ describe('admin template editor draft model', () => {
     expect(humanizeSluggedName('  hello_world ')).toBe('Hello World');
     expect(humanizeSluggedName('single')).toBe('Single');
     expect(humanizeSluggedName('')).toBe('');
+  });
+});
+
+describe('draftFromAiSuggestion (AI option preview === apply)', () => {
+  const base = rowToDraft({ ...row, body: 'old body', title: 'Old Title', slug: 'old_slug' });
+  const suggestion = {
+    title: 'Festive Offer Blast',
+    slug: 'festive_offer_blast',
+    category: 'MARKETING' as const,
+    body: 'Hi {{1}}! Flat {{2}} off with code {{3}}.',
+    bodyHi: 'नमस्ते {{1}}! कोड {{3}} से {{2}} छूट।',
+    footer: 'Reply STOP to stop messages',
+    footerHi: 'संदेश रोकने के लिए STOP भेजें',
+    buttons: [{ type: 'URL' as const, text: 'Shop now', url: 'https://example.com', phone_number: '', example: '' }],
+    variables: [
+      { index: 1, description: 'Customer name', suggestedSource: 'contact.name' },
+      { index: 2, description: 'Discount', suggestedSource: 'custom' },
+      { index: 3, description: 'Code', suggestedSource: 'custom' },
+    ],
+  };
+
+  it('overwrites copy fields and rebuilds variableMeta + examples', () => {
+    const next = draftFromAiSuggestion(base, suggestion, false);
+    expect(next.category).toBe('MARKETING');
+    expect(next.body).toBe(suggestion.body);
+    expect(next.bodyHi).toBe(suggestion.bodyHi);
+    expect(next.footer).toBe('Reply STOP to stop messages');
+    expect(next.footerHi).toBe('संदेश रोकने के लिए STOP भेजें');
+    expect(next.buttons).toHaveLength(1);
+    expect(next.variableMeta).toHaveLength(3);
+    expect(next.variableMeta.every((m) => m.scope === 'body')).toBe(true);
+    expect(next.bodyExamples).toHaveLength(3);
+    expect(next.bodyExamples[0]).toBe(sampleForVariable('Customer name', 1, 'contact.name'));
+  });
+
+  it('derives slug + humanized title on a new row, keeps header/media untouched', () => {
+    const next = draftFromAiSuggestion(EMPTY_DRAFT, suggestion, false);
+    expect(next.slug).toBe('festive_offer_blast');
+    expect(next.title).toBe('Festive Offer Blast');
+    expect(next.header).toBe('');
+    expect(next.mediaFormat).toBe('');
+  });
+
+  it('keeps the stored slug on an existing row and only updates the title', () => {
+    const next = draftFromAiSuggestion(base, suggestion, true);
+    expect(next.slug).toBe('old_slug');
+    expect(next.title).toBe('Festive Offer Blast');
   });
 });

@@ -256,7 +256,9 @@ export function TemplatePreviewBlock({
         </div>
       ) : null}
       <div className="bg-gradient-to-b from-slate-50/60 to-slate-100/30 p-3">
-        <div className="w-[280px] max-w-full">
+        {/* Phone surface stays 280px for chat realism; centered so left/right
+            spacing stays even when the card spans a wider column. */}
+        <div className="mx-auto w-[280px] max-w-full">
           <WhatsAppPreview draft={effective} />
         </div>
       </div>

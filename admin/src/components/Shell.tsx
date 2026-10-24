@@ -44,9 +44,12 @@ const PATH_TITLES: Record<string, string> = {
 function NavGroup({
   label,
   items,
+  overflowFrom,
 }: {
   label: string;
   items: Array<{ to: string; label: string }>;
+  /** Hide items at this index and beyond on mobile (More-sheet territory). */
+  overflowFrom?: number;
 }) {
   if (items.length === 0) return null;
   return (
@@ -56,14 +59,15 @@ function NavGroup({
       <p className="rail-group-label hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 md:block">
         {label}
       </p>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const Icon = ICONS[item.to] ?? LayoutDashboard;
+        const mobileHidden = overflowFrom !== undefined && index >= overflowFrom;
         return (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === '/'}
-            className="rail-nav-item group"
+            className={`rail-nav-item group ${mobileHidden ? 'max-md:hidden' : ''}`}
             title={item.label}
           >
             {({ isActive }) => (
@@ -109,8 +113,8 @@ export function Shell() {
   /** Mobile-only sheet holding the navs packed out of the bottom bar. */
   const [moreOpen, setMoreOpen] = useState(false);
   const staffActive = staff.some((item) => item.to === currentPath);
-  // Mobile bar keeps 5 tiles: first four work navs + More. Overflow shines here.
-  const mobileWork = work.slice(0, 4);
+  // Mobile bar keeps 5 tiles: first four work navs + More; the overflow lives
+  // in the More sheet. (The rail renders the full group once, desktop only.)
   const overflowWork = work.slice(4);
   const moreActive = staffActive || overflowWork.some((item) => item.to === currentPath);
 
@@ -199,9 +203,10 @@ export function Shell() {
         </div>
 
         <nav className="flex min-w-0 flex-1 justify-between gap-1 md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
-          <NavGroup label="Work" items={mobileWork} />
-          {/* Mobile: More tile opens the sheet; packed navs are sheet-only.
-              Desktop: full groups render in normal rail flow. */}
+          <NavGroup label="Work" items={work} overflowFrom={4} />
+          {/* Mobile: first four work tiles render; the rest live in the More
+              sheet. Desktop: the full Work group renders once (the earlier
+              split rendered a second "WORK" heading on desktop). */}
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
@@ -216,7 +221,6 @@ export function Shell() {
             <span>More</span>
           </button>
           <div className="hidden md:contents">
-            <NavGroup label="Work" items={overflowWork} />
             <NavGroup label="Staff & Security" items={staff} />
           </div>
         </nav>

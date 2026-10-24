@@ -67,18 +67,25 @@ export type AiTemplateDraftSuggestion = {
   bodyHi: string;
   footer: string;
   footerHi: string;
-  buttons: Array<{ type: string; text: string; url?: string; phone_number?: string; example?: string }>;
+  buttons: Array<{
+    type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
+    text: string;
+    url?: string;
+    phone_number?: string;
+    example?: string;
+  }>;
   variables: Array<{ index: number; description: string; suggestedSource: string }>;
 };
 
 /**
  * Platform AI services — mirrors the tenant aiStudioApi boiler (client/src/services/api.ts)
  * but for the operator console: same platformRequest transport, org-independent.
- * POST /platform/library-templates/ai-draft → { draft: AiTemplateDraftSuggestion }
+ * POST /platform/library-templates/ai-draft → { drafts: [...] } | { clarify: string[] }
+ * (vague prompt → the model asks up to 3 short questions instead of guessing).
  */
 export const aiApi = {
-  generateTemplateDraft: (prompt: string) =>
-    platformRequest<{ draft: AiTemplateDraftSuggestion }>('/library-templates/ai-draft', {
+  generateTemplateDrafts: (prompt: string) =>
+    platformRequest<{ drafts: AiTemplateDraftSuggestion[]; clarify?: string[] }>('/library-templates/ai-draft', {
       method: 'POST',
       body: JSON.stringify({ prompt }),
     }),
