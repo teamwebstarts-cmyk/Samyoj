@@ -3,6 +3,7 @@ import {
   draftPayload,
   emptyTemplateButton,
   bodyVariableIndexes,
+  normalizeCategory,
   rowToDraft,
   sampleForVariable,
   titleCaseCategory,
@@ -65,12 +66,14 @@ describe('admin template editor draft model', () => {
     expect('headerExamples' in payload).toBe(false);
   });
 
-  it('preserves custom categories and only falls back on blank values (titleCaseCategory labels)', () => {
+  it('coerces custom categories to UTILITY — Meta-only taxonomy (titleCaseCategory labels)', () => {
     const custom = rowToDraft({ ...row, category: 'FESTIVE_OFFER' });
-    expect(custom.category).toBe('FESTIVE_OFFER');
-    expect(draftPayload(custom).category).toBe('FESTIVE_OFFER');
+    expect(custom.category).toBe('UTILITY');
+    expect(draftPayload(custom).category).toBe('UTILITY');
     expect(rowToDraft({ ...row, category: '' }).category).toBe('UTILITY');
-    expect(titleCaseCategory('FESTIVE_OFFER')).toBe('Festive Offer');
+    expect(normalizeCategory('MARKETING')).toBe('MARKETING');
+    expect(normalizeCategory('AUTHENTICATION')).toBe('AUTHENTICATION');
+    expect(normalizeCategory('garbage')).toBe('UTILITY');
     expect(titleCaseCategory('UTILITY')).toBe('Utility');
   });
 

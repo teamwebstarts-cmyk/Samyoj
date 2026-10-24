@@ -733,39 +733,19 @@ export function TemplateEditorPage() {
                 disabled={!canWrite || Boolean(row)}
                 onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
               />
-              {/* Builtin + custom categories ("Festive offer"). Custom values are
-                  platform-only taxonomy — tenant/Meta surfaces treat them as Utility. */}
-              <div className="space-y-2">
-                <Select
-                  label="Category"
-                  aria-label="Category"
-                  value={
-                    ['UTILITY', 'MARKETING', 'AUTHENTICATION'].includes(draft.category)
-                      ? draft.category
-                      : '__custom__'
-                  }
-                  disabled={!canWrite}
-                  onChange={(event) => set('category', event.target.value === '__custom__' ? '' : event.target.value)}
-                >
-                  <option value="UTILITY">Utility</option>
-                  <option value="MARKETING">Marketing</option>
-                  <option value="AUTHENTICATION">Authentication</option>
-                  <option value="__custom__">Custom…</option>
-                </Select>
-                {!['UTILITY', 'MARKETING', 'AUTHENTICATION'].includes(draft.category) ? (
-                  <Input
-                    label="Custom category"
-                    aria-label="Custom category"
-                    value={draft.category}
-                    disabled={!canWrite}
-                    maxLength={32}
-                    placeholder="e.g. FESTIVE_OFFER"
-                    onChange={(event) =>
-                      set('category', event.target.value.toUpperCase().replace(/\s+/g, '_'))
-                    }
-                  />
-                ) : null}
-              </div>
+                            {/* Meta recognizes exactly three categories; platform-only custom
+                  taxonomy removed — tenant/Meta surfaces treated custom as Utility anyway. */}
+              <Select
+                label="Category"
+                aria-label="Category"
+                value={draft.category}
+                disabled={!canWrite}
+                onChange={(event) => set('category', event.target.value as Draft['category'])}
+              >
+                <option value="UTILITY">Utility</option>
+                <option value="MARKETING">Marketing</option>
+                <option value="AUTHENTICATION">Authentication</option>
+              </Select>
               {/* No Language select: every catalog row carries both languages and is
                   edited in one pass — the EN/HI toggle in the preview shows each surface. */}
               <div aria-hidden className="hidden sm:block" />

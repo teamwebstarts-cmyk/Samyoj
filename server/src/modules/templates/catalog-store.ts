@@ -150,7 +150,7 @@ export async function listAdminLibraryTemplates() {
 export type LibraryTemplateWriteInput = {
   slug: string;
   title: string;
-  /** Free-form (platform-only taxonomy). Tenant + Meta reads coerce unknowns to UTILITY. */
+  /** One of the three Meta categories; asCategory() still guards legacy rows. */
   category: string;
   tags: string[];
   icon: string;

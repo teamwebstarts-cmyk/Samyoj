@@ -87,11 +87,16 @@ export function sampleForVariable(description: string, index: number, source?: s
   return `Sample ${index}`;
 }
 
+/** Meta-only taxonomy; legacy custom rows coerce to UTILITY. */
+export function normalizeCategory(value: string | undefined | null): Draft['category'] {
+  return value === 'MARKETING' || value === 'AUTHENTICATION' ? value : 'UTILITY';
+}
+
 export type Draft = {
   slug: string;
   title: string;
-  /** Free-form category (builtin or custom). Custom values stay platform-only. */
-  category: string;
+  /** Meta's three categories — custom platform taxonomy removed. */
+  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
   language: string;
   tags: string;
   icon: string;
@@ -154,8 +159,8 @@ export function rowToDraft(row: LibraryRow): Draft {
   return {
     slug: row.slug,
     title: row.title,
-    // Keep custom categories as-is; only blank/garbage falls back to UTILITY.
-    category: row.category?.trim() ? row.category : 'UTILITY',
+    // Legacy custom categories coerce to UTILITY (Meta-only taxonomy now).
+    category: normalizeCategory(row.category),
     language: row.language || 'en_US',
     tags: (row.tags || []).join(', '),
     icon: row.icon || 'file',

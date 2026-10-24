@@ -38,7 +38,6 @@ import {
   HONESTY,
   iconFor,
   rowToDraft,
-  titleCaseCategory,
   type LibraryRow,
 } from "../lib/library-catalog";
 
@@ -324,16 +323,6 @@ export function TemplateCatalogPage() {
       .sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
   }, [rows, tab, q, category]);
 
-  /** Custom (non-builtin) categories currently in use — filter options follow the data. */
-  const customCategories = useMemo(
-    () =>
-      [...new Set((rows || []).map((row) => row.category))].filter(
-        (value) =>
-          value && !["UTILITY", "MARKETING", "AUTHENTICATION"].includes(value),
-      ),
-    [rows],
-  );
-
   const openCreate = () => navigate("/library/new");
   const openEdit = (row: LibraryRow) => navigate(`/library/${row.id}/edit`);
   const [viewing, setViewing] = useState<LibraryRow | null>(null);
@@ -422,27 +411,13 @@ export function TemplateCatalogPage() {
           <Select
             aria-label="Filter by category"
             className="sm:w-44"
-            value={
-              category === "ALL" || customCategories.includes(category)
-                ? category
-                : category === "UTILITY" ||
-                    category === "MARKETING" ||
-                    category === "AUTHENTICATION"
-                  ? category
-                  : "ALL"
-            }
+            value={["ALL", "UTILITY", "MARKETING", "AUTHENTICATION"].includes(category) ? category : "ALL"}
             onChange={(event) => setCategory(event.target.value)}
           >
             <option value="ALL">All categories</option>
             <option value="UTILITY">Utility</option>
             <option value="MARKETING">Marketing</option>
             <option value="AUTHENTICATION">Authentication</option>
-            {/* Custom categories appear only when at least one row uses them. */}
-            {customCategories.map((value) => (
-              <option key={value} value={value}>
-                {titleCaseCategory(value)}
-              </option>
-            ))}
           </Select>
         </div>
 
