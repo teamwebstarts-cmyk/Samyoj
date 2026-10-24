@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  Check,
   FileText,
   Image as ImageIcon,
   Info,
@@ -12,6 +11,7 @@ import {
   Type,
   Video,
   Wand2,
+  X,
 } from 'lucide-react';
 import { Button, Input, Notice, Select } from '../components/ui';
 import { TemplatePreviewBlock } from '../components/WhatsAppPreview';
@@ -32,13 +32,13 @@ import {
   type TemplateButtonType,
 } from '../lib/library-catalog';
 
-/** Header-type picker tiles — mirrors client HEADER_TYPE_STYLES (create step). */
+/** Header-type picker chips — mirrors client HEADER_TYPE_STYLES (create step). */
 const HEADER_TILES = [
-  { value: 'NONE', label: 'None', icon: Minus, iconTile: 'bg-gradient-to-br from-slate-400 to-slate-500 text-white', active: 'border-slate-300 bg-slate-50 ring-slate-300/60 text-slate-700' },
-  { value: 'TEXT', label: 'Text', icon: Type, iconTile: 'bg-gradient-to-br from-sky-400 to-blue-600 text-white', active: 'border-sky-300 bg-sky-50 ring-sky-300/60 text-sky-900' },
-  { value: 'IMAGE', label: 'Image', icon: ImageIcon, iconTile: 'bg-gradient-to-br from-emerald-400 to-teal-600 text-white', active: 'border-emerald-300 bg-emerald-50 ring-emerald-300/60 text-emerald-900' },
-  { value: 'VIDEO', label: 'Video', icon: Video, iconTile: 'bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white', active: 'border-violet-300 bg-violet-50 ring-violet-300/60 text-violet-900' },
-  { value: 'DOCUMENT', label: 'Doc', icon: FileText, iconTile: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white', active: 'border-amber-300 bg-amber-50 ring-amber-300/60 text-amber-900' },
+  { value: 'NONE', label: 'None', icon: Minus, tint: 'bg-slate-200/80 text-slate-700', ring: 'ring-slate-400/40' },
+  { value: 'TEXT', label: 'Text', icon: Type, tint: 'bg-sky-100 text-sky-700', ring: 'ring-sky-400/50' },
+  { value: 'IMAGE', label: 'Image', icon: ImageIcon, tint: 'bg-emerald-100 text-emerald-700', ring: 'ring-emerald-400/50' },
+  { value: 'VIDEO', label: 'Video', icon: Video, tint: 'bg-violet-100 text-violet-700', ring: 'ring-violet-400/50' },
+  { value: 'DOCUMENT', label: 'Document', icon: FileText, tint: 'bg-amber-100 text-amber-700', ring: 'ring-amber-400/50' },
 ] as const;
 
 /** Same button types as client TemplateButtonEditor. */
@@ -90,6 +90,7 @@ function VariableRow({
   canWrite,
   onPatchMeta,
   onPatchSample,
+  onDelete,
 }: {
   scope: 'body' | 'header';
   index: number;
@@ -98,6 +99,7 @@ function VariableRow({
   canWrite: boolean;
   onPatchMeta: (patch: Partial<VariableMeta>) => void;
   onPatchSample: (value: string) => void;
+  onDelete?: () => void;
 }) {
   const inputClass =
     'h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium disabled:cursor-not-allowed disabled:opacity-60';
@@ -116,6 +118,21 @@ function VariableRow({
           disabled={!canWrite}
           className={`min-w-0 flex-1 ${inputClass}`}
         />
+        {onDelete && canWrite ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Delete ${scope} variable {{${index}}}`}
+            title={
+              scope === 'body'
+                ? `Remove {{${index}}} from both bodies and renumber the rest`
+                : `Remove {{${index}}} from the header`
+            }
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </div>
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="block min-w-0">
@@ -364,6 +381,7 @@ function BodyChipsRoster({
   onInsert,
   onAddVariable,
   onInsertPreset,
+  onDelete,
 }: {
   lang: 'en' | 'hi';
   items: Array<{ index: number; description: string }>;
@@ -372,6 +390,7 @@ function BodyChipsRoster({
   onInsert: (index: number) => void;
   onAddVariable?: () => void;
   onInsertPreset?: (chip: { description: string; source: string }) => void;
+  onDelete?: (index: number) => void;
 }) {
   return (
     <div className="mb-1.5">
@@ -397,43 +416,58 @@ function BodyChipsRoster({
           <span className="text-[10px] font-medium text-slate-400">{charCount}/1024</span>
         </div>
       </div>
-      {onAddVariable ? (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {VARIABLE_PRESET_CHIPS.map((chip) => (
+      {/* One row: quick presets first, then the template's own {{n}} chips.
+          A preset vanishes once a variable with its description exists —
+          "selected" presets live in the roster below, not as options. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {onAddVariable ? (
+          (() => {
+            const used = new Set(items.map((item) => item.description.trim()));
+            return VARIABLE_PRESET_CHIPS.filter((chip) => !used.has(chip.description)).map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                disabled={!canWrite}
+                onClick={() => onInsertPreset?.({ description: chip.description, source: chip.source })}
+                title={`Insert next {{n}} auto-mapped to ${chip.source} at the cursor`}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Plus className="h-2.5 w-2.5" />
+                {chip.label}
+              </button>
+            ));
+          })()
+        ) : null}
+        {items.length === 0 && !onAddVariable ? null : (
+        items.map((item) => (
+          <span
+            key={`${lang}-${item.index}`}
+            className="group chip inline-flex items-center overflow-hidden rounded-full border border-indigo-200 bg-indigo-50 text-[10px] font-bold text-indigo-700 transition disabled:opacity-60"
+          >
             <button
-              key={chip.label}
-              type="button"
-              disabled={!canWrite}
-              onClick={() => onInsertPreset?.({ description: chip.description, source: chip.source })}
-              title={`Insert {{n}} auto-mapped to ${chip.source} at the cursor`}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Plus className="h-2.5 w-2.5" />
-              {chip.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {items.length === 0 ? (
-          <span className="text-[10.5px] font-medium text-slate-400">
-            {onAddVariable
-              ? <>No variables yet — “Add variable” inserts {'{{n}}'} and lists it here.</>
-              : 'No variables yet — add them in the English body; the same list appears here.'}
-          </span>
-        ) : (
-          items.map((item) => (
-            <button
-              key={item.index}
               type="button"
               onClick={() => onInsert(item.index)}
+              disabled={!canWrite}
               title={`Insert {{${item.index}}} at the cursor — rename it in Connect variables below`}
-              className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1 py-1 pl-2.5 pr-1.5 transition hover:bg-indigo-100 disabled:cursor-not-allowed"
             >
               <Plus className="h-2.5 w-2.5" />
-              {item.description.trim() ? item.description : `Untitled ({{${item.index}}})`}
+              {item.description.trim() || `{{${item.index}}}`}
             </button>
-          ))
+            {onDelete && canWrite ? (
+              <button
+                type="button"
+                onClick={() => onDelete(item.index)}
+                disabled={!canWrite}
+                aria-label={`Delete ${item.description.trim() || `{{${item.index}}}`} and renumber the rest`}
+                title={`Remove {{${item.index}}} from both bodies and renumber the rest`}
+                className="inline-flex h-full items-center rounded-r-full py-1 pl-1 pr-2 text-indigo-400 transition hover:text-rose-600"
+              >
+                <X className="h-3 w-3" strokeWidth={2.5} />
+              </button>
+            ) : null}
+          </span>
+        ))
         )}
       </div>
     </div>
@@ -602,6 +636,79 @@ export function TemplateEditorPage() {
     });
   };
 
+  /** Roster chip delete (chip ✕): strips every `{{index}}` occurrence from both
+   *  bodies, then renumbers remaining body tokens/zoom/meta/examples down so
+   *  indexes stay 1..n contiguous (Meta requires gapless placeholders). */
+  const deleteVariable = (index: number) => {
+    setDraft((prev) => {
+      const shift = (text: string) => {
+        if (!text) return text;
+        let removed = false;
+        let out = text.replace(new RegExp(`\\{\\{${index}\\}\\}`, 'g'), () => {
+          removed = true;
+          return '';
+        });
+        if (!removed) return out;
+        // Clean up doubled spaces around the removal point.
+        out = out.replace(/ {2,}/g, ' ');
+        // Renumber higher tokens n → n-1 (single pass, low-to-high).
+        for (let n = index + 1; ; n += 1) {
+          const re = new RegExp(`\\{\\{${n}\\}\\}`, 'g');
+          if (!re.test(out)) break;
+          out = out.replace(re, `{{${n - 1}}}`);
+        }
+        return out.trim();
+      };
+      const body = shift(prev.body);
+      const bodyHi = shift(prev.bodyHi);
+      // Examples/meta: drop the deleted slot, shift the tail down.
+      const dropAndShift = (arr: string[]) => arr.filter((_, i) => i !== index - 1);
+      const variableMeta = prev.variableMeta
+        .filter((meta) => !(meta.scope === 'body' && meta.index === index))
+        .map((meta) =>
+          meta.scope === 'body' && meta.index > index ? { ...meta, index: meta.index - 1 } : meta,
+        );
+      return {
+        ...prev,
+        body,
+        bodyHi,
+        variableMeta,
+        bodyExamples: dropAndShift(prev.bodyExamples),
+        headerExamples: prev.headerExamples,
+      };
+    });
+  };
+
+  /** Header-scope delete (Connect row ✕): strip `{{index}}` from the header
+   *  text and renumber the remaining header tokens/meta/examples. */
+  const deleteHeaderVariable = (index: number) => {
+    setDraft((prev) => {
+      let removed = false;
+      let header = (prev.header || '').replace(new RegExp(`\\{\\{${index}\\}\\}`, 'g'), () => {
+        removed = true;
+        return '';
+      });
+      if (!removed) return prev;
+      header = header.replace(/ {2,}/g, ' ').trim();
+      for (let n = index + 1; ; n += 1) {
+        const re = new RegExp(`\\{\\{${n}\\}\\}`, 'g');
+        if (!re.test(header)) break;
+        header = header.replace(re, `{{${n - 1}}}`);
+      }
+      const variableMeta = prev.variableMeta
+        .filter((meta) => !(meta.scope === 'header' && meta.index === index))
+        .map((meta) =>
+          meta.scope === 'header' && meta.index > index ? { ...meta, index: meta.index - 1 } : meta,
+        );
+      return {
+        ...prev,
+        header,
+        variableMeta,
+        headerExamples: prev.headerExamples.filter((_, i) => i !== index - 1),
+      };
+    });
+  };
+
   // AI assist: pour the suggestion into the draft. Variables
   // map to body-scope connect rows so chips/Connect examples work identically.
   const applyAiSuggestion = (s: AiDraftSuggestion) => {
@@ -733,7 +840,7 @@ export function TemplateEditorPage() {
                 disabled={!canWrite || Boolean(row)}
                 onChange={(event) => set('slug', event.target.value.toLowerCase().replace(/\s/g, '_'))}
               />
-                            {/* Meta recognizes exactly three categories; platform-only custom
+              {/* Meta recognizes exactly three categories; platform-only custom
                   taxonomy removed — tenant/Meta surfaces treated custom as Utility anyway. */}
               <Select
                 label="Category"
@@ -759,7 +866,8 @@ export function TemplateEditorPage() {
                   <Info className="h-3.5 w-3.5 cursor-help text-slate-400" aria-label="Header info" />
                 </span>
               </div>
-              <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Header type">
+              {/* Soft color chips: every type wears its tint; active = solid + ring, inactive = outlined */}
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Header type">
                 {HEADER_TILES.map((tile) => {
                   const active = headerFormat === tile.value;
                   const Icon = tile.icon;
@@ -771,27 +879,14 @@ export function TemplateEditorPage() {
                       aria-checked={active}
                       disabled={!canWrite}
                       onClick={() => setHeaderFormat(tile.value)}
-                      className={`group relative flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl border px-0.5 py-2 text-center transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[11.5px] font-bold transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
                         active
-                          ? `${tile.active} ring-2 ring-offset-1`
-                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                          ? `${tile.tint} border-transparent shadow-sm ring-2 ${tile.ring} ring-offset-1 ring-offset-white`
+                          : 'border-slate-200 bg-white text-slate-500 shadow-2xs hover:border-slate-300 hover:text-slate-800'
                       }`}
                     >
-                      {active ? (
-                        <span
-                          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-sm"
-                          aria-hidden
-                        >
-                          <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
-                        </span>
-                      ) : null}
-                      <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg shadow-sm transition-transform duration-150 group-hover:scale-105 group-disabled:group-hover:scale-100 ${tile.iconTile}`}
-                        aria-hidden
-                      >
-                        <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                      </span>
-                      <span className="text-[10px] font-bold leading-none">{tile.label}</span>
+                      <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} aria-hidden />
+                      {tile.label}
                     </button>
                   );
                 })}
@@ -810,18 +905,6 @@ export function TemplateEditorPage() {
               </div>
             ) : null}
 
-            {draft.mediaFormat ? (
-              <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-3">
-                <p className="text-[12px] font-semibold text-slate-900">
-                  Sample {draft.mediaFormat.toLowerCase()} for WhatsApp review
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                  Tenants upload this sample from their own studio before submitting to Meta — the catalog only defines that a{' '}
-                  {draft.mediaFormat.toLowerCase()} header is required.
-                </p>
-              </div>
-            ) : null}
-
             {/* Body — English and Hindi edited in one pass (both required by the catalog).
                 Each language gets its own chips roster; insertions go to that textarea. */}
             <div className="mt-4">
@@ -833,6 +916,7 @@ export function TemplateEditorPage() {
                 onInsert={(index) => insertToken(index, 'en')}
                 onAddVariable={() => insertVariable('en')}
                 onInsertPreset={insertPresetVariable}
+                onDelete={deleteVariable}
               />
               <textarea
                 ref={bodyRef}
@@ -853,6 +937,7 @@ export function TemplateEditorPage() {
                   canWrite={canWrite}
                   charCount={(draft.bodyHi || '').length}
                   onInsert={(index) => insertToken(index, 'hi')}
+                  onDelete={deleteVariable}
                 />
                 <textarea
                   ref={bodyHiRef}
@@ -904,6 +989,7 @@ export function TemplateEditorPage() {
                                 return { ...prev, headerExamples: next };
                               })
                             }
+                            onDelete={() => deleteHeaderVariable(index)}
                           />
                         ))}
                       </div>
@@ -942,6 +1028,7 @@ export function TemplateEditorPage() {
                                 return { ...prev, bodyExamples: next };
                               })
                             }
+                            onDelete={() => deleteVariable(index)}
                           />
                         ))}
                       </div>
