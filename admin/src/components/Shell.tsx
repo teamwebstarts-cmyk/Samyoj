@@ -50,7 +50,9 @@ function NavGroup({
 }) {
   if (items.length === 0) return null;
   return (
-    <div className="flex gap-1 md:flex-col md:gap-1">
+    // `contents` on mobile: tiles become direct flex children of the bar's nav,
+    // so `flex: 1 1 0` actually equalizes them (a wrapping div would break it).
+    <div className="contents md:flex md:flex-col md:gap-1">
       <p className="rail-group-label hidden px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 md:block">
         {label}
       </p>
@@ -107,6 +109,10 @@ export function Shell() {
   /** Mobile-only sheet holding the navs packed out of the bottom bar. */
   const [moreOpen, setMoreOpen] = useState(false);
   const staffActive = staff.some((item) => item.to === currentPath);
+  // Mobile bar keeps 5 tiles: first four work navs + More. Overflow shines here.
+  const mobileWork = work.slice(0, 4);
+  const overflowWork = work.slice(4);
+  const moreActive = staffActive || overflowWork.some((item) => item.to === currentPath);
 
   // Breadcrumb trail: nav label (current nav item) → optional detail segment.
   // Detail segments are path-grepped (entity ids), not hardcoded routes.
@@ -192,24 +198,25 @@ export function Shell() {
           )}
         </div>
 
-        <nav className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
-          <NavGroup label="Work" items={work} />
-          {/* Mobile: More tile opens the sheet; the packed group is sheet-only.
-              Desktop: the group renders in normal rail flow. */}
+        <nav className="flex min-w-0 flex-1 justify-between gap-1 md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
+          <NavGroup label="Work" items={mobileWork} />
+          {/* Mobile: More tile opens the sheet; packed navs are sheet-only.
+              Desktop: full groups render in normal rail flow. */}
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
             aria-haspopup="dialog"
             aria-expanded={moreOpen}
-            className={`rail-nav-item rail-more-toggle md:hidden ${staffActive ? 'rail-more-active' : ''}`}
+            className={`rail-nav-item rail-more-toggle mobile-tile md:hidden ${moreActive ? 'rail-more-active' : ''}`}
             title="More"
           >
             <span className="rail-nav-icon">
-              <MoreVertical className="h-4 w-4" strokeWidth={staffActive ? 2.2 : 1.8} />
+              <MoreVertical className="h-4 w-4" strokeWidth={moreActive ? 2.2 : 1.8} />
             </span>
             <span>More</span>
           </button>
           <div className="hidden md:contents">
+            <NavGroup label="Work" items={overflowWork} />
             <NavGroup label="Staff & Security" items={staff} />
           </div>
         </nav>
@@ -280,7 +287,36 @@ export function Shell() {
             className="relative w-full rounded-t-2xl border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(15,23,42,0.18)]"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" aria-hidden />
-            <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+            {overflowWork.length > 0 ? (
+              <>
+                <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                  More pages
+                </p>
+                <nav className="flex flex-col gap-1">
+                  {overflowWork.map((item) => {
+                    const Icon = ICONS[item.to] ?? LayoutDashboard;
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setMoreOpen(false)}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${
+                            isActive
+                              ? 'bg-indigo-50 text-[#3b22c7]'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                          }`
+                        }
+                      >
+                        <Icon className="h-4 w-4" strokeWidth={2} />
+                        {item.label}
+                      </NavLink>
+                    );
+                  })}
+                </nav>
+              </>
+            ) : null}
+            <p className="mt-2 px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
               Staff &amp; Security
             </p>
             <nav className="flex flex-col gap-1">

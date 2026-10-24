@@ -1283,9 +1283,11 @@ export function TemplateEditorPage() {
           </section>
         </div>
 
-        {/* Right: Template Preview panel — same block as the catalog View drawer */}
+        {/* Right: Template Preview panel — same block as the catalog View drawer.
+            Card spans the full column: zero outer padding/margin, consistent
+            with every other block on the page. */}
         <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-          <TemplatePreviewBlock draft={draft} />
+          <TemplatePreviewBlock draft={draft} fullWidth />
         </aside>
       </div>
 

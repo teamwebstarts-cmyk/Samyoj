@@ -27,7 +27,7 @@ import {
   Select,
   StatusBadge,
 } from "../components/ui";
-import { TemplatePreviewBlock } from "../components/WhatsAppPreview";
+import { PreviewLanguagePills, TemplatePreviewBlock, TemplatePreviewGlyph } from "../components/WhatsAppPreview";
 import { formatAgo } from "../lib/format";
 import { useOperator } from "../context/OperatorContext";
 import {
@@ -323,6 +323,7 @@ export function TemplateCatalogPage() {
   const openCreate = () => navigate("/library/new");
   const openEdit = (row: LibraryRow) => navigate(`/library/${row.id}/edit`);
   const [viewing, setViewing] = useState<LibraryRow | null>(null);
+  const [previewLang, setPreviewLang] = useState<'en' | 'hi'>('en');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const closeMenu = () => setOpenMenuId(null);
@@ -564,8 +565,23 @@ export function TemplateCatalogPage() {
 
       <Drawer
         open={Boolean(viewing)}
-        title={viewing?.title || "Preview"}
-        onClose={() => setViewing(null)}
+        title={
+          viewing ? (
+            /* The card's own header moves here — glyph + label + EN/HI lens. */
+            <span className="flex items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold leading-5 text-slate-900">
+                <TemplatePreviewGlyph />
+                Template Preview
+              </span>
+              <PreviewLanguagePills lang={previewLang} onChange={setPreviewLang} />
+            </span>
+          ) : (
+            'Preview'
+          )
+        }
+        onClose={() =>
+          setViewing(null)
+        }
         fit
       >
         {viewing ? (
@@ -573,8 +589,13 @@ export function TemplateCatalogPage() {
              306px axis (PREVIEW_COLUMN), so nothing hugs the left edge
              while the card centers in the fit-width drawer. */
           <div className="flex flex-col items-center gap-3">
-            {/* Same block as the editor aside: header card + EN/HI lens + phone + details table */}
-            <TemplatePreviewBlock draft={rowToDraft(viewing)} />
+            {/* Same block as the editor aside, but the header lives in the drawer title row */}
+            <TemplatePreviewBlock
+              draft={rowToDraft(viewing)}
+              showHeader={false}
+              lang={previewLang}
+              onLangChange={setPreviewLang}
+            />
             {canWrite ? (
               <Button
                 className="w-[306px] max-w-full justify-center"

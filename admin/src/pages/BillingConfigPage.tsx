@@ -244,8 +244,8 @@ export function BillingConfigPage() {
         </div>
       )}
 
-      {/* Main Tabs */}
-      <div className="flex border-b border-slate-200/80 gap-4">
+      {/* Main Tabs — wrap on tiny screens instead of forcing horizontal scroll */}
+      <div className="flex flex-wrap border-b border-slate-200/80 gap-x-4 gap-y-2">
         <button
           className={`flex items-center gap-2 pb-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'tiers'
@@ -590,8 +590,9 @@ export function BillingConfigPage() {
         </div>
       )}
 
-      {/* Sticky Bottom Publish Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 shadow-xl md:pl-[15.5rem]">
+      {/* Sticky Bottom Publish Bar — sits above the mobile nav bar (offset matches
+          the 4.5rem body reservation); full-width content-aligned bar on desktop. */}
+      <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 shadow-xl md:bottom-0">
         <div className="content-shell flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <ShieldCheck className="h-4 w-4 text-indigo-600" />

@@ -12,7 +12,8 @@ export function Drawer({
   fit,
 }: {
   open: boolean;
-  title: string;
+  /** Plain string or a composite header node (e.g. preview glyph + label + language pills). */
+  title: ReactNode;
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
