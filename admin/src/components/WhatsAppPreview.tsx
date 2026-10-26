@@ -276,20 +276,21 @@ export function TemplatePreviewGlyph() {
   );
 }
 
-/** EN/HI lens — same pills in the editor card header and the drawer header. */
+/** EN/HI lens — tab control in the editor card header and the drawer header. */
 export function PreviewLanguagePills({ lang, onChange }: { lang: 'en' | 'hi'; onChange: (lang: 'en' | 'hi') => void }) {
   return (
-    <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Preview language">
+    <div className="flex shrink-0 items-center gap-1 rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="Preview language">
       {(['en', 'hi'] as const).map((option) => {
         const active = lang === option;
         return (
           <button
             key={option}
             type="button"
-            aria-pressed={active}
+            role="tab"
+            aria-selected={active}
             onClick={() => onChange(option)}
-            className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
-              active ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'
+            className={`rounded-md px-3 py-1 text-[11px] font-bold transition ${
+              active ? 'bg-white text-indigo-700 shadow-sm' : 'bg-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             {option === 'en' ? 'English' : 'हिन्दी'}
