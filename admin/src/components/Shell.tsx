@@ -1,7 +1,6 @@
 import {
   BookOpen,
   Building2,
-  ChevronRight,
   ChevronsLeft,
   CreditCard,
   LayoutDashboard,
@@ -14,10 +13,11 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperator } from '../context/OperatorContext';
 import { visibleNavGroups } from '../lib/routes';
 import { PlatformBrand } from './PlatformBrand';
+import { Topbar } from './Topbar';
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   '/': LayoutDashboard,
@@ -28,17 +28,6 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   '/outreach': Mail,
   '/operators': Users,
   '/audit': ScrollText,
-};
-
-const PATH_TITLES: Record<string, string> = {
-  '/': 'Overview',
-  '/accounts': 'Organizations',
-  '/billing': 'Billing Studio',
-  '/library': 'Template library',
-  '/errors': 'Meta Telemetry',
-  '/outreach': 'Email Outreach',
-  '/operators': 'Staff & Access',
-  '/audit': 'Compliance Audit',
 };
 
 function NavGroup({
@@ -118,16 +107,6 @@ export function Shell() {
   const overflowWork = work.slice(4);
   const moreActive = staffActive || overflowWork.some((item) => item.to === currentPath);
 
-  // Breadcrumb trail: nav label (current nav item) → optional detail segment.
-  // Detail segments are path-grepped (entity ids), not hardcoded routes.
-  const allNav = [...work, ...staff];
-  const activeNav = allNav.find((item) => item.to === currentPath);
-  const currentTitle = activeNav?.label || PATH_TITLES[currentPath] || 'Console';
-  const segments = location.pathname.split('/').filter(Boolean);
-  // Detail level: /accounts/:id (and future /x/:id patterns) — anything one level past its nav root.
-  const navRootLength = currentPath === '/' ? 0 : currentPath.split('/').filter(Boolean).length;
-  const detailSegment = segments.length > Math.max(navRootLength, 1) ? segments[segments.length - 1] : null;
-
   // Escape closes the mobile More sheet.
   useEffect(() => {
     if (!moreOpen) return;
@@ -139,13 +118,15 @@ export function Shell() {
   }, [moreOpen]);
 
   return (
-    <div className={`min-h-screen md:grid transition-[grid-template-columns] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
+    <div className={`admin-shell min-h-screen md:grid transition-[grid-template-columns] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
       <a href="#main" className="skip-to-content">
         Skip to content
       </a>
 
-      {/* Sidebar Rail — fixed bottom bar on mobile, side rail on desktop */}
-      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 md:overflow-hidden z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
+      {/* Sidebar Rail — fixed bottom bar on mobile, side rail on desktop.
+          rail-is-collapsed/expanded feeds the --rail-w var (desktop media in
+          index.css) used by fixed page-relative bars to match <main>'s column. */}
+      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 md:overflow-hidden z-20 ${collapsed ? 'rail-collapsed rail-is-collapsed' : 'rail-is-expanded'}`}>
         <div className="hidden min-w-0 px-1 md:block">
           {collapsed ? (
             <div className="group/logo relative flex h-8 w-full items-center justify-center">
@@ -363,73 +344,9 @@ export function Shell() {
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-col">
-        {/* Breadcrumb header parked 2026-10-24 — felt redundant next to page PageHeaders.
-            Recover by setting HEADER_ENABLED back to true (component is type-checked,
-            not commented out, so it can't rot). Mobile sign-out moved into the More sheet. */}
-        {false &&
-          (() => {
-            // HEADER_ENABLED — flip to true to restore the sticky breadcrumb header.
-            return (
-        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur-md px-4 py-2.5 md:px-8">
-          <div className="content-shell flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-2.5">
-              {/* Nav icon of the active section — mirrors the rail highlight */}
-              {(() => {
-                const ActiveIcon = ICONS[currentPath] ?? LayoutDashboard;
-                return (
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100">
-                    <ActiveIcon className="h-3.5 w-3.5" strokeWidth={2} />
-                  </span>
-                );
-              })()}
-              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-[13px]">
-                {/* Root is always Overview, skippable when it IS the current page. */}
-                {currentPath !== '/' ? (
-                  <>
-                    <Link
-                      to="/"
-                      className="shrink-0 rounded-md px-1 py-0.5 font-semibold text-slate-500 transition-colors hover:text-indigo-600"
-                    >
-                      Platform
-                    </Link>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
-                  </>
-                ) : null}
-                <span aria-current="page" className={`truncate font-bold ${detailSegment ? 'text-slate-700' : 'text-slate-900'}`}>
-                  {currentTitle}
-                </span>
-                {detailSegment ? (
-                  <>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
-                    <span aria-current="page" className="truncate font-mono text-xs text-slate-900">
-                      {detailSegment}
-                    </span>
-                  </>
-                ) : null}
-              </nav>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200/60 px-2.5 py-0.5 font-medium text-indigo-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-success-500 animate-pulse" />
-                  Live Platform
-                </span>
-              </div>
-              <div className="md:hidden">
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-            );
-          })()}
+        {/* Sticky topbar tracking the active page (client AppTopbar port,
+            admin-essential subset). Replaces the parked breadcrumb header. */}
+        <Topbar />
 
         <main id="main" className="flex-1 px-4 py-6 md:px-8 md:py-8">
           <div className="content-shell">
