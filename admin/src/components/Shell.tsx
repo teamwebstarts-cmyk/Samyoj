@@ -8,7 +8,6 @@ import {
   Mail,
   MoreVertical,
   ScrollText,
-  ShieldCheck,
   TriangleAlert,
   Users,
 } from 'lucide-react';
@@ -118,15 +117,13 @@ export function Shell() {
   }, [moreOpen]);
 
   return (
-    <div className={`admin-shell min-h-screen md:grid transition-[grid-template-columns] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'}`}>
+    <div className={`admin-shell min-h-screen md:grid transition-[grid-template-columns] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? 'md:grid-cols-[4.25rem_minmax(0,1fr)]' : 'md:grid-cols-[14.5rem_minmax(0,1fr)]'} ${collapsed ? 'rail-is-collapsed' : 'rail-is-expanded'}`}>
       <a href="#main" className="skip-to-content">
         Skip to content
       </a>
 
-      {/* Sidebar Rail — fixed bottom bar on mobile, side rail on desktop.
-          rail-is-collapsed/expanded feeds the --rail-w var (desktop media in
-          index.css) used by fixed page-relative bars to match <main>'s column. */}
-      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 md:overflow-hidden z-20 ${collapsed ? 'rail-collapsed rail-is-collapsed' : 'rail-is-expanded'}`}>
+      {/* Sidebar Rail — fixed bottom bar on mobile, side rail on desktop */}
+      <aside className={`admin-bottom-nav flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 text-slate-900 shadow-sm md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:border-b-0 md:border-r md:border-slate-200 md:px-3 md:py-4 md:overflow-hidden z-20 ${collapsed ? 'rail-collapsed' : ''}`}>
         <div className="hidden min-w-0 px-1 md:block">
           {collapsed ? (
             <div className="group/logo relative flex h-8 w-full items-center justify-center">
@@ -172,15 +169,6 @@ export function Shell() {
               </button>
             </div>
           )}
-          {!collapsed && (
-            <div className="mt-2.5 flex items-center justify-between gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200/60 px-2 py-1 text-[10px] text-indigo-700">
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                Samyoj Ops
-              </span>
-              <span className="font-mono text-[9px] text-indigo-400">v2.4</span>
-            </div>
-          )}
         </div>
 
         <nav className="flex min-w-0 flex-1 justify-between gap-1 md:mt-6 md:flex-col md:gap-3 md:overflow-y-auto">
@@ -206,54 +194,7 @@ export function Shell() {
           </div>
         </nav>
 
-        {/* Operator Profile Card */}
-        {collapsed ? (
-          <div className="hidden md:flex flex-col items-center gap-2 border-t border-slate-200 pt-3 mt-auto">
-            <span
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/70"
-              title={`${operator.email} · ${operator.role}`}
-            >
-              <ShieldCheck className="h-4 w-4" />
-            </span>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              aria-label="Sign out"
-              title="Sign out"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-indigo-200/70 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="hidden md:block pt-3 border-t border-slate-200 mt-auto">
-          <div className="rounded-xl bg-indigo-50/70 border border-indigo-200/70 p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-indigo-950">{operator.email}</p>
-                <div className="mt-1 flex items-center gap-1.5">
-                  <span className="inline-flex items-center rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700 border border-indigo-200">
-                    {operator.role}
-                  </span>
-                  {operator.mfaEnabled && (
-                    <span className="inline-flex items-center text-indigo-500" title="MFA Protected">
-                      <ShieldCheck className="h-3 w-3" />
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white border border-indigo-200/70 py-1.5 text-center text-xs font-medium text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sign out
-            </button>
-          </div>
-        </div>
-        )}
+        {/* Operator Profile Card — removed; Topbar operator menu owns sign-out */}
       </aside>
 
       {/* Mobile "More" bottom sheet — packed navs from the bottom bar */}

@@ -130,6 +130,22 @@ select:focus-visible {
   margin-right: auto;
 }
 
+/* Admin shell publishes the current rail width so fixed bars can offset by it
+   and stay page-relative (matches the md:grid-cols rail column in Shell.tsx).
+   Desktop values live in the @media (min-width: 768px) block near .admin-bottom-nav. */
+.admin-shell {
+  --rail-w: 0rem;
+}
+
+/* Editor action bar — fixed at the viewport bottom, page-relative in width:
+   starts where <main> starts (past the rail via --rail-w), inner column capped
+   to .content-shell's max with breathing room on both sides.
+   Mobile: --rail-w is 0, full-width above the mobile bottom nav. */
+.editor-action-bar {
+  left: var(--rail-w, 0rem);
+  right: 0;
+}
+
 /* Buttons */
 .btn-primary {
   display: inline-flex;
@@ -498,6 +514,23 @@ body {
   /* Desktop rail is sticky in normal flow — no body reservation needed. */
   body {
     padding-bottom: 0;
+  }
+
+  /* Publish the rail width for fixed page-relative bars (matches the
+     md:grid-cols rail column in Shell.tsx: collapsed 4.25rem / expanded 14.5rem). */
+  .admin-shell.rail-is-collapsed {
+    --rail-w: 4.25rem;
+  }
+  .admin-shell.rail-is-expanded {
+    --rail-w: 14.5rem;
+  }
+
+  .editor-action-bar {
+    border-top-width: 0;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-radius: 0;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
   }
 }
 

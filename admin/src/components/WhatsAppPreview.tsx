@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BadgeCheck, CheckCheck, ChevronDown, ChevronLeft, Copy, ExternalLink, MoreVertical, Phone } from 'lucide-react';
+import { BadgeCheck, CheckCheck, ChevronLeft, Copy, ExternalLink, MoreVertical, Phone } from 'lucide-react';
 import { languageLabel, templateVariableCount, titleCaseCategory, type Draft } from '../lib/library-catalog';
 
 /**
@@ -143,22 +143,14 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-/** Collapsible details section inside the preview card (below the phone surface). */
+/** Details section inside the preview card (below the phone surface) — always expanded. */
 export function TemplateDetailsTable({ draft }: { draft: Draft }) {
-  const [open, setOpen] = useState(false);
   return (
     <div className="border-t border-slate-100">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50/80"
-      >
+      <div className="flex w-full items-center border-b border-slate-100 px-4 py-3">
         <span className="text-[13px] font-bold leading-5 text-slate-900">Details</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
-      </button>
-      {open ? (
-        <div className="px-4 py-1.5">
+      </div>
+      <div className="px-4 py-1.5">
           <DetailRow label="Name">
             <span className="truncate" title={draft.title || undefined}>
               {draft.title || 'Untitled'}
@@ -199,8 +191,7 @@ export function TemplateDetailsTable({ draft }: { draft: Draft }) {
               {draft.published ? 'Published in library' : 'Draft'}
             </span>
           </DetailRow>
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }

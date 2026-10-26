@@ -9,7 +9,6 @@ import {
   FlagPills,
   Input,
   Notice,
-  PageHeader,
   PageLoading,
   ResponsiveDataView,
   SectionCard,
@@ -19,7 +18,7 @@ import {
 } from '../components/ui';
 import { formatAiCapPercent, formatCount, formatWhen } from '../lib/format';
 import { toStackedAccountRecord, type AccountListRow } from '../lib/records';
-import { ACTIVATION_STAGES, STAGE_LABELS, type ActivationStage } from '../lib/stages';
+import { ACTIVATION_STAGES, type ActivationStage } from '../lib/stages';
 
 export function AccountsPage() {
   const navigate = useNavigate();
@@ -58,15 +57,13 @@ export function AccountsPage() {
 
   const records = (rows ?? []).map(toStackedAccountRecord);
   const pageCount = Math.max(1, Math.ceil(total / 25));
-  const purpose = stage
-    ? `${STAGE_LABELS[stage]} · ${formatCount(total)} organizations matching`
-    : `Managing ${formatCount(total)} total organizations across all lifecycle stages.`;
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Organizations & Accounts"
-        purpose={purpose}
+      {/* Stage Rail Selector */}
+      <SectionCard
+        title="Lifecycle Filter"
+        purpose="Select an activation station to isolate organizations at that step."
         action={
           stage ? (
             <Button variant="secondary" size="sm" onClick={() => setStage()}>
@@ -74,10 +71,8 @@ export function AccountsPage() {
             </Button>
           ) : undefined
         }
-      />
-
-      {/* Stage Rail Selector */}
-      <SectionCard title="Lifecycle Filter" purpose="Select an activation station to isolate organizations at that step." padded>
+        padded
+      >
         <LifecycleRail current={stage || undefined} onSelect={setStage} compact />
       </SectionCard>
 

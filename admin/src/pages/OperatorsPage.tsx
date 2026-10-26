@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   KeyRound,
   Laptop,
-  Shield,
   ShieldCheck,
   UserPlus,
   Users,
@@ -14,7 +13,6 @@ import {
   EmptyState,
   Input,
   Notice,
-  PageHeader,
   PageLoading,
   SectionCard,
   Select,
@@ -84,15 +82,10 @@ export function OperatorsPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Staff & Access Control"
-        purpose="Manage platform operator identities, Role-Based Access Control (RBAC), and active login sessions."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
-            <Shield className="h-3 w-3 text-indigo-600" />
-            Security Administration
-          </span>
-        }
+      {/* Operator List Card */}
+      <SectionCard
+        title="Platform Operators"
+        purpose="ANALYST is read-only. SUPPORT can modify accounts. SUPER_ADMIN controls all platform settings and staff."
         action={
           <Button
             onClick={() => {
@@ -104,12 +97,6 @@ export function OperatorsPage() {
             <UserPlus className="h-4 w-4 mr-1.5" /> Add New Operator
           </Button>
         }
-      />
-
-      {/* Operator List Card */}
-      <SectionCard
-        title="Platform Operators"
-        purpose="ANALYST is read-only. SUPPORT can modify accounts. SUPER_ADMIN controls all platform settings and staff."
       >
         {operators.length === 0 ? (
           <div className="p-6">

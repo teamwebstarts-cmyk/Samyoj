@@ -15,7 +15,6 @@ import {
   EmptyState,
   FlagPills,
   Notice,
-  PageHeader,
   PageLoading,
   SectionCard,
 } from '../components/ui';
@@ -80,17 +79,6 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Platform Overview"
-        purpose="Live ecosystem telemetry, onboarding funnel metrics, and account health triage."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
-            <Activity className="h-3 w-3 text-indigo-600" />
-            Live Ops Feed
-          </span>
-        }
-      />
-
       {/* Top 4 KPI Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="dashboard-card relative overflow-hidden p-4 bg-gradient-to-br from-white to-slate-50">

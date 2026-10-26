@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { platformRequest } from '../api';
 import {
   EmptyState,
   FilterPills,
   Notice,
-  PageHeader,
   PageLoading,
   SectionCard,
   clickableRowProps,
@@ -65,27 +64,17 @@ export function ErrorsPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Meta WhatsApp Error Telemetry"
-        purpose="Official Meta Cloud API status codes aggregated across all connected numbers. No customer phone numbers or message bodies are retained."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-800">
-            <AlertOctagon className="h-3 w-3 text-rose-600" />
-            API Incident Tracker
-          </span>
-        }
-        action={
-          <FilterPills
-            label="Window"
-            value={days}
-            onChange={setDays}
-            options={[
-              { value: 7, label: 'Past 7 days' },
-              { value: 30, label: 'Past 30 days' },
-            ]}
-          />
-        }
-      />
+      <div className="flex items-center justify-end">
+        <FilterPills
+          label="Window"
+          value={days}
+          onChange={setDays}
+          options={[
+            { value: 7, label: 'Past 7 days' },
+            { value: 30, label: 'Past 30 days' },
+          ]}
+        />
+      </div>
 
       {/* Overview Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

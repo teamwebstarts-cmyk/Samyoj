@@ -8,7 +8,6 @@ import {
   EmptyState,
   Input,
   Notice,
-  PageHeader,
   PageLoading,
   SectionCard,
   Select,
@@ -76,17 +75,6 @@ export function OutreachPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Owner Email Outreach"
-        purpose="Automated lifecycle nurture & onboarding queues. Direct outreach sent to verified business owner emails only."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-800">
-            <Mail className="h-3 w-3 text-blue-600" />
-            Transactional Playbooks
-          </span>
-        }
-      />
-
       {data.smtpConfigured === false && (
         <Notice tone="warning">
           Outbound Mail SMTP is currently unset in the server environment. Email requests are safely recorded as LOGGED rather than dispatched externally.

@@ -3,7 +3,6 @@ import {
   AlertCircle,
   Check,
   CheckCircle2,
-  Coins,
   Eye,
   Layers,
   Plus,
@@ -13,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { platformRequest } from '../api';
-import { Button, Input, PageHeader, PageLoading, SectionCard, Select, StatusBadge } from '../components/ui';
+import { Button, Input, PageLoading, SectionCard, Select, StatusBadge } from '../components/ui';
 
 type PlanTier = 'launch' | 'starter' | 'growth' | 'pro' | 'enterprise';
 type Cadence = 'trial' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
@@ -196,17 +195,6 @@ export function BillingConfigPage() {
 
   return (
     <div className="space-y-6 max-w-7xl pb-24">
-      <PageHeader
-        title="Billing & Subscription Studio"
-        purpose="Live configuration of subscription tiers, quotas, WhatsApp slot limits, AI permissions, and commercial pricing SKUs."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-800">
-            <Coins className="h-3 w-3 text-purple-600" />
-            Dynamic Catalog Engine
-          </span>
-        }
-      />
-
       <SectionCard
         title="Subscription enforcement"
         purpose="Off: every workspace can use the full product without buying a plan, including AI credits. On: expired plans and credit limits apply, and customers must purchase."

@@ -915,8 +915,7 @@ export function TemplateEditorPage() {
   return (
     <div className="pb-32">
       {/* Title header — previous admin style */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">        <div className="min-w-0">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               {row ? 'Edit Template' : 'Create Template'}
@@ -1433,12 +1432,13 @@ export function TemplateEditorPage() {
         </aside>
       </div>
 
-      {/* Floating action bar — fixed to viewport bottom, content-aligned.
-          Mobile: lifted above the nav bar (matches the 4.5rem body reservation).
-          Desktop: full-width bar, rail is a sibling column so no inset needed. */}
+      {/* Floating action bar — fixed at the viewport bottom, page-relative in
+          width via --rail-w (published by Shell) so its left edge tracks the
+          sidebar; inner column is capped to .content-shell's max with padding.
+          Mobile: full-width above the nav bar; pb-32 parent reserves space. */}
       {canWrite ? (
-        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md md:bottom-0">
-          <div className="content-shell flex items-center justify-between gap-3 px-4 py-3 md:px-8">
+        <div className="editor-action-bar fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 border-t border-slate-200/80 bg-white/90 backdrop-blur-md md:bottom-0">
+          <div className="mx-auto flex w-full max-w-[var(--content-max)] items-center justify-between gap-3 px-4 py-3 md:px-6">
             <div className="flex min-w-0 items-center gap-2">
               {/* Draft / Published visibility toggle — drives draft.published on save */}
               <div

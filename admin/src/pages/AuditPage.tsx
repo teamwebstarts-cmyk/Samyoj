@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollText, User } from 'lucide-react';
 import { platformRequest } from '../api';
-import { Button, EmptyState, Notice, PageHeader, PageLoading, SectionCard } from '../components/ui/index';
+import { Button, EmptyState, Notice, PageLoading, SectionCard } from '../components/ui/index';
 import { formatCount, formatWhen } from '../lib/format';
 
 type Audit = {
@@ -47,17 +47,6 @@ export function AuditPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Compliance & Audit Trail"
-        purpose="Immutable record of administrative state mutations — AI token overrides, feature flags, billing adjustments, and staff actions."
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-800">
-            <ScrollText className="h-3 w-3 text-slate-600" />
-            Append-Only Ledger
-          </span>
-        }
-      />
-
       {data.rows.length === 0 ? (
         <EmptyState
           icon={ScrollText}

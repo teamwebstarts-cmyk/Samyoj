@@ -6,7 +6,6 @@ import {
   Copy,
   CopyPlus,
   Eye,
-  Info,
   Library,
   MoreVertical,
   Pencil,
@@ -21,7 +20,6 @@ import {
   EmptyState,
   Input,
   Notice,
-  PageHeader,
   PageLoading,
   ResponsiveDataView,
   Select,
@@ -32,7 +30,6 @@ import { formatAgo } from "../lib/format";
 import { useOperator } from "../context/OperatorContext";
 import {
   CATEGORY_AVATAR,
-  HONESTY,
   iconFor,
   rowToDraft,
   type LibraryRow,
@@ -354,34 +351,6 @@ export function TemplateCatalogPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <PageHeader
-        title="Templates"
-        purpose="Publish WhatsApp drafts that tenants pick in Template Library, then submit to their own number."
-        titleExtra={
-          <span
-            className="group relative inline-flex shrink-0 cursor-help rounded-full outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-            tabIndex={0}
-            role="note"
-            aria-label="How the platform catalog works"
-          >
-            <Info
-              className="h-[18px] w-[18px] text-slate-400 transition-colors group-hover:text-indigo-600 group-focus-visible:text-indigo-600"
-              aria-hidden
-            />
-            <span className="pointer-events-none invisible absolute left-1/2 top-7 z-30 w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-left text-[13px] font-normal leading-relaxed text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100">
-              {HONESTY}
-            </span>
-          </span>
-        }
-        action={
-          canWrite ? (
-            <Button onClick={openCreate}>
-              <Plus className="mr-1.5 h-4 w-4" /> Add template
-            </Button>
-          ) : undefined
-        }
-      />
-
       <div className="dashboard-card overflow-hidden">
         {/* Search + filters — status and category are both selects */}
         <div className="flex flex-col gap-3 border-b border-slate-200/80 px-4 py-3 sm:flex-row sm:items-center">
@@ -417,6 +386,11 @@ export function TemplateCatalogPage() {
             <option value="MARKETING">Marketing</option>
             <option value="AUTHENTICATION">Authentication</option>
           </Select>
+          {canWrite && (
+            <Button className="sm:ml-auto" onClick={openCreate}>
+              <Plus className="mr-1.5 h-4 w-4" /> Add template
+            </Button>
+          )}
         </div>
 
         <ResponsiveDataView
